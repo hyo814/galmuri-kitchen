@@ -202,6 +202,7 @@ export default function IngredientForm({
               id="ingredient-purchased"
               type="date"
               value={purchasedOn}
+              max={localToday()}
               onChange={(e) => setPurchasedOn(e.target.value)}
               required
             />
