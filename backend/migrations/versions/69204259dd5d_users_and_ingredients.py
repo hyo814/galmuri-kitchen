@@ -1,8 +1,8 @@
 """users and ingredients
 
-Revision ID: 19c9098dfe0e
+Revision ID: 69204259dd5d
 Revises: 
-Create Date: 2026-09-13 11:14:09.809681
+Create Date: 2026-09-13 12:03:08.809200
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '19c9098dfe0e'
+revision = '69204259dd5d'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -24,8 +24,8 @@ def upgrade():
     sa.Column('provider_id', sa.String(length=100), nullable=False),
     sa.Column('nickname', sa.String(length=50), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('provider', 'provider_id')
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_users')),
+    sa.UniqueConstraint('provider', 'provider_id', name=op.f('uq_users_provider'))
     )
     op.create_table('ingredients',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -36,8 +36,8 @@ def upgrade():
     sa.Column('purchased_on', sa.Date(), nullable=False),
     sa.Column('expires_on', sa.Date(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], name=op.f('fk_ingredients_user_id_users'), ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_ingredients'))
     )
     with op.batch_alter_table('ingredients', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_ingredients_user_id'), ['user_id'], unique=False)
