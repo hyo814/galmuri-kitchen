@@ -8,6 +8,9 @@ import SettingsSheet, { type SettingsTarget } from "../components/SettingsSheet"
 import StaplesSheet from "../components/StaplesSheet";
 import { formatDate, formatQuantity } from "../format";
 
+// 떨어진 필수품이 많아도 배너가 화면을 차지하지 않도록 앞의 몇 개만 이름을 보여 준다 (전체는 필수품 시트)
+const BANNER_NAMES = 3;
+
 function badge(item: Ingredient): string | null {
   if (item.status === "danger") return "섭취 주의";
   const d = item.days_left;
@@ -97,7 +100,10 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
           </span>
           <span className="row-main">
             <span className="banner-title">필수품 {missing.length}개가 떨어졌어요</span>
-            <span className="banner-sub">{missing.map((s) => s.name).join(", ")}</span>
+            <span className="banner-sub">
+              {missing.slice(0, BANNER_NAMES).map((s) => s.name).join(", ")}
+              {missing.length > BANNER_NAMES && ` 외 ${missing.length - BANNER_NAMES}개`}
+            </span>
           </span>
           <Icon name="chevron" />
         </button>
