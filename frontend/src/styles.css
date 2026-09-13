@@ -691,8 +691,11 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
   color: var(--text-3);
   font-size: 14px;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .text-btn.strong {
@@ -912,8 +915,3 @@ a.row-btn > svg {
   font-weight: 600;
 }
 
-.stock-ok {
-  min-width: 0;
-  text-align: right;
-  overflow-wrap: anywhere;
-}
