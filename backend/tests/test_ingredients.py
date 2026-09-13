@@ -228,3 +228,15 @@ def test_deleting_user_cascades_ingredients(app):
 
         assert Ingredient.query.filter_by(user_id=user.id).count() == 0
         assert StorageLocation.query.filter_by(user_id=user.id).count() == 0
+
+
+def test_seasoning_staple_skips_fridge_old_badge(client, login):
+    login()
+    old = (seoul_today() - timedelta(days=30)).isoformat()
+    client.post("/api/staples", json={"name": "고추장", "category": "조미료"})
+    client.post("/api/staples", json={"name": "굴소스", "category": "소스"})
+    client.post("/api/staples", json={"name": "애호박", "category": "야채"})
+    statuses = {name: create(client, name=name, purchased_on=old).get_json()["status"] for name in ["고추장", "굴소스", "애호박"]}
+    assert statuses == {"고추장": "ok", "굴소스": "ok", "애호박": "old"}
+    listed = {i["name"]: i["status"] for i in client.get("/api/ingredients").get_json()}
+    assert listed == statuses

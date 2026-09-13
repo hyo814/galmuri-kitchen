@@ -61,3 +61,14 @@ def test_delete_and_ownership(client, login, app):
     mine = client.post("/api/staples", json={"name": "후추"}).get_json()
     assert client.delete(f"/api/staples/{mine['id']}").status_code == 204
     assert client.get("/api/staples").get_json() == []
+
+
+def test_matched_name_and_short_name_false_positive(client, login):
+    login()
+    client.post("/api/staples", json={"name": "파", "category": "야채"})
+    client.post("/api/staples", json={"name": "간장", "category": "조미료"})
+    client.post("/api/ingredients", json={"name": "양파", "purchased_on": "2026-09-10"})
+    client.post("/api/ingredients", json={"name": "진간장 (500ml)", "purchased_on": "2026-09-10"})
+    rows = {s["name"]: s for s in client.get("/api/staples").get_json()}
+    assert (rows["파"]["in_stock"], rows["파"]["matched_name"]) == (False, None)
+    assert (rows["간장"]["in_stock"], rows["간장"]["matched_name"]) == (True, "진간장 (500ml)")

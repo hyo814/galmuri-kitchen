@@ -15,11 +15,13 @@ def ingredient_names(user_id):
 
 
 def to_json(staple, names):
+    matched = next((n for n in names if names_match(staple.name, n)), None)
     return {
         "id": staple.id,
         "name": staple.name,
         "category": staple.category,
-        "in_stock": any(names_match(staple.name, n) for n in names),
+        "in_stock": matched is not None,
+        "matched_name": matched,
     }
 
 
