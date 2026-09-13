@@ -253,3 +253,92 @@ def test_seasoning_skip_does_not_catch_dishes_named_after_a_seasoning(client, lo
         name: create(client, name=name, purchased_on=old).get_json()["status"] for name in ok_names + old_names
     }
     assert statuses == {**{n: "ok" for n in ok_names}, **{n: "old" for n in old_names}}
+
+
+def bulk(client, *items):
+    return client.post("/api/ingredients/bulk", json={"items": list(items)})
+
+
+def test_bulk_requires_login(client):
+    assert bulk(client, {"name": "대파"}).status_code == 401
+
+
+def test_bulk_creates_items_in_given_or_default_locations(client, login):
+    login()
+    kinds = {l["kind"]: l["id"] for l in client.get("/api/locations").get_json()}
+    today = seoul_today().isoformat()
+    res = bulk(
+        client,
+        {"name": "대파", "quantity": 1, "unit": "단", "purchased_on": today},
+        {"name": "냉동만두", "quantity": 1, "unit": "봉", "purchased_on": today, "location_id": kinds["freezer"]},
+        {"name": "햇반", "quantity": 6, "unit": "개", "purchased_on": today, "expires_on": "2027-01-01", "location_id": kinds["room"]},
+    )
+    assert res.status_code == 201
+    assert [(i["name"], i["quantity"], i["unit"], i["location_name"]) for i in res.get_json()] == [
+        ("대파", 1, "단", "냉장실"),
+        ("냉동만두", 1, "봉", "냉동실"),
+        ("햇반", 6, "개", "실온"),
+    ]
+    assert {i["name"] for i in client.get("/api/ingredients").get_json()} == {"대파", "냉동만두", "햇반"}
+
+
+def test_bulk_default_location_is_first_fridge_then_first_location(client, login):
+    login()
+    fridge = client.get("/api/locations").get_json()[0]
+    today = seoul_today().isoformat()
+    client.patch(f"/api/locations/{fridge['id']}", json={"kind": "room"})
+    kimchi = client.post("/api/locations", json={"name": "김치냉장고", "kind": "fridge"}).get_json()
+    assert bulk(client, {"name": "김치", "purchased_on": today}).get_json()[0]["location_name"] == "김치냉장고"
+    client.patch(f"/api/locations/{kimchi['id']}", json={"kind": "freezer"})
+    assert bulk(client, {"name": "쌀", "purchased_on": today}).get_json()[0]["location_name"] == "냉장실"
+
+
+def test_bulk_rejects_other_users_location_and_creates_nothing(client, login):
+    login("owner")
+    owner_location_id = client.get("/api/locations").get_json()[0]["id"]
+    login("intruder")
+    today = seoul_today().isoformat()
+    res = bulk(client, {"name": "대파", "purchased_on": today}, {"name": "우유", "purchased_on": today, "location_id": owner_location_id})
+    assert res.status_code == 400
+    assert res.get_json() == {"error": f"2번째 재료: {INVALID_LOCATION}", "errors": [{"index": 1, "error": INVALID_LOCATION}]}
+    assert client.get("/api/ingredients").get_json() == []
+
+
+def test_bulk_invalid_items_create_nothing_and_list_errors(client, login):
+    login()
+    today = seoul_today().isoformat()
+    res = bulk(
+        client,
+        {"name": "대파", "purchased_on": today},
+        {"name": "", "purchased_on": today},
+        "우유",
+        {"name": "두부", "quantity": 0, "purchased_on": today},
+        {"name": "계란", "purchased_on": today, "location_id": True},
+    )
+    assert res.status_code == 400
+    assert res.get_json() == {
+        "error": "2번째 재료: 이름은 1~50자로 입력해 주세요.",
+        "errors": [
+            {"index": 1, "error": "이름은 1~50자로 입력해 주세요."},
+            {"index": 2, "error": "잘못된 요청이에요."},
+            {"index": 3, "error": "수량은 0보다 커야 해요."},
+            {"index": 4, "error": INVALID_LOCATION},
+        ],
+    }
+    assert client.get("/api/ingredients").get_json() == []
+
+
+@pytest.mark.parametrize(
+    "body",
+    [None, {}, {"items": []}, {"items": "대파"}, {"items": [{"name": "대파", "purchased_on": "2026-09-13"}] * 51}],
+)
+def test_bulk_body_validation(client, login, body):
+    login()
+    res = client.post("/api/ingredients/bulk", json=body)
+    assert (res.status_code, res.get_json()) == (400, {"error": "재료를 1~50개 보내 주세요."})
+    assert client.get("/api/ingredients").get_json() == []
+
+
+def test_bulk_requires_fetch_header(raw_client):
+    res = raw_client.post("/api/ingredients/bulk", json={"items": [{"name": "대파"}]})
+    assert (res.status_code, res.get_json()) == (400, {"error": "잘못된 요청이에요."})

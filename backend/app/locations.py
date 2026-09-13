@@ -19,11 +19,20 @@ def user_locations(user_id):
     )
 
 
-def default_location(user_id):
-    locations = user_locations(user_id)
+def choose_location(locations, value):
+    """미리 불러온 내 위치 목록에서 고른다. value가 None이면 첫 냉장(fridge) 위치, 없으면 첫 위치."""
     if not locations:
         abort(400, "보관 위치를 먼저 만들어 주세요.")
-    return next((l for l in locations if l.kind == "fridge"), locations[0])
+    if value is None:
+        return next((l for l in locations if l.kind == "fridge"), locations[0])
+    location = next((l for l in locations if not isinstance(value, bool) and l.id == value), None)
+    if location is None:
+        abort(400, INVALID_LOCATION)
+    return location
+
+
+def default_location(user_id):
+    return choose_location(user_locations(user_id), None)
 
 
 def owned_location(value):
