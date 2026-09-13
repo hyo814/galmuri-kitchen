@@ -22,6 +22,8 @@
   --warn-tint: #fff3dc;
   --neutral-tint: #eef0f2;
   --scrim: rgb(15 17 20 / 0.48);
+  /* WCAG 1.4.11 non-text contrast: #7a7f87 vs --surface #ffffff = 4.03:1, vs --bg #f3f4f6 = 3.66:1 (both ≥3:1) */
+  --control-line: #7a7f87;
   color-scheme: light dark;
 }
 
@@ -50,6 +52,8 @@
     --warn-tint: #3a2c12;
     --neutral-tint: #2a2d32;
     --scrim: rgb(0 0 0 / 0.6);
+    /* #767c86 vs --surface #1a1c20 = 4.06:1, vs --bg #0e0f11 = 4.56:1 (both ≥3:1) */
+    --control-line: #767c86;
   }
 }
 
@@ -216,6 +220,11 @@ button {
   font-weight: 700;
 }
 
+.badge.info {
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+}
+
 .empty {
   margin: 16px 20px 0;
   padding: 48px 20px;
@@ -344,6 +353,8 @@ button {
   max-height: calc(100dvh - 40px);
   margin: auto auto 0;
   padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 0;
   border-radius: 24px 24px 0 0;
   background: var(--surface);
@@ -1021,7 +1032,7 @@ a.row-btn > svg {
 .btn.outline {
   background: var(--surface);
   color: var(--text);
-  box-shadow: inset 0 0 0 1px var(--handle);
+  box-shadow: inset 0 0 0 1.5px var(--control-line);
 }
 
 .btn.outline svg {

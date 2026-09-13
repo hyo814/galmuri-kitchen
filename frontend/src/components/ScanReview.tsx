@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { api, localToday, type ScanKind, type ScanResult, type StorageLocation } from "../api";
+import { ApiError, api, localToday, type ScanKind, type ScanResult, type StorageLocation } from "../api";
 import { formatQuantity } from "../format";
 import { useAsyncAction } from "../useAsyncAction";
 import Icon from "./Icon";
@@ -53,7 +53,7 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded 
     const bad = chosen.find((r) => !r.name.trim() || !(Number(r.quantity) > 0));
     if (bad) {
       setOpenKey(bad.key);
-      setError("이름과 수량(0보다 큰 숫자)을 확인해 주세요.");
+      setError("이름을 채우고 수량은 0보다 큰 숫자로 입력해 주세요.");
       return;
     }
     if (!purchasedOn || purchasedOn > today) {
@@ -68,7 +68,19 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded 
         purchased_on: purchasedOn,
         location_id: r.locationId,
       }));
-      await api("/api/ingredients/bulk", { method: "POST", body: { items } });
+      try {
+        await api("/api/ingredients/bulk", { method: "POST", body: { items } });
+      } catch (e) {
+        // errors[]가 있으면(항목별 오류) 그 행을 펼치고 그 항목의 오류만 보여 준다.
+        // 없으면(상한·위치 변경처럼 항목과 무관한 오류) 서버가 준 top-level error를 그대로 보여 준다.
+        const first = e instanceof ApiError ? e.errors?.[0] : undefined;
+        const row = first && chosen[first.index];
+        if (row) {
+          setOpenKey(row.key);
+          throw new Error(first.error);
+        }
+        throw e;
+      }
       await onAdded(items.length);
     });
   };
@@ -76,7 +88,7 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded 
   return (
     <form className="form scan-review" onSubmit={submit}>
       {result.sample && (
-        <span className="badge old scan-sample">
+        <span className="badge info scan-sample">
           <Icon name="info" size={16} />
           예시 결과예요 (API 키 없음)
         </span>
@@ -104,6 +116,7 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded 
         {rows.map((row) => {
           const open = openKey === row.key;
           const toggle = () => setOpenKey(open ? null : row.key);
+          const editId = `scan-edit-${row.key}`;
           return (
             <li key={row.key} className={`scan-item${row.checked ? "" : " off"}${open ? " open" : ""}`}>
               <button
@@ -125,7 +138,13 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded 
                   onChange={(e) => update(row.key, { name: e.target.value })}
                 />
               ) : (
-                <button type="button" className="row-main scan-item-main" onClick={toggle}>
+                <button
+                  type="button"
+                  className="row-main scan-item-main"
+                  aria-expanded={open}
+                  aria-controls={editId}
+                  onClick={toggle}
+                >
                   <span className="row-title">{row.name}</span>
                   <span className="row-sub">
                     {formatQuantity(Number(row.quantity) || 0)}
@@ -138,12 +157,13 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded 
                 className="icon-btn"
                 aria-label={open ? "접기" : `${row.name} 고치기`}
                 aria-expanded={open}
+                aria-controls={editId}
                 onClick={toggle}
               >
                 <Icon name={open ? "up" : "down"} />
               </button>
               {open && (
-                <div className="scan-edit">
+                <div className="scan-edit" id={editId}>
                   <label className="field">
                     <span className="field-label">수량</span>
                     <input

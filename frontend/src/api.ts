@@ -94,6 +94,7 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    public errors?: { index: number; error: string }[],
   ) {
     super(message);
   }
@@ -129,7 +130,11 @@ export async function api<T>(
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401) unauthorizedHandler?.();
-    throw new ApiError(res.status, data.error ?? "문제가 생겼어요. 잠시 후 다시 시도해 주세요.");
+    throw new ApiError(
+      res.status,
+      data.error ?? "문제가 생겼어요. 잠시 후 다시 시도해 주세요.",
+      Array.isArray(data.errors) ? data.errors : undefined,
+    );
   }
   return data as T;
 }

@@ -10,7 +10,10 @@ export async function resizeImage(file: File, maxSide = 1568): Promise<Blob> {
     canvas.width = Math.round(bitmap.width * scale);
     canvas.height = Math.round(bitmap.height * scale);
     const context = canvas.getContext("2d");
-    if (!context) return file;
+    if (!context) {
+      bitmap.close();
+      return file;
+    }
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     bitmap.close();
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
