@@ -691,8 +691,11 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
   color: var(--text-3);
   font-size: 14px;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .text-btn.strong {
@@ -869,3 +872,46 @@ a.row-btn > svg {
   background: var(--danger);
   color: var(--bg);
 }
+
+.search {
+  position: relative;
+  margin: 16px 20px 0;
+}
+
+.search > svg {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  color: var(--text-3);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.search .input {
+  padding-left: 46px;
+  background: var(--surface);
+}
+
+.row-press {
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row-end {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.add-hint {
+  color: var(--accent-strong);
+  font-size: 14px;
+  font-weight: 600;
+}
+

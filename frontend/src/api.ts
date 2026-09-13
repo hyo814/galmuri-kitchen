@@ -14,6 +14,7 @@ export interface Staple {
   name: string;
   category: string;
   in_stock: boolean;
+  matched_name: string | null;
 }
 
 export interface ItemRule {

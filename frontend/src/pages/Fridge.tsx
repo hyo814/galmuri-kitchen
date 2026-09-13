@@ -29,6 +29,8 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
   const [prefillName, setPrefillName] = useState("");
   const [panel, setPanel] = useState<"settings" | SettingsTarget | null>(null);
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [staplesMissingOnly, setStaplesMissingOnly] = useState(false);
 
   // 401은 api()의 전역 핸들러(App.tsx)가 처리한다.
   const load = () => {
@@ -72,7 +74,13 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
   };
 
   const activeFilter = filter !== "all" && locations.some((l) => l.id === filter) ? filter : "all";
-  const visible = items?.filter((i) => activeFilter === "all" || i.location_id === activeFilter) ?? null;
+  const q = query.replace(/\s+/g, "").toLowerCase();
+  const visible =
+    items?.filter(
+      (i) =>
+        (activeFilter === "all" || i.location_id === activeFilter) &&
+        (!q || i.name.replace(/\s+/g, "").toLowerCase().includes(q)),
+    ) ?? null;
   const defaultLocationId =
     activeFilter !== "all" ? activeFilter : (locations.find((l) => l.kind === "fridge") ?? locations[0])?.id;
   const soon = items?.filter((i) => i.status === "urgent" || i.status === "danger").length ?? 0;
@@ -101,7 +109,7 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
       )}
 
       {missing.length > 0 && (
-        <button className="banner" onClick={() => setPanel("staples")}>
+        <button className="banner" onClick={() => { setStaplesMissingOnly(true); setPanel("staples"); }}>
           <span className="banner-icon">
             <Icon name="alert" size={22} />
           </span>
@@ -114,6 +122,22 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
           </span>
           <Icon name="chevron" />
         </button>
+      )}
+
+      {items && (items.length >= 10 || query) && (
+        <div className="search">
+          <Icon name="search" />
+          <input
+            className="input"
+            id="inventory-search"
+            type="search"
+            aria-label="재고 검색"
+            placeholder="재고에서 찾기"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            enterKeyHint="search"
+          />
+        </div>
       )}
 
       {locations.length > 0 && (
@@ -145,8 +169,19 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
         !error && <p className="center muted">불러오는 중…</p>
       ) : visible.length === 0 ? (
         <div className="empty">
-          <p>{items && items.length > 0 ? "이 위치에는 재료가 없어요." : "재고가 비어 있어요."}</p>
-          <p className="muted">아래 버튼으로 재료를 추가해 보세요.</p>
+          {query ? (
+            <>
+              <p>‘{query.trim()}’ 재료가 없어요.</p>
+              <button className="btn secondary inline" onClick={() => openNew(query.trim())}>
+                {withJosa(query.trim(), "을", "를")} 재고에 추가
+              </button>
+            </>
+          ) : (
+            <>
+              <p>{items && items.length > 0 ? "이 위치에는 재료가 없어요." : "재고가 비어 있어요."}</p>
+              <p className="muted">아래 버튼으로 재료를 추가해 보세요.</p>
+            </>
+          )}
         </div>
       ) : (
         <ul className="list">
@@ -194,7 +229,18 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
       {panel === "locations" && (
         <LocationsSheet locations={locations} onChanged={load} onClose={() => setPanel(null)} />
       )}
-      {panel === "staples" && <StaplesSheet staples={staples} onChanged={load} onClose={() => setPanel(null)} />}
+      {panel === "staples" && (
+        <StaplesSheet
+          staples={staples}
+          initialMissingOnly={staplesMissingOnly}
+          onChanged={load}
+          onAddIngredient={openNew}
+          onClose={() => {
+            setPanel(null);
+            setStaplesMissingOnly(false);
+          }}
+        />
+      )}
       {panel === "rules" && <RulesSheet rules={rules} onChanged={load} onClose={() => setPanel(null)} />}
     </div>
   );
