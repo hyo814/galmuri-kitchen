@@ -125,10 +125,15 @@ def scan():
     # 업로드 검증(kind·사진 유무·형식)에서 걸린 요청은 세지 않는다.
     # created_at을 명시적으로 넣는다: 모델 기본값(utcnow) 대신 이 모듈의 utcnow를 써서
     # scans_today/scans_recent와 같은 시계를 보게 한다(테스트에서 시계를 고정하기 쉽다).
-    db.session.add(AiCall(user_id=g.user.id, kind=kind, created_at=utcnow()))
+    call = AiCall(user_id=g.user.id, kind=kind, model=current_app.config["CLAUDE_MODEL"], created_at=utcnow())
+    db.session.add(call)
     db.session.commit()
     try:
-        raw = ai.extract(kind, data, media_type)
+        raw, usage = ai.extract(kind, data, media_type)
     except ai.AiError:
         abort(502, "인식에 실패했어요. 직접 입력해주세요.")
+    # ponytail: 응답은 받았지만 AiError가 되는 호출(refusal·max_tokens·스키마 불일치)의 토큰은 버려진다.
+    # 그런 호출이 잦아 원가가 어긋나면 AiError에 usage를 실어 기록한다.
+    call.model, call.input_tokens, call.output_tokens = usage["model"], usage["input_tokens"], usage["output_tokens"]
+    db.session.commit()
     return jsonify(**clean_result(kind, raw, today), sample=False)

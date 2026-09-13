@@ -130,6 +130,20 @@ def test_recipes_migration_adds_and_removes_tables(app):
         assert not {"recipes", "public_recipes"} & tables
 
 
+def test_ai_call_tokens_migration_adds_and_removes_columns(app):
+    token_columns = {"model", "input_tokens", "output_tokens"}
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="a7b7c7d7e7f7")
+        with db.engine.connect() as conn:
+            columns = {c["name"] for c in sa.inspect(conn).get_columns("ai_calls")}
+        assert token_columns <= columns
+
+        downgrade(directory=MIGRATIONS, revision="a6b6c6d6e6f6")
+        with db.engine.connect() as conn:
+            columns = {c["name"] for c in sa.inspect(conn).get_columns("ai_calls")}
+        assert not token_columns & columns
+
+
 def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)

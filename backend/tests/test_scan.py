@@ -23,9 +23,17 @@ def upload(client, kind="receipt", data=JPEG_BYTES, mimetype="image/jpeg"):
     return client.post(f"/api/scan?kind={kind}", data={"image": (io.BytesIO(data), "photo.jpg", mimetype)})
 
 
+def ai_call_costs(app):
+    with app.app_context():
+        return [(c.model, c.input_tokens, c.output_tokens) for c in AiCall.query.order_by(AiCall.id).all()]
+
+
 def ai_calls(app):
     with app.app_context():
         return [(c.user_id, c.kind) for c in AiCall.query.order_by(AiCall.id).all()]
+
+
+USAGE = {"model": "claude-sonnet-5-answered", "input_tokens": 1500, "output_tokens": 120}
 
 
 def fail_if_called(*args):
@@ -126,10 +134,16 @@ def test_extract_sends_image_prompt_and_schema(app, monkeypatch):
     parsed = ai.ScanResult(
         items=[ai.ScanItem(name="우유", quantity=1, unit="개", location_kind="fridge")], purchased_on="2026-09-12"
     )
-    calls = fake_anthropic(monkeypatch, response=SimpleNamespace(stop_reason="end_turn", parsed_output=parsed))
+    usage = SimpleNamespace(input_tokens=1500, output_tokens=120)
+    calls = fake_anthropic(
+        monkeypatch,
+        response=SimpleNamespace(stop_reason="end_turn", parsed_output=parsed, usage=usage, model="claude-sonnet-5-answered"),
+    )
     app.config.update(ANTHROPIC_API_KEY="test-key", CLAUDE_MODEL="claude-sonnet-5")
     with app.app_context():
-        result = ai.extract("receipt", b"\xff\xd8jpeg", "image/jpeg")
+        result, tokens = ai.extract("receipt", b"\xff\xd8jpeg", "image/jpeg")
+
+    assert tokens == {"model": "claude-sonnet-5-answered", "input_tokens": 1500, "output_tokens": 120}
 
     assert result == {
         "items": [{"name": "우유", "quantity": 1.0, "unit": "개", "location_kind": "fridge"}],
@@ -200,7 +214,7 @@ def test_too_large_upload_is_413_json(client, login):
 def test_scan_accepts_valid_image_signatures_by_content_not_label(client, login, app, monkeypatch):
     login()
     app.config["ANTHROPIC_API_KEY"] = "test-key"
-    monkeypatch.setattr(ai, "extract", lambda *a: {"items": [], "purchased_on": None})
+    monkeypatch.setattr(ai, "extract", lambda *a: ({"items": [], "purchased_on": None}, USAGE))
     for data in (JPEG_BYTES, PNG_BYTES, WEBP_BYTES):
         # 선언된 Content-Type은 항상 text/plain으로 위조하지만, 실제 바이트 서명이 유효하면 통과한다
         assert upload(client, data=data, mimetype="text/plain").status_code == 200
@@ -233,7 +247,8 @@ def test_real_scan_cleans_result_and_logs_call(client, login, app, monkeypatch):
 
     def fake_extract(kind, image_bytes, media_type):
         seen.append((kind, image_bytes, media_type))
-        return {"items": [{"name": " 우유 ", "quantity": 0, "unit": "", "location_kind": "fridge"}], "purchased_on": "2999-01-01"}
+        raw = {"items": [{"name": " 우유 ", "quantity": 0, "unit": "", "location_kind": "fridge"}], "purchased_on": "2999-01-01"}
+        return raw, USAGE
 
     monkeypatch.setattr(ai, "extract", fake_extract)
     # 선언된 Content-Type은 image/jpeg로 위조하지만 실제 바이트는 PNG 서명 → extract는 스니핑한 image/png를 받는다
@@ -246,6 +261,7 @@ def test_real_scan_cleans_result_and_logs_call(client, login, app, monkeypatch):
     }
     assert seen == [("order", PNG_BYTES, "image/png")]
     assert ai_calls(app) == [(user.id, "order")]
+    assert ai_call_costs(app) == [("claude-sonnet-5-answered", 1500, 120)]  # 실제로 답한 모델로 덮어쓴다
 
 
 def test_ai_failure_is_502_and_counted(client, login, app, monkeypatch):
@@ -260,12 +276,13 @@ def test_ai_failure_is_502_and_counted(client, login, app, monkeypatch):
     assert (res.status_code, res.get_json()) == (502, {"error": "인식에 실패했어요. 직접 입력해주세요."})
     # F1: 실패도 비용이 들었으므로 한도에는 센다(업로드 검증 실패만 세지 않는다)
     assert ai_calls(app) == [(user.id, "receipt")]
+    assert ai_call_costs(app) == [("claude-sonnet-5", None, None)]  # 실패하면 요청한 모델만 남고 토큰은 비워 둔다
 
 
 def test_daily_limit_counts_scan_kinds_in_seoul_day(client, login, app, monkeypatch):
     user = login()
     app.config.update(ANTHROPIC_API_KEY="test-key", AI_DAILY_SCAN_LIMIT=3)
-    monkeypatch.setattr(ai, "extract", lambda *args: {"items": [], "purchased_on": None})
+    monkeypatch.setattr(ai, "extract", lambda *args: ({"items": [], "purchased_on": None}, USAGE))
     fixed_today = date(2026, 9, 13)
     start = datetime.combine(fixed_today, time.min, tzinfo=SEOUL).astimezone(timezone.utc)
     fixed_now = start + timedelta(hours=12)  # 벽시계와 무관하게 고정 — burst 윈도우가 seed 데이터와 안 겹치게 정오로 둔다
@@ -313,7 +330,7 @@ def test_burst_limit_blocks_rapid_calls(client, login, app, monkeypatch):
 def test_burst_limit_ignores_calls_older_than_a_minute(client, login, app, monkeypatch):
     user = login()
     app.config.update(ANTHROPIC_API_KEY="test-key", AI_SCAN_BURST_LIMIT=3)
-    monkeypatch.setattr(ai, "extract", lambda *args: {"items": [], "purchased_on": None})
+    monkeypatch.setattr(ai, "extract", lambda *args: ({"items": [], "purchased_on": None}, USAGE))
     fixed_now = datetime(2026, 9, 13, 12, 0, 0, tzinfo=timezone.utc)
     monkeypatch.setattr(scan, "utcnow", lambda: fixed_now)
     with app.app_context():
