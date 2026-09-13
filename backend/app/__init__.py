@@ -45,8 +45,10 @@ def create_app(test_config=None):
     Migrate(app, db, render_as_batch=True)
 
     from .auth import bp as auth_bp
+    from .ingredients import bp as ingredients_bp
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(ingredients_bp)
 
     @app.before_request
     def require_fetch_header():
