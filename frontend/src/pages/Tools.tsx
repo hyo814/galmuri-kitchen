@@ -52,7 +52,17 @@ export default function Tools() {
 
   return (
     <div className="page">
-      <a className="back-link" href="#/more">
+      <a
+        className="back-link"
+        href="#/more"
+        onClick={(e) => {
+          // 더보기에서 눌러 들어온 경우에만 뒤로가기(히스토리 유지); 그 외(직접 진입 등)엔 링크 그대로 이동.
+          if ((history.state as { fromMore?: boolean } | null)?.fromMore) {
+            e.preventDefault();
+            history.back();
+          }
+        }}
+      >
         <Icon name="back" size={18} />
         더보기
       </a>

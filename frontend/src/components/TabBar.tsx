@@ -22,6 +22,10 @@ export default function TabBar({ route }: { route: string }) {
           className="tab"
           href={`#${tab.path}`}
           aria-current={tab.match(route) ? "page" : undefined}
+          onClick={(e) => {
+            e.preventDefault();
+            location.replace("#" + tab.path); // 탭 전환은 히스토리를 쌓지 않는다
+          }}
         >
           <Icon name={tab.icon} size={24} />
           <span>{tab.label}</span>

@@ -6,9 +6,10 @@ import Icon from "./Icon";
 import Sheet from "./Sheet";
 
 const CATEGORIES: ToolCategory[] = ["조리도구", "조리기구", "칼·도마", "기타"];
-const CYCLES: (number | null)[] = [null, 1, 3, 6, 12];
+const STANDARD_CYCLES: (number | null)[] = [null, 1, 3, 6, 12];
 // 식약처는 기간이 아니라 상태(코팅 30% 이상 벗겨짐) 기준으로 교체를 권고한다 → 6개월마다 '점검'을 제안 (스펙 18절)
-const COATED = /프라이팬|코팅/;
+// "논코팅"·"무코팅"은 코팅 제품이 아니므로 제외한다.
+const isCoated = (name: string) => /프라이팬|코팅/.test(name) && !/논코팅|무코팅/.test(name);
 
 interface Props {
   initial: KitchenTool | null;
@@ -27,10 +28,16 @@ export default function ToolForm({ initial, onSubmit, onChecked, onReplaced, onD
   const [boughtOn, setBoughtOn] = useState(initial?.bought_on ?? "");
   const { busy, error, run } = useAsyncAction();
 
+  // 저장된 주기가 표준 목록(안 함/1/3/6/12개월)에 없으면 선택 상태를 잃지 않도록 추가해 보여준다.
+  const CYCLES =
+    initial?.check_every_months && !STANDARD_CYCLES.includes(initial.check_every_months)
+      ? [...STANDARD_CYCLES, initial.check_every_months]
+      : STANDARD_CYCLES;
+
   const changeName = (value: string) => {
     setName(value);
     // 새 도구를 입력할 때 코팅 제품이면 6개월 점검을 미리 골라 준다(사용자가 주기를 직접 고르면 건드리지 않음)
-    if (!initial && !cycleTouched && COATED.test(value)) setCycle(6);
+    if (!initial && !cycleTouched && isCoated(value)) setCycle(6);
   };
 
   const submit = (e: FormEvent) => {
@@ -53,7 +60,14 @@ export default function ToolForm({ initial, onSubmit, onChecked, onReplaced, onD
                 <Icon name="check" size={18} />
                 점검했어요
               </button>
-              <button type="button" className="btn secondary" disabled={busy} onClick={() => onReplaced && run(onReplaced)}>
+              <button
+                type="button"
+                className="btn secondary"
+                disabled={busy}
+                onClick={() =>
+                  onReplaced && confirm("구매일과 점검일을 오늘로 바꿀까요?") && run(onReplaced)
+                }
+              >
                 교체했어요
               </button>
             </div>
@@ -70,6 +84,7 @@ export default function ToolForm({ initial, onSubmit, onChecked, onReplaced, onD
             required
             maxLength={30}
             placeholder="예: 코팅 프라이팬"
+            autoFocus
           />
         </label>
 
@@ -102,7 +117,7 @@ export default function ToolForm({ initial, onSubmit, onChecked, onReplaced, onD
               </button>
             ))}
           </div>
-          {COATED.test(name) && (
+          {isCoated(name) && (
             <p className="hint">코팅이 30% 이상 벗겨졌다면 교체를 권장해요(식약처 기준). 6개월마다 상태를 확인해 보세요.</p>
           )}
         </div>
