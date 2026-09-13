@@ -4,7 +4,7 @@ import { api, type AuthOptions, type User } from "../api";
 export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const [options, setOptions] = useState<AuthOptions | null>(null);
   const [error, setError] = useState(
-    new URLSearchParams(location.search).has("login_error") ? "로그인에 실패했어요. 다시 시도해 주세요." : "",
+    new URLSearchParams(location.search).has("login_error") ? "로그인에 실패했어요. 다시 시도해주세요." : "",
   );
 
   useEffect(() => {

@@ -14,8 +14,8 @@ import Icon from "./Icon";
 
 // backend/app/locations.py INVALID_LOCATION, backend/app/ingredients.py의 커밋 시 위치 사라짐 오류.
 // 둘 중 하나면 부모가 들고 있는 locations 목록이 낡았다는 뜻이라 다시 불러와야 한다.
-const INVALID_LOCATION = "보관 위치를 다시 선택해 주세요.";
-const LOCATION_CHANGED = "선택한 보관 위치가 방금 바뀌었어요. 다시 시도해 주세요.";
+const INVALID_LOCATION = "보관 위치를 다시 선택해주세요.";
+const LOCATION_CHANGED = "선택한 보관 위치가 방금 바뀌었어요. 다시 시도해주세요.";
 
 interface Row {
   key: number;
@@ -81,11 +81,11 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
     const bad = chosen.find((r) => !r.name.trim() || !(Number(r.quantity) > 0));
     if (bad) {
       setOpenKey(bad.key);
-      setError("이름을 채우고 수량은 0보다 큰 숫자로 입력해 주세요.");
+      setError("이름을 채우고 수량은 0보다 큰 숫자로 입력해주세요.");
       return;
     }
     if (!purchasedOn || purchasedOn > today) {
-      setError("구입일은 오늘이나 그 전 날짜로 골라 주세요.");
+      setError("구입일은 오늘이나 그 전 날짜로 골라주세요.");
       return;
     }
     run(async () => {
@@ -120,7 +120,7 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
       {result.sample && (
         <span className="badge info scan-sample">
           <Icon name="info" size={16} />
-          예시 결과예요 (API 키 없음)
+          예시 결과예요 · 사진을 읽지 않았어요
         </span>
       )}
 

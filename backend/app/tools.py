@@ -68,10 +68,10 @@ def parse_fields(data, creating):
     if creating or "category" in data:
         category = data.get("category", "조리도구")
         if category not in CATEGORIES:
-            abort(400, "분류를 조리도구·조리기구·칼·도마·기타 중에서 골라 주세요.")
+            abort(400, "분류를 조리도구·조리기구·칼·도마·기타 중에서 골라주세요.")
         fields["category"] = category
     if "bought_on" in data:
-        fields["bought_on"] = _optional_date(data["bought_on"], "구매일은 YYYY-MM-DD 형식으로 입력해 주세요.")
+        fields["bought_on"] = _optional_date(data["bought_on"], "구매일은 YYYY-MM-DD 형식으로 입력해주세요.")
     if "check_every_months" in data:
         value = data["check_every_months"]
         fields["check_every_months"] = None if value is None else integer(value, "점검 주기는", 1, 60)

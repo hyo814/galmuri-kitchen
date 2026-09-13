@@ -12,9 +12,9 @@ export const SCAN_CHOICES: { kind: ScanKind; icon: IconName; title: string; hint
 ];
 
 const NOT_FOUND = "사진에서 재료를 찾지 못했어요.";
-const TOO_BIG = "사진이 너무 커요. 10MB 이하로 올려 주세요.";
-const UNREADABLE_FORMAT = "이 사진 형식은 읽을 수 없어요. 카메라 설정에서 HEIF를 끄거나 스크린샷으로 올려 주세요.";
-const HEIF_HINT = "카메라 설정에서 HEIF를 끄거나 스크린샷으로 올려 주세요.";
+const TOO_BIG = "사진이 너무 커요. 10MB 이하로 올려주세요.";
+const UNREADABLE_FORMAT = "이 사진 형식은 읽을 수 없어요. 카메라 설정에서 HEIF를 끄거나 스크린샷으로 올려주세요.";
+const HEIF_HINT = "카메라 설정에서 HEIF를 끄거나 스크린샷으로 올려주세요.";
 const READABLE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 type Step =
@@ -134,7 +134,7 @@ export default function ScanSheet({ mode, limit, locations, onAdded, onManual, o
 
   const sheetProps =
     step.name === "review"
-      ? { title: `찾은 재료 ${step.result.items.length}개`, description: "넣을 재료만 체크해 주세요", className: "scan-tall" }
+      ? { title: `찾은 재료 ${step.result.items.length}개`, description: "넣을 재료만 체크해주세요", className: "scan-tall" }
       : step.name === "pick"
         ? { title: "사진으로 추가" }
         : { title: step.name === "loading" ? "재료를 찾는 중" : "인식 실패", hideHeader: true };
@@ -176,7 +176,7 @@ export default function ScanSheet({ mode, limit, locations, onAdded, onManual, o
             <p className="hint scan-quota">
               <Icon name="info" size={16} />
               {mode === "sample"
-                ? "API 키가 없어서 예시 결과를 보여 줘요"
+                ? "지금은 사진을 실제로 읽지 않고 예시 재료를 보여줘요"
                 : `하루 ${limit}번까지 쓸 수 있어요 · 인식에 실패해도 1번으로 세요`}
             </p>
           </>
