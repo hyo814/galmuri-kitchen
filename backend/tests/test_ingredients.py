@@ -416,6 +416,8 @@ def test_bulk_commit_failure_returns_friendly_error(client, login, monkeypatch):
     res = bulk(client, {"name": "무", "purchased_on": today})
     assert res.status_code == 400
     assert res.get_json() == {"error": "선택한 보관 위치가 방금 바뀌었어요. 다시 시도해 주세요."}
+    monkeypatch.undo()
+    assert client.get("/api/ingredients").get_json() == []
 
 
 def test_bulk_rejects_non_int_location_id(client, login):
