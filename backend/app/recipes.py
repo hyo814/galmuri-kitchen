@@ -2,6 +2,7 @@ from datetime import timezone
 from urllib.parse import urlparse
 
 from flask import Blueprint, abort, g, jsonify, request
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
 from .auth import get_owned_or_404, login_required
@@ -9,7 +10,7 @@ from .ingredients import seasoning_names, seoul_today, status_of, user_rules
 from .matching import names_match, normalize
 from .models import Ingredient, PublicRecipe, Recipe, db
 from .recipe_parse import ingredient_key
-from .validation import commit_or_duplicate, integer, text
+from .validation import integer, text
 
 bp = Blueprint("recipes", __name__, url_prefix="/api")
 
@@ -107,8 +108,11 @@ def _ingredients(value):
     return rows
 
 
+MAX_RAW_STEPS = 100  # 다듬기 전 원본 길이 상한(비어 있어 걸러지는 것까지 포함). 정식 상한은 MAX_STEPS
+
+
 def _steps(value):
-    if not isinstance(value, list) or not all(isinstance(step, str) for step in value):
+    if not isinstance(value, list) or len(value) > MAX_RAW_STEPS or not all(isinstance(step, str) for step in value):
         abort(400, "만드는 법을 다시 확인해주세요.")
     steps = [step.strip() for step in value if step.strip()]
     if len(steps) > MAX_STEPS:
@@ -225,5 +229,13 @@ def save_public_recipe(recipe_id):
         image_url=public.image_url,
     )
     db.session.add(recipe)
-    commit_or_duplicate("이미 저장한 레시피예요.")  # 동시에 두 번 누른 경우 UNIQUE(user_id, public_recipe_id)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # 동시에 두 번 눌러 UNIQUE(user_id, public_recipe_id)에 걸린 경우: 진 쪽도 저장된 레시피를 그대로 돌려준다(멱등).
+        db.session.rollback()
+        winner = Recipe.query.filter_by(user_id=g.user.id, public_recipe_id=public.id).first()
+        if winner is None:
+            abort(400, "이미 저장한 레시피예요.")
+        return jsonify(recipe_json(winner, inventory(g.user.id)))
     return jsonify(recipe_json(recipe, inventory(g.user.id))), 201

@@ -52,6 +52,7 @@ def test_dish_name_suffix_line_is_dropped():
         ("7분도쌀 100g", ("7분도쌀", "100g")),
         ("오메가3 달걀 2개", ("오메가3 달걀", "2개")),
         ("대파1대", ("대파", "1대")),
+        ("대파½대", ("대파", "½대")),  # R3: 붙어 쓴 양이 분수 글리프로 시작해도 잘라낸다
         ("½큰술 참기름", ("½큰술 참기름", "")),  # 이름이 없으면 확신이 없으니 통째로 이름
         ("후추", ("후추", "")),
         ("소금(1g, 약간)", ("소금(1g, 약간)", "")),  # 괄호 안 쉼표로 나누지 않는다
@@ -59,6 +60,22 @@ def test_dish_name_suffix_line_is_dropped():
 )
 def test_splits_trailing_amount(item, expected):
     assert pairs(item) == [expected]
+
+
+@pytest.mark.parametrize("marker", ["적당량", "적당히", "조금", "소량", "취향껏"])
+def test_splits_word_amount_markers(marker):
+    assert pairs(f"소금 {marker}") == [("소금", marker)]
+
+
+def test_long_item_skips_regex_and_finishes_quickly():
+    # R2: _SPACED/_ATTACHED의 역추적 최악의 경우를 피하려 200자 넘는 항목은 정규식 없이 통째로 이름으로 둔다
+    import time
+
+    text = "가1" + "." * 5000 + " "
+    start = time.perf_counter()
+    result = parse_ingredients(text)
+    assert time.perf_counter() - start < 0.2
+    assert len(result) == 1
 
 
 def test_drops_empty_dedupes_and_caps():

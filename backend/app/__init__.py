@@ -97,6 +97,11 @@ def create_app(test_config=None):
         message = e.description if custom else DEFAULT_MESSAGES.get(e.code, "문제가 생겼어요.")
         return jsonify(error=message), e.code
 
+    @app.errorhandler(RecursionError)
+    def recursion_error(e):
+        # 지나치게 깊은 JSON(예: 중첩 배열)을 파싱할 때 C 확장이 없는 환경 등에서 발생할 수 있다.
+        return jsonify(error=DEFAULT_MESSAGES[400]), 400
+
     @app.route("/api/<path:_>", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     def api_not_found(_):
         abort(404)

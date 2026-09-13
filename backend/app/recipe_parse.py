@@ -21,7 +21,7 @@ _LEAD_WORD = re.compile(r"^(?:주재료|부재료|재료)\s+")
 _HEADER_WORDS = {"재료", "주재료", "부재료", "양념", "양념장", "소스", "고명", "육수", "드레싱", "반죽", "토핑", "곁들임"}
 _AMOUNT_START = r"(?:\d|[½⅓⅔¼¾⅛]|약간|적당량|적당히|조금|소량|취향껏)"
 _SPACED = re.compile(rf"^(.+?)\s+({_AMOUNT_START}.*)$")  # "다진 마늘 1작은술(5g)"
-_ATTACHED = re.compile(r"^(.*[가-힣])(\d[\d./]*[^\s\d(]*(?:\([^)]*\))?)$")  # "대파1대" (양 안에 공백 없음)
+_ATTACHED = re.compile(r"^(.*[가-힣])([\d½⅓⅔¼¾⅛][\d./]*[^\s\d(]*(?:\([^)]*\))?)$")  # "대파1대"·"대파½대" (양 안에 공백 없음)
 _STEP_NO = re.compile(r"^\d+[.)](?!\d)\s*")  # "1. " (1.5컵은 그대로)
 _STEP_MARK = re.compile(r"(?<=[.!?])\s*[a-zA-Z]$")  # 원문 단계 끝의 "a", "b"
 _SERVINGS = re.compile(r"(\d+)\s*인분")
@@ -50,7 +50,14 @@ def _clean_item(item):
     return _LEAD_WORD.sub("", item, count=1).strip()
 
 
+_NAME_AMOUNT_REGEX_MAX_LEN = 200
+
+
 def _name_amount(item):
+    if len(item) > _NAME_AMOUNT_REGEX_MAX_LEN:
+        # ponytail: 정상 재료 항목은 이렇게 길지 않다. _SPACED/_ATTACHED의 역추적 최악의 경우를 피하려
+        # 정규식을 건너뛰고 기존 "확신 없으면 통째로 이름" 규칙만 적용한다.
+        return item[:MAX_NAME], ""
     match = _SPACED.match(item) or _ATTACHED.match(item)
     if not match or match.group(1).count("(") != match.group(1).count(")"):  # 괄호 안에서 자르지 않는다
         return item, ""

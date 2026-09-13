@@ -251,3 +251,81 @@ def test_mutations_require_fetch_header(raw_client):
     for method, path in [("post", "/api/recipes"), ("put", "/api/recipes/1"), ("delete", "/api/recipes/1"), ("post", "/api/public-recipes/1/save")]:
         res = getattr(raw_client, method)(path, json=BODY)
         assert (res.status_code, res.get_json()) == (400, {"error": "잘못된 요청이에요."})
+
+
+# --- fix round 1 ---
+
+
+def test_deeply_nested_json_body_returns_400_not_500(client, login):
+    # R1: 중첩 배열이 아주 깊어도(파싱기에 따라 RecursionError가 날 수 있어도) 앱은 500이 아니라 400을 준다
+    from app import DEFAULT_MESSAGES
+
+    login()
+    body = "[" * 100000 + "]" * 100000
+    res = client.post("/api/recipes", data=body, content_type="application/json")
+    assert (res.status_code, res.get_json()) == (400, {"error": DEFAULT_MESSAGES[400]})
+
+
+def test_steps_raw_list_over_100_rejected_before_filtering_empties(client, login):
+    # R4: 빈 문자열만 101개 보내면 다듬은 뒤엔 0개지만, 원본 길이 자체를 먼저 막는다(all()로 다 훑지 않는다)
+    login()
+    res = create(client, steps=[""] * 101)
+    assert (res.status_code, res.get_json()) == (400, {"error": "만드는 법을 다시 확인해주세요."})
+
+
+def test_save_public_recipe_race_returns_existing_recipe(client, login, app, monkeypatch):
+    # R5: 동시에 두 번 눌러 사전 확인은 못 보고(첫 first() 호출을 흉내로 None) 지나갔지만
+    # 실제 INSERT가 UNIQUE(user_id, public_recipe_id)에 걸리면, 이긴 쪽 레시피를 200으로 돌려준다.
+    user = login()
+    recipe_id = add_public(app)
+    with app.app_context():
+        winner = Recipe(
+            user_id=user.id,
+            title="두부조림",
+            servings=2,
+            ingredients=[{"name": "두부", "amount": "1모"}, {"name": "간장", "amount": "2큰술"}],
+            steps=["두부를 썰어요.", "간장에 졸여요."],
+            source="public",
+            public_recipe_id=recipe_id,
+        )
+        db.session.add(winner)
+        db.session.commit()
+        winner_id = winner.id
+        QueryClass = type(Recipe.query)
+
+    real_first = QueryClass.first
+    calls = []
+
+    def fake_first(self):
+        calls.append(1)
+        if len(calls) == 1:  # 사전 확인 시점엔 아직 못 본 척한다(동시 요청 흉내)
+            return None
+        return real_first(self)
+
+    monkeypatch.setattr(QueryClass, "first", fake_first)
+    res = client.post(f"/api/public-recipes/{recipe_id}/save")
+    assert (res.status_code, res.get_json()["id"]) == (200, winner_id)
+    with app.app_context():
+        assert Recipe.query.filter_by(user_id=user.id).count() == 1
+
+
+def test_recipe_at_max_boundaries_is_created(client, login):
+    # R6: 제목 60자, 인분 20, 재료 50개(양 30자), 단계 30개(그중 하나 500자) → 201
+    login()
+    ingredients = [{"name": f"재료{i}", "amount": "1" * 30} for i in range(50)]
+    steps = ["단계"] * 29 + ["가" * 500]
+    res = create(client, title="가" * 60, servings=20, ingredients=ingredients, steps=steps)
+    assert res.status_code == 201
+    body = res.get_json()
+    assert (len(body["title"]), body["servings"], len(body["ingredients"]), len(body["steps"])) == (60, 20, 50, 30)
+    assert body["ingredients"][0]["amount"] == "1" * 30
+    assert len(body["steps"][-1]) == 500
+
+
+def test_max_recipes_per_user_is_1000():
+    assert recipes_module.MAX_RECIPES_PER_USER == 1000
+
+
+def test_save_public_recipe_out_of_range_id_is_404(client, login):
+    login()
+    assert client.post(f"/api/public-recipes/{2**40}/save").status_code == 404
