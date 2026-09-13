@@ -14,14 +14,13 @@ class FakeResponse:
 
 @pytest.fixture
 def oauth_app(make_app):
-    app = make_app(
+    # app context를 붙잡지 않는다: 요청마다 새 세션을 써야 commit 누락이 테스트에서 드러난다 (conftest의 app 픽스처와 같은 이유)
+    return make_app(
         KAKAO_CLIENT_ID="kid",
         KAKAO_CLIENT_SECRET="ksecret",
         GOOGLE_CLIENT_ID="gid",
         GOOGLE_CLIENT_SECRET="gsecret",
     )
-    with app.app_context():
-        yield app
 
 
 def oauth_client(app, name):
@@ -55,7 +54,8 @@ def test_kakao_callback_logs_in(oauth_app, monkeypatch):
     assert res.status_code == 302
     assert res.location == "/"
     assert c.get("/api/me").get_json()["nickname"] == "냉장고왕"
-    assert User.query.filter_by(provider="kakao", provider_id="42").count() == 1
+    with oauth_app.app_context():
+        assert User.query.filter_by(provider="kakao", provider_id="42").count() == 1
 
 
 def test_google_callback_logs_in(oauth_app, monkeypatch):
