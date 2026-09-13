@@ -53,7 +53,7 @@ recipe-ai/
 - `recipes`: id, user_id, title(1~60자), servings(1~20, 기본 2), ingredients(JSON `[{name, amount}]` 1~50개), steps(JSON `[str]` 0~30개), source(`mine`|`public`|`ai`|`youtube`|`instagram`|`text`), source_url(선택), public_recipe_id(선택, SET NULL), image_url(선택), created_at, updated_at. UNIQUE(user_id, public_recipe_id)
 - `public_recipes`: id, rcp_seq(UNIQUE), title, category(RCP_PAT2), method(RCP_WAY2), kcal(INFO_ENG), servings(원문 `N인분`, 없으면 2), ingredients_text(원문), ingredients(JSON `[{name, amount}]`, 파싱), ingredient_keys(JSON, ingredients와 같은 순서의 매칭용 이름), steps(JSON), image_url, is_sample(키 없을 때 넣는 예시 레시피), updated_at. 사용자 소유 아님.
 - `cook_logs`: id, user_id, recipe_id(선택, SET NULL), title, cooked_on(date), rating(1~5, 선택), memo(선택), photo_key(선택), created_at
-- `ai_calls`: id, user_id, kind(`fridge`|`receipt`|`order`|`memo`|`recipe`|`link`), created_at(인덱스)
+- `ai_calls`: id, user_id, kind(`fridge`|`receipt`|`order`|`memo`|`recipe`|`link`), model, input_tokens, output_tokens, created_at(인덱스). 토큰은 원가 계산용(25절)이다. model은 성공하면 실제로 답한 모델, 실패하면 요청한 모델이다. AI 호출이 AiError로 끝나면(오류·타임아웃·거절·max_tokens·스키마 불일치) 토큰은 비워 둔다. 새 AI 기능도 같은 방식으로 남긴다.
 - `storage_locations`, `staples`, `item_rules`(14절), `shopping_items`(16절), `kitchen_tools`(18절)
 
 ### 규칙
@@ -221,6 +221,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - 정렬 링크(추가 2026-09-13): 쇼핑몰마다 `낮은 가격순`·`판매량(많이 산)순`·`신상품순`으로 연 검색 결과 링크. 쇼핑몰별 정렬 URL 파라미터는 구현 시 실제 동작을 검증하고, 지원하지 않는 정렬은 버튼을 숨긴다.
 - 구매·결제는 앱에서 하지 않는다(공개 주문 API 없음). 링크로 쇼핑몰 앱/웹의 검색·상품 화면까지 연결하는 것이 범위.
 - ~~네이버 최저가~~ (변경 2026-09-13): 네이버 쇼핑 검색 API가 2026-07-31에 종료되고 공식 대체 API가 없어 앱 안 가격 표시는 하지 않는다. 사용자 결정으로 쇼핑몰별 `낮은 가격순` 검색 링크(위 정렬 링크)로 대체한다. 가격 스크래핑은 약관·차단 위험으로 하지 않는다.
+- 제휴 링크(추가 2026-09-13, 25절): 쇼핑몰 링크는 한 함수에서만 만든다. 제휴 ID는 환경변수(예: `COUPANG_PARTNERS_ID`)로 받고, 없으면 일반 검색 링크를 쓴다. 제휴 링크 옆에는 `광고` 표시를 단다(공정위 추천·보증 심사지침). 정렬·노출 순서는 수수료와 무관하게 둔다. 파트너스 가입·약관 확인은 Render 배포 후.
 - 구매 완료: 체크 시 재료로 등록(구입일 기본 오늘·수정 가능, 위치 선택). 주문 캡처/영수증 스캔 결과로 장보기 항목 일괄 체크.
 
 ## 17. 3단계 추가: 링크로 레시피 가져오기
@@ -332,3 +333,16 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **월 요약:** 달력 위에 이번 달 기록한 날 수, 하루 평균 kcal(기록한 날 기준), 집밥/외식 비율(`place` 기준, 미지정 제외).
 - **개인정보:** 사진·먹은 기록은 본인만 조회, 계정 삭제 시 함께 삭제. 의료 조언이 아니라 참고용 문구는 21절과 같다.
 - **순서:** 달력·먹은 기록·사진·메모·만족도는 4b단계에서 만들고, 요리 기록 합치기는 5단계에서 연결한다.
+
+## 25. 수익화 방향 (추가: 2026-09-13, 기획만 — 구현하지 않음)
+
+순서: 배포 → AI 원가 측정(`ai_calls` 토큰, 구현됨) → 4단계에서 제휴 링크(16절) → 아래 두 가지는 조건이 되면 그때 설계한다.
+
+- **구독 결제** — 매주 쓰는 사용자가 생기면 붙인다.
+  - 무료/유료 경계는 **AI 한도**(스캔·AI 레시피·식단 AI 횟수)로 둔다. 비용이 드는 곳이 경계다. 레시피 등록 개수 제한은 원가가 거의 없고 초기 사용자를 떠나게 해서 쓰지 않는다.
+  - 유료 후보: AI 한도 상향, 식단 AI 초안·1달 달력(4b), 가족 공유 냉장고(13절 범위 밖에서 승격).
+  - 가격은 `ai_calls` 토큰으로 사용자당 월 AI 원가를 잰 뒤 정한다. 무료 한도(지금 스캔·레시피 하루 10회)도 그때 다시 정한다.
+  - 웹(PWA) 결제대행(토스페이먼츠·포트원 등)이라 앱스토어 수수료가 없다. 필요: 사업자등록, 통신판매업 신고, 환불 규정, 개인정보처리방침.
+- **식품 브랜드 협찬 레시피** — 사용자가 더 모이면 제안한다. 추천 목록에 `광고` 표시를 달고 섞는다.
+- 하지 않음: 배너 광고(수익 적고 디자인 방향과 안 맞음), 사용자 재고·식습관 데이터 판매.
+- 유료화 전에 확인: 식약처 공공 레시피 상업 이용 조건·출처 표시, 유튜브·인스타그램 가져오기는 링크·요약만(본문·사진 저장 안 함), `갈무리부엌` 상표(KIPRIS).

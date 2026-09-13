@@ -84,7 +84,7 @@ def sample_result(kind, today):
 
 
 def extract(kind, image_bytes, media_type):
-    """사진 한 장에서 재료 목록을 뽑는다. 실패하면 AiError."""
+    """사진 한 장에서 재료 목록을 뽑는다. (결과, 토큰 사용량)을 돌려주고, 실패하면 AiError."""
     # gthread 워커는 요청 처리 중에도 계속 heartbeat를 보내므로 gunicorn --timeout(120s, Dockerfile)이
     # 이 호출을 끊지 않는다. SDK는 두 번의 시도(45s + 45s) 사이에 retry-after(최대 60s)를 기다릴 수 있어
     # 최악의 경우 약 150초까지 걸릴 수 있다. 그동안 사용자는 화면에서 취소할 수 있다.
@@ -111,4 +111,10 @@ def extract(kind, image_bytes, media_type):
     if response.stop_reason == "refusal" or response.parsed_output is None:
         current_app.logger.warning("scan %s failed: stop_reason=%s", kind, response.stop_reason)
         raise AiError(response.stop_reason)
-    return response.parsed_output.model_dump()
+    # model은 요청한 이름이 아니라 실제로 답한(과금된) 모델 이름이다.
+    usage = {
+        "model": response.model,
+        "input_tokens": response.usage.input_tokens,
+        "output_tokens": response.usage.output_tokens,
+    }
+    return response.parsed_output.model_dump(), usage
