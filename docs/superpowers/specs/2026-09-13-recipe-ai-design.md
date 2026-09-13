@@ -49,7 +49,7 @@ recipe-ai/
 모든 사용자 소유 테이블은 `user_id` FK를 갖고, 모든 조회는 현재 사용자로 한정한다.
 
 - `users`: id, provider(`kakao`|`google`), provider_id, nickname, created_at. UNIQUE(provider, provider_id)
-- `ingredients`: id, user_id, name, quantity(float, 기본 1), unit(str, 기본 `개`), purchased_on(date, 필수), expires_on(date, 선택), created_at
+- `ingredients`: id, user_id, name, quantity(float, 기본 1), unit(str, 기본 `개`), purchased_on(date, 필수), expires_on(date, 선택), price(원, 선택), created_at
 - `recipes`: id, user_id, title(1~60자), servings(1~20, 기본 2), ingredients(JSON `[{name, amount}]` 1~50개), steps(JSON `[str]` 0~30개), source(`mine`|`public`|`ai`|`youtube`|`instagram`|`text`), source_url(선택), public_recipe_id(선택, SET NULL), image_url(선택), created_at, updated_at. UNIQUE(user_id, public_recipe_id)
 - `public_recipes`: id, rcp_seq(UNIQUE), title, category(RCP_PAT2), method(RCP_WAY2), kcal(INFO_ENG), servings(원문 `N인분`, 없으면 2), ingredients_text(원문), ingredients(JSON `[{name, amount}]`, 파싱), ingredient_keys(JSON, ingredients와 같은 순서의 매칭용 이름), steps(JSON), image_url, is_sample(키 없을 때 넣는 예시 레시피), updated_at. 사용자 소유 아님.
 - `cook_logs`: id, user_id, recipe_id(선택, SET NULL), title, cooked_on(date), rating(1~5, 선택), memo(선택), photo_key(선택), created_at
@@ -76,9 +76,9 @@ recipe-ai/
 | POST | `/api/logout` | 세션 삭제 |
 | GET | `/api/me` | 현재 사용자 `{id, nickname, scan: "on"\|"sample"\|"off", scan_limit}` (비로그인 401). 개발용 로그인 응답도 같은 모양 |
 | GET/POST | `/api/ingredients` | 목록(임박 순, status 포함) / 생성 |
-| POST | `/api/ingredients/bulk` | 스캔 확인 후 일괄 생성 `{items:[{name, quantity, unit, purchased_on, expires_on?, location_id?}]}` 1~50개. 하나라도 틀리면 아무것도 만들지 않고 400 `{error: "N번째 재료: …", errors:[{index, error}]}` |
+| POST | `/api/ingredients/bulk` | 스캔 확인 후 일괄 생성 `{items:[{name, quantity, unit, purchased_on, expires_on?, price?, location_id?}]}` 1~50개. 하나라도 틀리면 아무것도 만들지 않고 400 `{error: "N번째 재료: …", errors:[{index, error}]}` |
 | PATCH/DELETE | `/api/ingredients/<id>` | 수정 / 삭제 |
-| POST | `/api/scan?kind=fridge\|receipt\|order` | multipart `image` → `{items:[{name, quantity, unit, location_kind}], purchased_on, sample}` |
+| POST | `/api/scan?kind=fridge\|receipt\|order` | multipart `image` → `{items:[{name, quantity, unit, location_kind, price}], purchased_on, sample}` |
 | GET/POST | `/api/recipes` | 목록(생성일 아님, `updated_at`·id 내림차순 커서 페이지 25절) / 생성. 목록 `?limit=1~50(기본 30)&cursor=` → `{items:[...], next_cursor}` |
 | GET/PUT/DELETE | `/api/recipes/<id>` | 상세 / 수정 / 삭제. 상세의 `ingredients`는 `[{name, amount, have, matched_name}]`(현재 재고 기준) |
 | GET | `/api/public-recipes/<id>` | 공공 레시피 상세(같은 `ingredients` 모양) |
@@ -109,7 +109,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 ## 7. 핵심 동작
 
 - **스캔**: Claude Messages API에 이미지(base64) + 종류별 프롬프트, 구조화 출력(JSON 스키마)으로
-  `{items:[{name, quantity, unit, location_kind}], purchased_on: "YYYY-MM-DD"|null}`. 영수증·주문에서 식재료가 아닌 항목(봉투, 세제 등)은 제외하도록 지시. 서버가 결과를 정리한다(최대 50개, 이름 50자·단위 10자, 수량이 0 이하·숫자 아님 → 1, 미래 구입일·냉장고 사진의 구입일 → null).
+  `{items:[{name, quantity, unit, location_kind, price}], purchased_on: "YYYY-MM-DD"|null}`. 영수증·주문에서 식재료가 아닌 항목(봉투, 세제 등)은 제외하도록 지시. 서버가 결과를 정리한다(최대 50개, 이름 50자·단위 10자, 수량이 0 이하·숫자 아님 → 1, 미래 구입일·냉장고 사진의 구입일 → null). price는 품목별 결제 금액(원, 할인 반영)이며 숫자가 아니거나 0보다 크고 10,000,000원 이하가 아니면 null(직접 입력은 0원도 허용), 냉장고 사진은 항상 null.
 - **AI 레시피**: 보유 재료 목록(임박 표시 포함)을 전달, 구조화 출력으로 `[{title, ingredients:[{name, amount}], steps:[str]}]` 3개. 임박 재료 우선 사용 지시.
 - **조리 기록 저장**: 한 트랜잭션에서 `usages=[{ingredient_id, amount}]` 각각 소유 확인 → quantity 차감 → 0 이하면 삭제 → cook_log 생성. 사진 업로드 실패 시 전체 롤백.
 - **AI 일일 한도**: 요청 전 오늘(서버 기준 Asia/Seoul) 해당 사용자의 `ai_calls` 수를 kind 그룹(scan: fridge+receipt+order+memo / recipe)별로 센다. 서울 하루를 UTC 구간으로 바꿔 created_at으로 센다.

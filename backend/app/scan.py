@@ -16,6 +16,7 @@ UPLOAD_KINDS = ("fridge", "receipt", "order")
 SCAN_KINDS = ("fridge", "receipt", "order", "memo")  # 일일 한도를 함께 세는 kind (memo는 4단계 장보기 메모 사진)
 MAX_ITEMS = 50
 MAX_QUANTITY = 9999
+MAX_PRICE = 10_000_000
 BURST_WINDOW_SECONDS = 60
 
 
@@ -67,6 +68,14 @@ def _purchased_on(value, today):
     return day.isoformat() if day and day <= today else None
 
 
+def _price(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not (0 < value <= MAX_PRICE):
+        return None
+    return round(value)
+
+
 def clean_result(kind, raw, today):
     """AI(또는 예시) 결과를 화면에 넘기기 전에 정리한다. 모델 출력은 믿지 않는다."""
     raw = raw if isinstance(raw, dict) else {}
@@ -86,6 +95,7 @@ def clean_result(kind, raw, today):
                 "quantity": _quantity(row.get("quantity")),
                 "unit": unit or "개",
                 "location_kind": location_kind if location_kind in KINDS else "fridge",
+                "price": None if kind == "fridge" else _price(row.get("price")),
             }
         )
     purchased_on = None if kind == "fridge" else _purchased_on(raw.get("purchased_on"), today)

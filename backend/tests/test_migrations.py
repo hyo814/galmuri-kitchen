@@ -144,6 +144,19 @@ def test_ai_call_tokens_migration_adds_and_removes_columns(app):
         assert not token_columns & columns
 
 
+def test_ingredient_price_migration_adds_and_removes_column(app):
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="a8b8c8d8e8f8")
+        with db.engine.connect() as conn:
+            columns = {c["name"] for c in sa.inspect(conn).get_columns("ingredients")}
+        assert "price" in columns
+
+        downgrade(directory=MIGRATIONS, revision="a7b7c7d7e7f7")
+        with db.engine.connect() as conn:
+            columns = {c["name"] for c in sa.inspect(conn).get_columns("ingredients")}
+        assert "price" not in columns
+
+
 def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)

@@ -16,6 +16,7 @@ from .validation import iso_date, text
 bp = Blueprint("ingredients", __name__, url_prefix="/api/ingredients")
 
 BULK_MAX = 50  # 스캔 확인 화면에서 한 번에 넣는 최대 개수 (scan.MAX_ITEMS와 같게)
+MAX_PRICE = 10_000_000  # 재료 가격 상한(원) (scan.MAX_PRICE와 같게)
 MAX_INGREDIENTS_PER_USER = 2000  # 사용자당 저장 가능한 재료 상한
 URGENT_DAYS = 3  # 유통기한까지 3일 이내(지난 것 포함)면 임박
 OLD_DAYS_BY_KIND = {"fridge": 7, "freezer": 60, "room": None}  # 유통기한이 없을 때 오래됨 기준(일), room은 표시 안 함
@@ -88,6 +89,7 @@ def to_json(item, today, rules, seasonings=()):
         "location_kind": item.location.kind,
         "days_left": (item.expires_on - today).days if item.expires_on else None,
         "days_since_purchase": (today - item.purchased_on).days,
+        "price": item.price,
     }
 
 
@@ -137,6 +139,14 @@ def parse_fields(data, creating, locations=None):
     if "expires_on" in data:
         value = data["expires_on"]
         fields["expires_on"] = _date(value, "유통기한") if value else None
+    if "price" in data:
+        value = data["price"]
+        if value is None or value == "":
+            fields["price"] = None
+        elif isinstance(value, bool) or not isinstance(value, int) or not (0 <= value <= MAX_PRICE):
+            abort(400, "가격은 0~10,000,000원 사이 숫자로 입력해주세요.")
+        else:
+            fields["price"] = value
     if creating or "location_id" in data:
         value = data.get("location_id")
         if locations is not None:  # 일괄 추가: 요청마다 한 번 불러온 위치 목록에서 고른다
