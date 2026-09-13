@@ -1,4 +1,4 @@
-# 배포 가이드 (Render + 카카오/구글 로그인)
+# 배포 가이드 (Render + 카카오/네이버/구글 로그인)
 
 ## 0. 로컬 개발
 
@@ -60,6 +60,7 @@
 | `SECRET_KEY` | 필수 | 항상(세션 서명) | 직접 생성(긴 랜덤 문자열) |
 | `DATABASE_URL` | 필수(운영) | 항상 | Render PostgreSQL Internal Database URL |
 | `KAKAO_CLIENT_ID` / `KAKAO_CLIENT_SECRET` | 선택 | 로그인 | 카카오 개발자 콘솔 |
+| `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | 선택 | 로그인 | 네이버 개발자센터 |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 선택 | 로그인 | Google Cloud Console |
 | `ANTHROPIC_API_KEY` / `CLAUDE_MODEL` | 선택 | 2단계 사진으로 추가, 3단계 AI 레시피(없으면 개발 모드는 예시 결과, 운영은 버튼 숨김) | console.anthropic.com |
 | `AI_DAILY_SCAN_LIMIT` / `AI_DAILY_RECIPE_LIMIT` | 선택 | 사진 인식 / AI 레시피 하루 한도(기본 10, 서울 날짜) | 직접 설정 |
@@ -75,7 +76,7 @@
 
 - [ ] `DEV_MODE` 환경변수가 없다 (있으면 Render에서 시작 거부). 이 거부 장치는 `RENDER` 환경변수를 기준으로 동작하므로, Render가 아닌 다른 호스팅에 올릴 때는 `DEV_MODE`를 직접 비워 둬야 한다.
 - [ ] `SECRET_KEY`를 새로 생성해 넣었다(로컬 값 재사용 금지).
-- [ ] 카카오/구글 OAuth 리다이렉트 URI가 실제 배포 도메인으로 등록돼 있다.
+- [ ] 카카오/네이버/구글 OAuth 리다이렉트 URI가 실제 배포 도메인으로 등록돼 있다.
 - [ ] `flask db upgrade` 후 `flask db check`가 깨끗하다(Postgres 대상).
 
 ## 1. GitHub에 올리기
@@ -97,6 +98,7 @@
    | `DATABASE_URL` | 2번에서 복사한 Internal Database URL |
    | `KAKAO_CLIENT_ID` / `KAKAO_CLIENT_SECRET` | 4번에서 발급 |
    | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 5번에서 발급 |
+   | `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | 5-1번에서 발급 |
    `DEV_MODE`는 **절대 넣지 않는다**(넣으면 앱이 시작을 거부함).
 4. 배포가 끝나면 주소 확인: `https://<서비스명>.onrender.com` (아래에서 `<도메인>`)
 
@@ -115,6 +117,14 @@
 4. 승인된 리디렉션 URI: `https://<도메인>/auth/callback/google`
 5. 클라이언트 ID/보안 비밀 → `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
 6. 동의 화면을 "프로덕션 게시"하기 전까지는 테스트 사용자로 등록한 계정만 로그인 가능
+
+## 5-1. 네이버 로그인
+1. https://developers.naver.com → Application → 애플리케이션 등록
+2. 사용 API: **네이버 로그인**, 제공 정보: **별명** 선택
+3. 로그인 오픈 API 서비스 환경 → PC 웹 → 서비스 URL `https://<도메인>`, Callback URL `https://<도메인>/auth/callback/naver`
+4. Client ID / Client Secret → `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET`
+5. 등록 직후는 "개발 중" 상태라 멤버관리에 넣은 테스트 계정만 로그인 가능. 누구나 쓰게 하려면 **검수 요청** 후 승인받기
+6. 한 번 발급한 네이버 앱(Client ID)은 바꾸지 않는다. 네이버 사용자 id는 앱마다 달라서, 바꾸면 기존 회원이 새 계정으로 생긴다.
 
 환경변수를 바꾼 뒤에는 Render에서 Manual Deploy → Deploy latest commit.
 

@@ -42,6 +42,11 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
           카카오 로그인
         </a>
       )}
+      {options?.providers.includes("naver") && (
+        <a className="btn naver" href="/auth/login/naver">
+          네이버 로그인
+        </a>
+      )}
       {options?.providers.includes("google") && (
         <a className="btn google" href="/auth/login/google">
           Google로 계속하기
