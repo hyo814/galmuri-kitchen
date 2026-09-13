@@ -6,7 +6,7 @@ import LocationsSheet from "../components/LocationsSheet";
 import RulesSheet from "../components/RulesSheet";
 import SettingsSheet, { type SettingsTarget } from "../components/SettingsSheet";
 import StaplesSheet from "../components/StaplesSheet";
-import { formatDate, formatQuantity } from "../format";
+import { formatDate, formatQuantity, withJosa } from "../format";
 
 // 떨어진 필수품이 많아도 배너가 화면을 차지하지 않도록 앞의 몇 개만 이름을 보여 준다 (전체는 필수품 시트)
 const BANNER_NAMES = 3;
@@ -26,6 +26,7 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
   const [rules, setRules] = useState<ItemRule[]>([]);
   const [filter, setFilter] = useState<number | "all">("all");
   const [editing, setEditing] = useState<Ingredient | "new" | null>(null);
+  const [prefillName, setPrefillName] = useState("");
   const [panel, setPanel] = useState<"settings" | SettingsTarget | null>(null);
   const [error, setError] = useState("");
 
@@ -44,19 +45,25 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
     load();
   }, []);
 
-  // 저장·삭제 오류는 던져서 시트 안에 표시한다.
-  const save = async (input: IngredientInput) => {
+  // 저장·삭제 오류는 던져서 시트 안에 표시한다. keepOpen이면 시트를 닫지 않는다(연속 추가).
+  const save = async (input: IngredientInput, keepOpen: boolean) => {
     if (editing === "new") await api("/api/ingredients", { method: "POST", body: input });
     else if (editing) await api(`/api/ingredients/${editing.id}`, { method: "PATCH", body: input });
-    setEditing(null);
+    if (!keepOpen) setEditing(null);
     await load();
   };
 
   const remove = async () => {
-    if (!editing || editing === "new" || !confirm(`${editing.name}을(를) 삭제할까요?`)) return;
+    if (!editing || editing === "new" || !confirm(`${withJosa(editing.name, "을", "를")} 삭제할까요?`)) return;
     await api(`/api/ingredients/${editing.id}`, { method: "DELETE" });
     setEditing(null);
     await load();
+  };
+
+  const openNew = (name = "") => {
+    setPanel(null);
+    setPrefillName(name);
+    setEditing("new");
   };
 
   const logout = async () => {
@@ -165,7 +172,7 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
       )}
 
       <div className="cta-bar">
-        <button className="btn primary" disabled={defaultLocationId === undefined} onClick={() => setEditing("new")}>
+        <button className="btn primary" disabled={defaultLocationId === undefined} onClick={() => openNew()}>
           <Icon name="plus" />
           재료 추가
         </button>
@@ -174,6 +181,7 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
       {editing && defaultLocationId !== undefined && (
         <IngredientForm
           initial={editing === "new" ? null : editing}
+          initialName={editing === "new" ? prefillName : undefined}
           locations={locations}
           defaultLocationId={defaultLocationId}
           onSubmit={save}
