@@ -73,6 +73,7 @@ export default function IngredientForm({
   const saveAndContinue = async () => {
     if (nameRef.current?.form && !nameRef.current.form.reportValidity()) return;
     const added = name.trim();
+    setLastAdded("");
     if (await run(() => onSubmit(input(), true))) {
       setName("");
       setQuantity("1");
