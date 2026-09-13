@@ -6,6 +6,9 @@ import ComingSoon from "./pages/ComingSoon";
 import Fridge from "./pages/Fridge";
 import Login from "./pages/Login";
 import More from "./pages/More";
+import RecipeDetail from "./pages/RecipeDetail";
+import RecipeForm from "./pages/RecipeForm";
+import Recipes from "./pages/Recipes";
 import Tools from "./pages/Tools";
 import { useHashRoute, type Route, type RoutePattern } from "./useHashRoute";
 import { forgetResources } from "./useResource";
@@ -19,11 +22,11 @@ interface PageProps {
 // 경로 → 화면. 새 화면은 useHashRoute의 ROUTES와 여기에 한 줄씩 추가한다.
 const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
   "/": ({ user, onLogout }) => <Fridge user={user} onLogout={onLogout} />,
-  "/recipes": () => <ComingSoon route="/recipes" />,
-  "/recipes/new": () => <ComingSoon route="/recipes" />,
-  "/recipes/mine/:id": () => <ComingSoon route="/recipes" />,
-  "/recipes/mine/:id/edit": () => <ComingSoon route="/recipes" />,
-  "/recipes/public/:id": () => <ComingSoon route="/recipes" />,
+  "/recipes": () => <Recipes />,
+  "/recipes/new": () => <RecipeForm />,
+  "/recipes/mine/:id": ({ route }) => <RecipeDetail kind="mine" id={route.params.id} />,
+  "/recipes/mine/:id/edit": ({ route }) => <RecipeForm id={route.params.id} />,
+  "/recipes/public/:id": ({ route }) => <RecipeDetail kind="public" id={route.params.id} />,
   "/shopping": () => <ComingSoon route="/shopping" />,
   "/meals": () => <ComingSoon route="/meals" />,
   "/more": () => <More />,

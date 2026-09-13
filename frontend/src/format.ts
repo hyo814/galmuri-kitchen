@@ -31,3 +31,37 @@ export function addDays(iso: string, days: number): string {
   d.setDate(d.getDate() + days);
   return d.toLocaleDateString("sv-SE");
 }
+
+/** 식약처 사진은 http 주소로 오지만 https로도 열린다(2026-09-13 확인). https 화면에서 섞인 콘텐츠로 막히지 않게 바꾼다. */
+export function imageSrc(url: string | null): string | null {
+  return url ? url.replace(/^http:\/\/(www|openapi)\.foodsafetykorea\.go\.kr\//, "https://$1.foodsafetykorea.go.kr/") : null;
+}
+
+// 숟가락으로 뜰 수 있는 분수 (스펙 22절과 같은 기호)
+const SNAPS: [number, string][] = [[0, ""], [1 / 4, "¼"], [1 / 3, "⅓"], [1 / 2, "½"], [2 / 3, "⅔"], [3 / 4, "¾"], [1, ""]];
+const FRACTIONS = Object.fromEntries(SNAPS.filter(([, symbol]) => symbol).map(([value, symbol]) => [symbol, value]));
+
+/** 0.5 → "½", 1.5 → "1½", 0.4 → "0.4", 112.5 → "113". 10 이상은 정수, 그 아래는 가까운 분수가 있으면 분수 */
+export function formatAmountNumber(value: number): string {
+  if (value >= 10) return String(Math.round(value));
+  const whole = Math.floor(value);
+  const snap = SNAPS.find(([fraction]) => Math.abs(value - whole - fraction) < 0.04);
+  if (!snap) return String(Number(value.toFixed(1)));
+  const [fraction, symbol] = snap;
+  return symbol ? `${whole || ""}${symbol}` : String(whole + fraction);
+}
+
+/**
+ * 인분 조절: 양의 앞 숫자만 배율로 바꾼다(화면에서만, 저장하지 않음 — 스펙 23절 D1).
+ * "200g" ×2 → "400g", "1/2모(150g)" ×2 → "1모(150g)", "1½큰술" ×2 → "3큰술". "약간"·"10~15개"는 그대로
+ */
+export function scaleAmount(amount: string, ratio: number): string {
+  const match = amount.match(/^(\d+(?:\.\d+)?)?(?:([¼⅓½⅔¾])|\/(\d+))?/);
+  if (ratio === 1 || !match || (match[1] === undefined && match[2] === undefined)) return amount;
+  if (match[3] !== undefined && (match[1] === undefined || Number(match[3]) === 0)) return amount;
+  const rest = amount.slice(match[0].length);
+  if (/^\s*[~-]\s*\d/.test(rest)) return amount; // 범위(10~15개)는 어느 숫자를 바꿀지 애매해서 그대로
+  let value = Number(match[1] ?? 0) + (match[2] ? FRACTIONS[match[2]] : 0);
+  if (match[3] !== undefined) value /= Number(match[3]);
+  return formatAmountNumber(value * ratio) + rest;
+}
