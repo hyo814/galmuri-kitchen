@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
-import { api, type Ingredient, type IngredientInput, type Staple, type StorageLocation } from "../api";
+import { api, type Ingredient, type IngredientInput, type ItemRule, type Staple, type StorageLocation } from "../api";
 import Icon from "../components/Icon";
 import IngredientForm from "../components/IngredientForm";
 import LocationsSheet from "../components/LocationsSheet";
+import RulesSheet from "../components/RulesSheet";
 import SettingsSheet, { type SettingsTarget } from "../components/SettingsSheet";
 import StaplesSheet from "../components/StaplesSheet";
 import { formatDate, formatQuantity } from "../format";
 
 function badge(item: Ingredient): string | null {
+  if (item.status === "danger") return "섭취 주의";
   const d = item.days_left;
   if (item.status === "old") return `구입 ${item.days_since_purchase}일째`;
   if (d !== null) return d > 0 ? `D-${d}` : d === 0 ? "D-day" : `${-d}일 지남`;
@@ -18,6 +20,7 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
   const [items, setItems] = useState<Ingredient[] | null>(null);
   const [locations, setLocations] = useState<StorageLocation[]>([]);
   const [staples, setStaples] = useState<Staple[]>([]);
+  const [rules, setRules] = useState<ItemRule[]>([]);
   const [filter, setFilter] = useState<number | "all">("all");
   const [editing, setEditing] = useState<Ingredient | "new" | null>(null);
   const [panel, setPanel] = useState<"settings" | SettingsTarget | null>(null);
@@ -29,6 +32,7 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
       api<Ingredient[]>("/api/ingredients").then(setItems),
       api<StorageLocation[]>("/api/locations").then(setLocations),
       api<Staple[]>("/api/staples").then(setStaples),
+      api<ItemRule[]>("/api/item-rules").then(setRules),
     ]).catch((e: Error) => setError(e.message));
 
   useEffect(() => {
@@ -59,7 +63,7 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
   const visible = items?.filter((i) => activeFilter === "all" || i.location_id === activeFilter) ?? null;
   const defaultLocationId =
     activeFilter !== "all" ? activeFilter : (locations.find((l) => l.kind === "fridge") ?? locations[0])?.id;
-  const soon = items?.filter((i) => i.status === "urgent").length ?? 0;
+  const soon = items?.filter((i) => i.status === "urgent" || i.status === "danger").length ?? 0;
   const missing = staples.filter((s) => !s.in_stock);
 
   return (
@@ -141,6 +145,7 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
                     <span className="row-sub">
                       {formatQuantity(item.quantity)}
                       {item.unit} · {item.location_name} · {formatDate(item.purchased_on)} 구입
+                      {item.status === "danger" && ` · 구입 ${item.days_since_purchase}일째`}
                     </span>
                   </span>
                   {label && <span className={`badge ${item.status}`}>{label}</span>}
@@ -174,6 +179,7 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
         <LocationsSheet locations={locations} onChanged={load} onClose={() => setPanel(null)} />
       )}
       {panel === "staples" && <StaplesSheet staples={staples} onChanged={load} onClose={() => setPanel(null)} />}
+      {panel === "rules" && <RulesSheet rules={rules} onChanged={load} onClose={() => setPanel(null)} />}
     </div>
   );
 }

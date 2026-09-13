@@ -7,14 +7,16 @@ from sqlalchemy.orm import joinedload
 
 from .auth import get_owned_or_404, login_required
 from .locations import default_location, owned_location
-from .models import Ingredient, db
+from .matching import keyword_in
+from .models import Ingredient, ItemRule, db
 from .validation import text
 
 bp = Blueprint("ingredients", __name__, url_prefix="/api/ingredients")
 
 URGENT_DAYS = 3  # 유통기한까지 3일 이내(지난 것 포함)면 임박
 OLD_DAYS_BY_KIND = {"fridge": 7, "freezer": 60, "room": None}  # 유통기한이 없을 때 오래됨 기준(일), room은 표시 안 함
-STATUS_RANK = {"urgent": 0, "old": 1, "ok": 2}
+SEVERITY = {"ok": 0, "old": 1, "urgent": 2, "danger": 3}
+STATUS_RANK = {"danger": 0, "urgent": 1, "old": 2, "ok": 3}
 SEOUL = ZoneInfo("Asia/Seoul")
 
 
@@ -22,14 +24,41 @@ def seoul_today():
     return datetime.now(SEOUL).date()
 
 
-def ingredient_status(purchased_on, expires_on, today, kind="fridge"):
+def ingredient_status(purchased_on, expires_on, today, kind="fridge", rule=None):
+    """rule은 (warn_days, danger_days) 또는 None. 가장 심각한 상태를 고른다 (스펙 14절)."""
+    statuses = []
     if expires_on is not None:
-        return "urgent" if (expires_on - today).days <= URGENT_DAYS else "ok"
-    old_days = OLD_DAYS_BY_KIND[kind]
-    return "old" if old_days is not None and (today - purchased_on).days >= old_days else "ok"
+        statuses.append("urgent" if (expires_on - today).days <= URGENT_DAYS else "ok")
+    age = (today - purchased_on).days
+    if rule is not None:
+        warn_days, danger_days = rule
+        statuses.append("danger" if age >= danger_days else "old" if age >= warn_days else "ok")
+    if not statuses:
+        old_days = OLD_DAYS_BY_KIND[kind]
+        statuses.append("old" if old_days is not None and age >= old_days else "ok")
+    return max(statuses, key=SEVERITY.__getitem__)
 
 
-def to_json(item, today):
+def matching_rule(name, rules):
+    """이름에 키워드가 들어가는 규칙 중 빨강 일수가 가장 짧은 규칙의 (warn_days, danger_days)."""
+    matched = [r for r in rules if keyword_in(r.keyword, name)]
+    if not matched:
+        return None
+    best = min(matched, key=lambda r: r.danger_days)
+    return best.warn_days, best.danger_days
+
+
+def user_rules(user_id):
+    return ItemRule.query.filter_by(user_id=user_id).all()
+
+
+def status_of(item, today, rules):
+    return ingredient_status(
+        item.purchased_on, item.expires_on, today, item.location.kind, matching_rule(item.name, rules)
+    )
+
+
+def to_json(item, today, rules):
     return {
         "id": item.id,
         "name": item.name,
@@ -37,7 +66,7 @@ def to_json(item, today):
         "unit": item.unit,
         "purchased_on": item.purchased_on.isoformat(),
         "expires_on": item.expires_on.isoformat() if item.expires_on else None,
-        "status": ingredient_status(item.purchased_on, item.expires_on, today, item.location.kind),
+        "status": status_of(item, today, rules),
         "location_id": item.location_id,
         "location_name": item.location.name,
         "location_kind": item.location.kind,
@@ -87,16 +116,12 @@ def parse_fields(data, creating):
 @login_required
 def list_ingredients():
     today = seoul_today()
+    rules = user_rules(g.user.id)
     items = Ingredient.query.options(joinedload(Ingredient.location)).filter_by(user_id=g.user.id).all()
     items.sort(
-        key=lambda i: (
-            STATUS_RANK[ingredient_status(i.purchased_on, i.expires_on, today, i.location.kind)],
-            i.expires_on or date.max,
-            i.purchased_on,
-            i.id,
-        )
+        key=lambda i: (STATUS_RANK[status_of(i, today, rules)], i.expires_on or date.max, i.purchased_on, i.id)
     )
-    return jsonify([to_json(i, today) for i in items])
+    return jsonify([to_json(i, today, rules) for i in items])
 
 
 @bp.post("")
@@ -105,7 +130,7 @@ def create_ingredient():
     item = Ingredient(user_id=g.user.id, **parse_fields(request.get_json(silent=True), creating=True))
     db.session.add(item)
     db.session.commit()
-    return jsonify(to_json(item, seoul_today())), 201
+    return jsonify(to_json(item, seoul_today(), user_rules(g.user.id))), 201
 
 
 @bp.patch("/<int:item_id>")
@@ -115,7 +140,7 @@ def update_ingredient(item_id):
     for key, value in parse_fields(request.get_json(silent=True), creating=False).items():
         setattr(item, key, value)
     db.session.commit()
-    return jsonify(to_json(item, seoul_today()))
+    return jsonify(to_json(item, seoul_today(), user_rules(g.user.id)))
 
 
 @bp.delete("/<int:item_id>")

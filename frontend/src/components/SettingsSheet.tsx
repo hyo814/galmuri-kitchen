@@ -1,11 +1,12 @@
 import Icon from "./Icon";
 import Sheet from "./Sheet";
 
-export type SettingsTarget = "locations" | "staples";
+export type SettingsTarget = "locations" | "staples" | "rules";
 
 const MENU: { target: SettingsTarget; label: string }[] = [
   { target: "locations", label: "보관 위치" },
   { target: "staples", label: "필수품" },
+  { target: "rules", label: "품목별 경고" },
 ];
 
 interface Props {

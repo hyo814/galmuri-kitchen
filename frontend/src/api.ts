@@ -1,4 +1,4 @@
-export type Status = "urgent" | "old" | "ok";
+export type Status = "danger" | "urgent" | "old" | "ok";
 
 export type LocationKind = "fridge" | "freezer" | "room";
 
@@ -14,6 +14,14 @@ export interface Staple {
   name: string;
   category: string;
   in_stock: boolean;
+}
+
+export interface ItemRule {
+  id: number;
+  keyword: string;
+  warn_days: number;
+  danger_days: number;
+  source: "mfds" | "user";
 }
 
 export interface User {
