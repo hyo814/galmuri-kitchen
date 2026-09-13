@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api, type ItemRule } from "../api";
+import { useAsyncAction } from "../useAsyncAction";
 import Icon from "./Icon";
 import Sheet from "./Sheet";
 
@@ -72,23 +73,7 @@ export default function RulesSheet({ rules, onChanged, onClose }: Props) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editDraft, setEditDraft] = useState<Draft>(EMPTY);
   const [newDraft, setNewDraft] = useState<Draft>(EMPTY);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  const run = async (action: () => Promise<unknown>) => {
-    setBusy(true);
-    setError("");
-    try {
-      await action();
-      await onChanged();
-      return true;
-    } catch (e) {
-      setError((e as Error).message);
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { busy, error, setError, run } = useAsyncAction();
 
   const startEdit = (rule: ItemRule) => {
     setEditingId(rule.id);
@@ -99,18 +84,36 @@ export default function RulesSheet({ rules, onChanged, onClose }: Props) {
   const saveEdit = async (e: FormEvent) => {
     e.preventDefault();
     const body = toBody(editDraft);
-    if (await run(() => api(`/api/item-rules/${editingId}`, { method: "PATCH", body }))) setEditingId(null);
+    if (
+      await run(async () => {
+        await api(`/api/item-rules/${editingId}`, { method: "PATCH", body });
+        await onChanged();
+      })
+    )
+      setEditingId(null);
   };
 
   const remove = async (rule: ItemRule) => {
     if (!confirm(`${rule.keyword} 경고를 삭제할까요?`)) return;
-    if (await run(() => api(`/api/item-rules/${rule.id}`, { method: "DELETE" }))) setEditingId(null);
+    if (
+      await run(async () => {
+        await api(`/api/item-rules/${rule.id}`, { method: "DELETE" });
+        await onChanged();
+      })
+    )
+      setEditingId(null);
   };
 
   const add = async (e: FormEvent) => {
     e.preventDefault();
     const body = toBody(newDraft);
-    if (await run(() => api("/api/item-rules", { method: "POST", body }))) setNewDraft(EMPTY);
+    if (
+      await run(async () => {
+        await api("/api/item-rules", { method: "POST", body });
+        await onChanged();
+      })
+    )
+      setNewDraft(EMPTY);
   };
 
   return (

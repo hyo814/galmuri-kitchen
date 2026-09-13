@@ -72,7 +72,7 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
     <div className="page">
       <header className="topbar">
         <div>
-          <h1>내 냉장고</h1>
+          <h1>내 재고</h1>
           {items && items.length > 0 && (
             <p className="summary">
               재료 {items.length}개{soon > 0 && ` · 곧 먹어야 할 재료 ${soon}개`}
@@ -132,7 +132,7 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
         !error && <p className="center muted">불러오는 중…</p>
       ) : visible.length === 0 ? (
         <div className="empty">
-          <p>{items && items.length > 0 ? "이 위치에는 재료가 없어요." : "냉장고가 비어 있어요."}</p>
+          <p>{items && items.length > 0 ? "이 위치에는 재료가 없어요." : "재고가 비어 있어요."}</p>
           <p className="muted">아래 버튼으로 재료를 추가해 보세요.</p>
         </div>
       ) : (

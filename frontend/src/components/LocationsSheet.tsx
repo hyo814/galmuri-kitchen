@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { api, type LocationKind, type StorageLocation } from "../api";
 import { KIND_LABEL } from "../format";
+import { useAsyncAction } from "../useAsyncAction";
 import Icon from "./Icon";
 import Sheet from "./Sheet";
 
@@ -30,47 +31,49 @@ export default function LocationsSheet({ locations, onChanged, onClose }: Props)
   const [editKind, setEditKind] = useState<LocationKind>("fridge");
   const [newName, setNewName] = useState("");
   const [newKind, setNewKind] = useState<LocationKind>("fridge");
-  const [busy, setBusy] = useState(false);
-  const [editError, setEditError] = useState("");
-  const [error, setError] = useState("");
-
-  const run = async (action: () => Promise<unknown>, setFieldError: (message: string) => void) => {
-    setBusy(true);
-    setFieldError("");
-    try {
-      await action();
-      await onChanged();
-      return true;
-    } catch (e) {
-      setFieldError((e as Error).message);
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  };
+  const edit = useAsyncAction();
+  const create = useAsyncAction();
 
   const startEdit = (location: StorageLocation) => {
     setEditingId(location.id);
     setEditName(location.name);
     setEditKind(location.kind);
-    setEditError("");
+    edit.setError("");
   };
 
   const saveEdit = async (e: FormEvent) => {
     e.preventDefault();
     const body = { name: editName, kind: editKind };
-    if (await run(() => api(`/api/locations/${editingId}`, { method: "PATCH", body }), setEditError)) setEditingId(null);
+    if (
+      await edit.run(async () => {
+        await api(`/api/locations/${editingId}`, { method: "PATCH", body });
+        await onChanged();
+      })
+    )
+      setEditingId(null);
   };
 
   const remove = async (location: StorageLocation) => {
     if (!confirm(`${location.name}을(를) 삭제할까요?`)) return;
-    if (await run(() => api(`/api/locations/${location.id}`, { method: "DELETE" }), setEditError)) setEditingId(null);
+    if (
+      await edit.run(async () => {
+        await api(`/api/locations/${location.id}`, { method: "DELETE" });
+        await onChanged();
+      })
+    )
+      setEditingId(null);
   };
 
   const add = async (e: FormEvent) => {
     e.preventDefault();
     const body = { name: newName, kind: newKind };
-    if (await run(() => api("/api/locations", { method: "POST", body }), setError)) setNewName("");
+    if (
+      await create.run(async () => {
+        await api("/api/locations", { method: "POST", body });
+        await onChanged();
+      })
+    )
+      setNewName("");
   };
 
   return (
@@ -94,16 +97,16 @@ export default function LocationsSheet({ locations, onChanged, onClose }: Props)
                   <button type="button" className="btn secondary" onClick={() => setEditingId(null)}>
                     취소
                   </button>
-                  <button className="btn primary" disabled={busy}>
+                  <button className="btn primary" disabled={edit.busy}>
                     저장
                   </button>
                 </div>
-                <button type="button" className="btn danger-text" disabled={busy} onClick={() => remove(location)}>
+                <button type="button" className="btn danger-text" disabled={edit.busy} onClick={() => remove(location)}>
                   이 위치 삭제
                 </button>
-                {editError && (
+                {edit.error && (
                   <p className="error" role="alert">
-                    {editError}
+                    {edit.error}
                   </p>
                 )}
               </form>
@@ -124,9 +127,9 @@ export default function LocationsSheet({ locations, onChanged, onClose }: Props)
         ))}
       </ul>
       <p className="hint">재료가 들어 있는 위치는 비운 뒤에 삭제할 수 있어요.</p>
-      {error && (
+      {create.error && (
         <p className="error" role="alert">
-          {error}
+          {create.error}
         </p>
       )}
       <form className="form compact divider-top" onSubmit={add}>
@@ -144,7 +147,7 @@ export default function LocationsSheet({ locations, onChanged, onClose }: Props)
         </label>
         <KindPicker value={newKind} onChange={setNewKind} />
         <p className="hint">냉장은 구입 7일, 냉동은 60일이 지나면 '오래됨'으로 표시해요. 실온은 표시하지 않아요.</p>
-        <button className="btn primary" disabled={busy}>
+        <button className="btn primary" disabled={create.busy}>
           위치 추가
         </button>
       </form>

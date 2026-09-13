@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api, type Staple } from "../api";
+import { useAsyncAction } from "../useAsyncAction";
 import Icon from "./Icon";
 import Sheet from "./Sheet";
 
@@ -15,27 +16,17 @@ export default function StaplesSheet({ staples, onChanged, onClose }: Props) {
   const [editMode, setEditMode] = useState(false);
   const [name, setName] = useState("");
   const [category, setCategory] = useState(CATEGORIES[0]);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  const run = async (action: () => Promise<unknown>) => {
-    setBusy(true);
-    setError("");
-    try {
-      await action();
-      await onChanged();
-      return true;
-    } catch (e) {
-      setError((e as Error).message);
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { busy, error, run } = useAsyncAction();
 
   const add = async (e: FormEvent) => {
     e.preventDefault();
-    if (await run(() => api("/api/staples", { method: "POST", body: { name, category } }))) setName("");
+    if (
+      await run(async () => {
+        await api("/api/staples", { method: "POST", body: { name, category } });
+        await onChanged();
+      })
+    )
+      setName("");
   };
 
   const groups = [...CATEGORIES, ...new Set(staples.map((s) => s.category).filter((c) => !CATEGORIES.includes(c)))]
@@ -70,7 +61,12 @@ export default function StaplesSheet({ staples, onChanged, onClose }: Props) {
                       <button
                         className="btn danger-text inline"
                         disabled={busy}
-                        onClick={() => run(() => api(`/api/staples/${staple.id}`, { method: "DELETE" }))}
+                        onClick={() =>
+                          run(async () => {
+                            await api(`/api/staples/${staple.id}`, { method: "DELETE" });
+                            await onChanged();
+                          })
+                        }
                       >
                         삭제
                       </button>
