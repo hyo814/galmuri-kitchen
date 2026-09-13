@@ -94,14 +94,14 @@ def to_json(item, today, rules, seasonings=()):
 def _check_ingredient_cap(user_id, new_count):
     existing = Ingredient.query.filter_by(user_id=user_id).count()
     if existing + new_count > MAX_INGREDIENTS_PER_USER:
-        abort(400, f"재료는 {MAX_INGREDIENTS_PER_USER}개까지 저장할 수 있어요. 다 쓴 재료를 정리해 주세요.")
+        abort(400, f"재료는 {MAX_INGREDIENTS_PER_USER}개까지 저장할 수 있어요. 다 쓴 재료를 정리해주세요.")
 
 
 def _date(value, label):
     try:
         return date.fromisoformat(value)
     except (TypeError, ValueError):
-        abort(400, f"{label}은 YYYY-MM-DD 형식으로 입력해 주세요.")
+        abort(400, f"{label}은 YYYY-MM-DD 형식으로 입력해주세요.")
 
 
 def parse_fields(data, creating, locations=None):
@@ -112,11 +112,11 @@ def parse_fields(data, creating, locations=None):
         fields["name"] = text(data.get("name"), "이름은", 50)
     if creating or "quantity" in data:
         if isinstance(data.get("quantity"), bool):
-            abort(400, "수량은 숫자로 입력해 주세요.")
+            abort(400, "수량은 숫자로 입력해주세요.")
         try:
             quantity = float(data.get("quantity", 1))
         except (TypeError, ValueError):
-            abort(400, "수량은 숫자로 입력해 주세요.")
+            abort(400, "수량은 숫자로 입력해주세요.")
         if not (math.isfinite(quantity) and quantity > 0):
             abort(400, "수량은 0보다 커야 해요.")
         fields["quantity"] = quantity
@@ -125,7 +125,7 @@ def parse_fields(data, creating, locations=None):
         if raw is None or raw == "":
             fields["unit"] = "개"
         elif not isinstance(raw, str):
-            abort(400, "단위는 1~10자로 입력해 주세요.")
+            abort(400, "단위는 1~10자로 입력해주세요.")
         elif not raw.strip():
             fields["unit"] = "개"
         else:
@@ -181,7 +181,7 @@ def create_ingredients_bulk():
     data = request.get_json(silent=True)
     items = data.get("items") if isinstance(data, dict) else None
     if not isinstance(items, list) or not 1 <= len(items) <= BULK_MAX:
-        abort(400, f"재료를 1~{BULK_MAX}개 보내 주세요.")
+        abort(400, f"재료를 1~{BULK_MAX}개 보내주세요.")
     _check_ingredient_cap(g.user.id, len(items))
     locations = user_locations(g.user.id)
     rows, errors = [], []
@@ -202,7 +202,7 @@ def create_ingredients_bulk():
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
-        abort(400, "선택한 보관 위치가 방금 바뀌었어요. 다시 시도해 주세요.")
+        abort(400, "선택한 보관 위치가 방금 바뀌었어요. 다시 시도해주세요.")
     return jsonify(result), 201
 
 

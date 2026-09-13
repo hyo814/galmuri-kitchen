@@ -181,9 +181,9 @@ def test_rejects_bad_kind_missing_image_and_non_image(client, login):
     res = upload(client, kind="memo")
     assert (res.status_code, res.get_json()) == (400, {"error": "스캔 종류가 올바르지 않아요."})
     res = client.post("/api/scan?kind=fridge")
-    assert (res.status_code, res.get_json()) == (400, {"error": "사진을 올려 주세요."})
+    assert (res.status_code, res.get_json()) == (400, {"error": "사진을 올려주세요."})
     res = upload(client, data=b"")
-    assert (res.status_code, res.get_json()) == (400, {"error": "사진을 올려 주세요."})
+    assert (res.status_code, res.get_json()) == (400, {"error": "사진을 올려주세요."})
     res = upload(client, data=b"not-an-image-just-plain-bytes", mimetype="text/plain")
     assert (res.status_code, res.get_json()) == (415, {"error": "사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요."})
     # 선언된 Content-Type을 image/jpeg로 위조해도 실제 바이트(서명)가 이미지가 아니면 415
@@ -194,7 +194,7 @@ def test_rejects_bad_kind_missing_image_and_non_image(client, login):
 def test_too_large_upload_is_413_json(client, login):
     login()
     res = upload(client, data=b"x" * (10 * 1024 * 1024 + 1))
-    assert (res.status_code, res.get_json()) == (413, {"error": "파일이 너무 커요. 10MB 이하로 올려 주세요."})
+    assert (res.status_code, res.get_json()) == (413, {"error": "파일이 너무 커요. 10MB 이하로 올려주세요."})
 
 
 def test_scan_accepts_valid_image_signatures_by_content_not_label(client, login, app, monkeypatch):
@@ -257,7 +257,7 @@ def test_ai_failure_is_502_and_counted(client, login, app, monkeypatch):
 
     monkeypatch.setattr(ai, "extract", broken)
     res = upload(client)
-    assert (res.status_code, res.get_json()) == (502, {"error": "인식에 실패했어요. 직접 입력해 주세요."})
+    assert (res.status_code, res.get_json()) == (502, {"error": "인식에 실패했어요. 직접 입력해주세요."})
     # F1: 실패도 비용이 들었으므로 한도에는 센다(업로드 검증 실패만 세지 않는다)
     assert ai_calls(app) == [(user.id, "receipt")]
 
@@ -288,7 +288,7 @@ def test_daily_limit_counts_scan_kinds_in_seoul_day(client, login, app, monkeypa
 
     assert upload(client).status_code == 200  # 2번 썼으니 3번째는 된다
     res = upload(client)
-    assert (res.status_code, res.get_json()) == (429, {"error": "오늘 사진 인식은 3번까지 쓸 수 있어요. 내일 다시 써 주세요."})
+    assert (res.status_code, res.get_json()) == (429, {"error": "오늘 사진 인식은 3번까지 쓸 수 있어요. 내일 다시 써주세요."})
 
 
 def test_burst_limit_blocks_rapid_calls(client, login, app, monkeypatch):
@@ -307,7 +307,7 @@ def test_burst_limit_blocks_rapid_calls(client, login, app, monkeypatch):
         )
         db.session.commit()
     res = upload(client)
-    assert (res.status_code, res.get_json()) == (429, {"error": "잠시 후 다시 시도해 주세요."})
+    assert (res.status_code, res.get_json()) == (429, {"error": "잠시 후 다시 시도해주세요."})
 
 
 def test_burst_limit_ignores_calls_older_than_a_minute(client, login, app, monkeypatch):

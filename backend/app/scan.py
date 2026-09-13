@@ -102,10 +102,10 @@ def scan():
         abort(400, "스캔 종류가 올바르지 않아요.")
     image = request.files.get("image")  # 10MB 초과는 여기서 413
     if image is None:
-        abort(400, "사진을 올려 주세요.")
+        abort(400, "사진을 올려주세요.")
     data = image.read()
     if not data:
-        abort(400, "사진을 올려 주세요.")
+        abort(400, "사진을 올려주세요.")
     media_type = sniff_image_type(data)  # 선언된 Content-Type이 아니라 파일 시그니처를 믿는다
     if media_type is None:
         abort(415, "사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요.")
@@ -118,10 +118,10 @@ def scan():
         return jsonify(**clean_result(kind, ai.sample_result(kind, today), today), sample=True)
 
     if scans_recent(g.user.id) >= current_app.config["AI_SCAN_BURST_LIMIT"]:
-        abort(429, "잠시 후 다시 시도해 주세요.")
+        abort(429, "잠시 후 다시 시도해주세요.")
     limit = current_app.config["AI_DAILY_SCAN_LIMIT"]
     if scans_today(g.user.id) >= limit:
-        abort(429, f"오늘 사진 인식은 {limit}번까지 쓸 수 있어요. 내일 다시 써 주세요.")
+        abort(429, f"오늘 사진 인식은 {limit}번까지 쓸 수 있어요. 내일 다시 써주세요.")
 
     # AI로 보낸 호출은 성공·실패와 관계없이 센다(실패도 비용이 들어 남용을 막기 위해).
     # 업로드 검증(kind·사진 유무·형식)에서 걸린 요청은 세지 않는다.
@@ -132,5 +132,5 @@ def scan():
     try:
         raw = ai.extract(kind, data, media_type)
     except ai.AiError:
-        abort(502, "인식에 실패했어요. 직접 입력해 주세요.")
+        abort(502, "인식에 실패했어요. 직접 입력해주세요.")
     return jsonify(**clean_result(kind, raw, today), sample=False)

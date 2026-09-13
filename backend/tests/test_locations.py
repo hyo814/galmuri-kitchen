@@ -56,7 +56,7 @@ def test_delete_rules_and_item_count(client, login):
 
     res = client.delete(f"/api/locations/{fridge}")
     assert res.status_code == 400
-    assert res.get_json()["error"] == "이 위치에 있는 재료를 먼저 옮겨 주세요."
+    assert res.get_json()["error"] == "이 위치에 있는 재료를 먼저 옮겨주세요."
 
     assert client.delete(f"/api/locations/{freezer}").status_code == 204
     assert client.delete(f"/api/locations/{room}").status_code == 204
@@ -81,4 +81,4 @@ def test_other_users_location_is_hidden(client, login):
     assert client.delete(f"/api/locations/{location_id}").status_code == 404
     res = client.post("/api/ingredients", json={"name": "우유", "purchased_on": "2026-09-10", "location_id": location_id})
     assert res.status_code == 400
-    assert res.get_json()["error"] == "보관 위치를 다시 선택해 주세요."
+    assert res.get_json()["error"] == "보관 위치를 다시 선택해주세요."

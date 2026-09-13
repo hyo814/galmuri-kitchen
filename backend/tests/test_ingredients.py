@@ -320,9 +320,9 @@ def test_bulk_invalid_items_create_nothing_and_list_errors(client, login):
     )
     assert res.status_code == 400
     assert res.get_json() == {
-        "error": "2번째 재료: 이름은 1~50자로 입력해 주세요.",
+        "error": "2번째 재료: 이름은 1~50자로 입력해주세요.",
         "errors": [
-            {"index": 1, "error": "이름은 1~50자로 입력해 주세요."},
+            {"index": 1, "error": "이름은 1~50자로 입력해주세요."},
             {"index": 2, "error": "잘못된 요청이에요."},
             {"index": 3, "error": "수량은 0보다 커야 해요."},
             {"index": 4, "error": INVALID_LOCATION},
@@ -338,7 +338,7 @@ def test_bulk_invalid_items_create_nothing_and_list_errors(client, login):
 def test_bulk_body_validation(client, login, body):
     login()
     res = client.post("/api/ingredients/bulk", json=body)
-    assert (res.status_code, res.get_json()) == (400, {"error": "재료를 1~50개 보내 주세요."})
+    assert (res.status_code, res.get_json()) == (400, {"error": "재료를 1~50개 보내주세요."})
     assert client.get("/api/ingredients").get_json() == []
 
 
@@ -387,7 +387,7 @@ def test_bulk_respects_per_user_ingredient_cap(client, login, monkeypatch):
     bulk(client, {"name": "a", "purchased_on": today}, {"name": "b", "purchased_on": today})
     res = bulk(client, {"name": "c", "purchased_on": today}, {"name": "d", "purchased_on": today})
     assert res.status_code == 400
-    assert res.get_json() == {"error": "재료는 3개까지 저장할 수 있어요. 다 쓴 재료를 정리해 주세요."}
+    assert res.get_json() == {"error": "재료는 3개까지 저장할 수 있어요. 다 쓴 재료를 정리해주세요."}
     assert len(client.get("/api/ingredients").get_json()) == 2
 
 
@@ -400,7 +400,7 @@ def test_create_respects_per_user_ingredient_cap(client, login, monkeypatch):
         assert create(client, purchased_on=today).status_code == 201
     res = create(client, purchased_on=today)
     assert res.status_code == 400
-    assert res.get_json() == {"error": "재료는 3개까지 저장할 수 있어요. 다 쓴 재료를 정리해 주세요."}
+    assert res.get_json() == {"error": "재료는 3개까지 저장할 수 있어요. 다 쓴 재료를 정리해주세요."}
     assert len(client.get("/api/ingredients").get_json()) == 3
 
 
@@ -415,7 +415,7 @@ def test_bulk_commit_failure_returns_friendly_error(client, login, monkeypatch):
     monkeypatch.setattr(db.session, "commit", raise_integrity_error)
     res = bulk(client, {"name": "무", "purchased_on": today})
     assert res.status_code == 400
-    assert res.get_json() == {"error": "선택한 보관 위치가 방금 바뀌었어요. 다시 시도해 주세요."}
+    assert res.get_json() == {"error": "선택한 보관 위치가 방금 바뀌었어요. 다시 시도해주세요."}
     monkeypatch.undo()
     assert client.get("/api/ingredients").get_json() == []
 
@@ -478,5 +478,5 @@ def test_bulk_49_valid_then_trailing_invalid_creates_nothing(client, login):
     items = [{"name": f"재료{i}", "purchased_on": today} for i in range(49)] + [{"name": "", "purchased_on": today}]
     res = bulk(client, *items)
     assert res.status_code == 400
-    assert res.get_json()["errors"] == [{"index": 49, "error": "이름은 1~50자로 입력해 주세요."}]
+    assert res.get_json()["errors"] == [{"index": 49, "error": "이름은 1~50자로 입력해주세요."}]
     assert client.get("/api/ingredients").get_json() == []

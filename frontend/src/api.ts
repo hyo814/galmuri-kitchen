@@ -125,14 +125,14 @@ export async function api<T>(
     });
   } catch (e) {
     if (options.signal?.aborted) throw e; // 사용자가 취소한 요청은 호출한 쪽이 처리한다
-    throw new ApiError(0, "네트워크에 연결할 수 없어요. 연결을 확인해 주세요.");
+    throw new ApiError(0, "네트워크에 연결할 수 없어요. 연결을 확인해주세요.");
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401) unauthorizedHandler?.();
     throw new ApiError(
       res.status,
-      data.error ?? "문제가 생겼어요. 잠시 후 다시 시도해 주세요.",
+      data.error ?? "문제가 생겼어요. 잠시 후 다시 시도해주세요.",
       Array.isArray(data.errors) ? data.errors : undefined,
     );
   }

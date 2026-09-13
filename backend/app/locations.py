@@ -8,7 +8,7 @@ from .validation import commit_or_duplicate, text
 bp = Blueprint("locations", __name__, url_prefix="/api/locations")
 
 KINDS = ("fridge", "freezer", "room")
-INVALID_LOCATION = "보관 위치를 다시 선택해 주세요."
+INVALID_LOCATION = "보관 위치를 다시 선택해주세요."
 
 
 def user_locations(user_id):
@@ -22,7 +22,7 @@ def user_locations(user_id):
 def choose_location(locations, value):
     """미리 불러온 내 위치 목록에서 고른다. value가 None이면 첫 냉장(fridge) 위치, 없으면 첫 위치."""
     if not locations:
-        abort(400, "보관 위치를 먼저 만들어 주세요.")
+        abort(400, "보관 위치를 먼저 만들어주세요.")
     if value is None:
         return next((l for l in locations if l.kind == "fridge"), locations[0])
     if isinstance(value, bool) or not isinstance(value, int):
@@ -69,7 +69,7 @@ def _json_body():
 
 def _kind(value):
     if value not in KINDS:
-        abort(400, "보관 종류를 냉장·냉동·실온 중에서 골라 주세요.")
+        abort(400, "보관 종류를 냉장·냉동·실온 중에서 골라주세요.")
     return value
 
 
@@ -123,7 +123,7 @@ def update_location(location_id):
 def delete_location(location_id):
     location = get_owned_or_404(StorageLocation, location_id)
     if Ingredient.query.filter_by(location_id=location.id).first():
-        abort(400, "이 위치에 있는 재료를 먼저 옮겨 주세요.")
+        abort(400, "이 위치에 있는 재료를 먼저 옮겨주세요.")
     if StorageLocation.query.filter_by(user_id=g.user.id).count() <= 1:
         abort(400, "위치는 하나 이상 있어야 해요.")
     db.session.delete(location)
