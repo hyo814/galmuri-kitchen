@@ -139,6 +139,9 @@ export default function IngredientForm({ initial, locations, defaultLocationId, 
             />
           </label>
         </div>
+        {name.includes("우유") && !expiresOn && (
+          <p className="hint">우유는 포장에 적힌 소비기한을 입력하면 가장 정확해요.</p>
+        )}
         {error && (
           <p className="error" role="alert">
             {error}
