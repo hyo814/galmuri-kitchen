@@ -7,6 +7,7 @@ from urllib.parse import urlparse, urlunparse
 
 import click
 import requests
+import urllib3
 from flask import Blueprint, current_app
 
 from .models import PublicRecipe, db
@@ -129,7 +130,7 @@ def fetch_rows(key):
             total = min(int(body.get("total_count") or 0), MAX_TOTAL_ROWS)
         except click.ClickException:
             raise
-        except (requests.RequestException, ValueError, KeyError, TypeError) as e:
+        except (requests.RequestException, urllib3.exceptions.HTTPError, OSError, ValueError, KeyError, TypeError) as e:
             # 요청 URL에 인증키가 들어 있으니 예외 내용은 찍지 않는다
             raise click.ClickException(f"식약처 레시피를 받지 못했어요({start}~{end}번, {type(e).__name__}).")
         if code == "INFO-200":  # 해당하는 데이터가 없음

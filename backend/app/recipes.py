@@ -1,5 +1,6 @@
 import base64
 import binascii
+import threading
 import time
 from datetime import datetime, timezone
 from urllib.parse import urlparse
@@ -220,6 +221,7 @@ def _rank(cards):
 _RANK_CACHE = {}  # user_id -> {"signature", "created", "mine": [...]|None, "public": ([...], sample)|None}
 _RANK_CACHE_TTL = 120  # seconds (time.monotonic)
 _RANK_CACHE_MAX_USERS = 500
+_RANK_CACHE_LOCK = threading.Lock()  # gthread 워커의 여러 스레드가 같은 dict를 바꾸므로 교체·삭제를 잠근다
 
 
 def _rank_cache_signature(user_id, stock):
@@ -244,14 +246,15 @@ def _rank_cache_signature(user_id, stock):
 
 def _rank_cache_entry(user_id, signature):
     now = time.monotonic()
-    entry = _RANK_CACHE.get(user_id)
-    if entry is None or entry["signature"] != signature or now - entry["created"] > _RANK_CACHE_TTL:
-        entry = {"signature": signature, "created": now, "mine": None, "public": None}
-        _RANK_CACHE[user_id] = entry
-        while len(_RANK_CACHE) > _RANK_CACHE_MAX_USERS:
-            oldest_id = min(_RANK_CACHE, key=lambda uid: _RANK_CACHE[uid]["created"])
-            del _RANK_CACHE[oldest_id]
-    return entry
+    with _RANK_CACHE_LOCK:
+        entry = _RANK_CACHE.get(user_id)
+        if entry is None or entry["signature"] != signature or now - entry["created"] > _RANK_CACHE_TTL:
+            entry = {"signature": signature, "created": now, "mine": None, "public": None}
+            _RANK_CACHE[user_id] = entry
+            while len(_RANK_CACHE) > _RANK_CACHE_MAX_USERS:
+                oldest_id = min(_RANK_CACHE, key=lambda uid: _RANK_CACHE[uid]["created"])
+                del _RANK_CACHE[oldest_id]
+        return entry
 
 
 def _ranked_mine(user_id, prepared_stock, urgent):

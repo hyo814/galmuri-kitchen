@@ -237,3 +237,25 @@ def test_sample_file_names_are_unique_per_recipe():
     for item in json.loads(SAMPLE_FILE.read_text(encoding="utf-8")):
         names = [normalize(i["name"]) for i in item["ingredients"]]
         assert len(names) == len(set(names)), item["title"]
+
+
+def test_sync_stream_read_failure_is_clean_and_hides_key(app, monkeypatch):
+    # 본문을 읽는 도중 연결이 끊겨도(urllib3 오류) 깔끔한 안내로 끝나고 키가 출력에 나오지 않는다
+    import urllib3
+
+    class Broken:
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        class raw:
+            @staticmethod
+            def read(*_args, **_kwargs):
+                raise urllib3.exceptions.ProtocolError("connection reset")
+
+    app.config["FOODSAFETY_API_KEY"] = "test-key"
+    monkeypatch.setattr("app.public_recipes.requests.get", lambda *a, **k: Broken())
+    result = app.test_cli_runner().invoke(args=["sync-public-recipes"])
+    assert result.exit_code != 0
+    assert "test-key" not in result.output
