@@ -1,13 +1,17 @@
+import os
+
 import pytest
 
-from app import create_app
+from app import create_app, database_url
 from app.defaults import seed_user_defaults
 from app.models import User, db
+
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "sqlite://")
 
 TEST_CONFIG = {
     "TESTING": True,
     "SECRET_KEY": "test",
-    "SQLALCHEMY_DATABASE_URI": "sqlite://",
+    "SQLALCHEMY_DATABASE_URI": database_url(TEST_DATABASE_URL),
     "DEV_MODE": True,
     "SESSION_COOKIE_SECURE": False,
 }
@@ -18,6 +22,10 @@ def make_app():
     def _make(**overrides):
         app = create_app({**TEST_CONFIG, **overrides})
         with app.app_context():
+            # Postgres DB is shared across the whole run (unlike sqlite://,
+            # a fresh in-memory DB per app) — reset it so tests stay isolated.
+            if not TEST_DATABASE_URL.startswith("sqlite"):
+                db.drop_all()
             db.create_all()
         return app
 

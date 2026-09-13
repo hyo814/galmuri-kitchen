@@ -1,20 +1,33 @@
+import os
 from pathlib import Path
 
 import sqlalchemy as sa
 from flask_migrate import downgrade, upgrade
 
-from app import create_app
+from app import create_app, database_url
 from app.models import db
 
 MIGRATIONS = str(Path(__file__).resolve().parents[1] / "migrations")
+
+MIGRATE_DATABASE_URL = os.environ.get("TEST_MIGRATE_DATABASE_URL")
 
 
 def migration_app(tmp_path, monkeypatch):
     # Alembic env.py의 fileConfig가 기존 로거(app 등)를 꺼 버려 다른 테스트의 caplog를 망가뜨리지 않도록 막는다
     monkeypatch.setattr("logging.config.fileConfig", lambda *args, **kwargs: None)
-    return create_app(
-        {"TESTING": True, "SECRET_KEY": "t", "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'migrate.sqlite3'}"}
-    )
+    if MIGRATE_DATABASE_URL:
+        uri = database_url(MIGRATE_DATABASE_URL)
+    else:
+        uri = f"sqlite:///{tmp_path / 'migrate.sqlite3'}"
+    app = create_app({"TESTING": True, "SECRET_KEY": "t", "SQLALCHEMY_DATABASE_URI": uri})
+    if MIGRATE_DATABASE_URL:
+        # Postgres DB is shared across the whole run — drop everything
+        # (including alembic_version) before each test starts from base.
+        with app.app_context():
+            db.drop_all()
+            with db.engine.begin() as conn:
+                conn.execute(sa.text("DROP TABLE IF EXISTS alembic_version"))
+    return app
 
 
 def test_location_migration_moves_existing_ingredients_to_fridge(tmp_path, monkeypatch):
