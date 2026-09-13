@@ -7,8 +7,8 @@ from sqlalchemy.orm import joinedload
 
 from .auth import get_owned_or_404, login_required
 from .locations import default_location, owned_location
-from .matching import keyword_in
-from .models import Ingredient, ItemRule, db
+from .matching import keyword_in, names_match
+from .models import Ingredient, ItemRule, Staple, db
 from .validation import text
 
 bp = Blueprint("ingredients", __name__, url_prefix="/api/ingredients")
@@ -18,6 +18,9 @@ OLD_DAYS_BY_KIND = {"fridge": 7, "freezer": 60, "room": None}  # 유통기한이
 SEVERITY = {"ok": 0, "old": 1, "urgent": 2, "danger": 3}
 STATUS_RANK = {"danger": 0, "urgent": 1, "old": 2, "ok": 3}
 SEOUL = ZoneInfo("Asia/Seoul")
+
+# 장류·소스는 냉장 보관해도 몇 달씩 쓰므로, 이렇게 분류한 필수품과 이름이 맞으면 위치 기준 '오래됨'을 건너뛴다 (사용성 점검 C3)
+SEASONING_CATEGORIES = ["조미료", "소스", "양념", "장류"]
 
 
 def seoul_today():
@@ -55,13 +58,19 @@ def user_rules(user_id):
     return ItemRule.query.filter_by(user_id=user_id).order_by(ItemRule.id).all()
 
 
-def status_of(item, today, rules):
-    return ingredient_status(
-        item.purchased_on, item.expires_on, today, item.location.kind, matching_rule(item.name, rules)
-    )
+def seasoning_names(user_id):
+    rows = db.session.query(Staple.name).filter(Staple.user_id == user_id, Staple.category.in_(SEASONING_CATEGORIES))
+    return [name for (name,) in rows.all()]
 
 
-def to_json(item, today, rules):
+def status_of(item, today, rules, seasonings=()):
+    kind = item.location.kind
+    if kind == "fridge" and any(names_match(s, item.name) for s in seasonings):
+        kind = "room"  # 위치 기준 '오래됨'만 건너뛴다. 유통기한·품목 규칙 판정은 그대로
+    return ingredient_status(item.purchased_on, item.expires_on, today, kind, matching_rule(item.name, rules))
+
+
+def to_json(item, today, rules, seasonings=()):
     return {
         "id": item.id,
         "name": item.name,
@@ -69,7 +78,7 @@ def to_json(item, today, rules):
         "unit": item.unit,
         "purchased_on": item.purchased_on.isoformat(),
         "expires_on": item.expires_on.isoformat() if item.expires_on else None,
-        "status": status_of(item, today, rules),
+        "status": status_of(item, today, rules, seasonings),
         "location_id": item.location_id,
         "location_name": item.location.name,
         "location_kind": item.location.kind,
@@ -128,11 +137,17 @@ def parse_fields(data, creating):
 def list_ingredients():
     today = seoul_today()
     rules = user_rules(g.user.id)
+    seasonings = seasoning_names(g.user.id)
     items = Ingredient.query.options(joinedload(Ingredient.location)).filter_by(user_id=g.user.id).all()
     items.sort(
-        key=lambda i: (STATUS_RANK[status_of(i, today, rules)], i.expires_on or date.max, i.purchased_on, i.id)
+        key=lambda i: (
+            STATUS_RANK[status_of(i, today, rules, seasonings)],
+            i.expires_on or date.max,
+            i.purchased_on,
+            i.id,
+        )
     )
-    return jsonify([to_json(i, today, rules) for i in items])
+    return jsonify([to_json(i, today, rules, seasonings) for i in items])
 
 
 @bp.post("")
@@ -141,7 +156,7 @@ def create_ingredient():
     item = Ingredient(user_id=g.user.id, **parse_fields(request.get_json(silent=True), creating=True))
     db.session.add(item)
     db.session.commit()
-    return jsonify(to_json(item, seoul_today(), user_rules(g.user.id))), 201
+    return jsonify(to_json(item, seoul_today(), user_rules(g.user.id), seasoning_names(g.user.id))), 201
 
 
 @bp.patch("/<int:item_id>")
@@ -151,7 +166,7 @@ def update_ingredient(item_id):
     for key, value in parse_fields(request.get_json(silent=True), creating=False).items():
         setattr(item, key, value)
     db.session.commit()
-    return jsonify(to_json(item, seoul_today(), user_rules(g.user.id)))
+    return jsonify(to_json(item, seoul_today(), user_rules(g.user.id), seasoning_names(g.user.id)))
 
 
 @bp.delete("/<int:item_id>")
