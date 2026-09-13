@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import { ApiError, api, onUnauthorized, type User } from "./api";
+import TabBar from "./components/TabBar";
 import Fridge from "./pages/Fridge";
 import Login from "./pages/Login";
+import More from "./pages/More";
+import { useHashRoute } from "./useHashRoute";
 
 export default function App() {
   // undefined: 확인 중, null: 비로그인
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [offline, setOffline] = useState(false);
+  const route = useHashRoute();
 
   const checkMe = () => {
     setOffline(false);
@@ -35,5 +39,10 @@ export default function App() {
 
   if (user === undefined) return <p className="center muted">불러오는 중…</p>;
   if (user === null) return <Login onLogin={setUser} />;
-  return <Fridge onLogout={() => setUser(null)} />;
+  return (
+    <>
+      {route === "/more" ? <More /> : <Fridge onLogout={() => setUser(null)} />}
+      <TabBar route={route} />
+    </>
+  );
 }

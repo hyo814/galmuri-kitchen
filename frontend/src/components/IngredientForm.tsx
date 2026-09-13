@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { localToday, type Ingredient, type IngredientInput, type StorageLocation } from "../api";
+import { useAsyncAction } from "../useAsyncAction";
 import Icon from "./Icon";
 import Sheet from "./Sheet";
 
@@ -21,20 +22,7 @@ export default function IngredientForm({ initial, locations, defaultLocationId, 
   const [purchasedOn, setPurchasedOn] = useState(initial?.purchased_on ?? localToday());
   const [expiresOn, setExpiresOn] = useState(initial?.expires_on ?? "");
   const [locationId, setLocationId] = useState(initial?.location_id ?? defaultLocationId);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  const run = async (action: () => Promise<void>) => {
-    setBusy(true);
-    setError("");
-    try {
-      await action();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { busy, error, run } = useAsyncAction();
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
