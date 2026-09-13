@@ -61,6 +61,7 @@ def create_app(test_config=None):
     from .item_rules import bp as item_rules_bp
     from .locations import bp as locations_bp
     from .staples import bp as staples_bp
+    from .tools import bp as tools_bp
 
     init_oauth(app)
     app.register_blueprint(auth_bp)
@@ -68,6 +69,7 @@ def create_app(test_config=None):
     app.register_blueprint(item_rules_bp)
     app.register_blueprint(locations_bp)
     app.register_blueprint(staples_bp)
+    app.register_blueprint(tools_bp)
 
     @app.before_request
     def require_fetch_header():

@@ -11,3 +11,6 @@ export function formatDate(iso: string): string {
 }
 
 export const KIND_LABEL: Record<LocationKind, string> = { fridge: "냉장", freezer: "냉동", room: "실온" };
+
+/** 6 → "6개월", 12 → "1년", 24 → "2년" */
+export const cycleLabel = (months: number) => (months % 12 === 0 ? `${months / 12}년` : `${months}개월`);
