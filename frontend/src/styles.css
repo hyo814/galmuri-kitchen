@@ -915,3 +915,30 @@ a.row-btn > svg {
   font-weight: 600;
 }
 
+
+.empty .soon-title {
+  margin-top: 12px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.soon-list {
+  display: grid;
+  gap: 10px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.soon-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.5;
+}
+
+.soon-list svg {
+  flex-shrink: 0;
+  margin-top: 4px;
+}

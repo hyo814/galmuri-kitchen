@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, api, onUnauthorized, type User } from "./api";
 import TabBar from "./components/TabBar";
+import ComingSoon from "./pages/ComingSoon";
 import Fridge from "./pages/Fridge";
 import Login from "./pages/Login";
 import More from "./pages/More";
@@ -42,7 +43,15 @@ export default function App() {
   if (user === null) return <Login onLogin={setUser} />;
   return (
     <>
-      {route === "/more" ? <More /> : route === "/tools" ? <Tools /> : <Fridge onLogout={() => setUser(null)} />}
+      {route === "/more" ? (
+        <More />
+      ) : route === "/tools" ? (
+        <Tools />
+      ) : route === "/" ? (
+        <Fridge onLogout={() => setUser(null)} />
+      ) : (
+        <ComingSoon route={route} />
+      )}
       <TabBar route={route} />
     </>
   );
