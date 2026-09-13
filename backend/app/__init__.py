@@ -59,11 +59,13 @@ def create_app(test_config=None):
     from .auth import init_oauth
     from .ingredients import bp as ingredients_bp
     from .locations import bp as locations_bp
+    from .staples import bp as staples_bp
 
     init_oauth(app)
     app.register_blueprint(auth_bp)
     app.register_blueprint(ingredients_bp)
     app.register_blueprint(locations_bp)
+    app.register_blueprint(staples_bp)
 
     @app.before_request
     def require_fetch_header():

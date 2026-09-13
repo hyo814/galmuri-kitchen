@@ -48,3 +48,13 @@ def test_location_migration_moves_existing_ingredients_to_fridge(tmp_path, monke
         assert moved_to == "냉장실"
 
         downgrade(directory=MIGRATIONS, revision="69204259dd5d")
+
+
+def test_upgrade_to_head_and_back_to_base(tmp_path, monkeypatch):
+    app = migration_app(tmp_path, monkeypatch)
+    with app.app_context():
+        upgrade(directory=MIGRATIONS)
+        with db.engine.connect() as conn:
+            tables = set(sa.inspect(conn).get_table_names())
+        assert {"users", "ingredients", "storage_locations", "staples"} <= tables
+        downgrade(directory=MIGRATIONS, revision="base")
