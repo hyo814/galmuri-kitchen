@@ -17,9 +17,9 @@ export default function Sheet({ title, description, action, onClose, children }:
   useEffect(() => {
     const dialog = ref.current;
     if (dialog && !dialog.open) dialog.showModal(); // StrictMode 이중 실행 대비
-    return () => {
-      if (dialog?.open) dialog.close(); // 오프너로 포커스를 되돌린다 (네이티브 <dialog> 동작)
-    };
+    // 언마운트 시 close()를 호출하지 않는다: StrictMode는 mount → cleanup → mount로
+    // 두 번 실행하는데, cleanup에서 close()하면 그 close 이벤트가 onClose를 불러
+    // 시트가 열리자마자 스스로 닫혀 버린다.
   }, []);
 
   return (
