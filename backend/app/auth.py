@@ -18,6 +18,12 @@ PROVIDERS = {
         "api_base_url": "https://kapi.kakao.com/",
         "client_kwargs": {"token_endpoint_auth_method": "client_secret_post"},
     },
+    "naver": {
+        "authorize_url": "https://nid.naver.com/oauth2.0/authorize",
+        "access_token_url": "https://nid.naver.com/oauth2.0/token",
+        "api_base_url": "https://openapi.naver.com/",
+        "client_kwargs": {"token_endpoint_auth_method": "client_secret_post"},
+    },
     "google": {
         "server_metadata_url": "https://accounts.google.com/.well-known/openid-configuration",
         "client_kwargs": {"scope": "openid profile"},
@@ -139,6 +145,9 @@ def oauth_callback(provider):
         if provider == "google":
             info = token.get("userinfo") or {}
             provider_id, nickname = info.get("sub"), info.get("name")
+        elif provider == "naver":
+            info = client.get("v1/nid/me", token=token).json().get("response") or {}
+            provider_id, nickname = info.get("id"), info.get("nickname")
         else:
             info = client.get("v2/user/me", token=token).json()
             provider_id, nickname = info.get("id"), (info.get("properties") or {}).get("nickname")

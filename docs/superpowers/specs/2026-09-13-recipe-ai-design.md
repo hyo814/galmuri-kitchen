@@ -16,7 +16,7 @@
 
 | 단계 | 범위 |
 |---|---|
-| 1. 기반 | 카카오/구글 로그인, 냉장고 재료 수기 CRUD(구입일 필수), 임박 표시 |
+| 1. 기반 | 카카오/네이버/구글 로그인, 냉장고 재료 수기 CRUD(구입일 필수), 임박 표시 |
 | 1b. 보관 위치·필수품·품목별 경고 | 사용자 정의 보관 위치(종류별 오래됨 기준), 필수품 목록과 떨어진 필수품 표시, 품목별 경고 규칙(식약처 참고값 기본 제공), 새 디자인 적용 → 이후 Render 배포 |
 | 1c. 주방 도구 | 조리도구·조리기구 목록, 코팅 프라이팬 등 주기 점검 알림 (18절) |
 | 2. 스캔 | 냉장고 사진·영수증·온라인 주문완료 캡처 → Claude 비전 → 확인 화면(보관 위치 추정 포함) → 일괄 등록, AI 일일 한도 |
@@ -41,7 +41,7 @@ recipe-ai/
 
 - DB: 로컬/테스트 SQLite, 운영 Render PostgreSQL (SQLAlchemy로 동일 코드)
 - 사진: Cloudflare R2(S3 호환, 비공개 버킷, presigned URL). R2 환경변수가 없으면 로컬 `uploads/` 폴더.
-- 인증: 소셜 로그인만(카카오, 구글). 비밀번호를 저장하지 않는다.
+- 인증: 소셜 로그인만(카카오, 네이버, 구글 — 네이버는 2026-09-13 사용자 결정으로 추가). 비밀번호를 저장하지 않는다.
 - AI: Anthropic API, 모델은 `CLAUDE_MODEL` 환경변수(기본 `claude-sonnet-5`). `ANTHROPIC_API_KEY`가 없으면 개발 모드(`DEV_MODE=1`)의 스캔은 종류별 예시 결과(`sample: true`, 한도·기록 없음)를 돌려주고, 운영에서는 503이며 화면에서 `사진으로 추가`를 숨긴다(`/api/me`의 `scan`).
 
 ## 4. 데이터 모델
@@ -97,7 +97,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 더보기: 먹은 기록(24절), 조리 기록, 주방 도구, 설정(보관 위치·필수품·품목별 경고·내 몸 정보·로그아웃). 레시피 탭에 추천(보유 재료)·내 레시피·링크 가져오기.
 화면 전환은 해시 경로(`#/`, `#/more`, `#/tools` …)로 하여 폰 뒤로가기가 동작한다. 비로그인 시 로그인 화면.
 
-1. **로그인**: 카카오/구글 버튼.
+1. **로그인**: 카카오/네이버/구글 버튼.
 2. **냉장고**: 임박 순 목록 + 배지. `+ 직접 추가`(이름, 수량, 단위, 구입일[기본 오늘], 유통기한). 항목 탭 → 수정/삭제.
    `사진으로 추가`(냉장고 사진 · 영수증 · 온라인 주문 캡처, 카메라·갤러리는 폰이 고르게 함) → 브라우저에서 긴 변 1568px JPEG로 축소 → `/api/scan` → 확인 화면(체크, 행을 펼쳐 이름·수량·단위·보관 위치 수정, 구입일 일괄 입력; 영수증·주문은 인식된 날짜로 프리필) → `/api/ingredients/bulk`. 시안 `docs/design/scan-2/`.
 3. **추천**: 내 레시피 / 공공 DB 섹션(일치율 순, 부족 재료 표시). `AI에게 물어보기` 버튼 → AI 제안 3개. 카드 → 상세.
@@ -129,7 +129,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - OAuth state 검증(Authlib).
 - CSRF: 상태 변경 요청에 커스텀 헤더 요구.
 - 사진: 비공개 버킷, 소유자 확인 후 만료 5분 presigned URL.
-- 비밀값(ANTHROPIC_API_KEY, FOODSAFETY_API_KEY, KAKAO_CLIENT_ID/SECRET, GOOGLE_CLIENT_ID/SECRET, R2_*, DATABASE_URL, SECRET_KEY)은 환경변수. `.env`는 gitignore.
+- 비밀값(ANTHROPIC_API_KEY, FOODSAFETY_API_KEY, KAKAO_CLIENT_ID/SECRET, NAVER_CLIENT_ID/SECRET, GOOGLE_CLIENT_ID/SECRET, R2_*, DATABASE_URL, SECRET_KEY)은 환경변수. `.env`는 gitignore.
 
 ## 10. 테스트
 

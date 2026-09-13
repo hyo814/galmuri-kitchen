@@ -292,6 +292,11 @@ button {
   color: #191600;
 }
 
+.btn.naver {
+  background: #03c75a;
+  color: #ffffff;
+}
+
 .btn.google {
   background: #ffffff;
   color: #1f1f1f;
