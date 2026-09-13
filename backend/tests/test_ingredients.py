@@ -2,9 +2,12 @@ from datetime import date, timedelta
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import event
+from sqlalchemy.exc import IntegrityError
 
-from app.ingredients import OLD_DAYS_BY_KIND, ingredient_status, matching_rule, seoul_today
-from app.locations import INVALID_LOCATION, KINDS
+import app.ingredients as ingredients_module
+from app.ingredients import BULK_MAX, OLD_DAYS_BY_KIND, ingredient_status, matching_rule, seoul_today
+from app.locations import INVALID_LOCATION, KINDS, choose_location, user_locations
 from app.models import Ingredient, StorageLocation, User, db
 
 TODAY = date(2026, 9, 13)
@@ -253,3 +256,227 @@ def test_seasoning_skip_does_not_catch_dishes_named_after_a_seasoning(client, lo
         name: create(client, name=name, purchased_on=old).get_json()["status"] for name in ok_names + old_names
     }
     assert statuses == {**{n: "ok" for n in ok_names}, **{n: "old" for n in old_names}}
+
+
+def bulk(client, *items):
+    return client.post("/api/ingredients/bulk", json={"items": list(items)})
+
+
+def test_bulk_requires_login(client):
+    assert bulk(client, {"name": "대파"}).status_code == 401
+
+
+def test_bulk_creates_items_in_given_or_default_locations(client, login):
+    login()
+    kinds = {l["kind"]: l["id"] for l in client.get("/api/locations").get_json()}
+    today = seoul_today().isoformat()
+    res = bulk(
+        client,
+        {"name": "대파", "quantity": 1, "unit": "단", "purchased_on": today},
+        {"name": "냉동만두", "quantity": 1, "unit": "봉", "purchased_on": today, "location_id": kinds["freezer"]},
+        {"name": "햇반", "quantity": 6, "unit": "개", "purchased_on": today, "expires_on": "2027-01-01", "location_id": kinds["room"]},
+    )
+    assert res.status_code == 201
+    assert [(i["name"], i["quantity"], i["unit"], i["location_name"]) for i in res.get_json()] == [
+        ("대파", 1, "단", "냉장실"),
+        ("냉동만두", 1, "봉", "냉동실"),
+        ("햇반", 6, "개", "실온"),
+    ]
+    assert {i["name"] for i in client.get("/api/ingredients").get_json()} == {"대파", "냉동만두", "햇반"}
+
+
+def test_bulk_default_location_is_first_fridge_then_first_location(client, login):
+    login()
+    fridge = client.get("/api/locations").get_json()[0]
+    today = seoul_today().isoformat()
+    client.patch(f"/api/locations/{fridge['id']}", json={"kind": "room"})
+    kimchi = client.post("/api/locations", json={"name": "김치냉장고", "kind": "fridge"}).get_json()
+    assert bulk(client, {"name": "김치", "purchased_on": today}).get_json()[0]["location_name"] == "김치냉장고"
+    client.patch(f"/api/locations/{kimchi['id']}", json={"kind": "freezer"})
+    assert bulk(client, {"name": "쌀", "purchased_on": today}).get_json()[0]["location_name"] == "냉장실"
+
+
+def test_bulk_rejects_other_users_location_and_creates_nothing(client, login):
+    login("owner")
+    owner_location_id = client.get("/api/locations").get_json()[0]["id"]
+    login("intruder")
+    today = seoul_today().isoformat()
+    res = bulk(client, {"name": "대파", "purchased_on": today}, {"name": "우유", "purchased_on": today, "location_id": owner_location_id})
+    assert res.status_code == 400
+    assert res.get_json() == {"error": f"2번째 재료: {INVALID_LOCATION}", "errors": [{"index": 1, "error": INVALID_LOCATION}]}
+    assert client.get("/api/ingredients").get_json() == []
+
+
+def test_bulk_invalid_items_create_nothing_and_list_errors(client, login):
+    login()
+    today = seoul_today().isoformat()
+    res = bulk(
+        client,
+        {"name": "대파", "purchased_on": today},
+        {"name": "", "purchased_on": today},
+        "우유",
+        {"name": "두부", "quantity": 0, "purchased_on": today},
+        {"name": "계란", "purchased_on": today, "location_id": True},
+    )
+    assert res.status_code == 400
+    assert res.get_json() == {
+        "error": "2번째 재료: 이름은 1~50자로 입력해 주세요.",
+        "errors": [
+            {"index": 1, "error": "이름은 1~50자로 입력해 주세요."},
+            {"index": 2, "error": "잘못된 요청이에요."},
+            {"index": 3, "error": "수량은 0보다 커야 해요."},
+            {"index": 4, "error": INVALID_LOCATION},
+        ],
+    }
+    assert client.get("/api/ingredients").get_json() == []
+
+
+@pytest.mark.parametrize(
+    "body",
+    [None, {}, {"items": []}, {"items": "대파"}, {"items": [{"name": "대파", "purchased_on": "2026-09-13"}] * 51}],
+)
+def test_bulk_body_validation(client, login, body):
+    login()
+    res = client.post("/api/ingredients/bulk", json=body)
+    assert (res.status_code, res.get_json()) == (400, {"error": "재료를 1~50개 보내 주세요."})
+    assert client.get("/api/ingredients").get_json() == []
+
+
+def test_bulk_requires_fetch_header(raw_client):
+    res = raw_client.post("/api/ingredients/bulk", json={"items": [{"name": "대파"}]})
+    assert (res.status_code, res.get_json()) == (400, {"error": "잘못된 요청이에요."})
+
+
+# --- Fix round 1 (G1-G5) ---
+
+
+def test_bulk_avoids_n_plus_one_after_commit(client, login, app):
+    # G1: to_json 결과를 flush 직후(만료 전)에 만들어 커밋 이후 N+1 조회가 없어야 한다.
+    login()
+    today = seoul_today().isoformat()
+    items = [{"name": f"재료{i}", "purchased_on": today} for i in range(10)]
+    with app.app_context():
+        engine = db.engine
+    statements = []
+
+    def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement.strip().upper())
+
+    event.listen(engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        res = bulk(client, *items)
+    finally:
+        event.remove(engine, "before_cursor_execute", before_cursor_execute)
+
+    assert res.status_code == 201
+    seen_insert = False
+    ingredient_selects_after_insert = 0
+    for stmt in statements:
+        if stmt.startswith("INSERT INTO INGREDIENTS"):
+            seen_insert = True
+        elif stmt.startswith("SELECT") and seen_insert and "INGREDIENTS" in stmt:
+            ingredient_selects_after_insert += 1  # 만료된 속성 재조회(=N+1)가 있으면 여기 잡힌다
+    assert ingredient_selects_after_insert == 0
+
+
+def test_bulk_respects_per_user_ingredient_cap(client, login, monkeypatch):
+    # G2: 사용자당 재료 2000개 상한(테스트는 값을 낮춰 확인) - 일괄 추가는 초과분이 있으면 전부 취소.
+    monkeypatch.setattr(ingredients_module, "MAX_INGREDIENTS_PER_USER", 3)
+    login()
+    today = seoul_today().isoformat()
+    bulk(client, {"name": "a", "purchased_on": today}, {"name": "b", "purchased_on": today})
+    res = bulk(client, {"name": "c", "purchased_on": today}, {"name": "d", "purchased_on": today})
+    assert res.status_code == 400
+    assert res.get_json() == {"error": "재료는 3개까지 저장할 수 있어요. 다 쓴 재료를 정리해 주세요."}
+    assert len(client.get("/api/ingredients").get_json()) == 2
+
+
+def test_create_respects_per_user_ingredient_cap(client, login, monkeypatch):
+    # G2: 단건 생성도 상한에 걸리면 400.
+    monkeypatch.setattr(ingredients_module, "MAX_INGREDIENTS_PER_USER", 3)
+    login()
+    today = seoul_today().isoformat()
+    for _ in range(3):
+        assert create(client, purchased_on=today).status_code == 201
+    res = create(client, purchased_on=today)
+    assert res.status_code == 400
+    assert res.get_json() == {"error": "재료는 3개까지 저장할 수 있어요. 다 쓴 재료를 정리해 주세요."}
+    assert len(client.get("/api/ingredients").get_json()) == 3
+
+
+def test_bulk_commit_failure_returns_friendly_error(client, login, monkeypatch):
+    # G3: 커밋 실패(예: 검증 이후 위치가 바뀜)는 한국어 JSON 400으로 안내하고 아무것도 만들지 않는다.
+    login()
+    today = seoul_today().isoformat()
+
+    def raise_integrity_error():
+        raise IntegrityError("insert", {}, Exception("conflict"))
+
+    monkeypatch.setattr(db.session, "commit", raise_integrity_error)
+    res = bulk(client, {"name": "무", "purchased_on": today})
+    assert res.status_code == 400
+    assert res.get_json() == {"error": "선택한 보관 위치가 방금 바뀌었어요. 다시 시도해 주세요."}
+    monkeypatch.undo()
+    assert client.get("/api/ingredients").get_json() == []
+
+
+def test_bulk_rejects_non_int_location_id(client, login):
+    # G4: choose_location도 owned_location처럼 bool/비-int location_id를 거부한다.
+    login()
+    fridge_id = client.get("/api/locations").get_json()[0]["id"]
+    today = seoul_today().isoformat()
+    res = bulk(
+        client,
+        {"name": "대파", "purchased_on": today, "location_id": float(fridge_id)},
+        {"name": "우유", "purchased_on": today, "location_id": str(fridge_id)},
+    )
+    assert res.status_code == 400
+    assert res.get_json()["errors"] == [
+        {"index": 0, "error": INVALID_LOCATION},
+        {"index": 1, "error": INVALID_LOCATION},
+    ]
+    assert client.get("/api/ingredients").get_json() == []
+
+
+def test_bulk_exactly_max_items_creates_all(client, login):
+    # G5: 정확히 상한(50)개면 전부 생성된다.
+    login()
+    today = seoul_today().isoformat()
+    items = [{"name": f"재료{i}", "purchased_on": today} for i in range(BULK_MAX)]
+    res = bulk(client, *items)
+    assert res.status_code == 201
+    assert len(res.get_json()) == BULK_MAX
+    assert len(client.get("/api/ingredients").get_json()) == BULK_MAX
+
+
+def test_bulk_response_matches_list_response_for_same_item(client, login):
+    # G5: 일괄 추가 응답 항목은 같은 재료의 목록 API 응답과 같아야 한다.
+    login()
+    today = seoul_today().isoformat()
+    created_item = bulk(client, {"name": "무", "quantity": 2, "unit": "개", "purchased_on": today}).get_json()[0]
+    listed = {i["id"]: i for i in client.get("/api/ingredients").get_json()}
+    assert created_item == listed[created_item["id"]]
+
+
+def test_choose_location_prefers_first_fridge_when_multiple_exist(app):
+    # G5: choose_location은 넘겨받은 목록의 순서를 그대로 쓴다(정렬은 user_locations의 책임).
+    with app.app_context():
+        user = User(provider="test", provider_id="tie", nickname="tie")
+        db.session.add(user)
+        db.session.commit()
+        first = StorageLocation(user_id=user.id, name="A", kind="fridge", sort_order=0)
+        second = StorageLocation(user_id=user.id, name="B", kind="fridge", sort_order=1)
+        db.session.add_all([second, first])
+        db.session.commit()
+        assert choose_location(user_locations(user.id), None) is first
+
+
+def test_bulk_49_valid_then_trailing_invalid_creates_nothing(client, login):
+    # G5: 마지막 항목만 틀려도 전부 취소되고 오류는 index 49 하나뿐이다.
+    login()
+    today = seoul_today().isoformat()
+    items = [{"name": f"재료{i}", "purchased_on": today} for i in range(49)] + [{"name": "", "purchased_on": today}]
+    res = bulk(client, *items)
+    assert res.status_code == 400
+    assert res.get_json()["errors"] == [{"index": 49, "error": "이름은 1~50자로 입력해 주세요."}]
+    assert client.get("/api/ingredients").get_json() == []

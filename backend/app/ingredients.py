@@ -3,16 +3,20 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from flask import Blueprint, abort, g, jsonify, request
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
+from werkzeug.exceptions import BadRequest
 
 from .auth import get_owned_or_404, login_required
-from .locations import default_location, owned_location
+from .locations import choose_location, default_location, owned_location, user_locations
 from .matching import head_is, keyword_in
 from .models import Ingredient, ItemRule, Staple, db
 from .validation import text
 
 bp = Blueprint("ingredients", __name__, url_prefix="/api/ingredients")
 
+BULK_MAX = 50  # 스캔 확인 화면에서 한 번에 넣는 최대 개수 (scan.MAX_ITEMS와 같게)
+MAX_INGREDIENTS_PER_USER = 2000  # 사용자당 저장 가능한 재료 상한
 URGENT_DAYS = 3  # 유통기한까지 3일 이내(지난 것 포함)면 임박
 OLD_DAYS_BY_KIND = {"fridge": 7, "freezer": 60, "room": None}  # 유통기한이 없을 때 오래됨 기준(일), room은 표시 안 함
 SEVERITY = {"ok": 0, "old": 1, "urgent": 2, "danger": 3}
@@ -87,6 +91,12 @@ def to_json(item, today, rules, seasonings=()):
     }
 
 
+def _check_ingredient_cap(user_id, new_count):
+    existing = Ingredient.query.filter_by(user_id=user_id).count()
+    if existing + new_count > MAX_INGREDIENTS_PER_USER:
+        abort(400, f"재료는 {MAX_INGREDIENTS_PER_USER}개까지 저장할 수 있어요. 다 쓴 재료를 정리해 주세요.")
+
+
 def _date(value, label):
     try:
         return date.fromisoformat(value)
@@ -94,7 +104,7 @@ def _date(value, label):
         abort(400, f"{label}은 YYYY-MM-DD 형식으로 입력해 주세요.")
 
 
-def parse_fields(data, creating):
+def parse_fields(data, creating, locations=None):
     if not isinstance(data, dict):
         abort(400, "잘못된 요청이에요.")
     fields = {}
@@ -127,7 +137,10 @@ def parse_fields(data, creating):
         fields["expires_on"] = _date(value, "유통기한") if value else None
     if creating or "location_id" in data:
         value = data.get("location_id")
-        location = default_location(g.user.id) if creating and value is None else owned_location(value)
+        if locations is not None:  # 일괄 추가: 요청마다 한 번 불러온 위치 목록에서 고른다
+            location = choose_location(locations, value)
+        else:
+            location = default_location(g.user.id) if creating and value is None else owned_location(value)
         fields["location_id"] = location.id
     return fields
 
@@ -153,10 +166,44 @@ def list_ingredients():
 @bp.post("")
 @login_required
 def create_ingredient():
-    item = Ingredient(user_id=g.user.id, **parse_fields(request.get_json(silent=True), creating=True))
+    fields = parse_fields(request.get_json(silent=True), creating=True)
+    _check_ingredient_cap(g.user.id, 1)
+    item = Ingredient(user_id=g.user.id, **fields)
     db.session.add(item)
     db.session.commit()
     return jsonify(to_json(item, seoul_today(), user_rules(g.user.id), seasoning_names(g.user.id))), 201
+
+
+@bp.post("/bulk")
+@login_required
+def create_ingredients_bulk():
+    """스캔 확인 화면의 여러 재료를 한 번에 넣는다. 하나라도 틀리면 아무것도 만들지 않는다."""
+    data = request.get_json(silent=True)
+    items = data.get("items") if isinstance(data, dict) else None
+    if not isinstance(items, list) or not 1 <= len(items) <= BULK_MAX:
+        abort(400, f"재료를 1~{BULK_MAX}개 보내 주세요.")
+    _check_ingredient_cap(g.user.id, len(items))
+    locations = user_locations(g.user.id)
+    rows, errors = [], []
+    for index, item in enumerate(items):
+        try:
+            rows.append(parse_fields(item, creating=True, locations=locations))
+        except BadRequest as e:
+            errors.append({"index": index, "error": e.description})
+    if errors:
+        first = errors[0]
+        return jsonify(error=f"{first['index'] + 1}번째 재료: {first['error']}", errors=errors), 400
+    created = [Ingredient(user_id=g.user.id, **fields) for fields in rows]
+    db.session.add_all(created)
+    db.session.flush()  # PK를 받되 커밋 전에 응답을 만들어 커밋 후 만료로 인한 N+1 조회를 피한다
+    today, rules, seasonings = seoul_today(), user_rules(g.user.id), seasoning_names(g.user.id)
+    result = [to_json(i, today, rules, seasonings) for i in created]
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        abort(400, "선택한 보관 위치가 방금 바뀌었어요. 다시 시도해 주세요.")
+    return jsonify(result), 201
 
 
 @bp.patch("/<int:item_id>")
