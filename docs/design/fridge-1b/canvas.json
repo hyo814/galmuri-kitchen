@@ -1,0 +1,13 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "냉장고 홈", "x": 0, "y": 0, "w": 384, "h": 832 },
+    { "file": "HomeDark.dc.html", "title": "냉장고 홈 · 다크", "x": 464, "y": 0, "w": 384, "h": 832 },
+    { "file": "AddSheet.dc.html", "title": "재료 추가", "x": 928, "y": 0, "w": 384, "h": 832 },
+    { "file": "StaplesSheet.dc.html", "title": "필수품", "x": 1392, "y": 0, "w": 384, "h": 832 },
+    { "file": "LocationsSheet.dc.html", "title": "위치 관리", "x": 1856, "y": 0, "w": 384, "h": 832 }
+  ],
+  "annotations": [
+    { "id": "direction", "x": 0, "y": -150, "w": 520, "text": "방향: 깔끔·또렷 (흰 카드 + 쿨 그레이 바탕, 굵은 제목, 색은 상태 표시에만)\n초록 포인트는 기존 앱 색을 밝게 다듬은 것. 빨강=임박/떨어짐, 노랑=오래됨, 회색=여유\n위치 칩은 가로로 넘겨 보고, 오른쪽 조절 아이콘이 위치 관리" }
+  ],
+  "launch": { "view": "canvas" }
+}

@@ -1,0 +1,90 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;display=swap">
+  <style>
+    body { margin: 0; background: #F3F4F6; }
+    a { color: #0F9D63; } a:hover { color: #0B7A4C; }
+  </style>
+</helmet>
+<div style="position: relative; width: 384px; height: 832px; overflow: hidden; background: #F3F4F6; color: #17191C; font-family: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;">
+  <div style="padding: 28px 20px 0 20px;">
+    <div style="font-size: 26px; line-height: 34px; font-weight: 700; letter-spacing: -0.5px;">내 냉장고</div>
+  </div>
+  <div style="position: absolute; inset: 0; background: rgba(15, 17, 20, 0.48);"></div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 18px; padding: 12px 20px 24px 20px; background: #FFFFFF; border-radius: 24px 24px 0 0;">
+    <div style="align-self: center; width: 40px; height: 4px; border-radius: 2px; background: #E1E4E8;"></div>
+
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <div style="font-size: 22px; line-height: 30px; font-weight: 700; letter-spacing: -0.4px;">필수품</div>
+        <div style="font-size: 15px; line-height: 22px; color: #5B616B; text-wrap: pretty;">항상 있어야 하는 재료예요. 떨어지면 냉장고 화면에서 알려드려요.</div>
+      </div>
+      <div style="display: flex; align-items: center; min-height: 44px; flex-shrink: 0; font-size: 15px; font-weight: 600; color: #5B616B;">편집</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div style="display: flex; flex-direction: column;">
+        <div style="font-size: 13px; line-height: 20px; font-weight: 600; color: #8B919A; padding-bottom: 2px;">조미료</div>
+        <div style="display: flex; align-items: center; justify-content: space-between; min-height: 48px;">
+          <div style="font-size: 17px; font-weight: 500;">참기름</div>
+          <div style="display: flex; align-items: center; height: 26px; padding: 0 9px; border-radius: 7px; background: #FDEDED; color: #E5484D; font-size: 13px; font-weight: 700;">떨어짐</div>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; min-height: 48px;">
+          <div style="font-size: 17px; font-weight: 500;">간장</div>
+          <div style="display: flex; align-items: center; gap: 4px; color: #8B919A; font-size: 14px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>있음</div>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; min-height: 48px;">
+          <div style="font-size: 17px; font-weight: 500;">소금</div>
+          <div style="display: flex; align-items: center; gap: 4px; color: #8B919A; font-size: 14px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>있음</div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column;">
+        <div style="font-size: 13px; line-height: 20px; font-weight: 600; color: #8B919A; padding-bottom: 2px;">야채</div>
+        <div style="display: flex; align-items: center; justify-content: space-between; min-height: 48px;">
+          <div style="font-size: 17px; font-weight: 500;">대파</div>
+          <div style="display: flex; align-items: center; height: 26px; padding: 0 9px; border-radius: 7px; background: #FDEDED; color: #E5484D; font-size: 13px; font-weight: 700;">떨어짐</div>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; min-height: 48px;">
+          <div style="font-size: 17px; font-weight: 500;">양파</div>
+          <div style="display: flex; align-items: center; gap: 4px; color: #8B919A; font-size: 14px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>있음</div>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; min-height: 48px;">
+          <div style="font-size: 17px; font-weight: 500;">마늘</div>
+          <div style="display: flex; align-items: center; gap: 4px; color: #8B919A; font-size: 14px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>있음</div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column;">
+        <div style="font-size: 13px; line-height: 20px; font-weight: 600; color: #8B919A; padding-bottom: 2px;">기타</div>
+        <div style="display: flex; align-items: center; justify-content: space-between; min-height: 48px;">
+          <div style="font-size: 17px; font-weight: 500;">계란</div>
+          <div style="display: flex; align-items: center; gap: 4px; color: #8B919A; font-size: 14px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>있음</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px; padding-top: 16px; border-top: 1px solid #EEF0F2;">
+      <div style="display: flex; gap: 8px;">
+        <div style="display: flex; align-items: center; flex-grow: 1; height: 52px; padding: 0 16px; border-radius: 14px; background: #F3F4F6; font-size: 17px; color: #9097A1;">예: 고춧가루</div>
+        <div style="display: flex; align-items: center; justify-content: center; width: 72px; height: 52px; border-radius: 14px; background: #0F9D63; color: #FFFFFF; font-size: 16px; font-weight: 600;">추가</div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <div style="display: flex; align-items: center; height: 44px; padding: 0 14px; box-sizing: border-box; border-radius: 12px; background: #E7F6EF; border: 1.5px solid #0F9D63; color: #0B7A4C; font-size: 15px; font-weight: 600;">조미료</div>
+        <div style="display: flex; align-items: center; height: 44px; padding: 0 14px; border-radius: 12px; background: #F3F4F6; color: #3A3F46; font-size: 15px; font-weight: 500;">야채</div>
+        <div style="display: flex; align-items: center; height: 44px; padding: 0 14px; border-radius: 12px; background: #F3F4F6; color: #3A3F46; font-size: 15px; font-weight: 500;">기타</div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
