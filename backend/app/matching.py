@@ -44,6 +44,13 @@ def names_match(a, b):
     return _match_one_way(na, nb, b)
 
 
+def head_is(name, word):
+    """이름의 마지막 단어(숫자로 시작하는 용량·개수 제외)가 word로 끝나는지. "청정원 순창 고추장 500g" → 고추장 O, "고추장 불고기" → X"""
+    word = normalize(word)
+    words = [t for t in tokens(name) if not t[0].isdigit()]
+    return bool(word and words) and words[-1].endswith(word)
+
+
 def keyword_in(keyword, name):
     """품목 규칙 키워드가 재료 이름에 들어가는지(한 방향).
     2글자 이하 키워드는 단어가 같거나 그 키워드로 끝날 때만 (식빵·순두부 O / 빵가루·햄버거 X)."""

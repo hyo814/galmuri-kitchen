@@ -1,6 +1,6 @@
 import pytest
 
-from app.matching import keyword_in, names_match, normalize, tokens
+from app.matching import head_is, keyword_in, names_match, normalize, tokens
 
 
 def test_normalize_drops_parentheses_spaces_and_case():
@@ -33,6 +33,24 @@ def test_normalize_drops_parentheses_spaces_and_case():
 )
 def test_names_match(a, b, expected):
     assert names_match(a, b) is expected
+
+
+@pytest.mark.parametrize(
+    "name, word, expected",
+    [
+        ("청정원 순창 고추장 500g", "고추장", True),
+        ("진간장 (500ml)", "간장", True),
+        ("초고추장", "고추장", True),
+        ("굴소스", "굴소스", True),
+        ("고추장 불고기 500g", "고추장", False),
+        ("간장 닭갈비", "간장", False),
+        ("된장 삼겹살", "된장", False),
+        ("굴소스 볶음밥", "굴소스", False),
+        ("참치마요네즈 샐러드", "마요네즈", False),
+    ],
+)
+def test_head_is(name, word, expected):
+    assert head_is(name, word) is expected
 
 
 def test_keyword_in_is_one_way():
