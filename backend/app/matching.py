@@ -11,12 +11,20 @@ def normalize(name):
 
 
 def tokens(name):
-    """괄호 내용을 뺀 뒤 공백·구분 기호로 나눈 소문자 단어들. "유정란 계란 (특란) 10구" → ["유정란", "계란", "10구"]"""
-    return [t for t in _TOKEN_SPLIT.split(_PARENS.sub("", name).lower()) if t]
+    """괄호와 그 안 내용을 공백으로 치환하고 숫자 앞에도 공백을 넣은 뒤 공백·구분 기호로 나눈 소문자 단어들.
+    "유정란 계란 (특란) 10구" → ["유정란", "계란", "10구"], "대파(국산)1단" → ["대파", "1단"], "대파1단" → ["대파", "1단"]"""
+    spaced = re.sub(r"(\d+)", r" \1", _PARENS.sub(" ", name)).lower()
+    return [t for t in _TOKEN_SPLIT.split(spaced) if t]
 
 
 def _short_match(short, name, allow_suffix):
     return any(word == short or (allow_suffix and word.endswith(short)) for word in tokens(name))
+
+
+def _match_one_way(short_norm, long_norm, long_original):
+    if len(short_norm) >= 3:
+        return short_norm in long_norm
+    return _short_match(short_norm, long_original, allow_suffix=len(short_norm) == 2)
 
 
 def names_match(a, b):
@@ -24,15 +32,16 @@ def names_match(a, b):
     - 짧은 쪽이 3글자 이상: 부분 문자열
     - 2글자: 긴 쪽 단어가 같거나 그 이름으로 끝날 때 (대파 1단·청양고추·진간장 O / 고추장·간장게장 X)
     - 1글자: 긴 쪽 단어와 정확히 같을 때 (파→양파 X, 무→단무지 X)
+    길이가 같으면 양방향(a가 짧은 쪽/b가 짧은 쪽) 모두 확인해 대칭을 보장한다.
     """
     na, nb = normalize(a), normalize(b)
     if not na or not nb:
         return False
+    if len(na) == len(nb):
+        return _match_one_way(na, nb, b) or _match_one_way(nb, na, a)
     if len(na) > len(nb):
         a, b, na, nb = b, a, nb, na
-    if len(na) >= 3:
-        return na in nb
-    return _short_match(na, b, allow_suffix=len(na) == 2)
+    return _match_one_way(na, nb, b)
 
 
 def keyword_in(keyword, name):
