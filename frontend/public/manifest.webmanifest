@@ -1,9 +1,14 @@
 {
+  "id": "/",
   "name": "갈무리부엌",
   "short_name": "갈무리부엌",
+  "description": "사둔 재료를 챙기고 요리로 마무리하는 우리 집 부엌 노트",
   "lang": "ko",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
+  "categories": ["food", "lifestyle"],
   "background_color": "#f3f4f6",
   "theme_color": "#f3f4f6",
   "icons": [

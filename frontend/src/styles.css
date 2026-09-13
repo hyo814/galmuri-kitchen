@@ -810,7 +810,8 @@ a.row-btn {
   text-decoration: none;
 }
 
-a.row-btn > svg {
+a.row-btn > svg,
+button.row-btn > svg {
   flex-shrink: 0;
   color: var(--text-3);
 }

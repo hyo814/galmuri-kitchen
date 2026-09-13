@@ -99,10 +99,17 @@ def create_app(test_config=None):
     def api_not_found(_):
         abort(404)
 
+    # 서비스워커/매니페스트는 캐시 없이 매번 받아야 업데이트가 바로 반영된다.
+    NO_CACHE_FILES = {"sw.js": "text/javascript", "manifest.webmanifest": "application/manifest+json"}
+
     @app.get("/", defaults={"path": ""})
     @app.get("/<path:path>")
     def spa(path):
         dist = app.config["FRONTEND_DIST"]
+        if path in NO_CACHE_FILES and os.path.isfile(os.path.join(dist, path)):
+            res = send_from_directory(dist, path, mimetype=NO_CACHE_FILES[path])
+            res.headers["Cache-Control"] = "no-cache"
+            return res
         if path and os.path.isfile(os.path.join(dist, path)):
             return send_from_directory(dist, path)
         return send_from_directory(dist, "index.html")
