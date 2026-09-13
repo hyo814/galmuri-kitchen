@@ -109,7 +109,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 ## 7. 핵심 동작
 
 - **스캔**: Claude Messages API에 이미지(base64) + 종류별 프롬프트, 구조화 출력(JSON 스키마)으로
-  `{items:[{name, quantity, unit, location_kind, price}], purchased_on: "YYYY-MM-DD"|null}`. 영수증·주문에서 식재료가 아닌 항목(봉투, 세제 등)은 제외하도록 지시. 서버가 결과를 정리한다(최대 50개, 이름 50자·단위 10자, 수량이 0 이하·숫자 아님 → 1, 미래 구입일·냉장고 사진의 구입일 → null). price는 품목별 결제 금액(원, 할인 반영)이며 숫자가 아니거나 0~10,000,000원을 벗어나면 null, 냉장고 사진은 항상 null.
+  `{items:[{name, quantity, unit, location_kind, price}], purchased_on: "YYYY-MM-DD"|null}`. 영수증·주문에서 식재료가 아닌 항목(봉투, 세제 등)은 제외하도록 지시. 서버가 결과를 정리한다(최대 50개, 이름 50자·단위 10자, 수량이 0 이하·숫자 아님 → 1, 미래 구입일·냉장고 사진의 구입일 → null). price는 품목별 결제 금액(원, 할인 반영)이며 숫자가 아니거나 0보다 크고 10,000,000원 이하가 아니면 null(직접 입력은 0원도 허용), 냉장고 사진은 항상 null.
 - **AI 레시피**: 보유 재료 목록(임박 표시 포함)을 전달, 구조화 출력으로 `[{title, ingredients:[{name, amount}], steps:[str]}]` 3개. 임박 재료 우선 사용 지시.
 - **조리 기록 저장**: 한 트랜잭션에서 `usages=[{ingredient_id, amount}]` 각각 소유 확인 → quantity 차감 → 0 이하면 삭제 → cook_log 생성. 사진 업로드 실패 시 전체 롤백.
 - **AI 일일 한도**: 요청 전 오늘(서버 기준 Asia/Seoul) 해당 사용자의 `ai_calls` 수를 kind 그룹(scan: fridge+receipt+order+memo / recipe)별로 센다. 서울 하루를 UTC 구간으로 바꿔 created_at으로 센다.

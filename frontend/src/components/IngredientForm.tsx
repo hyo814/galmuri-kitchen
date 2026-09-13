@@ -202,7 +202,8 @@ export default function IngredientForm({
               inputMode="numeric"
               value={price}
               placeholder="모르면 비워두세요"
-              onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
+              maxLength={8}
+              onChange={(e) => setPrice(e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, ""))}
             />
             <span className="suffix">원</span>
           </div>
