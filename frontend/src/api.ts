@@ -34,6 +34,13 @@ export class ApiError extends Error {
   }
 }
 
+let unauthorizedHandler: (() => void) | null = null;
+
+/** 401 응답을 한 곳에서 처리하기 위한 핸들러 등록 (스펙 §8) */
+export function onUnauthorized(handler: () => void) {
+  unauthorizedHandler = handler;
+}
+
 export async function api<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
   const hasBody = options.body !== undefined;
   let res;
@@ -48,7 +55,10 @@ export async function api<T>(path: string, options: { method?: string; body?: un
     throw new ApiError(0, "네트워크에 연결할 수 없어요. 연결을 확인해 주세요.");
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, data.error ?? "문제가 생겼어요. 잠시 후 다시 시도해 주세요.");
+  if (!res.ok) {
+    if (res.status === 401) unauthorizedHandler?.();
+    throw new ApiError(res.status, data.error ?? "문제가 생겼어요. 잠시 후 다시 시도해 주세요.");
+  }
   return data as T;
 }
 

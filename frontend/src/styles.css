@@ -92,8 +92,8 @@ input {
   margin: 0 0 12px;
   padding: 12px 14px;
   border-radius: var(--radius);
-  background: var(--urgent-bg);
-  color: var(--urgent);
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 
 .empty {
