@@ -16,10 +16,14 @@
 
 | 단계 | 범위 |
 |---|---|
-| 1. 기반 | 카카오/구글 로그인, 냉장고 재료 수기 CRUD(구입일 필수), 임박 표시, Render 배포 |
-| 2. 스캔 | 냉장고 사진·영수증 → Claude 비전 → 확인 화면 → 일괄 등록, AI 일일 한도 |
-| 3. 레시피 | 내 레시피 CRUD, 식약처 공공 DB 동기화·매칭, AI 레시피 생성, 추천 화면 |
-| 4. 조리 기록 | 사용 재료 차감, 날짜·별점·메모·완성 사진, 기록 목록 |
+| 1. 기반 | 카카오/구글 로그인, 냉장고 재료 수기 CRUD(구입일 필수), 임박 표시 |
+| 1b. 보관 위치·필수품 | 사용자 정의 보관 위치(종류별 오래됨 기준), 필수품 목록과 떨어진 필수품 표시 → 이후 Render 배포 |
+| 2. 스캔 | 냉장고 사진·영수증·온라인 주문완료 캡처 → Claude 비전 → 확인 화면(보관 위치 추정 포함) → 일괄 등록, AI 일일 한도 |
+| 3. 레시피 | 내 레시피 CRUD, 식약처 공공 DB 동기화·매칭, AI 레시피 생성, 유튜브·인스타그램 링크 가져오기, 추천 화면 |
+| 4. 장보기 | 장보기 목록(살 날짜·쇼핑몰), 부족 재료·떨어진 필수품·임박 재료 담기, 6개 쇼핑몰 검색 링크, 네이버 최저가, 구매 완료 → 냉장고 |
+| 5. 조리 기록 | 사용 재료 차감, 날짜·별점·메모·완성 사진, 기록 목록 |
+
+단계별 상세는 14~17절(2026-09-13 추가 요구사항)이 4~7절보다 우선한다.
 
 ## 3. 구조
 
@@ -47,7 +51,8 @@ recipe-ai/
 - `recipes`: id, user_id, title, ingredients(JSON `[{name, amount}]`), steps(JSON `[str]`), source(`mine`|`public`|`ai`), image_url(선택), created_at
 - `public_recipes`: id, rcp_seq(UNIQUE), title, ingredients_text(원문), ingredient_names(JSON, 파싱된 이름 목록), steps(JSON), image_url. 사용자 소유 아님.
 - `cook_logs`: id, user_id, recipe_id(선택, SET NULL), title, cooked_on(date), rating(1~5, 선택), memo(선택), photo_key(선택), created_at
-- `ai_calls`: id, user_id, kind(`fridge`|`receipt`|`recipe`), created_at
+- `ai_calls`: id, user_id, kind(`fridge`|`receipt`|`order`|`recipe`|`link`), created_at
+- `storage_locations`, `staples`(14절), `shopping_items`(16절)
 
 ### 규칙
 
@@ -145,4 +150,55 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 
 ## 13. 범위 밖 (필요해질 때 추가)
 
-- 푸시 알림(임박은 화면 표시만), 가족 공유 냉장고, 이메일/비밀번호 가입, 네이티브 앱, 영양 정보, 장보기 목록.
+- 푸시 알림(임박·떨어진 필수품은 화면 표시만), 가족 공유 냉장고, 이메일/비밀번호 가입, 네이티브 앱, 영양 정보,
+  쇼핑몰 주문내역 자동 연동·장바구니 담기(6개 쇼핑몰 모두 공개 API 없음).
+
+## 14. 1b단계: 보관 위치 · 필수품 (추가: 2026-09-13)
+
+### 보관 위치
+- `storage_locations`: id, user_id, name(1~20자), kind(`fridge`|`freezer`|`room`), sort_order(int), created_at. UNIQUE(user_id, name).
+- 사용자 생성 시(및 기존 사용자 마이그레이션 시) 기본 3개: `냉장실`(fridge), `냉동실`(freezer), `실온`(room).
+- `ingredients.location_id`: FK NOT NULL. 기존 재료는 마이그레이션에서 해당 사용자의 `냉장실`로 채운다.
+- 사용자는 위치를 추가·이름 변경·삭제(예: 김치냉장고=fridge, 냉장고 문칸=fridge, 찬장=room, 베란다=room).
+  재료가 들어 있는 위치 삭제는 400 `{"error": "이 위치에 있는 재료를 먼저 옮겨 주세요."}`. 마지막 1개는 삭제 불가.
+- **오래됨 기준(유통기한 없을 때):** fridge 7일, freezer 60일, room 표시 안 함. 유통기한이 있으면 종류와 무관하게 D-3부터 urgent.
+- 재료 JSON에 `location_id`, `location_name`, `location_kind` 추가.
+
+### 필수품
+- `staples`: id, user_id, name(1~50자), category(최대 10자, 기본 `기타`; 추천값 `조미료`·`야채`·`기타`), created_at. UNIQUE(user_id, name).
+- `in_stock`: 사용자의 재료 중 이름 매칭(4절 규칙)되는 것이 하나라도 있으면 true.
+- 필수품은 재료를 삭제해도 남는다(떨어짐으로 표시).
+
+### API
+| 메서드 | 경로 | 설명 |
+|---|---|---|
+| GET/POST | `/api/locations` | 목록(sort_order 순, 각 위치 재료 수 포함) / 생성 |
+| PATCH/DELETE | `/api/locations/<id>` | 이름·종류 변경 / 삭제(규칙 위) |
+| GET/POST | `/api/staples` | 목록(`in_stock` 포함, 떨어진 것 먼저) / 생성 |
+| DELETE | `/api/staples/<id>` | 삭제 |
+
+### 화면
+- 냉장고 화면 상단: 떨어진 필수품이 있으면 배너 `필수품 N개가 떨어졌어요: 대파, 참기름` → 탭하면 필수품 시트.
+- 위치 탭(가로 스크롤 칩): `전체 · 냉장실 · 냉동실 · 실온 · …` + 끝에 `위치 관리`. 전체 탭도 임박 순 정렬.
+- 재료 입력 시트에 `보관 위치` 선택(기본: 현재 선택된 탭, 전체 탭이면 첫 fridge 위치).
+- 필수품 시트: 분류별 목록(있음/떨어짐 표시), 추가(이름 + 분류), 삭제.
+- 위치 관리 시트: 목록, 추가(이름 + 종류), 이름·종류 변경, 삭제.
+
+## 15. 2단계 추가: 온라인 주문 캡처 · 위치 추정
+- `/api/scan?kind=fridge|receipt|order`. `order`는 쿠팡·네이버스토어·컬리·이마트·홈플러스·롯데마트 주문완료/주문상세 화면 캡처.
+- 인식 결과 항목에 `location_kind`(fridge|freezer|room) 추정 포함 → 확인 화면에서 해당 종류의 첫 위치로 프리필, 변경 가능.
+
+## 16. 4단계: 장보기
+- `shopping_items`: id, user_id, name, quantity, unit, planned_on(date, 선택), store(`coupang`|`naver`|`kurly`|`emart`|`homeplus`|`lottemart`|null),
+  location_id(선택, 구매 후 넣을 위치), source(`manual`|`recipe`|`staple`|`urgent`), done_at(선택), created_at.
+- 담기 경로: 직접 추가, 레시피 상세의 부족 재료, 떨어진 필수품 배너, 임박/소진 재료.
+- 목록: 살 날짜별 그룹(오늘·이번 주·날짜 미정), 완료 항목은 아래로.
+- 쇼핑몰 검색 링크: 항목마다 6개 쇼핑몰 검색 결과로 이동(URL 형식은 구현 시 실제 동작 검증).
+- 네이버 최저가: 네이버 쇼핑 검색 API(`NAVER_CLIENT_ID`/`NAVER_CLIENT_SECRET`)로 최저가·판매처 표시. 네이버 입점 상품 한정임을 화면에 명시.
+- 구매 완료: 체크 시 재료로 등록(구입일 기본 오늘·수정 가능, 위치 선택). 주문 캡처/영수증 스캔 결과로 장보기 항목 일괄 체크.
+
+## 17. 3단계 추가: 링크로 레시피 가져오기
+- `POST /api/recipes/import` `{url}` 또는 `{text}` → Claude 구조화 출력 `{title, ingredients:[{name, amount}], steps:[str]}` → 확인 후 저장(`source`: `youtube`|`instagram`|`text`, `source_url`).
+- 유튜브: 영상 설명란 + 자막(자동 자막 포함)을 가져와 정리. 데이터센터 IP 차단 등으로 실패하면 설명란만 사용하거나 텍스트 붙여넣기로 안내.
+- 인스타그램: 공식적으로 타인 게시물 본문 조회 불가 → 링크 미리보기(og:description) 시도, 부족하면 캡션 붙여넣기 안내. 링크만으로 항상 성공을 약속하지 않는다.
+- AI 일일 한도에 `link` 포함(recipe 그룹).
