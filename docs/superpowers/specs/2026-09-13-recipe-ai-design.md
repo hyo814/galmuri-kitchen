@@ -230,6 +230,15 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - 인스타그램: 공식적으로 타인 게시물 본문 조회 불가 → 링크 미리보기(og:description) 시도, 부족하면 캡션 붙여넣기 안내. 링크만으로 항상 성공을 약속하지 않는다.
 - AI 일일 한도에 `link` 포함(recipe 그룹).
 
+### 요리 채널 영상 (추가: 2026-09-14, 사용자 제안·선택)
+유튜브를 따로 검색하지 않고 앱 안에서 요리 영상을 보고 바로 레시피로 가져온다. **유튜브 전체가 아니라 고른 요리 채널만** 다룬다.
+- **위치:** 레시피 탭 칸 `추천 · 내 레시피 · 영상 · 양념 비율`(사용자 결정). 3b에서 링크 가져오기와 함께 만든다.
+- **채널:** 기본 채널(운영자가 고른 한국 요리 전문 채널 몇 개, 구현 시 채널 정책·콘텐츠 확인 후 확정) + 사용자가 채널 링크를 붙여 추가·삭제하는 **내 채널**(최대 30개). `youtube_channels`(id, channel_id UNIQUE, title, thumbnail_url, is_default, fetched_at), `user_channels`(user_id, channel_id, created_at, UNIQUE(user_id, channel_id)). 기본 채널은 사용자가 숨길 수 있다(`hidden`).
+- **목록:** 채널 업로드 재생목록을 `playlistItems.list`(1 unit)로 최근 영상 30개씩 가져와 서버에 캐시(채널별 6시간, `youtube_videos`: video_id UNIQUE, channel_id, title, thumbnail_url, published_at, fetched_at). 화면은 내 채널 + 기본 채널 영상을 최신순으로 합쳐 무한 스크롤(26절). **전체 검색(`search.list`, 100 units)은 쓰지 않고** 캐시된 제목 안에서만 찾는다(무료 한도 하루 10,000 units 보호). 20절 "유튜브 인기 레시피"도 이 채널 캐시를 쓰도록 바꾼다.
+- **보기:** 영상을 누르면 유튜브 공식 삽입 플레이어(IFrame, `youtube-nocookie.com`)로 앱 안에서 재생한다. 영상 파일·자막은 저장하지 않는다. 화면에 YouTube 출처 표시.
+- **가져오기:** 플레이어 아래 `레시피로 가져오기` → 17절 링크 가져오기(`videos.list` 설명란, 1 unit)로 확인 화면 → 내 레시피 저장(source `youtube`, source_url).
+- **정책:** YouTube API 서비스 약관에 따라 저장한 메타데이터(제목·썸네일)는 주기적으로 새로 받고(30일 넘기지 않음), 채널이 삭제·비공개되면 목록에서 뺀다. `YOUTUBE_API_KEY`가 없으면 개발 모드에서는 예시 영상 목록(썸네일 없이 제목만), 운영에서는 영상 칸을 숨긴다.
+
 ## 18. 1c단계: 주방 도구 (추가: 2026-09-13)
 - `kitchen_tools`: id, user_id, name(1~30자), category(`조리도구`|`조리기구`|`칼·도마`|`기타`), bought_on(선택), check_every_months(선택, 1~60),
   last_checked_on(선택), created_at.
@@ -287,7 +296,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - 의료 조언이 아니라 참고용이라는 문구를 계산기 화면에 표시.
 
 ## 22. 3단계 추가: 양념 비율 계산기 (추가: 2026-09-13)
-- 레시피 탭 안 `양념 비율` 목록. 불고기·제육볶음·간장조림·초고추장·쌈장·갈비 양념 등 기본 양념을 제공하고 사용자가 추가·수정("내 비율").
+- 레시피 탭 안 `양념 비율` 칸(추천 · 내 레시피 · 영상 · 양념 비율). 불고기·제육볶음·간장조림·초고추장·쌈장·갈비 양념 등 기본 양념을 제공하고 사용자가 추가·수정("내 비율").
 - `seasonings`: id, user_id(NULL이면 기본 제공), name, basis(`main_weight`|`servings`|`yield`), basis_amount(예: 100), basis_unit(`g`|`인분`|`컵`|`ml`), main_ingredient(선택, 예: `돼지고기`), source(`default`|`user`), source_note(기본 비율 출처), created_at.
 - `seasoning_items`: id, seasoning_id(CASCADE), name, amount(float), unit(`큰술`|`작은술`|`컵`|`ml`|`g`|`개`|`꼬집`), sort_order.
 - 기준(사용자 결정, 모두 지원): 주재료 무게당(예: 고기 100g당), 인분(예: 2인분), 완성량(예: 양념장 1컵).
