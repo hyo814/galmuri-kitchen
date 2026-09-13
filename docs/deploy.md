@@ -41,7 +41,7 @@
      -e DATABASE_URL=postgresql://$(whoami)@host.docker.internal:5432/recipe_ai_docker \
      -e SECRET_KEY=local-docker-check -e PORT=8000 \
      recipe-ai:local
-   curl -s http://localhost:18000/                     # <title>냉장고 레시피</title> 포함
+   curl -s http://localhost:18000/                     # <title>갈무리부엌</title> 포함
    curl -s -o /dev/null -w '%{http_code}\n' http://localhost:18000/api/me            # 401
    curl -s -o /dev/null -w '%{http_code}\n' http://localhost:18000/manifest.webmanifest  # 200
    docker logs recipe-ai-smoke   # 마이그레이션 로그 + gunicorn access log 확인

@@ -28,7 +28,8 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
   return (
     <main className="login">
       <div className="login-hero">
-        <h1>냉장고 레시피</h1>
+        <img src="/mark.svg" width="72" height="72" alt="" />
+        <h1>갈무리부엌</h1>
         <p>냉장고 속 재료로 오늘 뭐 해 먹을지 정해요.</p>
       </div>
       {error && (
