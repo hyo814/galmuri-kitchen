@@ -2,16 +2,6 @@ import Icon, { type IconName } from "../components/Icon";
 
 // ponytail: 기능이 만들어질 때까지 탭 자리만 잡아 두는 안내 화면. 각 단계에서 진짜 화면으로 교체한다.
 const PAGES: Record<string, { title: string; icon: IconName; items: string[] }> = {
-  "/recipes": {
-    title: "레시피",
-    icon: "book",
-    items: [
-      "가진 재료로 만들 수 있는 요리 추천",
-      "내 레시피 저장",
-      "유튜브·인스타그램 링크로 레시피 가져오기",
-      "양념 비율 계산기",
-    ],
-  },
   "/shopping": {
     title: "장보기",
     icon: "cart",
@@ -38,7 +28,7 @@ export default function ComingSoon({ route }: { route: string }) {
   const page = PAGES[route];
   if (!page) return null;
   return (
-    <div className="page">
+    <main className="page">
       <header className="topbar">
         <h1>{page.title}</h1>
       </header>
@@ -55,6 +45,6 @@ export default function ComingSoon({ route }: { route: string }) {
           ))}
         </ul>
       </section>
-    </div>
+    </main>
   );
 }

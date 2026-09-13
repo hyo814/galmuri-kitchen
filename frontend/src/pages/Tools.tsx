@@ -43,7 +43,7 @@ export default function Tools() {
   const due = tools?.filter((t) => t.is_due).length ?? 0;
 
   return (
-    <div className="page">
+    <main className="page">
       <a
         className="back-link"
         href="#/more"
@@ -117,6 +117,6 @@ export default function Tools() {
           onClose={() => setEditing(null)}
         />
       )}
-    </div>
+    </main>
   );
 }

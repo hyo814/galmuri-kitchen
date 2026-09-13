@@ -16,7 +16,7 @@ export default function More() {
   };
 
   return (
-    <div className="page">
+    <main className="page">
       <header className="topbar">
         <h1>더보기</h1>
       </header>
@@ -64,6 +64,6 @@ export default function More() {
           </button>
         </Sheet>
       )}
-    </div>
+    </main>
   );
 }

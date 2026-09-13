@@ -31,3 +31,46 @@ export function addDays(iso: string, days: number): string {
   d.setDate(d.getDate() + days);
   return d.toLocaleDateString("sv-SE");
 }
+
+/** 식약처 사진은 http 주소로 오지만 https로도 열린다(2026-09-13 확인). https 화면에서 섞인 콘텐츠로 막히지 않게 바꾼다. */
+export function imageSrc(url: string | null): string | null {
+  return url ? url.replace(/^http:\/\/(www|openapi)\.foodsafetykorea\.go\.kr\//, "https://$1.foodsafetykorea.go.kr/") : null;
+}
+
+// 숟가락으로 뜰 수 있는 분수 (스펙 22절과 같은 기호)
+const SNAPS: [number, string][] = [[0, ""], [1 / 4, "¼"], [1 / 3, "⅓"], [1 / 2, "½"], [2 / 3, "⅔"], [3 / 4, "¾"], [1, ""]];
+const FRACTIONS = Object.fromEntries(SNAPS.filter(([, symbol]) => symbol).map(([value, symbol]) => [symbol, value]));
+
+/** 0.5 → "½", 1.5 → "1½", 0.4 → "0.4", 112.5 → "113". 10 이상은 정수, 그 아래는 가까운 분수가 있으면 분수 */
+export function formatAmountNumber(value: number): string {
+  if (value >= 10) return String(Math.round(value));
+  const whole = Math.floor(value);
+  const snap = SNAPS.find(([fraction]) => Math.abs(value - whole - fraction) < 0.04);
+  if (!snap) return String(Number(value.toFixed(1)));
+  const [fraction, symbol] = snap;
+  return symbol ? `${whole || ""}${symbol}` : String(whole + fraction);
+}
+
+/**
+ * 인분 조절: 양의 앞 숫자만 배율로 바꾼다(화면에서만, 저장하지 않음 — 스펙 23절 D1).
+ * "200g" ×2 → "400g", "1/2모(150g)" ×2 → "1모(150g)", "1½큰술" ×2 → "3큰술", "2 1/2컵" ×2 → "5컵".
+ * "약간"·"10~15개"·"100g-200g"는 그대로(범위·분수 없는 문구는 배율을 매길 수 없다).
+ */
+export function scaleAmount(amount: string, ratio: number): string {
+  // 대분수("2 1/2", 띄어쓰기)를 먼저 시도하고, 아니면 기존 형태(정수 | 유니코드 분수 | "1/2")를 본다.
+  const match = amount.match(/^(?:(\d+)\s+(\d+)\/(\d+)|(\d+(?:\.\d+)?)?(?:([¼⅓½⅔¾])|\/(\d+))?)/);
+  if (ratio === 1 || !match) return amount;
+  const [, mixedWhole, mixedNum, mixedDenom, whole, symbol, denom] = match;
+  if (mixedWhole === undefined && whole === undefined && symbol === undefined) return amount; // 숫자·분수가 없다("약간" 등)
+  if (mixedWhole !== undefined && Number(mixedDenom) === 0) return amount; // "2 1/0컵" 같은 잘못된 분모
+  if (denom !== undefined && (whole === undefined || Number(denom) === 0)) return amount; // "2/0개", "/2" 그대로
+  const rest = amount.slice(match[0].length);
+  if (/[~\-–]\s*\d/.test(rest)) return amount; // 범위(10~15개, 100g-200g)는 어느 숫자를 바꿀지 애매해서 그대로
+  let value: number;
+  if (mixedWhole !== undefined) value = Number(mixedWhole) + Number(mixedNum) / Number(mixedDenom);
+  else {
+    value = Number(whole ?? 0) + (symbol ? FRACTIONS[symbol] : 0);
+    if (denom !== undefined) value /= Number(denom);
+  }
+  return formatAmountNumber(value * ratio) + rest;
+}

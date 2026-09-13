@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ApiError, api, onUnauthorized, type User } from "./api";
 import Splash from "./components/Splash";
 import TabBar from "./components/TabBar";
@@ -6,6 +6,9 @@ import ComingSoon from "./pages/ComingSoon";
 import Fridge from "./pages/Fridge";
 import Login from "./pages/Login";
 import More from "./pages/More";
+import RecipeDetail from "./pages/RecipeDetail";
+import RecipeForm from "./pages/RecipeForm";
+import Recipes from "./pages/Recipes";
 import Tools from "./pages/Tools";
 import { useHashRoute, type Route, type RoutePattern } from "./useHashRoute";
 import { forgetResources } from "./useResource";
@@ -19,11 +22,11 @@ interface PageProps {
 // 경로 → 화면. 새 화면은 useHashRoute의 ROUTES와 여기에 한 줄씩 추가한다.
 const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
   "/": ({ user, onLogout }) => <Fridge user={user} onLogout={onLogout} />,
-  "/recipes": () => <ComingSoon route="/recipes" />,
-  "/recipes/new": () => <ComingSoon route="/recipes" />,
-  "/recipes/mine/:id": () => <ComingSoon route="/recipes" />,
-  "/recipes/mine/:id/edit": () => <ComingSoon route="/recipes" />,
-  "/recipes/public/:id": () => <ComingSoon route="/recipes" />,
+  "/recipes": () => <Recipes />,
+  "/recipes/new": () => <RecipeForm />,
+  "/recipes/mine/:id": ({ route }) => <RecipeDetail kind="mine" id={route.params.id} />,
+  "/recipes/mine/:id/edit": ({ route }) => <RecipeForm id={route.params.id} />,
+  "/recipes/public/:id": ({ route }) => <RecipeDetail kind="public" id={route.params.id} />,
   "/shopping": () => <ComingSoon route="/shopping" />,
   "/meals": () => <ComingSoon route="/meals" />,
   "/more": () => <More />,
@@ -77,6 +80,40 @@ export default function App() {
     window.addEventListener("keydown", stop, { passive: true, once: true });
 
     return stop;
+  }, [route.path]);
+
+  // U-S1/S2: 경로가 바뀌면(첫 렌더 제외) 새 화면의 제목(h1)으로 포커스를 옮긴다 — 스크린리더 사용자가
+  // 화면이 바뀐 걸 알 수 있게. 이미 자동 포커스된 입력(예: 레시피 추가 폼의 이름 칸)이 있으면 건너뛴다.
+  const isFirstRoute = useRef(true);
+  useEffect(() => {
+    if (isFirstRoute.current) {
+      isFirstRoute.current = false;
+      return;
+    }
+    const main = document.querySelector("main.page");
+    if (!main) return;
+    if (document.activeElement && main.contains(document.activeElement)) return; // 자동 포커스된 입력이 이미 있다
+
+    const focusHeading = () => {
+      const heading = main.querySelector("h1");
+      if (!heading) return false;
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+      return true;
+    };
+    if (focusHeading()) return;
+
+    // 상세·수정 화면처럼 데이터를 비동기로 받아 오는 화면은 이 시점에 h1이 아직 없을 수 있다.
+    // 생기는 대로(불러오는 중 → 실제 내용으로 바뀔 때) 한 번만 포커스한다.
+    const observer = new MutationObserver(() => {
+      if (focusHeading()) observer.disconnect();
+    });
+    observer.observe(main, { childList: true, subtree: true });
+    const timer = setTimeout(() => observer.disconnect(), 5000); // 계속 없으면(오류 화면 등) 포기
+    return () => {
+      observer.disconnect();
+      clearTimeout(timer);
+    };
   }, [route.path]);
 
   // 로그아웃·세션 만료: 다른 계정으로 들어와도 이전 사용자의 화면 캐시가 보이지 않게

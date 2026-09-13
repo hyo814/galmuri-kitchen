@@ -92,6 +92,91 @@ export interface Ingredient extends IngredientInput {
   location_kind: LocationKind;
 }
 
+export interface RecipeIngredient {
+  name: string;
+  amount: string;
+}
+
+/** 상세 화면의 재료: 지금 재고와 매칭한 결과(matched_name은 재고 이름, 물처럼 늘 있는 재료는 null) */
+export interface RecipeIngredientStatus extends RecipeIngredient {
+  have: boolean;
+  matched_name: string | null;
+}
+
+export interface RecipeInput {
+  title: string;
+  servings: number;
+  ingredients: RecipeIngredient[];
+  steps: string[];
+}
+
+export type RecipeSource = "mine" | "public" | "ai" | "youtube" | "instagram" | "text";
+
+export interface RecipeSummary {
+  id: number;
+  title: string;
+  servings: number;
+  source: RecipeSource;
+  image_url: string | null;
+  ingredient_count: number;
+  updated_at: string;
+}
+
+interface RecipeDetailBase {
+  id: number;
+  title: string;
+  servings: number;
+  category: string | null;
+  ingredients: RecipeIngredientStatus[];
+  steps: string[];
+  image_url: string | null;
+}
+
+export interface MyRecipe extends RecipeDetailBase {
+  kind: "mine";
+  source: RecipeSource;
+  source_url: string | null;
+  public_recipe_id: number | null;
+}
+
+export interface PublicRecipeDetail extends RecipeDetailBase {
+  kind: "public";
+  method: string | null;
+  kcal: number | null;
+  is_sample: boolean;
+}
+
+export type RecipeDetail = MyRecipe | PublicRecipeDetail;
+
+export interface RecommendationCard {
+  kind: "mine" | "public";
+  id: number;
+  title: string;
+  image_url: string | null;
+  servings: number;
+  match_rate: number;
+  have_count: number;
+  total_count: number;
+  missing: string[];
+  urgent_used: number;
+  urgent_names: string[];
+  score: number;
+}
+
+/**
+ * GET /api/recommendations 응답(addendum: 페이지가 있다).
+ * section=all(기본, 첫 페이지)만 mine·mine_total을 준다. section=public 페이지는 public·public_total·next_offset만 온다.
+ */
+export interface Recommendations {
+  mine?: RecommendationCard[];
+  mine_total?: number;
+  public: RecommendationCard[];
+  public_total: number;
+  next_offset: number | null;
+  sample: boolean;
+  inventory_count: number;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,

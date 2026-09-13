@@ -1,0 +1,187 @@
+import { useState } from "react";
+import { api, type MyRecipe, type RecipeDetail as Detail } from "../api";
+import Icon from "../components/Icon";
+import { imageSrc, scaleAmount, withJosa } from "../format";
+import { useAsyncAction } from "../useAsyncAction";
+import { goBack, navigate } from "../useHashRoute";
+import { forgetResources, useResource } from "../useResource";
+import { MatchLine } from "./Recipes";
+
+function BackLink() {
+  return (
+    <a
+      className="back-link"
+      href="#/recipes"
+      onClick={(e) => {
+        e.preventDefault();
+        goBack("/recipes");
+      }}
+    >
+      <Icon name="back" size={18} />
+      레시피
+    </a>
+  );
+}
+
+// 저장·수정·삭제 뒤 상세 자신(useResource)뿐 아니라 목록·추천(useInfiniteList)도 새로 받게 한다
+function forgetRecipeCaches() {
+  forgetResources("/api/rec");
+  forgetResources("list:");
+}
+
+export default function RecipeDetail({ kind, id }: { kind: "mine" | "public"; id: string }) {
+  const { data: recipe, error, reload } = useResource<Detail>(kind === "mine" ? `/api/recipes/${id}` : `/api/public-recipes/${id}`);
+  const [servings, setServings] = useState<number | null>(null); // null이면 레시피 기준 인분
+  const { busy, error: actionError, run } = useAsyncAction();
+
+  if (!recipe)
+    return (
+      <main className="page">
+        <BackLink />
+        {error ? (
+          <div className="list-end">
+            <p className="error" role="alert">
+              {error}
+            </p>
+            <button className="btn secondary inline" onClick={reload}>
+              <Icon name="refresh" size={16} />
+              다시 불러오기
+            </button>
+          </div>
+        ) : (
+          <p className="center muted">불러오는 중…</p>
+        )}
+      </main>
+    );
+
+  const shown = servings ?? recipe.servings;
+  const ratio = shown / recipe.servings;
+  const have = recipe.ingredients.filter((item) => item.have).length;
+  const src = imageSrc(recipe.image_url);
+  const meta = [
+    `${recipe.servings}인분`,
+    recipe.category,
+    recipe.kind === "public" && recipe.is_sample ? "예시 레시피" : null,
+    recipe.kind === "mine" && recipe.source === "public" ? "추천에서 저장" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const save = () =>
+    run(async () => {
+      const saved = await api<MyRecipe>(`/api/public-recipes/${recipe.id}/save`, { method: "POST" });
+      forgetRecipeCaches();
+      navigate(`/recipes/mine/${saved.id}`, { replace: true });
+    });
+
+  const remove = () => {
+    if (!confirm(`${withJosa(recipe.title, "을", "를")} 삭제할까요?`)) return;
+    run(async () => {
+      await api(`/api/recipes/${recipe.id}`, { method: "DELETE" });
+      forgetRecipeCaches();
+      goBack("/recipes");
+    });
+  };
+
+  return (
+    <main className="page">
+      <BackLink />
+      {src && <img className="rc-hero" src={src} alt="" />}
+      <header className="rc-head">
+        <h1>{recipe.title}</h1>
+        <p className="summary">{meta}</p>
+      </header>
+
+      <section className="rc-sec" aria-labelledby="rc-ingredients">
+        <div className="rc-sec-head">
+          <h2 id="rc-ingredients">재료</h2>
+          <div className="rc-serv" role="group" aria-label="인분 조절">
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="인분 줄이기"
+              disabled={shown <= 1}
+              onClick={() => setServings(shown - 1)}
+            >
+              <Icon name="minus" />
+            </button>
+            <b aria-live="polite">{shown}인분</b>
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="인분 늘리기"
+              disabled={shown >= 20}
+              onClick={() => setServings(shown + 1)}
+            >
+              <Icon name="plus" />
+            </button>
+          </div>
+        </div>
+        {recipe.ingredients.length > 0 && (
+          <div className="rc-have">
+            <MatchLine have={have} total={recipe.ingredients.length} />
+          </div>
+        )}
+        <ul className="rc-ings">
+          {recipe.ingredients.map((item, index) => (
+            <li key={index} className="plain-row">
+              <span className="staple-name">
+                {item.name}
+                {item.amount && <span className="rc-amt">{scaleAmount(item.amount, ratio)}</span>}
+              </span>
+              {item.have ? (
+                <span className="stock-ok">
+                  <Icon name="check" size={16} />
+                  {item.matched_name ? `있음 · ${item.matched_name}` : "있음"}
+                </span>
+              ) : (
+                <span className="badge">없음</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {recipe.steps.length > 0 && (
+        <section className="rc-sec" aria-labelledby="rc-steps">
+          <h2 id="rc-steps">만드는 법</h2>
+          <ol className="rc-steps">
+            {recipe.steps.map((step, index) => (
+              <li key={index}>
+                <span className="rc-num" aria-hidden="true">
+                  {index + 1}
+                </span>
+                <p>{step}</p>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {actionError && (
+        <p className="error" role="alert">
+          {actionError}
+        </p>
+      )}
+
+      {recipe.kind === "mine" ? (
+        <div className="rc-actions">
+          <button className="btn outline" onClick={() => navigate(`/recipes/mine/${recipe.id}/edit`)}>
+            <Icon name="pencil" />
+            수정
+          </button>
+          <button className="btn danger-text" disabled={busy} onClick={remove}>
+            이 레시피 삭제
+          </button>
+        </div>
+      ) : (
+        <div className="cta-bar">
+          <button className="btn primary" disabled={busy} onClick={save}>
+            <Icon name="bookmark" />
+            {busy ? "저장 중…" : "내 레시피로 저장"}
+          </button>
+        </div>
+      )}
+    </main>
+  );
+}
