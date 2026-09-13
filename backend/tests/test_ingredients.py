@@ -240,3 +240,16 @@ def test_seasoning_staple_skips_fridge_old_badge(client, login):
     assert statuses == {"고추장": "ok", "굴소스": "ok", "애호박": "old"}
     listed = {i["name"]: i["status"] for i in client.get("/api/ingredients").get_json()}
     assert listed == statuses
+
+
+def test_seasoning_skip_does_not_catch_dishes_named_after_a_seasoning(client, login):
+    login()
+    old = (seoul_today() - timedelta(days=30)).isoformat()
+    for name in ["고추장", "간장", "된장", "굴소스", "마요네즈"]:
+        client.post("/api/staples", json={"name": name, "category": "조미료"})
+    ok_names = ["청정원 순창 고추장 500g", "진간장 (500ml)", "초고추장", "굴소스"]
+    old_names = ["고추장 불고기 500g", "간장 닭갈비", "된장 삼겹살", "굴소스 볶음밥", "참치마요네즈 샐러드"]
+    statuses = {
+        name: create(client, name=name, purchased_on=old).get_json()["status"] for name in ok_names + old_names
+    }
+    assert statuses == {**{n: "ok" for n in ok_names}, **{n: "old" for n in old_names}}

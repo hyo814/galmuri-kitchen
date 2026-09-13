@@ -11,7 +11,13 @@ CATEGORY_ORDER = {"조미료": 0, "야채": 1, "기타": 2}
 
 
 def ingredient_names(user_id):
-    return [name for (name,) in db.session.query(Ingredient.name).filter(Ingredient.user_id == user_id).all()]
+    return [
+        name
+        for (name,) in db.session.query(Ingredient.name)
+        .filter(Ingredient.user_id == user_id)
+        .order_by(Ingredient.id)
+        .all()
+    ]
 
 
 def to_json(staple, names):

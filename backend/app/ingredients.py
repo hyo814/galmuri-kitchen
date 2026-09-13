@@ -7,7 +7,7 @@ from sqlalchemy.orm import joinedload
 
 from .auth import get_owned_or_404, login_required
 from .locations import default_location, owned_location
-from .matching import keyword_in, names_match
+from .matching import head_is, keyword_in
 from .models import Ingredient, ItemRule, Staple, db
 from .validation import text
 
@@ -65,7 +65,7 @@ def seasoning_names(user_id):
 
 def status_of(item, today, rules, seasonings=()):
     kind = item.location.kind
-    if kind == "fridge" and any(names_match(s, item.name) for s in seasonings):
+    if kind == "fridge" and any(head_is(item.name, s) for s in seasonings):
         kind = "room"  # 위치 기준 '오래됨'만 건너뛴다. 유통기한·품목 규칙 판정은 그대로
     return ingredient_status(item.purchased_on, item.expires_on, today, kind, matching_rule(item.name, rules))
 
