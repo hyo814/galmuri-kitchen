@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api, type KitchenTool, type KitchenToolInput } from "../api";
 import Icon from "../components/Icon";
 import ToolForm from "../components/ToolForm";
-import { cycleLabel, formatDate } from "../format";
+import { cycleLabel, formatDate, withJosa } from "../format";
 
 function subtitle(tool: KitchenTool): string {
   const parts: string[] = [tool.category];
@@ -42,7 +42,7 @@ export default function Tools() {
   };
 
   const remove = async () => {
-    if (!editing || editing === "new" || !confirm(`${editing.name}을(를) 삭제할까요?`)) return;
+    if (!editing || editing === "new" || !confirm(`${withJosa(editing.name, "을", "를")} 삭제할까요?`)) return;
     await api(`/api/tools/${editing.id}`, { method: "DELETE" });
     setEditing(null);
     await load();

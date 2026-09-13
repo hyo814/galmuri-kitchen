@@ -64,6 +64,7 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
 
   const openNew = (name = "") => {
     setPanel(null);
+    setStaplesMissingOnly(false);
     setPrefillName(name);
     setEditing("new");
   };
@@ -135,6 +136,9 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
             placeholder="재고에서 찾기"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
             enterKeyHint="search"
           />
         </div>
@@ -170,12 +174,21 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
       ) : visible.length === 0 ? (
         <div className="empty">
           {query ? (
-            <>
-              <p>‘{query.trim()}’ 재료가 없어요.</p>
-              <button className="btn secondary inline" onClick={() => openNew(query.trim())}>
-                {withJosa(query.trim(), "을", "를")} 재고에 추가
-              </button>
-            </>
+            activeFilter !== "all" ? (
+              <>
+                <p>이 위치에는 ‘{query.trim()}’ 재료가 없어요.</p>
+                <button className="btn secondary inline" onClick={() => setFilter("all")}>
+                  전체 위치에서 찾기
+                </button>
+              </>
+            ) : (
+              <>
+                <p>‘{query.trim()}’ 재료가 없어요.</p>
+                <button className="btn secondary inline" onClick={() => openNew(query.trim())}>
+                  {withJosa(query.trim(), "을", "를")} 재고에 추가
+                </button>
+              </>
+            )
           ) : (
             <>
               <p>{items && items.length > 0 ? "이 위치에는 재료가 없어요." : "재고가 비어 있어요."}</p>

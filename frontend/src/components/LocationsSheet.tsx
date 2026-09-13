@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { api, type LocationKind, type StorageLocation } from "../api";
-import { KIND_LABEL } from "../format";
+import { KIND_LABEL, withJosa } from "../format";
 import { useAsyncAction } from "../useAsyncAction";
 import Icon from "./Icon";
 import Sheet from "./Sheet";
@@ -54,7 +54,7 @@ export default function LocationsSheet({ locations, onChanged, onClose }: Props)
   };
 
   const remove = async (location: StorageLocation) => {
-    if (!confirm(`${location.name}을(를) 삭제할까요?`)) return;
+    if (!confirm(`${withJosa(location.name, "을", "를")} 삭제할까요?`)) return;
     if (
       await edit.run(async () => {
         await api(`/api/locations/${location.id}`, { method: "DELETE" });

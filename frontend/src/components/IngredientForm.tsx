@@ -47,7 +47,7 @@ export default function IngredientForm({
   const { busy, error, run } = useAsyncAction();
 
   const qty = Number(quantity) || 0;
-  const usedUp = !!initial && !!onDelete && qty === 0;
+  const usedUp = !!initial && !!onDelete && quantity.trim() !== "" && Number(quantity) === 0;
 
   const input = (): IngredientInput => ({
     name: name.trim(),
@@ -59,7 +59,8 @@ export default function IngredientForm({
   });
 
   const changeQuantity = (direction: 1 | -1) => {
-    const next = Math.max(0, Math.round((qty + direction * stepFor(unit, qty)) * 100) / 100);
+    const min = initial ? 0 : 0.01;
+    const next = Math.max(min, Math.round((qty + direction * stepFor(unit, qty)) * 100) / 100);
     setQuantity(String(next));
   };
 
@@ -225,6 +226,7 @@ export default function IngredientForm({
               type="button"
               className="choice"
               aria-pressed={expiresOn === addDays(purchasedOn, days)}
+              disabled={!purchasedOn}
               onClick={() => setExpiresOn(addDays(purchasedOn, days))}
             >
               구입일 +{days}일
