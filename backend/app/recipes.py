@@ -161,6 +161,58 @@ def _public_or_404(recipe_id):
     return recipe
 
 
+@bp.get("/recommendations")
+@login_required
+def recommendations():
+    """보유 재료 일치율 순 추천(스펙 4절). 재고와 겹치는 재료가 하나도 없는 레시피는 뺀다."""
+    limit = min(max(request.args.get("limit", 20, type=int), 1), 50)
+    stock = inventory(g.user.id)
+    urgent = {name for name, is_urgent in stock if is_urgent}
+    # ponytail: 서로 다른 재료 키마다 재고 전체와 names_match로 비교한다 — 최악 O(레시피 × 재료 × 재고), 키가 겹치면 캐시로 줄어든다.
+    # 공공 레시피 1,100건 × 재고 60개에서 1.5초 안(테스트). 느려지면 재고 이름 단어로 역색인을 만들어 후보만 비교한다.
+    matches = {}
+
+    def card(kind, recipe_id, title, image_url, servings, keys, names):
+        results = []
+        for key in keys:
+            if key not in matches:
+                matches[key] = match_key(key, stock)
+            results.append(matches[key])
+        matched = [name for name, _ in results if name]
+        if not matched:
+            return None
+        have = sum(1 for _, has in results if has)
+        urgent_names = list(dict.fromkeys(name for name in matched if name in urgent))
+        rate = round(have / len(keys), 2)
+        return {
+            "kind": kind,
+            "id": recipe_id,
+            "title": title,
+            "image_url": image_url,
+            "servings": servings,
+            "match_rate": rate,
+            "have_count": have,
+            "total_count": len(keys),
+            "missing": [name for name, (_, has) in zip(names, results) if not has][:5],
+            "urgent_used": len(urgent_names),
+            "urgent_names": urgent_names,
+            "score": round(rate + 0.1 * len(urgent_names), 2),
+        }
+
+    def ranked(cards):
+        return sorted((c for c in cards if c), key=lambda c: (-c["score"], c["title"], c["id"]))[:limit]
+
+    mine = ranked(
+        card("mine", r.id, r.title, r.image_url, r.servings, [ingredient_key(i["name"]) for i in r.ingredients], [i["name"] for i in r.ingredients])
+        for r in Recipe.query.filter_by(user_id=g.user.id)
+    )
+    rows = db.session.query(
+        PublicRecipe.id, PublicRecipe.title, PublicRecipe.image_url, PublicRecipe.servings, PublicRecipe.ingredient_keys, PublicRecipe.is_sample
+    ).all()
+    public = ranked(card("public", r.id, r.title, r.image_url, r.servings, r.ingredient_keys, r.ingredient_keys) for r in rows)
+    return jsonify(mine=mine, public=public, sample=bool(rows) and all(r.is_sample for r in rows), inventory_count=len(stock))
+
+
 @bp.get("/recipes")
 @login_required
 def list_recipes():

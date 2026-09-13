@@ -64,7 +64,7 @@
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 선택 | 로그인 | Google Cloud Console |
 | `ANTHROPIC_API_KEY` / `CLAUDE_MODEL` | 선택 | 2단계 사진으로 추가, 3단계 AI 레시피(없으면 개발 모드는 예시 결과, 운영은 버튼 숨김) | console.anthropic.com |
 | `AI_DAILY_SCAN_LIMIT` / `AI_DAILY_RECIPE_LIMIT` | 선택 | 사진 인식 / AI 레시피 하루 한도(기본 10, 서울 날짜) | 직접 설정 |
-| `FOODSAFETY_API_KEY` | 선택 | 레시피 추천 구현 후 | 식약처 공공데이터포털(COOKRCP01) |
+| `FOODSAFETY_API_KEY` | 선택 | 3단계 레시피 추천. 배포 후 한 번 `flask sync-public-recipes`(없으면 `flask seed-sample-recipes` 예시 레시피) | 식약처 공공데이터포털(COOKRCP01) |
 | `FOOD_NUTRITION_API_KEY` | 선택 | 영양 계산기 구현 후 | 식약처 공공데이터포털(식품영양성분 DB) |
 | `YOUTUBE_API_KEY` | 선택 | 레시피 영상 연동 후 | Google Cloud Console(YouTube Data API v3) |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | 선택 | 사진 업로드 구현 후 | Cloudflare 대시보드 R2 |

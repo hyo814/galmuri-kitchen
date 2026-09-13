@@ -62,7 +62,7 @@ recipe-ai/
   `expires_on`이 없고 `purchased_on`이 7일 이상 지났으면 `old`(노랑). 그 외 `ok`.
 - **재료 이름 매칭:** 정규화(공백 제거, 소문자, 괄호 내용 제거) 후 한쪽이 다른 쪽을 포함하면 일치.
   `ponytail:` 부분 문자열 매칭 — "파"가 "파프리카"에 매칭되는 오류 가능. 문제되면 동의어 사전 또는 AI 매칭으로 교체.
-- **일치율:** (보유한 레시피 재료 수 / 레시피 재료 수). 임박 재료를 쓰면 정렬 가산점(+0.1/개).
+- **일치율:** (보유한 레시피 재료 수 / 레시피 재료 수). 임박 재료를 쓰면 정렬 가산점(+0.1/개). `물`은 늘 있는 것으로 센다. 재고와 겹치는 재료가 없는 레시피는 추천하지 않는다.
 
 ## 5. API
 
@@ -83,13 +83,13 @@ recipe-ai/
 | GET/PUT/DELETE | `/api/recipes/<id>` | 상세 / 수정 / 삭제. 상세의 `ingredients`는 `[{name, amount, have, matched_name}]`(현재 재고 기준) |
 | GET | `/api/public-recipes/<id>` | 공공 레시피 상세(같은 `ingredients` 모양) |
 | POST | `/api/public-recipes/<id>/save` | 내 레시피로 복사(source `public`) 201. 이미 저장했으면 그 레시피 200 |
-| GET | `/api/recommendations` | `{mine:[...], public:[...]}` 일치율 순, 각 항목에 missing 재료 |
+| GET | `/api/recommendations?limit=20` | `{mine:[...], public:[...], sample, inventory_count}` 점수 순. 항목: kind, id, title, image_url, servings, match_rate, have_count, total_count, missing(최대 5), urgent_used, urgent_names, score(= match_rate + 0.1 × urgent_used) |
 | POST | `/api/recommendations/ai` | AI 레시피 3개 생성(저장 안 함) |
 | GET/POST | `/api/cook-logs` | 기록 목록 / 생성(multipart: 필드 + 사진 + `usages` JSON) |
 | DELETE | `/api/cook-logs/<id>` | 기록 삭제(재고 복원 안 함) |
 | GET | `/api/photos/<key>` | 소유자 확인 후 presigned URL로 302(로컬은 파일 전송) |
 
-CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를 1,000건 단위로 받아 upsert.
+CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를 1,000건 단위로 받아 upsert(`FOODSAFETY_API_KEY` 필요, 받으면 예시 레시피는 지움). `flask seed-sample-recipes` — 키 없이 화면을 확인하는 직접 쓴 예시 레시피 12개(`is_sample`).
 
 ## 6. 화면 흐름
 
