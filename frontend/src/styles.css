@@ -634,6 +634,38 @@ button {
   min-height: 48px;
 }
 
+.location-row {
+  min-height: 64px;
+}
+
+.edit-block {
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.form.compact {
+  gap: 12px;
+}
+
+.menu-row {
+  width: 100%;
+  min-height: 56px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+
+.menu-row svg {
+  color: var(--text-3);
+}
+
+.menu-row.logout {
+  color: var(--text-3);
+  font-size: 16px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     scroll-behavior: auto !important;
