@@ -68,6 +68,38 @@ const PATHS = {
       <path d="M20 20l-3.5-3.5" />
     </>
   ),
+  camera: (
+    <>
+      <path d="M3.5 8.5A2.5 2.5 0 0 1 6 6h1.8l1.5-2h5.4l1.5 2H18a2.5 2.5 0 0 1 2.5 2.5v9A2.5 2.5 0 0 1 18 20H6a2.5 2.5 0 0 1-2.5-2.5z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </>
+  ),
+  receipt: (
+    <>
+      <path d="M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21z" />
+      <path d="M9.5 8h5M9.5 12h5M9.5 16h2.5" />
+    </>
+  ),
+  phone: (
+    <>
+      <rect x="6" y="2.5" width="12" height="19" rx="2.5" />
+      <path d="M10.5 18.5h3M9.5 10.5l2 2 3.5-3.5" />
+    </>
+  ),
+  down: <path d="M6 9l6 6 6-6" />,
+  up: <path d="M6 15l6-6 6 6" />,
+  pencil: (
+    <>
+      <path d="M4 20h4L19 9l-4-4L4 16z" />
+      <path d="M13.5 6.5l4 4" />
+    </>
+  ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5.5M12 7.5h.01" />
+    </>
+  ),
 };
 
 export type IconName = keyof typeof PATHS;

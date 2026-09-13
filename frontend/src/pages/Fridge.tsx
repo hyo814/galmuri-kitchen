@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { api, type Ingredient, type IngredientInput, type ItemRule, type Staple, type StorageLocation } from "../api";
+import { api, type Ingredient, type IngredientInput, type ItemRule, type Staple, type StorageLocation, type User } from "../api";
 import Icon from "../components/Icon";
 import IngredientForm from "../components/IngredientForm";
 import LocationsSheet from "../components/LocationsSheet";
 import RulesSheet from "../components/RulesSheet";
+import ScanSheet from "../components/ScanSheet";
 import SettingsSheet, { type SettingsTarget } from "../components/SettingsSheet";
 import StaplesSheet from "../components/StaplesSheet";
 import { formatDate, formatQuantity, withJosa } from "../format";
@@ -19,7 +20,7 @@ function badge(item: Ingredient): string | null {
   return null;
 }
 
-export default function Fridge({ onLogout }: { onLogout: () => void }) {
+export default function Fridge({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [items, setItems] = useState<Ingredient[] | null>(null);
   const [locations, setLocations] = useState<StorageLocation[]>([]);
   const [staples, setStaples] = useState<Staple[]>([]);
@@ -31,6 +32,8 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [staplesMissingOnly, setStaplesMissingOnly] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [notice, setNotice] = useState("");
 
   // 401은 api()의 전역 핸들러(App.tsx)가 처리한다.
   const load = () => {
@@ -46,6 +49,13 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
   useEffect(() => {
     load();
   }, []);
+
+  // 사진으로 넣은 뒤 안내는 잠깐만 보여 준다
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(""), 4000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   // 저장·삭제 오류는 던져서 시트 안에 표시한다. keepOpen이면 시트를 닫지 않는다(연속 추가).
   const save = async (input: IngredientInput, keepOpen: boolean) => {
@@ -64,9 +74,16 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
 
   const openNew = (name = "") => {
     setPanel(null);
+    setScanning(false);
     setStaplesMissingOnly(false);
     setPrefillName(name);
     setEditing("new");
+  };
+
+  const scanned = async (count: number) => {
+    setScanning(false);
+    setNotice(`${count}개를 재고에 넣었어요`);
+    await load();
   };
 
   const logout = async () => {
@@ -106,6 +123,12 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
       {error && (
         <p className="error" role="alert">
           {error}
+        </p>
+      )}
+
+      {notice && (
+        <p className="notice" role="status">
+          {notice}
         </p>
       )}
 
@@ -220,10 +243,18 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
       )}
 
       <div className="cta-bar">
-        <button className="btn primary" disabled={defaultLocationId === undefined} onClick={() => openNew()}>
-          <Icon name="plus" />
-          재료 추가
-        </button>
+        <div className="cta-2">
+          {user.scan !== "off" && (
+            <button className="btn outline" disabled={defaultLocationId === undefined} onClick={() => setScanning(true)}>
+              <Icon name="camera" />
+              사진으로 추가
+            </button>
+          )}
+          <button className="btn primary" disabled={defaultLocationId === undefined} onClick={() => openNew()}>
+            <Icon name="plus" />
+            재료 추가
+          </button>
+        </div>
       </div>
 
       {editing && defaultLocationId !== undefined && (
@@ -238,6 +269,16 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
         />
       )}
 
+      {scanning && user.scan !== "off" && (
+        <ScanSheet
+          mode={user.scan}
+          limit={user.scan_limit}
+          locations={locations}
+          onAdded={scanned}
+          onManual={() => openNew()}
+          onClose={() => setScanning(false)}
+        />
+      )}
       {panel === "settings" && <SettingsSheet onOpen={setPanel} onLogout={logout} onClose={() => setPanel(null)} />}
       {panel === "locations" && (
         <LocationsSheet locations={locations} onChanged={load} onClose={() => setPanel(null)} />

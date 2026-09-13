@@ -69,7 +69,7 @@ export default function App() {
       ) : route === "/tools" ? (
         <Tools />
       ) : route === "/" ? (
-        <Fridge onLogout={() => setUser(null)} />
+        <Fridge user={user} onLogout={() => setUser(null)} />
       ) : (
         <ComingSoon route={route} />
       )}

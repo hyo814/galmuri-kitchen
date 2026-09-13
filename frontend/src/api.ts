@@ -42,9 +42,29 @@ export interface KitchenTool extends KitchenToolInput {
   days_until_due: number | null;
 }
 
+/** on: AI 인식 / sample: API 키 없는 개발 모드의 예시 결과 / off: 사진으로 추가 숨김 */
+export type ScanMode = "on" | "sample" | "off";
+
 export interface User {
   id: number;
   nickname: string;
+  scan: ScanMode;
+  scan_limit: number;
+}
+
+export type ScanKind = "fridge" | "receipt" | "order";
+
+export interface ScanItem {
+  name: string;
+  quantity: number;
+  unit: string;
+  location_kind: LocationKind;
+}
+
+export interface ScanResult {
+  items: ScanItem[];
+  purchased_on: string | null;
+  sample: boolean;
 }
 
 export interface AuthOptions {
@@ -86,17 +106,24 @@ export function onUnauthorized(handler: () => void) {
   unauthorizedHandler = handler;
 }
 
-export async function api<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
-  const hasBody = options.body !== undefined;
+export async function api<T>(
+  path: string,
+  options: { method?: string; body?: unknown; signal?: AbortSignal } = {},
+): Promise<T> {
+  const { body } = options;
+  // FormData(사진 업로드)는 브라우저가 multipart 경계를 넣은 Content-Type을 직접 붙인다
+  const json = body !== undefined && !(body instanceof FormData);
   let res;
   try {
     res = await fetch(path, {
       method: options.method ?? "GET",
-      headers: { "X-Requested-With": "fetch", ...(hasBody ? { "Content-Type": "application/json" } : {}) },
-      body: hasBody ? JSON.stringify(options.body) : undefined,
+      headers: { "X-Requested-With": "fetch", ...(json ? { "Content-Type": "application/json" } : {}) },
+      body: body instanceof FormData ? body : json ? JSON.stringify(body) : undefined,
       credentials: "same-origin",
+      signal: options.signal,
     });
-  } catch {
+  } catch (e) {
+    if (options.signal?.aborted) throw e; // 사용자가 취소한 요청은 호출한 쪽이 처리한다
     throw new ApiError(0, "네트워크에 연결할 수 없어요. 연결을 확인해 주세요.");
   }
   const data = await res.json().catch(() => ({}));

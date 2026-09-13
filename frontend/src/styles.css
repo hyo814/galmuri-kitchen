@@ -984,3 +984,386 @@ a.row-btn > svg {
     transition: none;
   }
 }
+
+/* ---- 2단계 사진으로 추가 (시안 docs/design/scan-2) ---- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.page > .notice {
+  margin: 16px 20px 0;
+}
+
+/* 재고 하단 CTA 1:1. 스캔이 꺼져 있으면 재료 추가 하나가 전체 폭 */
+.cta-2 {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 8px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.cta-2 .btn {
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+/* 보조 버튼이 --bg 위에 놓이므로 surface 배경 + 테두리로 버튼임을 보여 준다 */
+.btn.outline {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--handle);
+}
+
+.btn.outline svg {
+  color: var(--accent-strong);
+}
+
+.scan-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scan-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 76px;
+  padding: 14px 12px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--field);
+  color: var(--text);
+  text-align: left;
+}
+
+.scan-choice-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--accent-strong);
+}
+
+.scan-choice .row-sub {
+  color: var(--text-2);
+  word-break: keep-all;
+}
+
+.scan-quota {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: -4px;
+}
+
+.scan-wait {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 0 4px;
+  text-align: center;
+}
+
+.scan-wait h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.scan-thumb {
+  position: relative;
+  width: 112px;
+  height: 148px;
+}
+
+.scan-paper {
+  position: absolute;
+  inset: 0;
+  padding: 16px 14px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #fbfbf8;
+  box-shadow: 0 1px 2px rgb(15 17 20 / 0.08), 0 8px 24px rgb(15 17 20 / 0.12), inset 0 0 0 1px rgb(15 17 20 / 0.06);
+  transform: rotate(-4deg);
+}
+
+.scan-paper i {
+  display: block;
+  height: 6px;
+  margin-bottom: 9px;
+  border-radius: 3px;
+  background: #d9dce1;
+}
+
+.scan-paper i.b {
+  width: 58%;
+  height: 8px;
+  margin: 0 auto 14px;
+  background: #b9bec6;
+}
+
+.scan-paper i.s {
+  width: 64%;
+}
+
+.scan-paper i.r {
+  width: 38%;
+  margin-left: auto;
+}
+
+.scan-beam {
+  position: absolute;
+  top: 30%;
+  right: 0;
+  left: 0;
+  height: 26px;
+  border-bottom: 2px solid var(--accent);
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--accent) 28%, transparent));
+  animation: scan-beam 1.8s ease-in-out infinite alternate;
+}
+
+@keyframes scan-beam {
+  from {
+    top: -26px;
+  }
+  to {
+    top: 100%;
+  }
+}
+
+.scan-mascot {
+  position: absolute;
+  right: -22px;
+  bottom: -14px;
+  border-radius: 17px;
+  box-shadow: 0 0 0 3px var(--surface);
+}
+
+.scan-progress {
+  width: 160px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--neutral-tint);
+}
+
+.scan-progress::after {
+  content: "";
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: scan-bar 1.4s ease-in-out infinite;
+}
+
+@keyframes scan-bar {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(260%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-beam,
+  .scan-progress::after {
+    animation: none;
+  }
+
+  .scan-progress::after {
+    width: 60%;
+  }
+}
+
+/* 찾은 재료 확인: 화면 높이 시트 + 아래에 붙는 버튼 줄 */
+.sheet.scan-tall {
+  height: calc(100dvh - 40px);
+}
+
+.sheet.scan-tall .sheet-body {
+  min-height: 100%;
+}
+
+.scan-review {
+  flex: 1;
+}
+
+.scan-sample {
+  align-self: flex-start;
+  gap: 4px;
+  margin-top: -8px;
+}
+
+.scan-date .hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent-strong);
+  font-weight: 500;
+}
+
+.scan-items {
+  display: flex;
+  flex-direction: column;
+  margin: 0 -8px;
+  padding: 0;
+  list-style: none;
+}
+
+.scan-item {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 4px;
+  min-height: 64px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+
+.scan-item:first-child {
+  border-top: 0;
+}
+
+.scan-item .row-title {
+  line-height: 24px;
+}
+
+.scan-item.off .row-title {
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.scan-item-main {
+  min-height: 52px;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.checkbox span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.checkbox.off span {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--placeholder);
+}
+
+.scan-item.open {
+  row-gap: 12px;
+  margin: 4px 0;
+  padding: 10px 8px 14px 0;
+  border: 1.5px solid var(--accent);
+  border-radius: 16px;
+}
+
+.scan-item.open + .scan-item {
+  border-top: 0;
+}
+
+.scan-item.open .input {
+  height: 52px;
+}
+
+.scan-edit {
+  display: grid;
+  grid-column: 2 / 4;
+  grid-template-columns: 64px 64px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.scan-edit .input {
+  padding: 0 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.scan-edit select.input {
+  padding: 0 10px 0 14px;
+  text-align: left;
+}
+
+.scan-foot {
+  position: sticky;
+  bottom: 0;
+  margin: auto -20px calc(-24px - env(safe-area-inset-bottom));
+  padding: 28px 20px calc(24px + env(safe-area-inset-bottom));
+  background: linear-gradient(to bottom, transparent, var(--surface) 28%);
+}
+
+.scan-foot .actions {
+  margin: 0;
+}
+
+.scan-fail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0 4px;
+  text-align: center;
+}
+
+.scan-fail-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 28px;
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+.scan-fail h2 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 30px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  text-wrap: balance;
+  word-break: keep-all;
+}
