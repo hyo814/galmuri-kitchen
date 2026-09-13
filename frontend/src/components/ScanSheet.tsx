@@ -12,6 +12,10 @@ export const SCAN_CHOICES: { kind: ScanKind; icon: IconName; title: string; hint
 ];
 
 const NOT_FOUND = "사진에서 재료를 찾지 못했어요.";
+const TOO_BIG = "사진이 너무 커요. 10MB 이하로 올려 주세요.";
+const UNREADABLE_FORMAT = "이 사진 형식은 읽을 수 없어요. 카메라 설정에서 HEIF를 끄거나 스크린샷으로 올려 주세요.";
+const HEIF_HINT = "카메라 설정에서 HEIF를 끄거나 스크린샷으로 올려 주세요.";
+const READABLE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 type Step =
   | { name: "pick" }
@@ -28,9 +32,10 @@ interface Props {
   onAdded: (count: number) => Promise<void>;
   onManual: () => void;
   onClose: () => void;
+  onLocationsStale?: () => void;
 }
 
-export default function ScanSheet({ mode, limit, locations, onAdded, onManual, onClose }: Props) {
+export default function ScanSheet({ mode, limit, locations, onAdded, onManual, onClose, onLocationsStale }: Props) {
   const [kind, setKind] = useState<ScanKind>("fridge");
   const [step, setStep] = useState<Step>({ name: "pick" });
   const fileRef = useRef<HTMLInputElement>(null);
@@ -87,8 +92,19 @@ export default function ScanSheet({ mode, limit, locations, onAdded, onManual, o
     abortRef.current = controller;
     setStep({ name: "loading" });
     try {
+      const blob = await resizeImage(file);
+      if (controller.signal.aborted) return;
+      if (blob.size > 10 * 1024 * 1024) {
+        setStep({ name: "error", message: TOO_BIG, status: 0 });
+        return;
+      }
+      // 리사이즈가 원본 그대로 떨어졌다(디코딩 실패) + 원래도 못 읽는 형식이면 서버에 보내 봐야 415만 받는다
+      if (blob === file && !READABLE_TYPES.includes(file.type)) {
+        setStep({ name: "error", message: UNREADABLE_FORMAT, status: 0 });
+        return;
+      }
       const form = new FormData();
-      form.append("image", await resizeImage(file), "photo.jpg");
+      form.append("image", blob, "photo.jpg");
       const result = await api<ScanResult>(`/api/scan?kind=${kind}`, {
         method: "POST",
         body: form,
@@ -159,7 +175,9 @@ export default function ScanSheet({ mode, limit, locations, onAdded, onManual, o
             </div>
             <p className="hint scan-quota">
               <Icon name="info" size={16} />
-              {mode === "sample" ? "API 키가 없어서 예시 결과를 보여 줘요" : `하루 ${limit}번까지 쓸 수 있어요`}
+              {mode === "sample"
+                ? "API 키가 없어서 예시 결과를 보여 줘요"
+                : `하루 ${limit}번까지 쓸 수 있어요 · 인식에 실패해도 1번으로 세요`}
             </p>
           </>
         )}
@@ -194,7 +212,14 @@ export default function ScanSheet({ mode, limit, locations, onAdded, onManual, o
         )}
 
         {step.name === "review" && (
-          <ScanReview kind={kind} result={step.result} locations={locations} onRetake={retake} onAdded={onAdded} />
+          <ScanReview
+            kind={kind}
+            result={step.result}
+            locations={locations}
+            onRetake={retake}
+            onAdded={onAdded}
+            onLocationsStale={onLocationsStale}
+          />
         )}
 
         {step.name === "error" && (
@@ -205,6 +230,7 @@ export default function ScanSheet({ mode, limit, locations, onAdded, onManual, o
               </span>
               <h2>{step.message}</h2>
               {photoTip && <p className="hint">밝은 곳에서 글자가 잘 보이게 찍으면 더 잘 찾아요</p>}
+              {step.status === 415 && <p className="hint">{HEIF_HINT}</p>}
             </div>
             <div className="actions">
               {canRetake ? (

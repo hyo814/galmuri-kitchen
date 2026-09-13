@@ -277,6 +277,7 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
           onAdded={scanned}
           onManual={() => openNew()}
           onClose={() => setScanning(false)}
+          onLocationsStale={load}
         />
       )}
       {panel === "settings" && <SettingsSheet onOpen={setPanel} onLogout={logout} onClose={() => setPanel(null)} />}
