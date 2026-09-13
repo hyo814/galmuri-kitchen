@@ -144,7 +144,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 ## 12. 로컬 개발 & 폰 확인 (추가: 2026-09-13)
 
 - 사용자 기기: 갤럭시 S22 Ultra(Chrome/삼성 인터넷, 뷰포트 약 384px).
-- `./dev.sh`: Flask(127.0.0.1:5000) + Vite(0.0.0.0:5173, `/api`·`/auth` 프록시) 실행, 폰은 같은 와이파이에서 `http://<맥 IP>:5173`.
+- `./dev.sh`: Flask(127.0.0.1:5181) + Vite(0.0.0.0:5180, strictPort, `/api`·`/auth` 프록시) 실행, 폰은 같은 와이파이에서 `http://<맥 IP>:5180`. (2026-09-13 변경: 5173·5000은 다른 프로젝트·AirPlay와 충돌)
 - OAuth 리다이렉트 URI에 사설 IP를 등록할 수 없으므로 `DEV_MODE=1`일 때만 `POST /api/dev-login`(개발용 로그인) 활성화.
   `DEV_MODE=1`이면 세션 쿠키 Secure 해제. `RENDER` 환경변수가 있으면 DEV_MODE 켜진 채 시작 거부.
 - `GET /api/auth-options` → `{providers: [설정된 provider], dev_login: bool}` (로그인 화면 버튼 표시용).
