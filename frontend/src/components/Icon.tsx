@@ -43,6 +43,25 @@ const PATHS = {
   ),
   back: <path d="M15 6l-6 6 6 6" />,
   minus: <path d="M5 12h14" />,
+  book: (
+    <>
+      <path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z" />
+      <path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3M9 7h6" />
+    </>
+  ),
+  cart: (
+    <>
+      <path d="M3 4h2.5l2.2 10.5h10.1L20 7.5H6.5" />
+      <circle cx="9.5" cy="19" r="1.5" />
+      <circle cx="17" cy="19" r="1.5" />
+    </>
+  ),
+  calendar: (
+    <>
+      <rect x="4" y="5" width="16" height="16" rx="2.5" />
+      <path d="M4 10h16M8.5 3v4M15.5 3v4" />
+    </>
+  ),
   search: (
     <>
       <circle cx="11" cy="11" r="7" />

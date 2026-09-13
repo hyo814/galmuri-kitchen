@@ -7,9 +7,12 @@ interface Tab {
   match: (route: string) => boolean;
 }
 
-// 최종 탭 순서(사용자 결정 2026-09-13): 재고 · 레시피 · 장보기 · 식단 · 더보기. 기능이 생기는 단계에서 해당 탭을 이 목록에 끼워 넣는다.
+// 탭 순서(사용자 결정 2026-09-13): 재고 · 레시피 · 장보기 · 식단 · 더보기. 아직 없는 기능 탭은 '준비 중' 화면을 보여 준다(사용자 결정).
 export const TABS: Tab[] = [
   { path: "/", label: "재고", icon: "fridge", match: (r) => r === "/" },
+  { path: "/recipes", label: "레시피", icon: "book", match: (r) => r === "/recipes" },
+  { path: "/shopping", label: "장보기", icon: "cart", match: (r) => r === "/shopping" },
+  { path: "/meals", label: "식단", icon: "calendar", match: (r) => r === "/meals" },
   { path: "/more", label: "더보기", icon: "menu", match: (r) => r === "/more" || r === "/tools" },
 ];
 
