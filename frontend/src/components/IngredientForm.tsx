@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { localToday, type Ingredient, type IngredientInput } from "../api";
+import Sheet from "./Sheet";
 
 interface Props {
   initial: Ingredient | null;
@@ -8,26 +9,24 @@ interface Props {
   onClose: () => void;
 }
 
-const UNITS = ["개", "g", "kg", "ml", "L", "팩", "봉", "병", "모"];
+const UNITS = ["개", "g", "kg", "ml", "L", "팩", "봉", "병", "모", "단"];
 
 export default function IngredientForm({ initial, onSubmit, onDelete, onClose }: Props) {
-  const ref = useRef<HTMLDialogElement>(null);
   const [name, setName] = useState(initial?.name ?? "");
   const [quantity, setQuantity] = useState(String(initial?.quantity ?? 1));
   const [unit, setUnit] = useState(initial?.unit ?? "개");
   const [purchasedOn, setPurchasedOn] = useState(initial?.purchased_on ?? localToday());
   const [expiresOn, setExpiresOn] = useState(initial?.expires_on ?? "");
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    const dialog = ref.current;
-    if (dialog && !dialog.open) dialog.showModal(); // StrictMode 이중 실행 대비
-  }, []);
+  const [error, setError] = useState("");
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
+    setError("");
     try {
       await action();
+    } catch (e) {
+      setError((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -47,20 +46,29 @@ export default function IngredientForm({ initial, onSubmit, onDelete, onClose }:
   };
 
   return (
-    <dialog ref={ref} className="sheet" onClose={onClose} aria-labelledby="ingredient-form-title">
-      <form onSubmit={submit}>
-        <h2 id="ingredient-form-title">{initial ? "재료 수정" : "재료 추가"}</h2>
+    <Sheet title={initial ? "재료 수정" : "재료 추가"} onClose={onClose}>
+      <form className="form" onSubmit={submit}>
         <label className="field">
-          이름
-          <input value={name} onChange={(e) => setName(e.target.value)} required maxLength={50} placeholder="예: 대파" />
+          <span className="field-label">이름</span>
+          <input
+            className="input"
+            id="ingredient-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            maxLength={50}
+            placeholder="예: 대파"
+          />
         </label>
-        <div className="row">
+        <div className="grid-2">
           <label className="field">
-            수량
+            <span className="field-label">수량</span>
             <input
+              className="input"
+              id="ingredient-quantity"
               type="number"
               inputMode="decimal"
-              min="0.1"
+              min="0.01"
               step="any"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
@@ -68,8 +76,15 @@ export default function IngredientForm({ initial, onSubmit, onDelete, onClose }:
             />
           </label>
           <label className="field">
-            단위
-            <input list="units" value={unit} onChange={(e) => setUnit(e.target.value)} maxLength={10} />
+            <span className="field-label">단위</span>
+            <input
+              className="input"
+              id="ingredient-unit"
+              list="units"
+              value={unit}
+              onChange={(e) => setUnit(e.target.value)}
+              maxLength={10}
+            />
             <datalist id="units">
               {UNITS.map((u) => (
                 <option key={u} value={u} />
@@ -77,28 +92,50 @@ export default function IngredientForm({ initial, onSubmit, onDelete, onClose }:
             </datalist>
           </label>
         </div>
-        <div className="row">
+        <div className="grid-2">
           <label className="field">
-            구입일
-            <input type="date" value={purchasedOn} onChange={(e) => setPurchasedOn(e.target.value)} required />
+            <span className="field-label">구입일</span>
+            <input
+              className="input"
+              id="ingredient-purchased"
+              type="date"
+              value={purchasedOn}
+              onChange={(e) => setPurchasedOn(e.target.value)}
+              required
+            />
           </label>
           <label className="field">
-            유통기한 (선택)
-            <input type="date" value={expiresOn} onChange={(e) => setExpiresOn(e.target.value)} />
+            <span className="field-label">
+              유통기한 <span className="optional">(선택)</span>
+            </span>
+            <input
+              className="input"
+              id="ingredient-expires"
+              type="date"
+              value={expiresOn}
+              onChange={(e) => setExpiresOn(e.target.value)}
+            />
           </label>
         </div>
-        <button className="btn primary" disabled={busy}>
-          {busy ? "저장 중…" : "저장"}
-        </button>
-        <button type="button" className="btn ghost" onClick={onClose}>
-          취소
-        </button>
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="actions">
+          <button type="button" className="btn secondary" onClick={onClose}>
+            취소
+          </button>
+          <button className="btn primary" disabled={busy}>
+            {busy ? "저장 중…" : "저장"}
+          </button>
+        </div>
         {onDelete && (
-          <button type="button" className="btn danger" disabled={busy} onClick={() => run(onDelete)}>
-            삭제
+          <button type="button" className="btn danger-text" disabled={busy} onClick={() => run(onDelete)}>
+            이 재료 삭제
           </button>
         )}
       </form>
-    </dialog>
+    </Sheet>
   );
 }
