@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type Ingredient, type IngredientInput, type ItemRule, type Staple, type StorageLocation, type User } from "../api";
 import Icon from "../components/Icon";
+import InfiniteSentinel from "../components/InfiniteSentinel";
 import IngredientForm from "../components/IngredientForm";
 import LocationsSheet from "../components/LocationsSheet";
 import RulesSheet from "../components/RulesSheet";
@@ -34,6 +35,12 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
   const [staplesMissingOnly, setStaplesMissingOnly] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [notice, setNotice] = useState("");
+  const [shown, setShown] = useState(50); // 재고는 서버가 전체를 주고 화면에서 50개씩 점진 렌더 (2,000개까지 대비)
+
+  // 필터·검색이 바뀌면 처음 50개부터 다시 보여 준다
+  useEffect(() => {
+    setShown(50);
+  }, [filter, query]);
 
   // 401은 api()의 전역 핸들러(App.tsx)가 처리한다.
   const load = () => {
@@ -111,7 +118,7 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
           <h1>내 재고</h1>
           {items && items.length > 0 && (
             <p className="summary">
-              재료 {items.length}개{soon > 0 && ` · 곧 먹어야 할 재료 ${soon}개`}
+              재료 {items.length}개{soon > 0 && ` · 빨리 먹어야 할 재료 ${soon}개`}
             </p>
           )}
         </div>
@@ -220,26 +227,31 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
           )}
         </div>
       ) : (
-        <ul className="list">
-          {visible.map((item) => {
-            const label = badge(item);
-            return (
-              <li key={item.id}>
-                <button className="row-btn" onClick={() => setEditing(item)}>
-                  <span className="row-main">
-                    <span className="row-title">{item.name}</span>
-                    <span className="row-sub">
-                      {formatQuantity(item.quantity)}
-                      {item.unit} · {item.location_name} · {formatDate(item.purchased_on)} 구입
-                      {item.status === "danger" && ` · 구입 ${item.days_since_purchase}일째`}
+        <>
+          <ul className="list">
+            {visible.slice(0, shown).map((item) => {
+              const label = badge(item);
+              return (
+                <li key={item.id}>
+                  <button className="row-btn" onClick={() => setEditing(item)}>
+                    <span className="row-main">
+                      <span className="row-title">{item.name}</span>
+                      <span className="row-sub">
+                        {formatQuantity(item.quantity)}
+                        {item.unit} · {item.location_name} · {formatDate(item.purchased_on)} 구입
+                        {item.status === "danger" && ` · 구입 ${item.days_since_purchase}일째`}
+                      </span>
                     </span>
-                  </span>
-                  {label && <span className={`badge ${item.status}`}>{label}</span>}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+                    {label && <span className={`badge ${item.status}`}>{label}</span>}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {visible.length > 50 && (
+            <InfiniteSentinel onVisible={() => setShown((s) => s + 50)} hasMore={shown < visible.length} />
+          )}
+        </>
       )}
 
       <div className="cta-bar">

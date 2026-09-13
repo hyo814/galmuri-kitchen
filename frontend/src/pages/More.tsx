@@ -2,6 +2,7 @@ import { useState } from "react";
 import Icon from "../components/Icon";
 import Sheet from "../components/Sheet";
 import { useInstallPrompt } from "../install";
+import { navigate } from "../useHashRoute";
 
 export const MORE_ITEMS = [{ path: "/tools", label: "주방 도구", desc: "프라이팬 코팅 점검 같은 도구 관리" }];
 
@@ -39,9 +40,7 @@ export default function More() {
               href={`#${item.path}`}
               onClick={(e) => {
                 e.preventDefault();
-                // pushState는 hashchange 이벤트를 스스로 쏘지 않으므로 직접 알린다.
-                history.pushState({ fromMore: true }, "", `#${item.path}`);
-                window.dispatchEvent(new HashChangeEvent("hashchange"));
+                navigate(item.path);
               }}
             >
               <Icon name="pan" size={20} color="var(--text-2)" />

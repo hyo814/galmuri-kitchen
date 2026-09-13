@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api, type KitchenTool, type KitchenToolInput } from "../api";
 import Icon from "../components/Icon";
 import ToolForm from "../components/ToolForm";
 import { cycleLabel, formatDate, withJosa } from "../format";
+import { goBack } from "../useHashRoute";
+import { useResource } from "../useResource";
 
 function subtitle(tool: KitchenTool): string {
   const parts: string[] = [tool.category];
@@ -13,18 +15,8 @@ function subtitle(tool: KitchenTool): string {
 }
 
 export default function Tools() {
-  const [tools, setTools] = useState<KitchenTool[] | null>(null);
+  const { data: tools, error, reload: load } = useResource<KitchenTool[]>("/api/tools");
   const [editing, setEditing] = useState<KitchenTool | "new" | null>(null);
-  const [error, setError] = useState("");
-
-  const load = () => {
-    setError("");
-    return api<KitchenTool[]>("/api/tools").then(setTools, (e: Error) => setError(e.message));
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
 
   // 오류는 던져서 시트 안에 표시한다.
   const save = async (input: KitchenToolInput) => {
@@ -56,11 +48,8 @@ export default function Tools() {
         className="back-link"
         href="#/more"
         onClick={(e) => {
-          // 더보기에서 눌러 들어온 경우에만 뒤로가기(히스토리 유지); 그 외(직접 진입 등)엔 링크 그대로 이동.
-          if ((history.state as { fromMore?: boolean } | null)?.fromMore) {
-            e.preventDefault();
-            history.back();
-          }
+          e.preventDefault();
+          goBack("/more");
         }}
       >
         <Icon name="back" size={18} />
@@ -83,7 +72,7 @@ export default function Tools() {
         </p>
       )}
 
-      {tools === null ? (
+      {tools === undefined ? (
         !error && <p className="center muted">불러오는 중…</p>
       ) : tools.length === 0 ? (
         <div className="empty">

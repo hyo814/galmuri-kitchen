@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { ApiError, api, onUnauthorized, type User } from "./api";
 import Splash from "./components/Splash";
 import TabBar from "./components/TabBar";
@@ -7,13 +7,54 @@ import Fridge from "./pages/Fridge";
 import Login from "./pages/Login";
 import More from "./pages/More";
 import Tools from "./pages/Tools";
-import { useHashRoute } from "./useHashRoute";
+import { useHashRoute, type Route, type RoutePattern } from "./useHashRoute";
+import { forgetResources } from "./useResource";
+
+interface PageProps {
+  route: Route;
+  user: User;
+  onLogout: () => void;
+}
+
+// 경로 → 화면. 새 화면은 useHashRoute의 ROUTES와 여기에 한 줄씩 추가한다.
+const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
+  "/": ({ user, onLogout }) => <Fridge user={user} onLogout={onLogout} />,
+  "/recipes": () => <ComingSoon route="/recipes" />,
+  "/recipes/new": () => <ComingSoon route="/recipes" />,
+  "/recipes/mine/:id": () => <ComingSoon route="/recipes" />,
+  "/recipes/mine/:id/edit": () => <ComingSoon route="/recipes" />,
+  "/recipes/public/:id": () => <ComingSoon route="/recipes" />,
+  "/shopping": () => <ComingSoon route="/shopping" />,
+  "/meals": () => <ComingSoon route="/meals" />,
+  "/more": () => <More />,
+  "/tools": () => <Tools />,
+};
+
+// 경로별 마지막 스크롤 위치: 상세에서 돌아오면 목록을 보던 자리로, 처음 여는 화면은 맨 위로
+const scrollTops = new Map<string, number>();
+history.scrollRestoration = "manual";
 
 export default function App() {
   // undefined: 확인 중, null: 비로그인
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [offline, setOffline] = useState(false);
   const route = useHashRoute();
+
+  useEffect(() => {
+    const onScroll = () => scrollTops.set(route.path, window.scrollY);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [route.path]);
+
+  useLayoutEffect(() => {
+    window.scrollTo(0, scrollTops.get(route.path) ?? 0);
+  }, [route.path]);
+
+  // 로그아웃·세션 만료: 다른 계정으로 들어와도 이전 사용자의 화면 캐시가 보이지 않게
+  const signOut = useCallback(() => {
+    forgetResources();
+    setUser(null);
+  }, []);
 
   // 시작 화면은 로그인 확인이 끝나고 최소 0.8초가 지날 때까지 보여 준다(너무 빨리 깜빡이지 않게)
   const [minSplashDone, setMinSplashDone] = useState(false);
@@ -35,7 +76,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    onUnauthorized(() => setUser(null));
+    onUnauthorized(signOut);
     checkMe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -64,16 +105,9 @@ export default function App() {
   return (
     <>
       {splash}
-      {route === "/more" ? (
-        <More />
-      ) : route === "/tools" ? (
-        <Tools />
-      ) : route === "/" ? (
-        <Fridge user={user} onLogout={() => setUser(null)} />
-      ) : (
-        <ComingSoon route={route} />
-      )}
-      <TabBar route={route} />
+      {/* key: 경로가 바뀌면 화면을 새로 만든다(상세 3 → 상세 4에서 이전 데이터가 남지 않게) */}
+      <Fragment key={route.path}>{PAGES[route.pattern]({ route, user, onLogout: signOut })}</Fragment>
+      <TabBar path={route.path} />
     </>
   );
 }
