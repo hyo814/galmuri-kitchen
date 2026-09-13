@@ -1,5 +1,7 @@
 import pytest
 
+from app.models import Staple, db
+
 
 def test_in_stock_and_order(client, login):
     login()
@@ -47,12 +49,14 @@ def test_duplicate_name_rejected(client, login):
     assert res.get_json()["error"] == "이미 등록된 필수품이에요."
 
 
-def test_delete_and_ownership(client, login):
+def test_delete_and_ownership(client, login, app):
     login("owner")
     staple = client.post("/api/staples", json={"name": "소금"}).get_json()
     login("intruder")
     assert client.delete(f"/api/staples/{staple['id']}").status_code == 404
     assert client.get("/api/staples").get_json() == []
+    with app.app_context():
+        assert db.session.get(Staple, staple["id"]) is not None
     login("owner2")
     mine = client.post("/api/staples", json={"name": "후추"}).get_json()
     assert client.delete(f"/api/staples/{mine['id']}").status_code == 204
