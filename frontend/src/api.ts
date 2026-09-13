@@ -59,6 +59,7 @@ export interface ScanItem {
   quantity: number;
   unit: string;
   location_kind: LocationKind;
+  price: number | null;
 }
 
 export interface ScanResult {
@@ -78,6 +79,7 @@ export interface IngredientInput {
   unit: string;
   purchased_on: string;
   expires_on: string | null;
+  price?: number | null;
   location_id: number;
 }
 

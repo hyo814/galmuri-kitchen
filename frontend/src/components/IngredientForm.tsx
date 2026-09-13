@@ -5,6 +5,8 @@ import { useAsyncAction } from "../useAsyncAction";
 import Icon from "./Icon";
 import Sheet from "./Sheet";
 
+const MAX_PRICE = 10_000_000;
+
 interface Props {
   initial: Ingredient | null;
   initialName?: string;
@@ -39,12 +41,13 @@ export default function IngredientForm({
   const [quantity, setQuantity] = useState(String(initial?.quantity ?? 1));
   const [unit, setUnit] = useState(initial?.unit ?? "개");
   const [customUnit, setCustomUnit] = useState(!!initial && !UNITS.includes(initial.unit));
+  const [price, setPrice] = useState(initial?.price != null ? String(initial.price) : "");
   const [purchasedOn, setPurchasedOn] = useState(initial?.purchased_on ?? localToday());
   const [expiresOn, setExpiresOn] = useState(initial?.expires_on ?? "");
   const [locationId, setLocationId] = useState(initial?.location_id ?? defaultLocationId);
   const [lastAdded, setLastAdded] = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
-  const { busy, error, run } = useAsyncAction();
+  const { busy, error, setError, run } = useAsyncAction();
 
   const qty = Number(quantity) || 0;
   const usedUp = !!initial && !!onDelete && quantity.trim() !== "" && Number(quantity) === 0;
@@ -55,8 +58,11 @@ export default function IngredientForm({
     unit: unit.trim() || "개",
     purchased_on: purchasedOn,
     expires_on: expiresOn || null,
+    price: price === "" ? null : Number(price),
     location_id: locationId,
   });
+
+  const priceTooHigh = price !== "" && Number(price) > MAX_PRICE;
 
   const changeQuantity = (direction: 1 | -1) => {
     const min = initial ? 0 : 0.01;
@@ -66,6 +72,10 @@ export default function IngredientForm({
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    if (priceTooHigh) {
+      setError("가격은 0~10,000,000원 사이 숫자로 입력해주세요.");
+      return;
+    }
     if (usedUp && onDelete) run(onDelete);
     else run(() => onSubmit(input(), false));
   };
@@ -73,12 +83,17 @@ export default function IngredientForm({
   // 장 본 뒤 여러 개를 이어서 넣는 흐름: 이름·수량·유통기한만 비우고 단위·위치·구입일은 유지 (사용성 점검 C1)
   const saveAndContinue = async () => {
     if (nameRef.current?.form && !nameRef.current.form.reportValidity()) return;
+    if (priceTooHigh) {
+      setError("가격은 0~10,000,000원 사이 숫자로 입력해주세요.");
+      return;
+    }
     const added = name.trim();
     setLastAdded("");
     if (await run(() => onSubmit(input(), true))) {
       setName("");
       setQuantity("1");
       setExpiresOn("");
+      setPrice("");
       setLastAdded(added);
       nameRef.current?.focus();
     }
@@ -175,6 +190,23 @@ export default function IngredientForm({
             />
           )}
         </div>
+
+        <label className="field">
+          <span className="field-label">
+            가격 <span className="optional">(선택)</span>
+          </span>
+          <div className="input-suffix">
+            <input
+              className="input"
+              id="ingredient-price"
+              inputMode="numeric"
+              value={price}
+              placeholder="모르면 비워두세요"
+              onChange={(e) => setPrice(e.target.value.replace(/\D/g, ""))}
+            />
+            <span className="suffix">원</span>
+          </div>
+        </label>
 
         <div className="field" role="group" aria-label="보관 위치">
           <span className="field-label">보관 위치</span>

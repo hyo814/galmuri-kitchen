@@ -180,6 +180,44 @@ def test_create_validation(client, login, fields):
     assert "error" in res.get_json()
 
 
+def test_create_with_price_and_clear_on_update(client, login):
+    login()
+    item = create(client, price=2980).get_json()
+    assert item["price"] == 2980
+    res = client.patch(f"/api/ingredients/{item['id']}", json={"price": None})
+    assert res.get_json()["price"] is None
+
+
+@pytest.mark.parametrize("price", [0, 1, 10_000_000])
+def test_price_boundary_values_accepted(client, login, price):
+    login()
+    assert create(client, price=price).get_json()["price"] == price
+
+
+@pytest.mark.parametrize("price", [-1, 10_000_001, "3000", True, 1.5])
+def test_price_validation_rejects_bad_values(client, login, price):
+    login()
+    res = create(client, price=price)
+    assert (res.status_code, res.get_json()) == (400, {"error": "가격은 0~10,000,000원 사이 숫자로 입력해주세요."})
+
+
+def test_price_omitted_on_create_defaults_to_none(client, login):
+    login()
+    assert create(client).get_json()["price"] is None
+
+
+def test_bulk_creates_items_with_prices(client, login):
+    login()
+    today = seoul_today().isoformat()
+    res = bulk(
+        client,
+        {"name": "대파", "purchased_on": today, "price": 2000},
+        {"name": "우유", "purchased_on": today},
+    )
+    assert res.status_code == 201
+    assert [i["price"] for i in res.get_json()] == [2000, None]
+
+
 def test_update_partial_and_clear_expiry(client, login):
     login()
     item = create(client, expires_on="2030-01-01").get_json()

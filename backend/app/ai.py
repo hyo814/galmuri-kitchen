@@ -17,20 +17,24 @@ PROMPTS = {
     "fridge": (
         "냉장고 안을 찍은 사진이다. 보이는 음식 재료를 모두 찾아라. "
         "개수와 단위는 사진에서 보이는 만큼 추정한다. 내용물을 알 수 없는 용기·반찬통은 건너뛴다. "
-        "purchased_on은 항상 null로 둔다. " + _COMMON
+        "purchased_on은 항상 null로 둔다. price는 항상 null. " + _COMMON
     ),
     "receipt": (
         "마트·시장 영수증 사진이다. 식재료·식품 줄만 골라라. 봉투·세제·휴지·생활용품 같은 식품이 아닌 항목은 뺀다. "
-        "수량은 영수증에 적힌 수량을 쓴다. purchased_on은 영수증에 찍힌 구매 날짜(YYYY-MM-DD)이고, 없으면 null. " + _COMMON
+        "수량은 영수증에 적힌 수량을 쓴다. purchased_on은 영수증에 찍힌 구매 날짜(YYYY-MM-DD)이고, 없으면 null. "
+        "price는 그 품목에 실제로 낸 금액(원, 정수)이다. 품목 바로 아래에 할인 줄(예: '농축산물 할인지원 -6,400')이 있으면 "
+        "뺀 금액을 쓴다. 금액을 알 수 없으면 null. " + _COMMON
     ),
     "order": (
         "온라인 쇼핑몰(쿠팡·네이버스토어·컬리·이마트·홈플러스·롯데마트·G마켓)의 주문완료 또는 주문상세 화면 캡처다. "
         "주문한 상품 중 식품만 골라라. 주문 수량을 quantity로 쓴다(묶음 상품은 알 수 있으면 낱개 수로). "
-        "purchased_on은 주문 날짜(YYYY-MM-DD)이고, 없으면 null. " + _COMMON
+        "purchased_on은 주문 날짜(YYYY-MM-DD)이고, 없으면 null. "
+        "price는 그 상품의 결제 금액(원, 정수, 할인 반영)이다. 알 수 없으면 null. " + _COMMON
     ),
 }
 
 # 키가 없는 개발 모드에서 화면 흐름을 확인하는 예시 결과
+# (이름, 수량, 단위, 보관 종류, 가격). fridge는 가격이 항상 없어 4개 튜플로 둔다.
 SAMPLES = {
     "fridge": [
         ("대파", 1, "단", "fridge"),
@@ -39,18 +43,18 @@ SAMPLES = {
         ("냉동만두", 1, "봉", "freezer"),
     ],
     "receipt": [
-        ("우유", 1, "개", "fridge"),
-        ("돼지고기 앞다리살", 600, "g", "fridge"),
-        ("양파", 3, "개", "room"),
-        ("냉동 새우", 1, "봉", "freezer"),
-        ("콩나물", 1, "봉", "fridge"),
+        ("우유", 1, "개", "fridge", 2980),
+        ("돼지고기 앞다리살", 600, "g", "fridge", 8940),
+        ("양파", 3, "개", "room", 2480),
+        ("냉동 새우", 1, "봉", "freezer", 9900),
+        ("콩나물", 1, "봉", "fridge", 1480),
     ],
     "order": [
-        ("냉동 블루베리", 1, "봉", "freezer"),
-        ("햇반", 6, "개", "room"),
-        ("그릭요거트", 2, "개", "fridge"),
-        ("애호박", 1, "개", "fridge"),
-        ("방울토마토", 500, "g", "fridge"),
+        ("냉동 블루베리", 1, "봉", "freezer", 8900),
+        ("햇반", 6, "개", "room", 5980),
+        ("그릭요거트", 2, "개", "fridge", 4580),
+        ("애호박", 1, "개", "fridge", 1990),
+        ("방울토마토", 500, "g", "fridge", 5990),
     ],
 }
 
@@ -64,6 +68,7 @@ class ScanItem(BaseModel):
     quantity: float
     unit: str
     location_kind: Literal["fridge", "freezer", "room"]
+    price: int | None
 
 
 class ScanResult(BaseModel):
@@ -79,7 +84,10 @@ def scan_mode():
 
 
 def sample_result(kind, today):
-    items = [{"name": n, "quantity": q, "unit": u, "location_kind": k} for n, q, u, k in SAMPLES[kind]]
+    items = [
+        {"name": row[0], "quantity": row[1], "unit": row[2], "location_kind": row[3], "price": row[4] if len(row) > 4 else None}
+        for row in SAMPLES[kind]
+    ]
     return {"items": items, "purchased_on": None if kind == "fridge" else today.isoformat()}
 
 

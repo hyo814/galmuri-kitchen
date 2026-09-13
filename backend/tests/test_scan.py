@@ -46,7 +46,7 @@ def fail_if_called(*args):
 def test_clean_result_sanitizes_items():
     raw = {
         "items": [
-            {"name": "  대파  ", "quantity": 2, "unit": " 단 ", "location_kind": "fridge"},
+            {"name": "  대파  ", "quantity": 2, "unit": " 단 ", "location_kind": "fridge", "price": 2500},
             {"name": "   ", "quantity": 1, "unit": "개", "location_kind": "fridge"},
             "not-a-dict",
             {"name": "가" * 60, "quantity": 0, "unit": "", "location_kind": "kitchen"},
@@ -58,14 +58,37 @@ def test_clean_result_sanitizes_items():
     }
     assert clean_result("receipt", raw, TODAY) == {
         "items": [
-            {"name": "대파", "quantity": 2.0, "unit": "단", "location_kind": "fridge"},
-            {"name": "가" * 50, "quantity": 1, "unit": "개", "location_kind": "fridge"},
-            {"name": "쌀", "quantity": 1, "unit": "킬로그램단위표기초과", "location_kind": "room"},
-            {"name": "생수", "quantity": 9999, "unit": "개", "location_kind": "room"},
-            {"name": "우유", "quantity": 1, "unit": "개", "location_kind": "fridge"},
+            {"name": "대파", "quantity": 2.0, "unit": "단", "location_kind": "fridge", "price": 2500},
+            {"name": "가" * 50, "quantity": 1, "unit": "개", "location_kind": "fridge", "price": None},
+            {"name": "쌀", "quantity": 1, "unit": "킬로그램단위표기초과", "location_kind": "room", "price": None},
+            {"name": "생수", "quantity": 9999, "unit": "개", "location_kind": "room", "price": None},
+            {"name": "우유", "quantity": 1, "unit": "개", "location_kind": "fridge", "price": None},
         ],
         "purchased_on": "2026-09-12",
     }
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("3,480원", None),
+        (-1, None),
+        (0, None),
+        (1e12, None),
+        (3480.4, 3480),
+        (True, None),
+        (3480, 3480),
+        (None, None),
+    ],
+)
+def test_clean_result_price_garbage(value, expected):
+    raw = {"items": [{"name": "대파", "quantity": 1, "unit": "단", "location_kind": "fridge", "price": value}]}
+    assert clean_result("receipt", raw, TODAY)["items"][0]["price"] == expected
+
+
+def test_clean_result_fridge_price_always_none():
+    raw = {"items": [{"name": "대파", "quantity": 1, "unit": "단", "location_kind": "fridge", "price": 2500}]}
+    assert clean_result("fridge", raw, TODAY)["items"][0]["price"] is None
 
 
 @pytest.mark.parametrize(
@@ -98,14 +121,14 @@ def test_clean_result_negative_quantity_and_empty_name():
         ]
     }
     assert clean_result("receipt", raw, TODAY)["items"] == [
-        {"name": "당근", "quantity": 1, "unit": "개", "location_kind": "fridge"},
+        {"name": "당근", "quantity": 1, "unit": "개", "location_kind": "fridge", "price": None},
     ]
 
 
 def test_clean_result_quantity_overflow_falls_back_to_one():
     raw = {"items": [{"name": "쌀", "quantity": 10**400, "unit": "포", "location_kind": "room"}]}
     assert clean_result("receipt", raw, TODAY)["items"] == [
-        {"name": "쌀", "quantity": 1, "unit": "포", "location_kind": "room"},
+        {"name": "쌀", "quantity": 1, "unit": "포", "location_kind": "room", "price": None},
     ]
 
 
@@ -132,7 +155,8 @@ def fake_anthropic(monkeypatch, response=None, error=None):
 
 def test_extract_sends_image_prompt_and_schema(app, monkeypatch):
     parsed = ai.ScanResult(
-        items=[ai.ScanItem(name="우유", quantity=1, unit="개", location_kind="fridge")], purchased_on="2026-09-12"
+        items=[ai.ScanItem(name="우유", quantity=1, unit="개", location_kind="fridge", price=2980)],
+        purchased_on="2026-09-12",
     )
     usage = SimpleNamespace(input_tokens=1500, output_tokens=120)
     calls = fake_anthropic(
@@ -146,7 +170,7 @@ def test_extract_sends_image_prompt_and_schema(app, monkeypatch):
     assert tokens == {"model": "claude-sonnet-5-answered", "input_tokens": 1500, "output_tokens": 120}
 
     assert result == {
-        "items": [{"name": "우유", "quantity": 1.0, "unit": "개", "location_kind": "fridge"}],
+        "items": [{"name": "우유", "quantity": 1.0, "unit": "개", "location_kind": "fridge", "price": 2980}],
         "purchased_on": "2026-09-12",
     }
     assert calls["client"] == {"api_key": "test-key", "timeout": 45, "max_retries": 1}
@@ -227,7 +251,9 @@ def test_sample_mode_without_key_in_dev(client, login, app, monkeypatch):
     fridge = upload(client, kind="fridge").get_json()
     assert (receipt["sample"], receipt["purchased_on"]) == (True, seoul_today().isoformat())
     assert (fridge["sample"], fridge["purchased_on"]) == (True, None)
-    assert {"name": "냉동만두", "quantity": 1, "unit": "봉", "location_kind": "freezer"} in fridge["items"]
+    assert {"name": "냉동만두", "quantity": 1, "unit": "봉", "location_kind": "freezer", "price": None} in fridge["items"]
+    assert all(item["price"] is None for item in fridge["items"])
+    assert all(isinstance(item["price"], int) for item in receipt["items"])
     assert all(3 <= len(upload(client, kind=k).get_json()["items"]) <= 6 for k in ["fridge", "receipt", "order"])
     assert ai_calls(app) == []
 
@@ -247,7 +273,10 @@ def test_real_scan_cleans_result_and_logs_call(client, login, app, monkeypatch):
 
     def fake_extract(kind, image_bytes, media_type):
         seen.append((kind, image_bytes, media_type))
-        raw = {"items": [{"name": " 우유 ", "quantity": 0, "unit": "", "location_kind": "fridge"}], "purchased_on": "2999-01-01"}
+        raw = {
+            "items": [{"name": " 우유 ", "quantity": 0, "unit": "", "location_kind": "fridge", "price": 2980}],
+            "purchased_on": "2999-01-01",
+        }
         return raw, USAGE
 
     monkeypatch.setattr(ai, "extract", fake_extract)
@@ -255,7 +284,7 @@ def test_real_scan_cleans_result_and_logs_call(client, login, app, monkeypatch):
     res = upload(client, kind="order", data=PNG_BYTES, mimetype="image/jpeg")
     assert res.status_code == 200
     assert res.get_json() == {
-        "items": [{"name": "우유", "quantity": 1, "unit": "개", "location_kind": "fridge"}],
+        "items": [{"name": "우유", "quantity": 1, "unit": "개", "location_kind": "fridge", "price": 2980}],
         "purchased_on": None,
         "sample": False,
     }

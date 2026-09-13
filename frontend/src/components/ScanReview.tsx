@@ -8,7 +8,7 @@ import {
   type ScanResult,
   type StorageLocation,
 } from "../api";
-import { formatQuantity } from "../format";
+import { formatQuantity, formatWon } from "../format";
 import { useAsyncAction } from "../useAsyncAction";
 import Icon from "./Icon";
 
@@ -16,6 +16,7 @@ import Icon from "./Icon";
 // 둘 중 하나면 부모가 들고 있는 locations 목록이 낡았다는 뜻이라 다시 불러와야 한다.
 const INVALID_LOCATION = "보관 위치를 다시 선택해주세요.";
 const LOCATION_CHANGED = "선택한 보관 위치가 방금 바뀌었어요. 다시 시도해주세요.";
+const MAX_PRICE = 10_000_000;
 
 interface Row {
   key: number;
@@ -23,6 +24,7 @@ interface Row {
   name: string;
   quantity: string;
   unit: string;
+  price: string;
   locationId: number;
   locationKind: LocationKind;
 }
@@ -50,6 +52,7 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
       name: item.name,
       quantity: String(item.quantity),
       unit: item.unit,
+      price: item.price != null ? String(item.price) : "",
       // AI가 추정한 보관 종류의 첫 위치, 그런 위치가 없으면 첫 위치 (스펙 15절)
       locationId: (locations.find((l) => l.kind === item.location_kind) ?? locations[0]).id,
       locationKind: item.location_kind,
@@ -88,12 +91,19 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
       setError("구입일은 오늘이나 그 전 날짜로 골라주세요.");
       return;
     }
+    const badPrice = chosen.find((r) => r.price !== "" && Number(r.price) > MAX_PRICE);
+    if (badPrice) {
+      setOpenKey(badPrice.key);
+      setError("가격은 0~10,000,000원 사이 숫자로 입력해주세요.");
+      return;
+    }
     run(async () => {
       const items = chosen.map((r) => ({
         name: r.name.trim(),
         quantity: Number(r.quantity),
         unit: r.unit.trim() || "개",
         purchased_on: purchasedOn,
+        price: r.price === "" ? null : Number(r.price),
         location_id: r.locationId,
       }));
       try {
@@ -179,6 +189,7 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
                   <span className="row-sub">
                     {formatQuantity(Number(row.quantity) || 0)}
                     {row.unit} · {locationName(row.locationId)}
+                    {row.price !== "" && ` · ${formatWon(Number(row.price))}`}
                   </span>
                 </button>
               )}
@@ -228,6 +239,22 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
                         </option>
                       ))}
                     </select>
+                  </label>
+                  <label className="field scan-edit-price">
+                    <span className="field-label">
+                      가격 <span className="optional">(선택)</span>
+                    </span>
+                    <div className="input-suffix">
+                      <input
+                        className="input"
+                        aria-label="가격"
+                        inputMode="numeric"
+                        value={row.price}
+                        placeholder="모르면 비워두세요"
+                        onChange={(e) => update(row.key, { price: e.target.value.replace(/\D/g, "") })}
+                      />
+                      <span className="suffix">원</span>
+                    </div>
                   </label>
                 </div>
               )}

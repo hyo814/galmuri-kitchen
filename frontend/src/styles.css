@@ -1356,6 +1356,29 @@ button.row-btn > svg {
   text-align: left;
 }
 
+.scan-edit-price {
+  grid-column: 1 / -1;
+}
+
+.input-suffix {
+  position: relative;
+}
+
+.input-suffix .input {
+  padding-right: 40px;
+  text-align: left;
+}
+
+.input-suffix .suffix {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-3);
+  font-size: 15px;
+  pointer-events: none;
+}
+
 .scan-foot {
   position: sticky;
   bottom: 0;
