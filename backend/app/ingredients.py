@@ -1,0 +1,116 @@
+import math
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
+
+from flask import Blueprint, abort, g, jsonify, request
+
+from .auth import get_owned_or_404, login_required
+from .models import Ingredient, db
+
+bp = Blueprint("ingredients", __name__, url_prefix="/api/ingredients")
+
+URGENT_DAYS = 3  # 유통기한까지 3일 이내(지난 것 포함)면 임박
+OLD_DAYS = 7  # 유통기한이 없으면 구입 7일째부터 오래됨
+STATUS_RANK = {"urgent": 0, "old": 1, "ok": 2}
+SEOUL = ZoneInfo("Asia/Seoul")
+
+
+def seoul_today():
+    return datetime.now(SEOUL).date()
+
+
+def ingredient_status(purchased_on, expires_on, today):
+    if expires_on is not None:
+        return "urgent" if (expires_on - today).days <= URGENT_DAYS else "ok"
+    return "old" if (today - purchased_on).days >= OLD_DAYS else "ok"
+
+
+def to_json(item, today):
+    return {
+        "id": item.id,
+        "name": item.name,
+        "quantity": item.quantity,
+        "unit": item.unit,
+        "purchased_on": item.purchased_on.isoformat(),
+        "expires_on": item.expires_on.isoformat() if item.expires_on else None,
+        "status": ingredient_status(item.purchased_on, item.expires_on, today),
+        "days_left": (item.expires_on - today).days if item.expires_on else None,
+        "days_since_purchase": (today - item.purchased_on).days,
+    }
+
+
+def _date(value, label):
+    try:
+        return date.fromisoformat(value)
+    except (TypeError, ValueError):
+        abort(400, f"{label}은 YYYY-MM-DD 형식으로 입력해 주세요.")
+
+
+def parse_fields(data, creating):
+    if not isinstance(data, dict):
+        abort(400, "잘못된 요청이에요.")
+    fields = {}
+    if creating or "name" in data:
+        name = str(data.get("name") or "").strip()
+        if not 1 <= len(name) <= 50:
+            abort(400, "이름은 1~50자로 입력해 주세요.")
+        fields["name"] = name
+    if creating or "quantity" in data:
+        try:
+            quantity = float(data.get("quantity", 1))
+        except (TypeError, ValueError):
+            abort(400, "수량은 숫자로 입력해 주세요.")
+        if not (math.isfinite(quantity) and quantity > 0):
+            abort(400, "수량은 0보다 커야 해요.")
+        fields["quantity"] = quantity
+    if creating or "unit" in data:
+        fields["unit"] = str(data.get("unit") or "").strip()[:10] or "개"
+    if creating or "purchased_on" in data:
+        fields["purchased_on"] = _date(data.get("purchased_on"), "구입일")
+    if "expires_on" in data:
+        value = data["expires_on"]
+        fields["expires_on"] = _date(value, "유통기한") if value else None
+    return fields
+
+
+@bp.get("")
+@login_required
+def list_ingredients():
+    today = seoul_today()
+    items = Ingredient.query.filter_by(user_id=g.user.id).all()
+    items.sort(
+        key=lambda i: (
+            STATUS_RANK[ingredient_status(i.purchased_on, i.expires_on, today)],
+            i.expires_on or date.max,
+            i.purchased_on,
+            i.id,
+        )
+    )
+    return jsonify([to_json(i, today) for i in items])
+
+
+@bp.post("")
+@login_required
+def create_ingredient():
+    item = Ingredient(user_id=g.user.id, **parse_fields(request.get_json(silent=True), creating=True))
+    db.session.add(item)
+    db.session.commit()
+    return jsonify(to_json(item, seoul_today())), 201
+
+
+@bp.patch("/<int:item_id>")
+@login_required
+def update_ingredient(item_id):
+    item = get_owned_or_404(Ingredient, item_id)
+    for key, value in parse_fields(request.get_json(silent=True), creating=False).items():
+        setattr(item, key, value)
+    db.session.commit()
+    return jsonify(to_json(item, seoul_today()))
+
+
+@bp.delete("/<int:item_id>")
+@login_required
+def delete_ingredient(item_id):
+    db.session.delete(get_owned_or_404(Ingredient, item_id))
+    db.session.commit()
+    return "", 204

@@ -18,3 +18,16 @@ class User(db.Model):
     provider_id = db.Column(db.String(100), nullable=False)
     nickname = db.Column(db.String(50), nullable=False, default="")
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class Ingredient(db.Model):
+    __tablename__ = "ingredients"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = db.Column(db.String(50), nullable=False)
+    quantity = db.Column(db.Float, nullable=False, default=1)
+    unit = db.Column(db.String(10), nullable=False, default="개")
+    purchased_on = db.Column(db.Date, nullable=False)
+    expires_on = db.Column(db.Date)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
