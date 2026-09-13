@@ -3,7 +3,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.ingredients import ingredient_status, matching_rule, seoul_today
+from app.ingredients import OLD_DAYS_BY_KIND, ingredient_status, matching_rule, seoul_today
+from app.locations import INVALID_LOCATION, KINDS
 from app.models import Ingredient, StorageLocation, User, db
 
 TODAY = date(2026, 9, 13)
@@ -44,7 +45,7 @@ def test_old_threshold_depends_on_location_kind(kind, days, expected):
         (24, None, "ok"),
         (25, None, "old"),
         (30, None, "danger"),
-        (30, 10, "danger"),  # 유통기한이 넉넉해도 품목 규칙이 더 심각하면 위험
+        (30, 10, "ok"),  # 입력한 소비기한이 품목 규칙보다 우선 (사용자 결정)
         (5, 1, "urgent"),  # 유통기한 임박이 품목 규칙보다 심각
     ],
 )
@@ -58,10 +59,23 @@ def test_item_rule_replaces_location_kind_rule():
     assert ingredient_status(TODAY - timedelta(days=31), None, TODAY, "room", (25, 30)) == "danger"
 
 
+@pytest.mark.parametrize(
+    "days, expected",
+    [(30, "ok"), (60, "old")],
+)
+def test_freezer_ignores_item_rule(days, expected):
+    # 냉동 위치는 품목 규칙을 무시하고 위치 종류 기준(60일)만 쓴다 (사용자 결정)
+    assert ingredient_status(TODAY - timedelta(days=days), None, TODAY, "freezer", (25, 30)) == expected
+
+
+def test_old_days_cover_all_location_kinds():
+    assert set(OLD_DAYS_BY_KIND) == set(KINDS)
+
+
 def test_matching_rule_picks_shortest_danger():
     rules = [
-        SimpleNamespace(keyword="빵", warn_days=21, danger_days=24),
-        SimpleNamespace(keyword="소시지", warn_days=41, danger_days=44),
+        SimpleNamespace(keyword="빵", warn_days=21, danger_days=24, id=1),
+        SimpleNamespace(keyword="소시지", warn_days=41, danger_days=44, id=2),
     ]
     assert matching_rule("소시지빵", rules) == (21, 24)
     assert matching_rule("우유", rules) is None
@@ -87,7 +101,30 @@ def test_location_defaults_and_fields(client, login):
     assert (body["location_name"], body["location_kind"]) == ("냉장실", "fridge")
 
     moved = client.patch(f"/api/ingredients/{body['id']}", json={"location_id": freezer["id"]}).get_json()
-    assert moved["location_id"] == freezer["id"]
+    assert (moved["location_id"], moved["location_name"]) == (freezer["id"], "냉동실")
+
+
+def test_freezer_item_ignores_item_rule_via_api(client, login):
+    login()
+    freezer = client.get("/api/locations").get_json()[1]
+    res = create(
+        client,
+        name="냉동 식빵",
+        purchased_on=(seoul_today() - timedelta(days=25)).isoformat(),
+        location_id=freezer["id"],
+    )
+    assert res.get_json()["status"] == "ok"
+
+
+def test_expiry_date_wins_over_item_rule_via_api(client, login):
+    login()
+    res = create(
+        client,
+        name="계란",
+        purchased_on=(seoul_today() - timedelta(days=31)).isoformat(),
+        expires_on=(seoul_today() + timedelta(days=14)).isoformat(),
+    )
+    assert res.get_json()["status"] == "ok"
 
 
 def create(client, **fields):
@@ -128,6 +165,9 @@ def test_create_and_list_sorted_by_urgency(client, login):
         {"name": 123},
         {"quantity": True},
         {"location_id": "1"},
+        {"location_id": 2**70},
+        {"unit": {"a": 1}},
+        {"unit": "가" * 11},
     ],
 )
 def test_create_validation(client, login, fields):
@@ -160,6 +200,16 @@ def test_other_users_ingredient_is_hidden(client, login):
     assert client.get("/api/ingredients").get_json() == []
     assert client.patch(f"/api/ingredients/{item['id']}", json={"name": "x"}).status_code == 404
     assert client.delete(f"/api/ingredients/{item['id']}").status_code == 404
+
+
+def test_patch_ingredient_to_other_users_location_rejected(client, login):
+    login("owner")
+    owner_location_id = client.get("/api/locations").get_json()[0]["id"]
+    login("intruder")
+    item = create(client).get_json()
+    res = client.patch(f"/api/ingredients/{item['id']}", json={"location_id": owner_location_id})
+    assert res.status_code == 400
+    assert res.get_json()["error"] == INVALID_LOCATION
 
 
 def test_deleting_user_cascades_ingredients(app):
