@@ -1,6 +1,7 @@
 import pytest
 
 from app import create_app
+from app.defaults import seed_user_defaults
 from app.models import User, db
 
 TEST_CONFIG = {
@@ -50,6 +51,8 @@ def login(client, app):
         with app.app_context():
             user = User(provider="test", provider_id=provider_id, nickname=f"user{provider_id}")
             db.session.add(user)
+            db.session.commit()
+            seed_user_defaults(user.id)
             db.session.commit()
             user_id = user.id
         with client.session_transaction() as s:

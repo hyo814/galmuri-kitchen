@@ -5,6 +5,7 @@ from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, abort, current_app, g, jsonify, redirect, session, url_for
 
+from .defaults import seed_user_defaults
 from .models import User, db
 
 bp = Blueprint("auth", __name__)
@@ -74,6 +75,8 @@ def upsert_user(provider, provider_id, nickname):
     if user is None:
         user = User(provider=provider, provider_id=provider_id)
         db.session.add(user)
+        db.session.flush()
+        seed_user_defaults(user.id)
     user.nickname = (nickname or "사용자")[:50]
     db.session.commit()
     return user
