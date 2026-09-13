@@ -90,14 +90,14 @@ export default function IngredientForm({ initial, onSubmit, onDelete, onClose }:
         <button className="btn primary" disabled={busy}>
           {busy ? "저장 중…" : "저장"}
         </button>
+        <button type="button" className="btn ghost" onClick={onClose}>
+          취소
+        </button>
         {onDelete && (
           <button type="button" className="btn danger" disabled={busy} onClick={() => run(onDelete)}>
             삭제
           </button>
         )}
-        <button type="button" className="btn ghost" onClick={onClose}>
-          취소
-        </button>
       </form>
     </dialog>
   );

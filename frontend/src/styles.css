@@ -10,6 +10,8 @@
   --urgent-bg: #ffedd5;
   --old: #a16207;
   --old-bg: #fef3c7;
+  --danger: #dc2626;
+  --danger-bg: #fef2f2;
   --radius: 14px;
   color-scheme: light dark;
 }
@@ -27,6 +29,8 @@
     --urgent-bg: #3a2014;
     --old: #fbbf24;
     --old-bg: #3a2e10;
+    --danger: #f87171;
+    --danger-bg: #3b1818;
   }
 }
 
@@ -191,8 +195,9 @@ input {
 }
 
 .btn.danger {
-  background: transparent;
-  color: var(--urgent);
+  margin-top: 8px;
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 
 .btn.kakao {
