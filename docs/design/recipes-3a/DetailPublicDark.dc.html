@@ -1,0 +1,158 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;display=swap">
+  <style>
+    body { margin: 0; background: #0e0f11; }
+
+.app{--bg:#f3f4f6;--surface:#ffffff;--field:#f3f4f6;--text:#17191c;--text-2:#5b616b;--text-3:#63697a;--placeholder:#63697a;--line:#eef0f2;--chip-text:#3a3f46;--handle:#e1e4e8;--accent:#0b7a4c;--accent-strong:#086a41;--accent-tint:#e7f6ef;--on-accent:#ffffff;--inverse-bg:#17191c;--inverse-text:#ffffff;--danger:#c4262e;--danger-tint:#fdeded;--danger-line:#f5c2c4;--warn:#8f5500;--warn-tint:#fff3dc;--neutral-tint:#eef0f2;--scrim:rgb(15 17 20 / 0.48);--control-line:#7a7f87;color-scheme:light;--seg-track:var(--handle);--seg-on:var(--surface);position:relative;width:384px;overflow:hidden;background:var(--bg);color:var(--text);font:16px/1.5 "IBM Plex Sans KR","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;text-align:left}
+.app.dark{--bg:#0e0f11;--surface:#1a1c20;--field:#24272c;--text:#f1f2f4;--text-2:#a6acb5;--text-3:#8a9099;--placeholder:#8a9099;--line:#2a2d32;--chip-text:#d3d7dc;--handle:#3a3d43;--accent:#2fc07f;--accent-strong:#5bd39c;--accent-tint:#173a2a;--on-accent:#07140d;--inverse-bg:#f1f2f4;--inverse-text:#0e0f11;--danger:#ff6b6f;--danger-tint:#3b1c1f;--danger-line:#6b2b30;--warn:#f2b04a;--warn-tint:#3a2c12;--neutral-tint:#2a2d32;--scrim:rgb(0 0 0 / 0.6);--control-line:#767c86;color-scheme:dark;--seg-track:var(--surface);--seg-on:var(--handle)}
+.app *{box-sizing:border-box}
+.app svg{display:block;flex-shrink:0}
+.app h1,.app h2,.app p,.app ol,.app ul{margin:0}
+.app ol,.app ul{padding:0;list-style:none}
+.topbar{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:28px 20px 0}
+.topbar h1{font-size:26px;line-height:34px;font-weight:700;letter-spacing:-.5px}
+.summary{margin-top:4px!important;font-size:15px;line-height:22px;color:var(--text-2)}
+.muted{color:var(--text-2)}
+.icon-btn{display:inline-flex;flex-shrink:0;align-items:center;justify-content:center;width:44px;height:44px;border-radius:22px;color:var(--text-3)}
+.list{margin:16px 20px 0;padding:6px 0;background:var(--surface);border-radius:20px}
+.row-btn{display:flex;align-items:center;gap:12px;min-height:72px;padding:12px 20px}
+.row-btn > svg{color:var(--text-3)}
+.row-main{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.row-title{font-size:17px;line-height:25px;font-weight:600}
+.row-sub{font-size:14px;line-height:20px;color:var(--text-3)}
+.badge{display:inline-flex;flex-shrink:0;align-items:center;gap:4px;height:28px;padding:0 10px;border-radius:8px;background:var(--neutral-tint);color:var(--text-2);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.badge.info{background:var(--accent-tint);color:var(--accent-strong)}
+.empty{margin:16px 20px 0;padding:48px 20px;background:var(--surface);border-radius:20px;text-align:center}
+.empty p{margin:4px 0!important}
+.empty .soon-title{margin-top:12px!important;font-size:18px;font-weight:700}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:56px;padding:0 20px;border-radius:16px;font-size:17px;font-weight:600;white-space:nowrap}
+.btn.inline{width:auto}
+.btn.primary{background:var(--accent);color:var(--on-accent)}
+.btn.secondary{background:var(--neutral-tint);color:var(--chip-text)}
+.btn.outline{background:var(--surface);color:var(--text);box-shadow:inset 0 0 0 1.5px var(--control-line)}
+.btn.outline svg{color:var(--accent-strong)}
+.btn.danger-text{min-height:52px;border:1px solid var(--danger-line);background:var(--danger-tint);color:var(--danger);font-size:16px}
+.cta-bar{position:absolute;right:0;bottom:64px;left:0;padding:32px 20px 16px;background:linear-gradient(to bottom,transparent,var(--bg) 36%)}
+.tabbar{position:absolute;right:0;bottom:0;left:0;display:flex;height:64px;border-top:1px solid var(--line);background:var(--surface)}
+.tab{display:flex;flex:1;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--text-3);font-size:12px;font-weight:600;line-height:18px}
+.tab.on{color:var(--accent-strong);font-weight:700}
+.back-link{display:inline-flex;align-items:center;gap:2px;min-height:44px;margin:12px 0 -16px 12px;padding:0 8px;color:var(--text-2);font-size:15px}
+.field{display:flex;flex-direction:column;gap:8px;min-width:0}
+.field-label{font-size:14px;line-height:20px;font-weight:500;color:var(--text-2)}
+.input{display:flex;align-items:center;width:100%;height:56px;padding:0 16px;border-radius:14px;background:var(--field);color:var(--text);font-size:17px;white-space:nowrap;overflow:hidden}
+.input.ph{color:var(--placeholder)}
+.actions{display:grid;grid-template-columns:1fr 2fr;gap:8px}
+.hint{font-size:13px;line-height:19px;color:var(--text-3)}
+.segmented{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:4px;border-radius:14px;background:var(--field)}
+.segmented span{display:flex;align-items:center;justify-content:center;height:44px;border-radius:10px;color:var(--text-2);font-size:15px;font-weight:500}
+.segmented span.on{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 1px 3px rgb(15 17 20 / .12)}
+.stepper{display:grid;grid-template-columns:56px minmax(0,1fr) 56px;gap:8px}
+.stepper .icon-btn{width:56px;height:56px;border-radius:14px;background:var(--field);color:var(--text)}
+.stepper .input{justify-content:center;font-variant-numeric:tabular-nums}
+.plain-row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:48px}
+.staple-name{font-size:17px;font-weight:500}
+.stock-ok{display:inline-flex;align-items:center;gap:4px;min-width:0;color:var(--text-3);font-size:14px;text-align:right}
+
+/* ---- new for recipes (3a): rc- prefix ---- */
+/* segmented on page --bg: field track disappears on --bg, so track/selected get their own pair */
+.rc-seg{margin:16px 20px 0;background:var(--seg-track)}
+.rc-seg span.on{background:var(--seg-on)}
+.rc-sample{display:flex;align-items:center;gap:6px;margin:12px 20px 0!important;color:var(--text-3);font-size:14px;line-height:20px}
+.rc-cards{display:flex;flex-direction:column;gap:12px;margin:12px 20px 0}
+/* recommended: compact card = 72px thumb + title/match, missing chips on a full-width row */
+.rc-card{display:grid;grid-template-columns:72px minmax(0,1fr);column-gap:14px;row-gap:12px;padding:16px;border-radius:20px;background:var(--surface)}
+.rc-thumb{width:72px;height:72px;border-radius:14px;overflow:hidden}
+.rc-ph{display:flex;align-items:center;justify-content:center;background:var(--neutral-tint);color:var(--text-3)}
+.rc-thumb:not(.rc-ph) svg,.rc-img:not(.rc-ph) svg,.rc-hero svg{width:100%;height:100%}
+.rc-body{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;justify-content:center}
+.rc-body .badge{height:26px;padding:0 8px;margin-bottom:4px}
+.rc-match{width:100%;font-size:14px;line-height:20px;color:var(--text-2)}
+.rc-match b{color:var(--accent-strong);font-weight:700}
+.rc-match .done{display:flex;align-items:center;gap:4px;color:var(--accent-strong);font-weight:600}
+.rc-bar{display:block;width:100%;height:6px;margin-top:8px;border-radius:3px;background:var(--neutral-tint);overflow:hidden}
+.rc-bar i{display:block;height:100%;border-radius:3px;background:var(--accent)}
+.rc-missing{grid-column:1 / 3;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding-top:12px;border-top:1px solid var(--line)}
+.rc-missing .label{margin-right:2px;font-size:13px;color:var(--text-3)}
+.rc-chip{display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:7px;background:var(--field);color:var(--chip-text);font-size:13px;font-weight:500;white-space:nowrap}
+.rc-chip.more{color:var(--text-3)}
+/* alternative: big cards */
+.rc-big{padding:0;overflow:hidden;display:block}
+.rc-big .rc-img{height:180px}
+.rc-big .rc-inner{display:flex;flex-direction:column;gap:12px;padding:16px}
+.rc-big .rc-missing{padding-top:0;border-top:0}
+/* empty */
+.rc-empty-mark{width:64px;height:64px;margin:0 auto;border-radius:19px;overflow:hidden}
+.rc-empty-mark svg{width:64px;height:64px}
+.rc-empty .btn{margin:20px auto 0}
+.rc-empty .muted{word-break:keep-all}
+/* detail */
+.rc-hero{height:188px;margin:20px 20px 0;border-radius:20px;overflow:hidden}
+.rc-head{padding:20px 20px 0}
+.rc-head h1{font-size:26px;line-height:34px;font-weight:700;letter-spacing:-.5px}
+.rc-sec{margin:16px 20px 0;padding:20px;border-radius:20px;background:var(--surface)}
+.rc-sec-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.rc-sec h2{font-size:20px;line-height:28px;font-weight:700;letter-spacing:-.3px}
+.rc-serv{display:flex;align-items:center;gap:4px}
+.rc-serv .icon-btn{border-radius:12px;background:var(--field);color:var(--text)}
+.rc-serv b{min-width:60px;text-align:center;font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.rc-have{margin-top:12px}
+.rc-ings{margin-top:8px!important}
+.rc-ings li{min-height:52px;border-top:1px solid var(--line)}
+.rc-ings li:first-child{border-top:0}
+.rc-amt{margin-left:6px;color:var(--text-2);font-size:15px;font-weight:400}
+.rc-ings .stock-ok svg{color:var(--accent-strong)}
+.rc-steps{display:flex;flex-direction:column;gap:14px;margin-top:14px!important}
+.rc-steps li{display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;align-items:start}
+.rc-num{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:14px;background:var(--accent-tint);color:var(--accent-strong);font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+.rc-steps p{font-size:16px;line-height:24px;padding-top:2px;word-break:keep-all}
+.rc-actions{display:flex;flex-direction:column;gap:8px;margin:24px 20px 0}
+.rc-scrolled{position:absolute;right:0;bottom:64px;left:0}
+/* form */
+.rc-form{display:flex;flex-direction:column;gap:20px}
+.rc-rows{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.rc-ing-row{display:grid;grid-template-columns:minmax(0,1fr) 104px 44px;gap:8px;align-items:center}
+.rc-ing-row .input{height:52px}
+.rc-ing-row .icon-btn,.rc-step-row .icon-btn{color:var(--text-3)}
+.input.invalid{box-shadow:inset 0 0 0 1.5px var(--danger)}
+.rc-err{display:flex;align-items:center;gap:4px;margin:-2px 0 2px!important;color:var(--danger);font-size:14px;line-height:20px;font-weight:600}
+.rc-step-row{display:grid;grid-template-columns:28px minmax(0,1fr) 44px;gap:8px;align-items:start}
+.rc-step-row .rc-num{margin-top:12px}
+.rc-area{height:auto;min-height:80px;align-items:flex-start;padding:13px 16px;white-space:normal;line-height:26px;word-break:keep-all}
+.rc-add{min-height:52px;margin-top:14px;font-size:16px}
+.rc-scrolled .rc-pad{height:120px}
+
+  </style>
+</helmet>
+<div class="app dark" style="height:832px"><span class="back-link"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>레시피</span>
+    <div class="rc-hero"><svg viewBox="0 0 344 188" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+<rect width="344" height="188" fill="#d6bf98"/><path d="M0 46h344M0 112h344M0 170h344" stroke="#c8ae86" stroke-width="2"/>
+<circle cx="30" cy="164" r="48" fill="#f6f1e7"/><circle cx="30" cy="164" r="36" fill="#ece3d2"/>
+<path d="M8 156c8-12 30-14 42-3 7 7 2 20-9 22-14 3-37 0-33-19z" fill="#c4442c"/><path d="M18 157c7-5 17-5 24 0" stroke="#e98a70" stroke-width="3" stroke-linecap="round" fill="none"/>
+<path d="M292 4l22 180M305 2l20 182" stroke="#7b5536" stroke-width="5" stroke-linecap="round"/>
+<circle cx="178" cy="101" r="84" fill="#4a3219" opacity=".16"/><circle cx="172" cy="94" r="82" fill="#fbf8f2"/><circle cx="172" cy="94" r="66" fill="#f0e9dc"/>
+<path d="M116 96c0-32 26-52 57-52s53 21 53 50-23 52-55 52-55-18-55-50z" fill="#983c21"/>
+<g transform="rotate(-10 150 78)"><rect x="128" y="62" width="44" height="32" rx="6" fill="#c5733a"/><rect x="132" y="65" width="36" height="13" rx="4" fill="#dd9b5d"/></g>
+<g transform="rotate(8 195 76)"><rect x="173" y="60" width="44" height="32" rx="6" fill="#c5733a"/><rect x="177" y="63" width="36" height="13" rx="4" fill="#dd9b5d"/></g>
+<g transform="rotate(6 149 114)"><rect x="127" y="98" width="44" height="32" rx="6" fill="#bf6c34"/><rect x="131" y="101" width="36" height="13" rx="4" fill="#d89355"/></g>
+<g transform="rotate(-6 195 113)"><rect x="173" y="97" width="44" height="32" rx="6" fill="#bf6c34"/><rect x="177" y="100" width="36" height="13" rx="4" fill="#d89355"/></g>
+<g fill="#a9d97f" stroke="#4d8d34" stroke-width="2.2"><circle cx="162" cy="92" r="4.5"/><circle cx="186" cy="70" r="4"/><circle cx="206" cy="108" r="4.5"/><circle cx="142" cy="118" r="4"/><circle cx="176" cy="122" r="3.6"/><circle cx="140" cy="74" r="3.6"/></g>
+<g fill="#b3301d"><circle cx="152" cy="84" r="1.8"/><circle cx="198" cy="84" r="1.8"/><circle cx="170" cy="108" r="1.6"/><circle cx="210" cy="120" r="1.8"/><circle cx="134" cy="106" r="1.6"/></g>
+<g fill="#fff3d8"><ellipse cx="158" cy="72" rx="2.2" ry="1.2"/><ellipse cx="190" cy="98" rx="2.2" ry="1.2" transform="rotate(30 190 98)"/><ellipse cx="150" cy="126" rx="2.2" ry="1.2"/><ellipse cx="204" cy="72" rx="2.2" ry="1.2" transform="rotate(-20 204 72)"/></g>
+</svg></div>
+    <header class="rc-head"><h1>두부조림</h1><p class="summary">2인분 · 반찬</p></header>
+    <section class="rc-sec"><div class="rc-sec-head"><h2>재료</h2>
+      <div class="rc-serv"><span class="icon-btn" aria-label="인분 줄이기"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/></svg></span><b>2인분</b><span class="icon-btn" aria-label="인분 늘리기"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span></div></div>
+      <div class="rc-have"><div class="rc-match">재료 7개 중 <b>5개</b> 있어요<span class="rc-bar"><i style="width:71%"></i></span></div></div>
+      <ul class="rc-ings"><li class="plain-row"><span class="staple-name">두부<span class="rc-amt">1모</span></span><span class="stock-ok" aria-label="있음"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>있음 · 두부 1모</span></li><li class="plain-row"><span class="staple-name">대파<span class="rc-amt">1/2대</span></span><span class="stock-ok" aria-label="있음"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>있음 · 대파 1단</span></li><li class="plain-row"><span class="staple-name">양파<span class="rc-amt">1/4개</span></span><span class="stock-ok" aria-label="있음"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>있음 · 양파 1망</span></li><li class="plain-row"><span class="staple-name">간장<span class="rc-amt">3큰술</span></span><span class="stock-ok" aria-label="있음"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>있음 · 진간장 1병</span></li><li class="plain-row"><span class="staple-name">고춧가루<span class="rc-amt">1큰술</span></span><span class="stock-ok" aria-label="있음"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>있음 · 고춧가루 1봉</span></li><li class="plain-row"><span class="staple-name">다진 마늘<span class="rc-amt">1작은술</span></span><span class="badge">없음</span></li><li class="plain-row"><span class="staple-name">청양고추<span class="rc-amt">1개</span></span><span class="badge">없음</span></li></ul></section>
+    <section class="rc-sec"><h2>만드는 법</h2><ol class="rc-steps"><li><span class="rc-num">1</span><p>두부는 1cm 두께로 썰어 키친타월로 물기를 닦아요.</p></li><li><span class="rc-num">2</span><p>대파는 송송 썰고, 양파는 채 썰어요.</p></li><li><span class="rc-num">3</span><p>간장, 고춧가루, 다진 마늘에 물 5큰술을 섞어 양념장을 만들어요.</p></li><li><span class="rc-num">4</span><p>기름 두른 팬에 두부를 앞뒤로 노릇하게 부쳐요.</p></li><li><span class="rc-num">5</span><p>양파를 깔고 양념장을 끼얹어 중약불에서 5분 졸여요.</p></li><li><span class="rc-num">6</span><p>대파와 청양고추를 올리고 1분 더 졸이면 완성이에요.</p></li></ol></section>
+    <div class="rc-pad" style="height:120px"></div><div class="cta-bar"><span class="btn primary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h11v17L12 16.5l-5.5 4z"/></svg>내 레시피로 저장</span></div><nav class="tabbar" aria-label="주요 메뉴"><span class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M5 10h14M9 5.5v2M9 13v3"/></svg><span>재고</span></span><span class="tab on"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3M9 7h6"/></svg><span>레시피</span></span><span class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2.5l2.2 10.5h10.1L20 7.5H6.5"/><circle cx="9.5" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></svg><span>장보기</span></span><span class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2.5"/><path d="M4 10h16M8.5 3v4M15.5 3v4"/></svg><span>식단</span></span><span class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>더보기</span></span></nav></div>
+</x-dc>
+</body>
+</html>
