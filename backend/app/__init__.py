@@ -81,11 +81,13 @@ def create_app(test_config=None):
         message = e.description if custom else DEFAULT_MESSAGES.get(e.code, "문제가 생겼어요.")
         return jsonify(error=message), e.code
 
+    @app.route("/api/<path:_>", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+    def api_not_found(_):
+        abort(404)
+
     @app.get("/", defaults={"path": ""})
     @app.get("/<path:path>")
     def spa(path):
-        if path.startswith("api/"):
-            abort(404)
         dist = app.config["FRONTEND_DIST"]
         if path and os.path.isfile(os.path.join(dist, path)):
             return send_from_directory(dist, path)
