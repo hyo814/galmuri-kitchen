@@ -1,10 +1,47 @@
 from functools import wraps
 
-from flask import Blueprint, abort, current_app, g, jsonify, session
+import requests
+from authlib.integrations.base_client import OAuthError
+from authlib.integrations.flask_client import OAuth
+from flask import Blueprint, abort, current_app, g, jsonify, redirect, session, url_for
 
 from .models import User, db
 
 bp = Blueprint("auth", __name__)
+
+PROVIDERS = {
+    "kakao": {
+        "authorize_url": "https://kauth.kakao.com/oauth/authorize",
+        "access_token_url": "https://kauth.kakao.com/oauth/token",
+        "api_base_url": "https://kapi.kakao.com/",
+        "client_kwargs": {"token_endpoint_auth_method": "client_secret_post"},
+    },
+    "google": {
+        "server_metadata_url": "https://accounts.google.com/.well-known/openid-configuration",
+        "client_kwargs": {"scope": "openid profile"},
+    },
+}
+
+
+def init_oauth(app):
+    oauth = OAuth(app)
+    for name, settings in PROVIDERS.items():
+        client_id = app.config.get(f"{name.upper()}_CLIENT_ID")
+        if client_id:
+            oauth.register(
+                name,
+                client_id=client_id,
+                client_secret=app.config.get(f"{name.upper()}_CLIENT_SECRET"),
+                **settings,
+            )
+    app.extensions["recipe_oauth"] = oauth
+
+
+def oauth_client(provider):
+    client = current_app.extensions["recipe_oauth"].create_client(provider) if provider in PROVIDERS else None
+    if client is None:
+        abort(404)
+    return client
 
 
 def login_user(user):
@@ -44,7 +81,11 @@ def upsert_user(provider, provider_id, nickname):
 
 @bp.get("/api/auth-options")
 def auth_options():
-    return jsonify(providers=[], dev_login=current_app.config["DEV_MODE"])
+    registry = current_app.extensions["recipe_oauth"]
+    return jsonify(
+        providers=[name for name in PROVIDERS if registry.create_client(name)],
+        dev_login=current_app.config["DEV_MODE"],
+    )
 
 
 @bp.post("/api/dev-login")
@@ -66,3 +107,28 @@ def me():
 def logout():
     session.clear()
     return jsonify(ok=True)
+
+
+@bp.get("/auth/login/<provider>")
+def oauth_login(provider):
+    client = oauth_client(provider)
+    return client.authorize_redirect(url_for("auth.oauth_callback", provider=provider, _external=True))
+
+
+@bp.get("/auth/callback/<provider>")
+def oauth_callback(provider):
+    client = oauth_client(provider)
+    try:
+        token = client.authorize_access_token()
+        if provider == "google":
+            info = token.get("userinfo") or {}
+            provider_id, nickname = info.get("sub"), info.get("name")
+        else:
+            info = client.get("v2/user/me", token=token).json()
+            provider_id, nickname = info.get("id"), (info.get("properties") or {}).get("nickname")
+    except (OAuthError, requests.RequestException, ValueError):
+        return redirect("/?login_error=1")
+    if not provider_id:
+        return redirect("/?login_error=1")
+    login_user(upsert_user(provider, str(provider_id), nickname))
+    return redirect("/")
