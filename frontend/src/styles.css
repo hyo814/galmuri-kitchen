@@ -17,6 +17,7 @@
   --inverse-text: #ffffff;
   --danger: #e5484d;
   --danger-tint: #fdeded;
+  --danger-line: #f5c2c4;
   --warn: #b86e00;
   --warn-tint: #fff3dc;
   --neutral-tint: #eef0f2;
@@ -44,6 +45,7 @@
     --inverse-text: #0e0f11;
     --danger: #ff6b6f;
     --danger-tint: #3b1c1f;
+    --danger-line: #6b2b30;
     --warn: #f2b04a;
     --warn-tint: #3a2c12;
     --neutral-tint: #2a2d32;
@@ -255,11 +257,20 @@ button {
   color: var(--chip-text);
 }
 
+/* 삭제 버튼: 실수로 누르지 않게 맨 아래에 두되, 버튼으로 보이도록 배경과 테두리를 준다 (사용자 요청) */
 .btn.danger-text {
-  min-height: 48px;
-  background: none;
+  min-height: 52px;
+  border: 1px solid var(--danger-line);
+  background: var(--danger-tint);
   color: var(--danger);
   font-size: 16px;
+}
+
+.btn.danger-text.inline {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 15px;
 }
 
 .btn.inline {
