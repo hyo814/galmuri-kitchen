@@ -1,5 +1,5 @@
 import math
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 
 from flask import Blueprint, abort, current_app, g, jsonify, request
 
@@ -8,6 +8,7 @@ from .auth import login_required
 from .ingredients import SEOUL, seoul_today
 from .locations import KINDS
 from .models import AiCall, db, utcnow
+from .validation import iso_date
 
 bp = Blueprint("scan", __name__, url_prefix="/api/scan")
 
@@ -62,11 +63,8 @@ def _quantity(value):
 
 
 def _purchased_on(value, today):
-    try:
-        day = date.fromisoformat(value)
-    except (TypeError, ValueError):
-        return None
-    return day.isoformat() if day <= today else None
+    day = iso_date(value)
+    return day.isoformat() if day and day <= today else None
 
 
 def clean_result(kind, raw, today):

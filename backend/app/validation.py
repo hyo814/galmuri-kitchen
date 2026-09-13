@@ -1,7 +1,12 @@
+import re
+from datetime import date
+
 from flask import abort
 from sqlalchemy.exc import IntegrityError
 
 from .models import db
+
+_ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 def commit_or_duplicate(message):
@@ -25,3 +30,13 @@ def integer(value, label, lo, hi):
     if isinstance(value, bool) or not isinstance(value, int) or not lo <= value <= hi:
         abort(400, f"{label} {lo}~{hi} 사이 정수로 입력해주세요.")
     return value
+
+
+def iso_date(value):
+    """YYYY-MM-DD 문자열만 날짜로 바꾸고, 아니면 None. date.fromisoformat은 3.11부터 20260101도 받아서 모양을 먼저 거른다."""
+    if not isinstance(value, str) or not _ISO_DATE.fullmatch(value):
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None

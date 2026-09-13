@@ -112,3 +112,43 @@ class AiCall(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     kind = db.Column(db.String(20), nullable=False)  # fridge | receipt | order | memo | recipe | link
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)
+
+
+class PublicRecipe(db.Model):
+    """식약처 COOKRCP01 레시피(또는 키가 없을 때 넣는 예시 레시피). 사용자 소유가 아니다."""
+
+    __tablename__ = "public_recipes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    rcp_seq = db.Column(db.String(20), nullable=False, unique=True)
+    title = db.Column(db.String(120), nullable=False)
+    category = db.Column(db.String(30))  # RCP_PAT2 (반찬, 국&찌개 …)
+    method = db.Column(db.String(30))  # RCP_WAY2 (끓이기, 볶기 …)
+    kcal = db.Column(db.Float)  # INFO_ENG
+    servings = db.Column(db.Integer, nullable=False, default=2)
+    ingredients_text = db.Column(db.Text, nullable=False, default="")  # RCP_PARTS_DTLS 원문
+    ingredients = db.Column(db.JSON, nullable=False, default=list)  # [{name, amount}]
+    ingredient_keys = db.Column(db.JSON, nullable=False, default=list)  # ingredients와 같은 순서의 매칭용 이름
+    steps = db.Column(db.JSON, nullable=False, default=list)  # [str]
+    image_url = db.Column(db.String(500))
+    is_sample = db.Column(db.Boolean, nullable=False, default=False)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class Recipe(db.Model):
+    __tablename__ = "recipes"
+    # 같은 공공 레시피를 두 번 저장하지 않는다(동시에 눌러도). public_recipe_id가 NULL인 행끼리는 겹쳐도 된다.
+    __table_args__ = (db.UniqueConstraint("user_id", "public_recipe_id"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = db.Column(db.String(60), nullable=False)
+    servings = db.Column(db.Integer, nullable=False, default=2)
+    ingredients = db.Column(db.JSON, nullable=False, default=list)  # [{name, amount}]
+    steps = db.Column(db.JSON, nullable=False, default=list)  # [str]
+    source = db.Column(db.String(20), nullable=False, default="mine")  # mine | public | ai | youtube | instagram | text
+    source_url = db.Column(db.String(500))
+    public_recipe_id = db.Column(db.Integer, db.ForeignKey("public_recipes.id", ondelete="SET NULL"))
+    image_url = db.Column(db.String(500))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)

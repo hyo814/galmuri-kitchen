@@ -176,3 +176,9 @@ def test_is_due_when_due_exactly_today():
     result = to_json(tool, fixed_today)
     assert result["due_on"] == "2026-06-15"
     assert result["is_due"] is True
+
+
+def test_bought_on_rejects_compact_date(client, login):
+    login()
+    res = create(client, bought_on="20260101")
+    assert (res.status_code, res.get_json()) == (400, {"error": "구매일은 YYYY-MM-DD 형식으로 입력해주세요."})

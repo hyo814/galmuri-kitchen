@@ -111,10 +111,39 @@ def test_ai_calls_migration_adds_and_removes_table_and_indexes(app):
         assert "ai_calls" not in tables
 
 
+def test_recipes_migration_adds_and_removes_tables(app):
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="a5b5c5d5e5f5")
+        upgrade(directory=MIGRATIONS, revision="a6b6c6d6e6f6")
+        with db.engine.connect() as conn:
+            inspector = sa.inspect(conn)
+            tables = set(inspector.get_table_names())
+            recipe_fks = {fk["referred_table"]: fk["options"].get("ondelete") for fk in inspector.get_foreign_keys("recipes")}
+            public_uniques = {tuple(u["column_names"]) for u in inspector.get_unique_constraints("public_recipes")}
+        assert {"recipes", "public_recipes"} <= tables
+        assert recipe_fks == {"users": "CASCADE", "public_recipes": "SET NULL"}
+        assert ("rcp_seq",) in public_uniques
+
+        downgrade(directory=MIGRATIONS, revision="a5b5c5d5e5f5")
+        with db.engine.connect() as conn:
+            tables = set(sa.inspect(conn).get_table_names())
+        assert not {"recipes", "public_recipes"} & tables
+
+
 def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)
         with db.engine.connect() as conn:
             tables = set(sa.inspect(conn).get_table_names())
-        assert {"users", "ingredients", "storage_locations", "staples", "item_rules", "kitchen_tools", "ai_calls"} <= tables
+        assert {
+            "users",
+            "ingredients",
+            "storage_locations",
+            "staples",
+            "item_rules",
+            "kitchen_tools",
+            "ai_calls",
+            "public_recipes",
+            "recipes",
+        } <= tables
         downgrade(directory=MIGRATIONS, revision="base")

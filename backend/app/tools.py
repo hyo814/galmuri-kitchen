@@ -6,7 +6,7 @@ from flask import Blueprint, abort, g, jsonify, request
 from .auth import get_owned_or_404, login_required
 from .ingredients import SEOUL, seoul_today
 from .models import KitchenTool, db
-from .validation import integer, text
+from .validation import integer, iso_date, text
 
 bp = Blueprint("tools", __name__, url_prefix="/api/tools")
 
@@ -50,9 +50,8 @@ def to_json(tool, today):
 def _optional_date(value, message):
     if value in (None, ""):
         return None
-    try:
-        parsed = date.fromisoformat(value)
-    except (TypeError, ValueError):
+    parsed = iso_date(value)
+    if parsed is None:
         abort(400, message)
     if parsed > seoul_today():
         abort(400, "구매일은 오늘 이후일 수 없어요.")

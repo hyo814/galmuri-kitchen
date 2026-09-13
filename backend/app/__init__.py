@@ -64,6 +64,7 @@ def create_app(test_config=None):
     from .ingredients import bp as ingredients_bp
     from .item_rules import bp as item_rules_bp
     from .locations import bp as locations_bp
+    from .recipes import bp as recipes_bp
     from .scan import bp as scan_bp
     from .staples import bp as staples_bp
     from .tools import bp as tools_bp
@@ -73,6 +74,7 @@ def create_app(test_config=None):
     app.register_blueprint(ingredients_bp)
     app.register_blueprint(item_rules_bp)
     app.register_blueprint(locations_bp)
+    app.register_blueprint(recipes_bp)
     app.register_blueprint(scan_bp)
     app.register_blueprint(staples_bp)
     app.register_blueprint(tools_bp)
@@ -94,6 +96,11 @@ def create_app(test_config=None):
         custom = e.description != type(e).description
         message = e.description if custom else DEFAULT_MESSAGES.get(e.code, "문제가 생겼어요.")
         return jsonify(error=message), e.code
+
+    @app.errorhandler(RecursionError)
+    def recursion_error(e):
+        # 지나치게 깊은 JSON(예: 중첩 배열)을 파싱할 때 C 확장이 없는 환경 등에서 발생할 수 있다.
+        return jsonify(error=DEFAULT_MESSAGES[400]), 400
 
     @app.route("/api/<path:_>", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
     def api_not_found(_):

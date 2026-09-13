@@ -11,7 +11,7 @@ from .auth import get_owned_or_404, login_required
 from .locations import choose_location, default_location, owned_location, user_locations
 from .matching import head_is, keyword_in
 from .models import Ingredient, ItemRule, Staple, db
-from .validation import text
+from .validation import iso_date, text
 
 bp = Blueprint("ingredients", __name__, url_prefix="/api/ingredients")
 
@@ -98,10 +98,10 @@ def _check_ingredient_cap(user_id, new_count):
 
 
 def _date(value, label):
-    try:
-        return date.fromisoformat(value)
-    except (TypeError, ValueError):
+    day = iso_date(value)
+    if day is None:
         abort(400, f"{label}은 YYYY-MM-DD 형식으로 입력해주세요.")
+    return day
 
 
 def parse_fields(data, creating, locations=None):
@@ -132,6 +132,8 @@ def parse_fields(data, creating, locations=None):
             fields["unit"] = text(raw, "단위는", 10)
     if creating or "purchased_on" in data:
         fields["purchased_on"] = _date(data.get("purchased_on"), "구입일")
+        if fields["purchased_on"] > seoul_today():  # 단건·일괄·수정이 모두 여기를 지난다
+            abort(400, "구입일은 오늘보다 뒤일 수 없어요.")
     if "expires_on" in data:
         value = data["expires_on"]
         fields["expires_on"] = _date(value, "유통기한") if value else None

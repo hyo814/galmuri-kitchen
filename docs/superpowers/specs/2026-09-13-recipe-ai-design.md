@@ -50,8 +50,8 @@ recipe-ai/
 
 - `users`: id, provider(`kakao`|`google`), provider_id, nickname, created_at. UNIQUE(provider, provider_id)
 - `ingredients`: id, user_id, name, quantity(float, 기본 1), unit(str, 기본 `개`), purchased_on(date, 필수), expires_on(date, 선택), created_at
-- `recipes`: id, user_id, title, ingredients(JSON `[{name, amount}]`), steps(JSON `[str]`), source(`mine`|`public`|`ai`), image_url(선택), created_at
-- `public_recipes`: id, rcp_seq(UNIQUE), title, ingredients_text(원문), ingredient_names(JSON, 파싱된 이름 목록), steps(JSON), image_url. 사용자 소유 아님.
+- `recipes`: id, user_id, title(1~60자), servings(1~20, 기본 2), ingredients(JSON `[{name, amount}]` 1~50개), steps(JSON `[str]` 0~30개), source(`mine`|`public`|`ai`|`youtube`|`instagram`|`text`), source_url(선택), public_recipe_id(선택, SET NULL), image_url(선택), created_at, updated_at. UNIQUE(user_id, public_recipe_id)
+- `public_recipes`: id, rcp_seq(UNIQUE), title, category(RCP_PAT2), method(RCP_WAY2), kcal(INFO_ENG), servings(원문 `N인분`, 없으면 2), ingredients_text(원문), ingredients(JSON `[{name, amount}]`, 파싱), ingredient_keys(JSON, ingredients와 같은 순서의 매칭용 이름), steps(JSON), image_url, is_sample(키 없을 때 넣는 예시 레시피), updated_at. 사용자 소유 아님.
 - `cook_logs`: id, user_id, recipe_id(선택, SET NULL), title, cooked_on(date), rating(1~5, 선택), memo(선택), photo_key(선택), created_at
 - `ai_calls`: id, user_id, kind(`fridge`|`receipt`|`order`|`memo`|`recipe`|`link`), created_at(인덱스)
 - `storage_locations`, `staples`, `item_rules`(14절), `shopping_items`(16절), `kitchen_tools`(18절)
@@ -80,8 +80,9 @@ recipe-ai/
 | PATCH/DELETE | `/api/ingredients/<id>` | 수정 / 삭제 |
 | POST | `/api/scan?kind=fridge\|receipt\|order` | multipart `image` → `{items:[{name, quantity, unit, location_kind}], purchased_on, sample}` |
 | GET/POST | `/api/recipes` | 내 레시피 목록 / 생성 |
-| GET/PUT/DELETE | `/api/recipes/<id>` | 상세 / 수정 / 삭제 |
-| GET | `/api/public-recipes/<id>` | 공공 레시피 상세 |
+| GET/PUT/DELETE | `/api/recipes/<id>` | 상세 / 수정 / 삭제. 상세의 `ingredients`는 `[{name, amount, have, matched_name}]`(현재 재고 기준) |
+| GET | `/api/public-recipes/<id>` | 공공 레시피 상세(같은 `ingredients` 모양) |
+| POST | `/api/public-recipes/<id>/save` | 내 레시피로 복사(source `public`) 201. 이미 저장했으면 그 레시피 200 |
 | GET | `/api/recommendations` | `{mine:[...], public:[...]}` 일치율 순, 각 항목에 missing 재료 |
 | POST | `/api/recommendations/ai` | AI 레시피 3개 생성(저장 안 함) |
 | GET/POST | `/api/cook-logs` | 기록 목록 / 생성(multipart: 필드 + 사진 + `usages` JSON) |
