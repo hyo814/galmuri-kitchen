@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;display=swap">
+  <style>
+    body { margin: 0; background: #0E0F11; }
+    a { color: #2FC07F; } a:hover { color: #5BD39C; }
+  </style>
+</helmet>
+<div style="position: relative; width: 384px; height: 832px; overflow: hidden; background: #0E0F11; color: #F1F2F4; font-family: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;">
+
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; padding: 28px 20px 0 20px;">
+    <div style="display: flex; flex-direction: column; gap: 4px;">
+      <h1 style="margin: 0; font-size: 26px; line-height: 34px; font-weight: 700; letter-spacing: -0.5px;">내 냉장고</h1>
+      <p style="margin: 0; font-size: 15px; line-height: 22px; color: #A6ACB5;">재료 6개 · 곧 먹어야 할 재료 2개</p>
+    </div>
+    <div style="display: flex; align-items: center; min-height: 44px; font-size: 15px; color: #7C838C;">로그아웃</div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 12px; margin: 20px 20px 0 20px; padding: 16px; min-height: 72px; box-sizing: border-box; background: #1A1C20; border-radius: 18px;">
+    <div style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0; border-radius: 20px; background: #3B1C1F; color: #FF6B6F;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v5.5"></path><path d="M12 16.5h.01"></path></svg>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1;">
+      <div style="font-size: 16px; line-height: 23px; font-weight: 600;">필수품 2개가 떨어졌어요</div>
+      <div style="font-size: 14px; line-height: 20px; color: #A6ACB5;">대파, 참기름</div>
+    </div>
+    <div style="display: flex; color: #5E656E;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+    </div>
+  </div>
+
+  <div style="position: relative; display: flex; align-items: center; margin-top: 16px;">
+    <div style="display: flex; gap: 8px; padding: 0 20px; overflow: hidden; white-space: nowrap; flex-grow: 1;">
+      <div style="display: flex; align-items: center; height: 44px; padding: 0 18px; border-radius: 22px; background: #F1F2F4; color: #0E0F11; font-size: 15px; font-weight: 600;">전체</div>
+      <div style="display: flex; align-items: center; height: 44px; padding: 0 16px; border-radius: 22px; background: #1A1C20; color: #D3D7DC; font-size: 15px; font-weight: 500;">냉장실</div>
+      <div style="display: flex; align-items: center; height: 44px; padding: 0 16px; border-radius: 22px; background: #1A1C20; color: #D3D7DC; font-size: 15px; font-weight: 500;">냉동실</div>
+      <div style="display: flex; align-items: center; height: 44px; padding: 0 16px; border-radius: 22px; background: #1A1C20; color: #D3D7DC; font-size: 15px; font-weight: 500;">김치냉장고</div>
+      <div style="display: flex; align-items: center; height: 44px; padding: 0 16px; border-radius: 22px; background: #1A1C20; color: #D3D7DC; font-size: 15px; font-weight: 500;">실온</div>
+      <div style="display: flex; align-items: center; height: 44px; padding: 0 16px; border-radius: 22px; background: #1A1C20; color: #D3D7DC; font-size: 15px; font-weight: 500;">찬장</div>
+    </div>
+    <div style="position: absolute; right: 0; top: 0; display: flex; align-items: center; height: 44px; padding: 0 20px 0 28px; background: linear-gradient(to right, rgba(14, 15, 17, 0), #0E0F11 30%);">
+      <div style="display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; background: #1A1C20; color: #D3D7DC;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9"></path><path d="M19 7h1"></path><circle cx="16" cy="7" r="2.5"></circle><path d="M4 17h2"></path><path d="M11 17h9"></path><circle cx="8.5" cy="17" r="2.5"></circle></svg>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; margin: 16px 20px 0 20px; padding: 6px 0; background: #1A1C20; border-radius: 20px;">
+    <div style="display: flex; align-items: center; gap: 12px; min-height: 72px; padding: 12px 20px; box-sizing: border-box;">
+      <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1;">
+        <div style="font-size: 17px; line-height: 25px; font-weight: 600;">우유</div>
+        <div style="font-size: 14px; line-height: 20px; color: #7C838C;">1개 · 냉장실 · 9월 10일 구입</div>
+      </div>
+      <div style="display: flex; align-items: center; height: 28px; padding: 0 10px; border-radius: 8px; background: #3B1C1F; color: #FF6B6F; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;">D-day</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; min-height: 72px; padding: 12px 20px; box-sizing: border-box;">
+      <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1;">
+        <div style="font-size: 17px; line-height: 25px; font-weight: 600;">두부</div>
+        <div style="font-size: 14px; line-height: 20px; color: #7C838C;">1모 · 김치냉장고 · 9월 11일 구입</div>
+      </div>
+      <div style="display: flex; align-items: center; height: 28px; padding: 0 10px; border-radius: 8px; background: #3B1C1F; color: #FF6B6F; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;">D-2</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; min-height: 72px; padding: 12px 20px; box-sizing: border-box;">
+      <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1;">
+        <div style="font-size: 17px; line-height: 25px; font-weight: 600;">애호박</div>
+        <div style="font-size: 14px; line-height: 20px; color: #7C838C;">1개 · 냉장실 · 9월 4일 구입</div>
+      </div>
+      <div style="display: flex; align-items: center; height: 28px; padding: 0 10px; border-radius: 8px; background: #3A2C12; color: #F2B04A; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;">구입 9일째</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; min-height: 72px; padding: 12px 20px; box-sizing: border-box;">
+      <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1;">
+        <div style="font-size: 17px; line-height: 25px; font-weight: 600;">계란</div>
+        <div style="font-size: 14px; line-height: 20px; color: #7C838C;">10개 · 냉장실 · 9월 8일 구입</div>
+      </div>
+      <div style="display: flex; align-items: center; height: 28px; padding: 0 10px; border-radius: 8px; background: #2A2D32; color: #A6ACB5; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;">D-12</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; min-height: 72px; padding: 12px 20px; box-sizing: border-box;">
+      <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1;">
+        <div style="font-size: 17px; line-height: 25px; font-weight: 600;">냉동만두</div>
+        <div style="font-size: 14px; line-height: 20px; color: #7C838C;">1봉 · 냉동실 · 8월 30일 구입</div>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; min-height: 72px; padding: 12px 20px; box-sizing: border-box;">
+      <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1;">
+        <div style="font-size: 17px; line-height: 25px; font-weight: 600;">간장</div>
+        <div style="font-size: 14px; line-height: 20px; color: #7C838C;">1병 · 찬장 · 7월 2일 구입</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 112px; background: linear-gradient(to bottom, rgba(14, 15, 17, 0), #0E0F11 36%);"></div>
+  <div style="position: absolute; left: 20px; right: 20px; bottom: 24px; display: flex; align-items: center; justify-content: center; gap: 6px; height: 56px; border-radius: 16px; background: #2FC07F; color: #07140D; font-size: 17px; font-weight: 600;">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+    재료 추가
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;display=swap">
+  <style>
+    body { margin: 0; background: #F3F4F6; }
+    a { color: #0F9D63; } a:hover { color: #0B7A4C; }
+  </style>
+</helmet>
+<div style="position: relative; width: 384px; height: 832px; overflow: hidden; background: #F3F4F6; color: #17191C; font-family: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;">
+  <div style="padding: 28px 20px 0 20px;">
+    <div style="font-size: 26px; line-height: 34px; font-weight: 700; letter-spacing: -0.5px;">내 냉장고</div>
+  </div>
+  <div style="position: absolute; inset: 0; background: rgba(15, 17, 20, 0.48);"></div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 20px; padding: 12px 20px 24px 20px; background: #FFFFFF; border-radius: 24px 24px 0 0;">
+    <div style="align-self: center; width: 40px; height: 4px; border-radius: 2px; background: #E1E4E8;"></div>
+    <div style="font-size: 22px; line-height: 30px; font-weight: 700; letter-spacing: -0.4px;">재료 추가</div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-size: 14px; line-height: 20px; font-weight: 500; color: #5B616B;">이름</div>
+      <div style="display: flex; align-items: center; height: 56px; padding: 0 16px; border-radius: 14px; background: #F3F4F6; font-size: 17px;">대파</div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="font-size: 14px; line-height: 20px; font-weight: 500; color: #5B616B;">수량</div>
+        <div style="display: flex; align-items: center; height: 56px; padding: 0 16px; border-radius: 14px; background: #F3F4F6; font-size: 17px; font-variant-numeric: tabular-nums;">1</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="font-size: 14px; line-height: 20px; font-weight: 500; color: #5B616B;">단위</div>
+        <div style="display: flex; align-items: center; height: 56px; padding: 0 16px; border-radius: 14px; background: #F3F4F6; font-size: 17px;">단</div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-size: 14px; line-height: 20px; font-weight: 500; color: #5B616B;">보관 위치</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 4px; height: 44px; padding: 0 14px; box-sizing: border-box; border-radius: 12px; background: #E7F6EF; border: 1.5px solid #0F9D63; color: #0B7A4C; font-size: 15px; font-weight: 600;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+          냉장실
+        </div>
+        <div style="display: flex; align-items: center; height: 44px; padding: 0 14px; border-radius: 12px; background: #F3F4F6; color: #3A3F46; font-size: 15px; font-weight: 500;">냉동실</div>
+        <div style="display: flex; align-items: center; height: 44px; padding: 0 14px; border-radius: 12px; background: #F3F4F6; color: #3A3F46; font-size: 15px; font-weight: 500;">김치냉장고</div>
+        <div style="display: flex; align-items: center; height: 44px; padding: 0 14px; border-radius: 12px; background: #F3F4F6; color: #3A3F46; font-size: 15px; font-weight: 500;">실온</div>
+        <div style="display: flex; align-items: center; height: 44px; padding: 0 14px; border-radius: 12px; background: #F3F4F6; color: #3A3F46; font-size: 15px; font-weight: 500;">찬장</div>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="font-size: 14px; line-height: 20px; font-weight: 500; color: #5B616B;">구입일</div>
+        <div style="display: flex; align-items: center; height: 56px; padding: 0 16px; border-radius: 14px; background: #F3F4F6; font-size: 17px; font-variant-numeric: tabular-nums;">2026. 9. 13.</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="font-size: 14px; line-height: 20px; font-weight: 500; color: #5B616B;">유통기한 <span style="color: #9097A1; font-weight: 400;">(선택)</span></div>
+        <div style="display: flex; align-items: center; height: 56px; padding: 0 16px; border-radius: 14px; background: #F3F4F6; font-size: 17px; color: #9097A1;">날짜 선택</div>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-top: 4px;">
+      <div style="display: flex; align-items: center; justify-content: center; height: 56px; border-radius: 16px; background: #EEF0F2; color: #3A3F46; font-size: 17px; font-weight: 600;">취소</div>
+      <div style="display: flex; align-items: center; justify-content: center; height: 56px; border-radius: 16px; background: #0F9D63; color: #FFFFFF; font-size: 17px; font-weight: 600;">저장</div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
