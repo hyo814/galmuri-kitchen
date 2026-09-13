@@ -25,7 +25,9 @@ def choose_location(locations, value):
         abort(400, "보관 위치를 먼저 만들어 주세요.")
     if value is None:
         return next((l for l in locations if l.kind == "fridge"), locations[0])
-    location = next((l for l in locations if not isinstance(value, bool) and l.id == value), None)
+    if isinstance(value, bool) or not isinstance(value, int):
+        abort(400, INVALID_LOCATION)
+    location = next((l for l in locations if l.id == value), None)
     if location is None:
         abort(400, INVALID_LOCATION)
     return location
