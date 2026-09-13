@@ -12,4 +12,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./
 COPY --from=web /web/dist /srv/frontend/dist
 ENV FRONTEND_DIST=/srv/frontend/dist
-CMD flask --app app db upgrade && exec gunicorn -w 2 -b 0.0.0.0:${PORT:-8000} "app:create_app()"
+CMD flask --app app db upgrade && exec gunicorn -w 2 -b 0.0.0.0:${PORT:-8000} --access-logfile - "app:create_app()"

@@ -1,8 +1,29 @@
+import sqlite3
 from datetime import datetime, timezone
 
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import MetaData, event
+from sqlalchemy.engine import Engine
 
-db = SQLAlchemy()
+NAMING_CONVENTION = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+db = SQLAlchemy(metadata=MetaData(naming_convention=NAMING_CONVENTION))
+
+
+@event.listens_for(Engine, "connect")
+def _enable_sqlite_foreign_keys(dbapi_connection, connection_record):
+    # SQLite has foreign keys OFF by default, so ondelete="CASCADE" (and
+    # phase 4's SET NULL) would silently do nothing here while Postgres
+    # enforces them in production.
+    if isinstance(dbapi_connection, sqlite3.Connection):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 
 def utcnow():

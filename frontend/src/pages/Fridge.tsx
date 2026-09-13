@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, ApiError, type Ingredient, type IngredientInput } from "../api";
+import { api, type Ingredient, type IngredientInput } from "../api";
 import IngredientForm from "../components/IngredientForm";
 
 function badge(item: Ingredient): string | null {
@@ -16,10 +16,8 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
   const [editing, setEditing] = useState<Ingredient | "new" | null>(null);
   const [error, setError] = useState("");
 
-  const fail = (e: unknown) => {
-    if (e instanceof ApiError && e.status === 401) onLogout();
-    else setError((e as Error).message);
-  };
+  // 401은 api()의 전역 unauthorized 핸들러(App.tsx)가 처리한다.
+  const fail = (e: unknown) => setError((e as Error).message);
 
   const load = () => api<Ingredient[]>("/api/ingredients").then(setItems, fail);
 

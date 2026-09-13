@@ -66,12 +66,14 @@ def test_google_callback_logs_in(oauth_app, monkeypatch):
     assert c.get("/api/me").get_json()["nickname"] == "구글사용자"
 
 
-def test_callback_error_redirects_with_flag(oauth_app, monkeypatch):
+def test_callback_error_redirects_with_flag(oauth_app, monkeypatch, caplog):
     kakao = oauth_client(oauth_app, "kakao")
 
     def denied():
         raise OAuthError(error="access_denied")
 
     monkeypatch.setattr(kakao, "authorize_access_token", denied)
-    res = oauth_app.test_client().get("/auth/callback/kakao")
+    with caplog.at_level("WARNING"):
+        res = oauth_app.test_client().get("/auth/callback/kakao")
     assert res.location == "/?login_error=1"
+    assert any("kakao" in r.message and "callback failed" in r.message for r in caplog.records)

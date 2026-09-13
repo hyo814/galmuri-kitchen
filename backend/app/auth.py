@@ -126,9 +126,11 @@ def oauth_callback(provider):
         else:
             info = client.get("v2/user/me", token=token).json()
             provider_id, nickname = info.get("id"), (info.get("properties") or {}).get("nickname")
-    except (OAuthError, requests.RequestException, ValueError):
+    except (OAuthError, requests.RequestException, ValueError) as e:
+        current_app.logger.warning("oauth %s callback failed: %r", provider, e)
         return redirect("/?login_error=1")
     if not provider_id:
+        current_app.logger.warning("oauth %s callback failed: missing provider_id", provider)
         return redirect("/?login_error=1")
     login_user(upsert_user(provider, str(provider_id), nickname))
     return redirect("/")

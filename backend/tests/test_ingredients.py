@@ -3,6 +3,7 @@ from datetime import date, timedelta
 import pytest
 
 from app.ingredients import ingredient_status, seoul_today
+from app.models import Ingredient, User, db
 
 TODAY = date(2026, 9, 13)
 
@@ -89,3 +90,17 @@ def test_other_users_ingredient_is_hidden(client, login):
     assert client.get("/api/ingredients").get_json() == []
     assert client.patch(f"/api/ingredients/{item['id']}", json={"name": "x"}).status_code == 404
     assert client.delete(f"/api/ingredients/{item['id']}").status_code == 404
+
+
+def test_deleting_user_cascades_ingredients(app):
+    with app.app_context():
+        user = User(provider="test", provider_id="cascade", nickname="x")
+        db.session.add(user)
+        db.session.commit()
+        db.session.add(Ingredient(user_id=user.id, name="계란", purchased_on=date(2026, 1, 1)))
+        db.session.commit()
+
+        db.session.delete(user)
+        db.session.commit()
+
+        assert Ingredient.query.filter_by(user_id=user.id).count() == 0
