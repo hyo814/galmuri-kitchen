@@ -36,6 +36,7 @@ const PAGES: Record<string, { title: string; icon: IconName; items: string[] }> 
 
 export default function ComingSoon({ route }: { route: string }) {
   const page = PAGES[route];
+  if (!page) return null;
   return (
     <div className="page">
       <header className="topbar">
