@@ -17,6 +17,10 @@ def create(client, **fields):
     return client.post("/api/recipes", json={**BODY, **fields})
 
 
+def list_recipes(client, query=""):
+    return client.get(f"/api/recipes{query}").get_json()
+
+
 def add_ingredient(client, name, **fields):
     body = {"name": name, "purchased_on": seoul_today().isoformat(), **fields}
     assert client.post("/api/ingredients", json=body).status_code == 201
@@ -75,12 +79,14 @@ def test_create_list_get_update_delete(client, login):
     }
     second = create(client, title="계란국").get_json()
 
-    listed = client.get("/api/recipes").get_json()
+    listed_body = list_recipes(client)
+    listed = listed_body["items"]
     assert [(r["title"], r["servings"], r["source"], r["ingredient_count"]) for r in listed] == [
         ("계란국", 1, "mine", 3),
         ("대파 계란볶음밥", 1, "mine", 3),
     ]
     assert set(listed[0]) == {"id", "title", "servings", "source", "image_url", "ingredient_count", "updated_at"}
+    assert listed_body["next_cursor"] is None
     assert client.get(f"/api/recipes/{recipe['id']}").get_json() == recipe
 
     res = client.put(
@@ -97,7 +103,7 @@ def test_create_list_get_update_delete(client, login):
     )
 
     assert client.delete(f"/api/recipes/{second['id']}").status_code == 204
-    assert [r["title"] for r in client.get("/api/recipes").get_json()] == ["볶음밥"]
+    assert [r["title"] for r in list_recipes(client)["items"]] == ["볶음밥"]
 
 
 @pytest.mark.parametrize(
@@ -129,7 +135,7 @@ def test_validation(client, login, fields, error):
     login()
     res = create(client, **fields)
     assert (res.status_code, res.get_json()) == (400, {"error": error})
-    assert client.get("/api/recipes").get_json() == []
+    assert list_recipes(client) == {"items": [], "next_cursor": None}
 
 
 def test_optional_fields_and_non_object_body(client, login):
@@ -155,7 +161,7 @@ def test_other_users_recipe_is_404(client, login):
     login("owner")
     recipe = create(client).get_json()
     login("intruder")
-    assert client.get("/api/recipes").get_json() == []
+    assert list_recipes(client) == {"items": [], "next_cursor": None}
     assert client.get(f"/api/recipes/{recipe['id']}").status_code == 404
     assert client.put(f"/api/recipes/{recipe['id']}", json=BODY).status_code == 404
     assert client.delete(f"/api/recipes/{recipe['id']}").status_code == 404
@@ -342,3 +348,67 @@ def test_max_recipes_per_user_is_1000():
 def test_save_public_recipe_out_of_range_id_is_404(client, login):
     login()
     assert client.post(f"/api/public-recipes/{2**40}/save").status_code == 404
+
+
+# --- fix round 1 (P-B2: 내 레시피 커서 페이지네이션) ---
+
+
+def _make_recipes(app, user_id, count):
+    from datetime import datetime, timedelta, timezone
+
+    with app.app_context():
+        base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        recipes = [
+            Recipe(user_id=user_id, title=f"레시피{i:02d}", servings=2, ingredients=[{"name": "재료", "amount": ""}], steps=[], source="mine")
+            for i in range(count)
+        ]
+        db.session.add_all(recipes)
+        db.session.flush()
+        for i, r in enumerate(recipes):
+            r.updated_at = base + timedelta(seconds=i // 2)  # 둘씩 짝지어 같은 시각(동률 처리 확인용)
+        db.session.commit()
+        return [r.id for r in recipes]
+
+
+def test_recipe_list_cursor_pages_through_65_without_duplicates_or_gaps(client, login, app):
+    user = login()
+    ids = _make_recipes(app, user.id, 65)
+
+    pages, seen = [], []
+    cursor = None
+    for _ in range(10):
+        body = list_recipes(client, f"?cursor={cursor}" if cursor else "")
+        pages.append(len(body["items"]))
+        seen.extend(r["id"] for r in body["items"])
+        cursor = body["next_cursor"]
+        if cursor is None:
+            break
+    assert pages == [30, 30, 5]
+    assert sorted(seen) == sorted(ids)
+    assert len(seen) == len(set(seen)) == 65
+
+
+def test_recipe_list_invalid_cursor_is_400(client, login):
+    login()
+    res = client.get("/api/recipes?cursor=not-a-valid-cursor!!")
+    assert (res.status_code, res.get_json()) == (400, {"error": "잘못된 요청이에요."})
+
+
+def test_recipe_list_pagination_never_leaks_other_users_recipes(client, login, app):
+    owner = login("owner")
+    owner_ids = _make_recipes(app, owner.id, 40)
+
+    intruder = login("intruder")
+    _make_recipes(app, intruder.id, 5)
+
+    with client.session_transaction() as s:  # 세션을 owner로 되돌린다(login()은 매번 새 사용자를 만든다)
+        s["user_id"] = owner.id
+    seen = []
+    cursor = None
+    for _ in range(10):
+        body = list_recipes(client, f"?cursor={cursor}" if cursor else "")
+        seen.extend(r["id"] for r in body["items"])
+        cursor = body["next_cursor"]
+        if cursor is None:
+            break
+    assert sorted(seen) == sorted(owner_ids)
