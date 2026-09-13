@@ -146,7 +146,7 @@ export default function LocationsSheet({ locations, onChanged, onClose }: Props)
           />
         </label>
         <KindPicker value={newKind} onChange={setNewKind} />
-        <p className="hint">냉장은 구입 7일, 냉동은 60일이 지나면 '오래됨'으로 표시해요. 실온은 표시하지 않아요.</p>
+        <p className="hint">냉장은 구입 7일, 냉동은 60일이 지나면 노랑 ‘구입 N일째’로 표시해요. 실온은 표시하지 않아요.</p>
         <button className="btn primary" disabled={create.busy}>
           위치 추가
         </button>
