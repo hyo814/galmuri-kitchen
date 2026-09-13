@@ -32,6 +32,7 @@
 | `fix/short-name-matching` | 1 (백엔드) |
 | `feature/quick-add` | 2 (재료 입력 시트) |
 | `feature/inventory-search-staples` | 3 (검색·필수품 시트) |
+| `feature/splash-screen` | 4 (시작 화면·앱 아이콘·파비콘) |
 
 각 태스크의 리뷰가 통과하면 컨트롤러가 순서대로 main에 `--no-ff`로 병합한다.
 
@@ -1005,6 +1006,263 @@ cd "/Users/limhyojin/PycharmProjects/ recipe-ai" && git add frontend && git comm
 
 ---
 
+### Task 4: 앱 시작 화면(스플래시)과 새 앱 아이콘
+
+사용자가 고른 "깔끔한 로고형"으로 만든다. 밝은 회색 바탕 가운데에 초록 앱 아이콘과 `냉장고 레시피`를 두고, 아래쪽에 한 줄 소개를 둔다.
+
+**Files:**
+- Create: `frontend/src/components/AppMark.tsx`, `frontend/src/components/Splash.tsx`
+- Modify: `frontend/src/App.tsx`, `frontend/src/styles.css`, `frontend/index.html`, `frontend/public/manifest.webmanifest`
+- Replace (다시 생성): `frontend/public/icon-192.png`, `frontend/public/icon-512.png`
+- Create: `frontend/public/favicon.ico` (16·32·48px, 브라우저 탭·북마크용), `frontend/public/apple-touch-icon.png` (180px)
+
+**Interfaces:**
+- Produces:
+  - `AppMark({ size })`: 인라인 SVG 로고. 초록 둥근 사각형 안에 흰 그릇과 김 세 줄. 색은 토큰 `--accent`, `--on-accent`를 쓴다.
+  - `Splash({ leaving, onGone })`: 화면 전체를 덮는다. `leaving`이 true가 되면 서서히 사라지고, 사라진 뒤 `onGone`을 부른다.
+  - App 동작:
+    - 스플래시는 로그인 확인(`/api/me`)이 끝나고 **최소 0.8초**가 지날 때까지 보인다.
+    - 로그인·재고·오프라인 화면은 스플래시 아래에서 미리 그려 둔다.
+    - JS가 뜨기 전에는 `index.html`의 정적 스플래시가 같은 모양으로 보인다.
+
+(브랜치: `feature/inventory-search-staples`가 main에 병합된 뒤 시작한다.)
+
+- [ ] **Step 0: 브랜치**
+
+```bash
+cd "/Users/limhyojin/PycharmProjects/ recipe-ai" && git checkout main && git checkout -b feature/splash-screen
+```
+
+- [ ] **Step 1: 로고 컴포넌트와 스플래시**
+
+`frontend/src/components/AppMark.tsx`:
+```tsx
+/** 앱 로고: 초록 둥근 사각형 + 흰 그릇과 김. 앱 아이콘 PNG와 같은 모양이다. */
+export default function AppMark({ size = 88 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 96 96" aria-hidden="true">
+      <rect width="96" height="96" rx="24" fill="var(--accent)" />
+      <path d="M20 50h56a28 28 0 0 1-56 0z" fill="var(--on-accent)" />
+      <path
+        d="M37 40c-4-5 4-8 0-13M48 40c-4-5 4-8 0-13M59 40c-4-5 4-8 0-13"
+        stroke="var(--on-accent)"
+        strokeWidth="4"
+        strokeLinecap="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
+```
+
+`frontend/src/components/Splash.tsx`:
+```tsx
+import { useEffect } from "react";
+import AppMark from "./AppMark";
+
+interface Props {
+  leaving: boolean;
+  onGone: () => void;
+}
+
+export default function Splash({ leaving, onGone }: Props) {
+  // 사라지는 전환(220ms) 뒤에 떼어 낸다. 동작 줄이기 설정이면 전환이 없으므로 타이머로 처리한다.
+  useEffect(() => {
+    if (!leaving) return;
+    const timer = setTimeout(onGone, 260);
+    return () => clearTimeout(timer);
+  }, [leaving, onGone]);
+
+  return (
+    <div className={`splash${leaving ? " leaving" : ""}`} role="status" aria-label="냉장고 레시피를 여는 중">
+      <div className="splash-mark">
+        <AppMark size={88} />
+      </div>
+      <p className="splash-name">냉장고 레시피</p>
+      <p className="splash-tagline">냉장고 속 재료로 오늘 뭐 해 먹을지 정해요</p>
+    </div>
+  );
+}
+```
+
+`frontend/src/styles.css` 끝에 추가한다:
+```css
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  background: var(--bg);
+  color: var(--text);
+  transition: opacity 220ms ease;
+}
+
+.splash.leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.splash-mark {
+  animation: splash-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.splash-name {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+}
+
+.splash-tagline {
+  position: absolute;
+  bottom: calc(40px + env(safe-area-inset-bottom));
+  margin: 0;
+  color: var(--text-3);
+  font-size: 14px;
+  text-align: center;
+}
+
+@keyframes splash-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash,
+  .splash-mark {
+    transition: none;
+    animation: none;
+  }
+}
+```
+
+- [ ] **Step 2: App에 연결**
+
+`frontend/src/App.tsx`:
+- import에 `useCallback`을 추가하고, `import Splash from "./components/Splash";`를 추가한다.
+- state와 effect를 추가한다. `offline` state 아래에 둔다:
+```tsx
+  // 시작 화면은 로그인 확인이 끝나고 최소 0.8초가 지날 때까지 보여 준다(너무 빨리 깜빡이지 않게)
+  const [minSplashDone, setMinSplashDone] = useState(false);
+  const [splashGone, setSplashGone] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setMinSplashDone(true), 800);
+    return () => clearTimeout(timer);
+  }, []);
+  const hideSplash = useCallback(() => setSplashGone(true), []);
+  const splash = !splashGone && (
+    <Splash leaving={minSplashDone && (user !== undefined || offline)} onGone={hideSplash} />
+  );
+```
+  (`leaving` 조건: 최소 시간이 지났고, 사용자 확인이 끝났거나 오프라인 화면이 떠야 할 때)
+- 반환하는 각 분기의 최상위를 `<>…{splash}</>`로 감싸서 스플래시가 위에 덮이게 한다.
+  - 오프라인 화면: `return (<>{splash}<div className="center">…</div></>);`
+  - `user === undefined`: `return splash || <p className="center muted">불러오는 중…</p>;` — 처음엔 스플래시만 보이고, `다시 시도`로 재확인할 때(스플래시가 이미 사라진 뒤)는 기존 문구가 보인다.
+  - 로그인: `return (<>{splash}<Login onLogin={setUser} /></>);`
+  - 로그인 후 화면: 기존 fragment 안의 맨 앞에 `{splash}`를 추가한다.
+
+- [ ] **Step 3: JS가 뜨기 전 정적 스플래시와 매니페스트**
+
+`frontend/index.html`:
+- `<head>` 끝에 인라인 스타일을 추가한다. 앱 CSS가 로드되기 전에도 같은 모양이 보이게 한다:
+```html
+    <style>
+      .boot-splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: #f3f4f6; color: #17191c; font: 700 24px/1.4 "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; letter-spacing: -0.4px; }
+      .boot-splash svg rect { fill: #0b7a4c; } .boot-splash svg path { fill: #fff; stroke: #fff; }
+      @media (prefers-color-scheme: dark) { .boot-splash { background: #0e0f11; color: #f1f2f4; } .boot-splash svg rect { fill: #2fc07f; } .boot-splash svg path { fill: #07140d; stroke: #07140d; } }
+    </style>
+```
+- 아이콘 링크 `<link rel="icon" href="/icon-192.png" />`를 다음 세 줄로 바꾼다:
+```html
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+```
+- `<div id="root"></div>`을 교체한다(React가 렌더하면 이 내용은 대체된다):
+```html
+    <div id="root"><div class="boot-splash" aria-hidden="true"><svg width="88" height="88" viewBox="0 0 96 96"><rect width="96" height="96" rx="24" /><path d="M20 50h56a28 28 0 0 1-56 0z" /><path d="M37 40c-4-5 4-8 0-13M48 40c-4-5 4-8 0-13M59 40c-4-5 4-8 0-13" stroke-width="4" stroke-linecap="round" style="fill:none" /></svg>냉장고 레시피</div></div>
+```
+  김 `path`는 인라인 `style="fill:none"`이 CSS의 `fill`보다 우선하므로 선만 그려진다.
+
+`frontend/public/manifest.webmanifest`에서 `"background_color"`를 `"#f3f4f6"`으로, `"theme_color"`를 `"#f3f4f6"`으로 바꾼다. 옛 팔레트를 새 디자인의 바탕색에 맞추는 것이다.
+
+- [ ] **Step 4: 새 앱 아이콘 PNG·ICO (한 번만 생성해 커밋, 스크립트는 남기지 않음)**
+
+Run:
+```bash
+cd "/Users/limhyojin/PycharmProjects/ recipe-ai/frontend" && python3 - <<'EOF'
+import math, struct, zlib
+
+GREEN, WHITE = (0x0B, 0x7A, 0x4C), (0xFF, 0xFF, 0xFF)
+
+def inside(u, v):
+    # 96 기준 좌표계로 AppMark와 같은 모양(그릇 반원 + 김 세 줄), 가장자리까지 초록(maskable)
+    x, y = u * 96, v * 96
+    if 50 <= y and (x - 48) ** 2 + (y - 50) ** 2 <= 28 ** 2:
+        return True
+    for cx in (37, 48, 59):
+        if 26 <= y <= 41:
+            wave = cx + 3.2 * math.sin((y - 27) / 13 * 2 * math.pi)
+            if abs(x - wave) <= 2.2:
+                return True
+    return False
+
+def png_bytes(size):
+    rows = []
+    for py in range(size):
+        row = bytearray([0])
+        for px in range(size):
+            # 4x4 서브샘플로 가장자리를 부드럽게 (16px 파비콘에서도 모양이 뭉개지지 않게)
+            hits = sum(inside((px + dx) / size, (py + dy) / size) for dx in (0.125, 0.375, 0.625, 0.875) for dy in (0.125, 0.375, 0.625, 0.875))
+            t = hits / 16
+            row += bytes(round(GREEN[i] + (WHITE[i] - GREEN[i]) * t) for i in range(3))
+        rows.append(bytes(row))
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(b"".join(rows), 9)) + chunk(b"IEND", b""))
+
+for size, path in [(192, "public/icon-192.png"), (512, "public/icon-512.png"), (180, "public/apple-touch-icon.png")]:
+    open(path, "wb").write(png_bytes(size))
+
+# favicon.ico: PNG를 담은 ICO(16·32·48). ICONDIR + ICONDIRENTRY들 + PNG 데이터
+images = [(n, png_bytes(n)) for n in (16, 32, 48)]
+offset = 6 + 16 * len(images)
+header = struct.pack("<HHH", 0, 1, len(images))
+entries, payload = b"", b""
+for n, data in images:
+    entries += struct.pack("<BBBBHHII", n, n, 0, 0, 1, 32, len(data), offset + len(payload))
+    payload += data
+open("public/favicon.ico", "wb").write(header + entries + payload)
+EOF
+file public/icon-192.png public/icon-512.png public/apple-touch-icon.png public/favicon.ico
+```
+Expected: `PNG image data, 192 x 192` / `512 x 512` / `180 x 180`, `MS Windows icon resource - 3 icons`. 생성한 512px 파일을 Read 도구로 열어 초록 바탕에 흰 그릇과 김이 보이는지 확인한다.
+
+- [ ] **Step 5: 빌드 확인**
+
+Run: `cd "/Users/limhyojin/PycharmProjects/ recipe-ai/frontend" && npm run build`
+Expected: 오류 없이 끝난다.
+
+- [ ] **Step 6: 커밋**
+
+```bash
+cd "/Users/limhyojin/PycharmProjects/ recipe-ai" && git add frontend && git commit -m "feat: 앱 시작 화면(로고형 스플래시)과 새 앱 아이콘·파비콘"
+```
+
+---
+
 ## 1d단계 완료 기준
 
 - 백엔드: SQLite와 PostgreSQL 테스트 모두 실패 0, 경고 0.
@@ -1019,3 +1277,4 @@ cd "/Users/limhyojin/PycharmProjects/ recipe-ai" && git add frontend && git comm
     - 있는 항목에는 `있음 · 진간장 (500ml)`처럼 연결된 재고 이름이 표시된다.
     - 필수품 `파`는 재고의 양파를 `있음`으로 잡지 않는다.
   - 조미료·소스 필수품은 냉장 보관 30일이 지나도 노랑 배지가 뜨지 않는다.
+  - 앱을 열면 로고 시작 화면이 잠깐 보인 뒤 부드럽게 사라지고, 브라우저 탭에 새 파비콘이 보인다.
