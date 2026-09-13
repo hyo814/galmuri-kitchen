@@ -3,7 +3,7 @@ from flask import Blueprint, abort, g, jsonify, request
 from .auth import get_owned_or_404, login_required
 from .matching import names_match
 from .models import Ingredient, Staple, db
-from .validation import text
+from .validation import commit_or_duplicate, text
 
 bp = Blueprint("staples", __name__, url_prefix="/api/staples")
 
@@ -46,7 +46,7 @@ def create_staple():
         abort(400, "이미 등록된 필수품이에요.")
     staple = Staple(user_id=g.user.id, name=name, category=category)
     db.session.add(staple)
-    db.session.commit()
+    commit_or_duplicate("이미 등록된 필수품이에요.")
     return jsonify(to_json(staple, ingredient_names(g.user.id))), 201
 
 

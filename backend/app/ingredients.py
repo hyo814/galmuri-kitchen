@@ -25,31 +25,34 @@ def seoul_today():
 
 
 def ingredient_status(purchased_on, expires_on, today, kind="fridge", rule=None):
-    """rule은 (warn_days, danger_days) 또는 None. 가장 심각한 상태를 고른다 (스펙 14절)."""
-    statuses = []
+    """판정 우선순위 (사용자 결정 2026-09-13, 스펙 14절):
+    1. 유통기한(expires_on)이 있으면 그것만 본다: D-3 이내면 urgent, 아니면 ok. 품목 규칙은 쓰지 않는다.
+    2. 냉동(freezer) 위치면 품목 규칙을 쓰지 않고 위치 종류 기준(60일).
+    3. 그 외 매칭되는 품목 규칙이 있으면 규칙.
+    4. 없으면 위치 종류 기준.
+    """
     if expires_on is not None:
-        statuses.append("urgent" if (expires_on - today).days <= URGENT_DAYS else "ok")
+        return "urgent" if (expires_on - today).days <= URGENT_DAYS else "ok"
     age = (today - purchased_on).days
-    if rule is not None:
+    if kind != "freezer" and rule is not None:
         warn_days, danger_days = rule
-        statuses.append("danger" if age >= danger_days else "old" if age >= warn_days else "ok")
-    if not statuses:
-        old_days = OLD_DAYS_BY_KIND[kind]
-        statuses.append("old" if old_days is not None and age >= old_days else "ok")
-    return max(statuses, key=SEVERITY.__getitem__)
+        return "danger" if age >= danger_days else "old" if age >= warn_days else "ok"
+    old_days = OLD_DAYS_BY_KIND[kind]
+    return "old" if old_days is not None and age >= old_days else "ok"
 
 
 def matching_rule(name, rules):
-    """이름에 키워드가 들어가는 규칙 중 빨강 일수가 가장 짧은 규칙의 (warn_days, danger_days)."""
+    """이름에 키워드가 들어가는 규칙 중 빨강 일수가 가장 짧은 규칙의 (warn_days, danger_days).
+    동률이면 노랑 일수, 그다음 id로 결정해 매번 같은 규칙을 고른다."""
     matched = [r for r in rules if keyword_in(r.keyword, name)]
     if not matched:
         return None
-    best = min(matched, key=lambda r: r.danger_days)
+    best = min(matched, key=lambda r: (r.danger_days, r.warn_days, r.id))
     return best.warn_days, best.danger_days
 
 
 def user_rules(user_id):
-    return ItemRule.query.filter_by(user_id=user_id).all()
+    return ItemRule.query.filter_by(user_id=user_id).order_by(ItemRule.id).all()
 
 
 def status_of(item, today, rules):
@@ -99,7 +102,15 @@ def parse_fields(data, creating):
             abort(400, "수량은 0보다 커야 해요.")
         fields["quantity"] = quantity
     if creating or "unit" in data:
-        fields["unit"] = str(data.get("unit") or "").strip()[:10] or "개"
+        raw = data.get("unit")
+        if raw is None or raw == "":
+            fields["unit"] = "개"
+        elif not isinstance(raw, str):
+            abort(400, "단위는 1~10자로 입력해 주세요.")
+        elif not raw.strip():
+            fields["unit"] = "개"
+        else:
+            fields["unit"] = text(raw, "단위는", 10)
     if creating or "purchased_on" in data:
         fields["purchased_on"] = _date(data.get("purchased_on"), "구입일")
     if "expires_on" in data:

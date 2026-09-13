@@ -68,6 +68,11 @@ def test_delete_rules_and_item_count(client, login):
     assert res.get_json()["error"] == "위치는 하나 이상 있어야 해요."
 
 
+def test_huge_location_id_not_found(client, login):
+    login()
+    assert client.patch("/api/locations/2147483648", json={"name": "x"}).status_code == 404
+
+
 def test_other_users_location_is_hidden(client, login):
     login("owner")
     location_id = client.get("/api/locations").get_json()[0]["id"]
