@@ -35,15 +35,25 @@ ROWS = [
 ]
 
 
+def _raw_response(body):
+    """실제 requests(stream=True) 응답을 흉내 낸다: raw.read(n, decode_content=True)는 최대 n바이트를 준다."""
+    data = json.dumps(body).encode("utf-8")
+
+    def read(n, decode_content=True):
+        return data[:n]
+
+    return SimpleNamespace(raise_for_status=lambda: None, raw=SimpleNamespace(read=read))
+
+
 def page(rows, total=None, code="INFO-000"):
     body = {"COOKRCP01": {"total_count": str(len(rows) if total is None else total), "row": rows, "RESULT": {"MSG": "", "CODE": code}}}
-    return SimpleNamespace(raise_for_status=lambda: None, json=lambda: body)
+    return _raw_response(body)
 
 
 def fake_get(monkeypatch, *responses):
     calls = []
 
-    def get(url, timeout):
+    def get(url, timeout, **kwargs):
         calls.append((url, timeout))
         response = responses[len(calls) - 1]
         if isinstance(response, Exception):
@@ -81,11 +91,30 @@ def test_row_fields_maps_cookrcp01_row():
         ],
         "ingredient_keys": ["연두부", "칵테일새우", "달걀", "시금치"],
         "steps": ["손질된 새우를 끓는 물에 데쳐 건진다.", "연두부와 달걀을 믹서에 갈아 새우와 섞는다."],
-        "image_url": "http://www.foodsafetykorea.go.kr/uploadimg/cook/10_00028_2.png",
+        "image_url": "https://www.foodsafetykorea.go.kr/uploadimg/cook/10_00028_2.png",  # S2: http → https로 정리
         "is_sample": False,
     }
     second = row_fields(ROWS[1])
     assert (second["servings"], second["kcal"], second["image_url"]) == (1, None, None)
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("http://www.foodsafetykorea.go.kr/x.png", "https://www.foodsafetykorea.go.kr/x.png"),
+        ("http://openapi.foodsafetykorea.go.kr/x.png", "https://openapi.foodsafetykorea.go.kr/x.png"),
+        ("https://www.foodsafetykorea.go.kr/x.png", "https://www.foodsafetykorea.go.kr/x.png"),
+        ("http://evil.example.com/x.png", None),  # 다른 호스트는 http를 https로 바꿔주지 않고 버린다
+        ("https://evil.example.com/x.png", "https://evil.example.com/x.png"),  # 이미 https면 호스트를 가리지 않는다
+        ("javascript:alert(1)", None),
+        ("ftp://www.foodsafetykorea.go.kr/x.png", None),
+        ("", None),
+        (None, None),
+        (123, None),
+    ],
+)
+def test_image_url_normalizes_known_hosts_to_https(value, expected):
+    assert public_module._image_url(value) == expected
 
 
 def test_sync_without_key_points_to_sample_seed(app, monkeypatch):
@@ -119,11 +148,58 @@ def test_sync_fetches_pages_and_upserts(app, monkeypatch):
     assert public_rows(app)[0] == ("28", "새우 두부 계란찜(개정)", False)
 
 
+def test_sync_page_boundaries_with_total_2500(app, monkeypatch):
+    # T-tests: 기본 PAGE_SIZE(1000)일 때 total 2500 → 1/1000, 1001/2000, 2001/3000
+    app.config["FOODSAFETY_API_KEY"] = "test-key"
+    calls = fake_get(monkeypatch, page(ROWS[:1], total=2500), page(ROWS[:1], total=2500), page(ROWS[1:], total=2500))
+    result = run(app, "sync-public-recipes")
+    assert result.exit_code == 0, result.output
+    assert [c[0] for c in calls] == [
+        "https://openapi.foodsafetykorea.go.kr/api/test-key/COOKRCP01/json/1/1000",
+        "https://openapi.foodsafetykorea.go.kr/api/test-key/COOKRCP01/json/1001/2000",
+        "https://openapi.foodsafetykorea.go.kr/api/test-key/COOKRCP01/json/2001/3000",
+    ]
+
+
+def test_sync_info_200_first_page_is_empty_result(app, monkeypatch):
+    # T-tests: INFO-200 첫 페이지 → 0건, 성공(exit 0), 예시 레시피도 그대로(진짜 레시피가 없으면 지우지 않는다)
+    app.config["FOODSAFETY_API_KEY"] = "test-key"
+    run(app, "seed-sample-recipes")
+    fake_get(monkeypatch, page([], code="INFO-200"))
+    result = run(app, "sync-public-recipes")
+    assert result.exit_code == 0, result.output
+    assert "식약처 레시피 0건을 받았어요. 새로 0건, 바뀐 것 0건, 예시 레시피 0건은 지웠어요." in result.output
+    assert len(public_rows(app)) == 12
+
+
+def test_sync_stops_at_total_row_ceiling(app, monkeypatch):
+    # S1: total_count가 999999라고 우겨도 MAX_TOTAL_ROWS(5000)에서 멈춘다 → 기본 PAGE_SIZE로 5번만 요청
+    app.config["FOODSAFETY_API_KEY"] = "test-key"
+    calls = fake_get(monkeypatch, *[page(ROWS[:1], total=999999) for _ in range(5)])
+    result = run(app, "sync-public-recipes")
+    assert result.exit_code == 0, result.output
+    assert len(calls) == 5
+    assert calls[-1][0] == "https://openapi.foodsafetykorea.go.kr/api/test-key/COOKRCP01/json/4001/5000"
+
+
+def test_sync_response_too_large_is_rejected(app, monkeypatch):
+    # S1: 스트리밍으로 MAX_RESPONSE_BYTES+1을 넘게 받으면 그 자리에서 그만두고 아무것도 쓰지 않는다
+    app.config["FOODSAFETY_API_KEY"] = "test-key"
+    monkeypatch.setattr(public_module, "MAX_RESPONSE_BYTES", 10)
+    run(app, "seed-sample-recipes")
+    fake_get(monkeypatch, page(ROWS[:1]))
+    result = run(app, "sync-public-recipes")
+    assert result.exit_code == 1
+    assert "식약처 응답이 예상보다 커요" in result.output
+    assert "test-key" not in result.output
+    assert len(public_rows(app)) == 12
+
+
 @pytest.mark.parametrize(
     "response, message",
     [
         (requests.ConnectionError("https://openapi.foodsafetykorea.go.kr/api/test-key/..."), "식약처 레시피를 받지 못했어요(1~1000번, ConnectionError)."),
-        (SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"oops": 1}), "식약처 레시피를 받지 못했어요(1~1000번, KeyError)."),
+        (_raw_response({"oops": 1}), "식약처 레시피를 받지 못했어요(1~1000번, KeyError)."),
         (page([], code="INFO-100"), "식약처 API가 오류를 돌려줬어요(INFO-100)."),
     ],
 )

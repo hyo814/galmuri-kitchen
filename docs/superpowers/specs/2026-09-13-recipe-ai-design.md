@@ -79,11 +79,11 @@ recipe-ai/
 | POST | `/api/ingredients/bulk` | 스캔 확인 후 일괄 생성 `{items:[{name, quantity, unit, purchased_on, expires_on?, location_id?}]}` 1~50개. 하나라도 틀리면 아무것도 만들지 않고 400 `{error: "N번째 재료: …", errors:[{index, error}]}` |
 | PATCH/DELETE | `/api/ingredients/<id>` | 수정 / 삭제 |
 | POST | `/api/scan?kind=fridge\|receipt\|order` | multipart `image` → `{items:[{name, quantity, unit, location_kind}], purchased_on, sample}` |
-| GET/POST | `/api/recipes` | 내 레시피 목록 / 생성 |
+| GET/POST | `/api/recipes` | 목록(생성일 아님, `updated_at`·id 내림차순 커서 페이지 25절) / 생성. 목록 `?limit=1~50(기본 30)&cursor=` → `{items:[...], next_cursor}` |
 | GET/PUT/DELETE | `/api/recipes/<id>` | 상세 / 수정 / 삭제. 상세의 `ingredients`는 `[{name, amount, have, matched_name}]`(현재 재고 기준) |
 | GET | `/api/public-recipes/<id>` | 공공 레시피 상세(같은 `ingredients` 모양) |
 | POST | `/api/public-recipes/<id>/save` | 내 레시피로 복사(source `public`) 201. 이미 저장했으면 그 레시피 200 |
-| GET | `/api/recommendations?limit=20` | `{mine:[...], public:[...], sample, inventory_count}` 점수 순. 항목: kind, id, title, image_url, servings, match_rate, have_count, total_count, missing(최대 5), urgent_used, urgent_names, score(= match_rate + 0.1 × urgent_used) |
+| GET | `/api/recommendations?section=all\|public&offset=0&limit=20` | 점수 순(25절: `section=all` 기본은 내 레시피 상위 10개 + 공공 레시피 한 페이지, `section=public`은 공공 레시피만). `{mine:[...10개], mine_total, public:[...], public_total, next_offset, sample, inventory_count}`(`section=public`이면 `mine`·`mine_total` 없음). 카드 항목: kind, id, title, image_url, servings, match_rate, have_count, total_count, missing(최대 5, 화면 표시용 이름), urgent_used, urgent_names, score(= match_rate + 0.1 × urgent_used) |
 | POST | `/api/recommendations/ai` | AI 레시피 3개 생성(저장 안 함) |
 | GET/POST | `/api/cook-logs` | 기록 목록 / 생성(multipart: 필드 + 사진 + `usages` JSON) |
 | DELETE | `/api/cook-logs/<id>` | 기록 삭제(재고 복원 안 함) |
@@ -346,3 +346,26 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **식품 브랜드 협찬 레시피** — 사용자가 더 모이면 제안한다. 추천 목록에 `광고` 표시를 달고 섞는다.
 - 하지 않음: 배너 광고(수익 적고 디자인 방향과 안 맞음), 사용자 재고·식습관 데이터 판매.
 - 유료화 전에 확인: 식약처 공공 레시피 상업 이용 조건·출처 표시, 유튜브·인스타그램 가져오기는 링크·요약만(본문·사진 저장 안 함), `갈무리부엌` 상표(KIPRIS).
+
+## 26. 목록 페이지네이션·무한 스크롤 (추가: 2026-09-13, 사용자 요구, 3a fix round 1)
+
+목록마다 크기와 쓰임에 맞춰 페이지 방식을 고른다.
+
+| 목록 | 최대 크기 | 방식 |
+|---|---|---|
+| 추천(공공 레시피) | ~1,100 | 서버 페이지(offset) + 무한 스크롤, 20개씩 |
+| 추천(내 레시피 섹션) | 1,000 | 첫 응답에 상위 10개만, 더 있으면 "내 레시피에서 더 보기" 링크 |
+| 내 레시피 | 1,000 | 서버 커서 페이지 + 무한 스크롤, 30개씩 |
+| 재고 | 2,000 | 서버는 전체(검색·필수품 매칭·요약에 필요), 화면은 50개씩 점진 렌더(무한 스크롤) |
+| 주방 도구·보관 위치·필수품·품목별 규칙 | 수십 개 | 페이지 없음 |
+| 앞으로(장보기·먹은 기록·조리 기록) | 커짐 | 서버 커서 페이지 + 무한 스크롤을 기본으로 한다 |
+
+무한 스크롤은 항상 접근성 대안을 둔다: 목록 끝에 보이는 `더 보기` 버튼(IntersectionObserver가 화면에 들어오면 자동으로 불러오고, 버튼은 그것 없이도 동작), 불러오는 중 표시, 끝 상태(`다 봤어요`, 한 페이지에 다 들어가면 숨김), 오류 시 `다시 불러오기`.
+
+**백엔드(3a fix round):**
+
+- `GET /api/recommendations`: `section`(`all` 기본 | `public`), `offset`(0 이상, 기본 0, 음수는 0으로), `limit`(1~50, 기본 20). `section=all`이면 `{mine: 내 레시피 상위 10개, mine_total, public: public[offset:offset+limit], public_total, next_offset, sample, inventory_count}`. `section=public`이면 `mine`·`mine_total` 없이 공공 레시피만 계산한다(내 레시피는 아예 계산하지 않는다). `next_offset`은 더 있으면 `offset+limit`, 없으면 `null`.
+  - **사용자별 순위 캐시**(재고가 클수록 매 요청 계산 비용이 커지는 문제 해결): 서명(오늘 날짜, 재고 이름·임박 여부, 내 레시피 개수·최대 id·최신 수정 시각, 공공 레시피 개수·최대 id·최신 수정 시각)이 그대로면 120초(TTL) 안에는 다시 계산하지 않는다. 프로세스별 캐시이고(여러 인스턴스로 늘면 Redis로 옮긴다), 500명분을 넘으면 오래된 것부터 지운다.
+- `GET /api/recipes`(내 레시피 목록): `limit`(1~50, 기본 30), `cursor`(불투명 문자열, 잘못됐으면 400). `updated_at`·id 내림차순 커서 페이지. 응답 `{items:[...], next_cursor}`(이전의 배열 응답에서 바뀜).
+
+**화면(3a 세 번째·네 번째 작업에서 연결):** `useInfiniteList` 훅과 `InfiniteSentinel` 컴포넌트로 공통화한다. 추천 탭은 첫 화면에서 `section=all`, 이후 `section=public`+offset으로 더 불러온다. 내 레시피 탭은 커서로 이어 붙인다.

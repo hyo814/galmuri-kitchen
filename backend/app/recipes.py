@@ -1,13 +1,17 @@
-from datetime import timezone
+import base64
+import binascii
+import time
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 from flask import Blueprint, abort, g, jsonify, request
+from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
 from .auth import get_owned_or_404, login_required
 from .ingredients import seasoning_names, seoul_today, status_of, user_rules
-from .matching import names_match, normalize
+from .matching import match_prepared, names_match, normalize, prepare
 from .models import Ingredient, PublicRecipe, Recipe, db
 from .recipe_parse import ingredient_key
 from .validation import integer, text
@@ -19,6 +23,8 @@ MAX_INGREDIENTS = 50
 MAX_STEPS = 30
 ALWAYS_HAVE = {"물"}  # 물은 재고에 넣지 않으니 늘 있는 것으로 본다
 URL_ERROR = "링크는 http:// 또는 https://로 시작하는 주소로 입력해주세요."
+RECIPE_LIST_PAGE_SIZE = 30
+RECOMMENDATION_PAGE_SIZE = 20
 
 
 def inventory(user_id):
@@ -161,63 +167,195 @@ def _public_or_404(recipe_id):
     return recipe
 
 
+def _prepared_stock(stock):
+    """재고 이름을 한 번씩만 normalize·tokenize해서 [(이름, prepare(이름))]로 둔다.
+    ponytail: 추천은 재료 키(최대 12개 × 레시피 최대 1,100개) × 재고를 비교한다 — 매 비교마다 정규식을 새로 돌리면
+    (재고 2,000개 기준) 실측 18초까지 걸렸다. 재고·키 양쪽을 한 번만 준비해 두면 비교 자체는 가벼운 문자열 연산만 남는다."""
+    return [(name, prepare(name)) for name, _ in stock]
+
+
+def _match_key_fast(key_prepared, prepared_stock):
+    """재료 키(미리 준비함)에 매칭되는 첫 재고 이름(없으면 None)과 있음 여부. match_key와 같은 규칙."""
+    for name, name_prepared in prepared_stock:
+        if match_prepared(key_prepared, name_prepared):
+            return name, True
+    return None, key_prepared[0] in ALWAYS_HAVE
+
+
+def _card(kind, recipe_id, title, image_url, servings, keys, names, prepared_stock, urgent, matches):
+    """겹치는 재료가 하나도 없으면(물만 겹쳐도) None."""
+    results = []
+    for key in keys:
+        if key not in matches:
+            matches[key] = _match_key_fast(prepare(key), prepared_stock)
+        results.append(matches[key])
+    matched = [name for name, _ in results if name]
+    if not matched:
+        return None
+    have = sum(1 for _, has in results if has)
+    urgent_names = list(dict.fromkeys(name for name in matched if name in urgent))
+    rate = round(have / len(keys), 2)
+    return {
+        "kind": kind,
+        "id": recipe_id,
+        "title": title,
+        "image_url": image_url,
+        "servings": servings,
+        "match_rate": rate,
+        "have_count": have,
+        "total_count": len(keys),
+        "missing": [name for name, (_, has) in zip(names, results) if not has][:5],
+        "urgent_used": len(urgent_names),
+        "urgent_names": urgent_names,
+        "score": round(rate + 0.1 * len(urgent_names), 2),
+    }
+
+
+def _rank(cards):
+    return sorted((c for c in cards if c), key=lambda c: (-c["score"], c["title"], c["id"]))
+
+
+# --- 추천 순위 캐시 (fix round 1: 재고가 클수록 매 요청 계산 비용이 커지는 문제 해결) ---
+# ponytail: 프로세스별 캐시다(gunicorn 워커마다 따로 가진다. 이 규모에선 충분하고, 여러 인스턴스로 늘면 Redis로 옮긴다).
+_RANK_CACHE = {}  # user_id -> {"signature", "created", "mine": [...]|None, "public": ([...], sample)|None}
+_RANK_CACHE_TTL = 120  # seconds (time.monotonic)
+_RANK_CACHE_MAX_USERS = 500
+
+
+def _rank_cache_signature(user_id, stock):
+    """서명이 같으면(오늘 날짜·재고·내 레시피·공공 레시피가 그대로면) 다시 계산하지 않는다."""
+    mine_count, mine_max_id, mine_max_updated = (
+        db.session.query(func.count(Recipe.id), func.max(Recipe.id), func.max(Recipe.updated_at)).filter_by(user_id=user_id).one()
+    )
+    public_count, public_max_id, public_max_updated = db.session.query(
+        func.count(PublicRecipe.id), func.max(PublicRecipe.id), func.max(PublicRecipe.updated_at)
+    ).one()
+    return (
+        seoul_today().isoformat(),
+        tuple(sorted(stock)),
+        mine_count,
+        mine_max_id,
+        _iso(mine_max_updated) if mine_max_updated else None,
+        public_count,
+        public_max_id,
+        _iso(public_max_updated) if public_max_updated else None,
+    )
+
+
+def _rank_cache_entry(user_id, signature):
+    now = time.monotonic()
+    entry = _RANK_CACHE.get(user_id)
+    if entry is None or entry["signature"] != signature or now - entry["created"] > _RANK_CACHE_TTL:
+        entry = {"signature": signature, "created": now, "mine": None, "public": None}
+        _RANK_CACHE[user_id] = entry
+        while len(_RANK_CACHE) > _RANK_CACHE_MAX_USERS:
+            oldest_id = min(_RANK_CACHE, key=lambda uid: _RANK_CACHE[uid]["created"])
+            del _RANK_CACHE[oldest_id]
+    return entry
+
+
+def _ranked_mine(user_id, prepared_stock, urgent):
+    matches = {}
+    return _rank(
+        _card(
+            "mine",
+            r.id,
+            r.title,
+            r.image_url,
+            r.servings,
+            [ingredient_key(i["name"]) for i in r.ingredients],
+            [i["name"] for i in r.ingredients],
+            prepared_stock,
+            urgent,
+            matches,
+        )
+        for r in Recipe.query.filter_by(user_id=user_id)
+    )
+
+
+def _ranked_public(prepared_stock, urgent):
+    matches = {}
+    rows = db.session.query(
+        PublicRecipe.id,
+        PublicRecipe.title,
+        PublicRecipe.image_url,
+        PublicRecipe.servings,
+        PublicRecipe.ingredient_keys,
+        PublicRecipe.ingredients,
+        PublicRecipe.is_sample,
+    ).all()
+    ranked = _rank(
+        _card("public", r.id, r.title, r.image_url, r.servings, r.ingredient_keys, [i["name"] for i in r.ingredients], prepared_stock, urgent, matches)
+        for r in rows
+    )
+    sample = bool(rows) and all(r.is_sample for r in rows)
+    return ranked, sample
+
+
 @bp.get("/recommendations")
 @login_required
 def recommendations():
-    """보유 재료 일치율 순 추천(스펙 4절). 재고와 겹치는 재료가 하나도 없는 레시피는 뺀다."""
-    limit = min(max(request.args.get("limit", 20, type=int), 1), 50)
+    """보유 재료 일치율 순 추천(스펙 4·25절). 재고와 겹치는 재료가 하나도 없는 레시피는 뺀다.
+    section=all(기본)은 내 레시피 상위 10개 + 공공 레시피 한 페이지, section=public은 공공 레시피만(내 레시피는 계산하지 않는다)."""
+    section = request.args.get("section", "all")
+    if section not in ("all", "public"):
+        abort(400, "잘못된 요청이에요.")
+    offset = max(request.args.get("offset", 0, type=int) or 0, 0)
+    limit = min(max(request.args.get("limit", RECOMMENDATION_PAGE_SIZE, type=int), 1), 50)
+
     stock = inventory(g.user.id)
     urgent = {name for name, is_urgent in stock if is_urgent}
-    # ponytail: 서로 다른 재료 키마다 재고 전체와 names_match로 비교한다 — 최악 O(레시피 × 재료 × 재고), 키가 겹치면 캐시로 줄어든다.
-    # 공공 레시피 1,100건 × 재고 60개에서 1.5초 안(테스트). 느려지면 재고 이름 단어로 역색인을 만들어 후보만 비교한다.
-    matches = {}
+    signature = _rank_cache_signature(g.user.id, stock)
+    entry = _rank_cache_entry(g.user.id, signature)
 
-    def card(kind, recipe_id, title, image_url, servings, keys, names):
-        results = []
-        for key in keys:
-            if key not in matches:
-                matches[key] = match_key(key, stock)
-            results.append(matches[key])
-        matched = [name for name, _ in results if name]
-        if not matched:
-            return None
-        have = sum(1 for _, has in results if has)
-        urgent_names = list(dict.fromkeys(name for name in matched if name in urgent))
-        rate = round(have / len(keys), 2)
-        return {
-            "kind": kind,
-            "id": recipe_id,
-            "title": title,
-            "image_url": image_url,
-            "servings": servings,
-            "match_rate": rate,
-            "have_count": have,
-            "total_count": len(keys),
-            "missing": [name for name, (_, has) in zip(names, results) if not has][:5],
-            "urgent_used": len(urgent_names),
-            "urgent_names": urgent_names,
-            "score": round(rate + 0.1 * len(urgent_names), 2),
-        }
+    if (section == "all" and entry["mine"] is None) or entry["public"] is None:
+        prepared_stock = _prepared_stock(stock)
+        if section == "all" and entry["mine"] is None:
+            entry["mine"] = _ranked_mine(g.user.id, prepared_stock, urgent)
+        if entry["public"] is None:
+            entry["public"] = _ranked_public(prepared_stock, urgent)
+    public_ranked, sample = entry["public"]
 
-    def ranked(cards):
-        return sorted((c for c in cards if c), key=lambda c: (-c["score"], c["title"], c["id"]))[:limit]
+    public_total = len(public_ranked)
+    public_page = public_ranked[offset : offset + limit]
+    next_offset = offset + limit if offset + limit < public_total else None
+    body = {"public": public_page, "public_total": public_total, "next_offset": next_offset, "sample": sample, "inventory_count": len(stock)}
+    if section == "all":
+        body["mine"] = entry["mine"][:10]
+        body["mine_total"] = len(entry["mine"])
+    return jsonify(**body)
 
-    mine = ranked(
-        card("mine", r.id, r.title, r.image_url, r.servings, [ingredient_key(i["name"]) for i in r.ingredients], [i["name"] for i in r.ingredients])
-        for r in Recipe.query.filter_by(user_id=g.user.id)
-    )
-    rows = db.session.query(
-        PublicRecipe.id, PublicRecipe.title, PublicRecipe.image_url, PublicRecipe.servings, PublicRecipe.ingredient_keys, PublicRecipe.is_sample
-    ).all()
-    public = ranked(card("public", r.id, r.title, r.image_url, r.servings, r.ingredient_keys, r.ingredient_keys) for r in rows)
-    return jsonify(mine=mine, public=public, sample=bool(rows) and all(r.is_sample for r in rows), inventory_count=len(stock))
+
+def _encode_cursor(recipe):
+    return base64.urlsafe_b64encode(f"{_iso(recipe.updated_at)}|{recipe.id}".encode()).decode()
+
+
+def _decode_cursor(value):
+    try:
+        raw = base64.urlsafe_b64decode(value.encode()).decode()
+        updated_iso, id_text = raw.rsplit("|", 1)
+        return datetime.fromisoformat(updated_iso), int(id_text)
+    except (ValueError, UnicodeDecodeError, binascii.Error):
+        abort(400, "잘못된 요청이에요.")
 
 
 @bp.get("/recipes")
 @login_required
 def list_recipes():
-    recipes = Recipe.query.filter_by(user_id=g.user.id).order_by(Recipe.id.desc()).all()
-    return jsonify([list_json(r) for r in recipes])
+    """updated_at·id 내림차순 커서 페이지(스펙 25절). limit(1~50, 기본 30) + next_cursor."""
+    limit = min(max(request.args.get("limit", RECIPE_LIST_PAGE_SIZE, type=int), 1), 50)
+    query = Recipe.query.filter_by(user_id=g.user.id)
+    cursor = request.args.get("cursor")
+    if cursor:
+        cursor_updated_at, cursor_id = _decode_cursor(cursor)
+        query = query.filter(
+            or_(Recipe.updated_at < cursor_updated_at, and_(Recipe.updated_at == cursor_updated_at, Recipe.id < cursor_id))
+        )
+    recipes = query.order_by(Recipe.updated_at.desc(), Recipe.id.desc()).limit(limit + 1).all()
+    has_more = len(recipes) > limit
+    recipes = recipes[:limit]
+    next_cursor = _encode_cursor(recipes[-1]) if has_more else None
+    return jsonify(items=[list_json(r) for r in recipes], next_cursor=next_cursor)
 
 
 @bp.post("/recipes")

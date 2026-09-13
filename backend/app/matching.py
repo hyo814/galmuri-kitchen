@@ -21,10 +21,29 @@ def _short_match(short, name, allow_suffix):
     return any(word == short or (allow_suffix and word.endswith(short)) for word in tokens(name))
 
 
-def _match_one_way(short_norm, long_norm, long_original):
-    if len(short_norm) >= 3:
+def prepare(name):
+    """normalize·tokens를 한 번만 계산해 둔다(추천처럼 하나를 여러 번 비교할 때 재계산을 피한다). fix round 1 (S1 성능)."""
+    norm = normalize(name)
+    return norm, len(norm), tokens(name)
+
+
+def _match_one_way_prepared(short_norm, short_len, long_norm, long_tokens):
+    if short_len >= 3:
         return short_norm in long_norm
-    return _short_match(short_norm, long_original, allow_suffix=len(short_norm) == 2)
+    return short_len > 0 and any(word == short_norm or (short_len == 2 and word.endswith(short_norm)) for word in long_tokens)
+
+
+def match_prepared(a, b):
+    """names_match와 같은 규칙이지만 양쪽 다 prepare()로 미리 계산해 둔 값을 받는다."""
+    a_norm, a_len, a_tokens = a
+    b_norm, b_len, b_tokens = b
+    if not a_norm or not b_norm:
+        return False
+    if a_len == b_len:
+        return _match_one_way_prepared(a_norm, a_len, b_norm, b_tokens) or _match_one_way_prepared(b_norm, b_len, a_norm, a_tokens)
+    if a_len < b_len:
+        return _match_one_way_prepared(a_norm, a_len, b_norm, b_tokens)
+    return _match_one_way_prepared(b_norm, b_len, a_norm, a_tokens)
 
 
 def names_match(a, b):
@@ -34,14 +53,7 @@ def names_match(a, b):
     - 1글자: 긴 쪽 단어와 정확히 같을 때 (파→양파 X, 무→단무지 X)
     길이가 같으면 양방향(a가 짧은 쪽/b가 짧은 쪽) 모두 확인해 대칭을 보장한다.
     """
-    na, nb = normalize(a), normalize(b)
-    if not na or not nb:
-        return False
-    if len(na) == len(nb):
-        return _match_one_way(na, nb, b) or _match_one_way(nb, na, a)
-    if len(na) > len(nb):
-        a, b, na, nb = b, a, nb, na
-    return _match_one_way(na, nb, b)
+    return match_prepared(prepare(a), prepare(b))
 
 
 def head_is(name, word):

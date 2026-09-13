@@ -3,6 +3,7 @@
 import json
 import math
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse
 
 import click
 import requests
@@ -16,12 +17,31 @@ bp = Blueprint("public_recipes", __name__, cli_group=None)  # 명령을 `flask s
 # http도 되지만 URL에 인증키가 들어가므로 https로 부른다 (2026-09-13 https 200 확인)
 API_URL = "https://openapi.foodsafetykorea.go.kr/api/{key}/COOKRCP01/json/{start}/{end}"
 PAGE_SIZE = 1000
+MAX_RESPONSE_BYTES = 20 * 1024 * 1024  # fix round 1 (S1): 응답 크기를 미리 제한해 메모리 고갈을 막는다
+MAX_TOTAL_ROWS = 5000  # fix round 1 (S1): total_count를 그대로 믿지 않고 상한을 둔다(식약처는 실제로 약 1,100건)
 SAMPLE_FILE = Path(__file__).parent / "data" / "sample_recipes.json"
+_IMAGE_HTTPS_HOSTS = {"www.foodsafetykorea.go.kr", "openapi.foodsafetykorea.go.kr"}  # fix round 1 (S2)
+MAX_IMAGE_URL = 500
 
 
 def _short(value, limit):
     value = value.strip() if isinstance(value, str) else ""
     return value[:limit] or None
+
+
+def _image_url(value):
+    """식약처 이미지 주소만 https로 정리한다. 그 외 호스트·스킴은 안전하지 않다고 보고 버린다(None)."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    parsed = urlparse(value)
+    if parsed.scheme == "http" and parsed.hostname in _IMAGE_HTTPS_HOSTS:
+        parsed = parsed._replace(scheme="https")
+    if parsed.scheme != "https" or not parsed.netloc:
+        return None
+    return urlunparse(parsed)[:MAX_IMAGE_URL] or None
 
 
 def _kcal(value):
@@ -48,7 +68,7 @@ def row_fields(row):
         "ingredients": ingredients,
         "ingredient_keys": [ingredient_key(i["name"]) for i in ingredients],
         "steps": split_steps(row),
-        "image_url": _short(row.get("ATT_FILE_NO_MAIN"), 500),
+        "image_url": _image_url(row.get("ATT_FILE_NO_MAIN")),
         "is_sample": False,
     }
 
@@ -91,17 +111,24 @@ def upsert(items):
 
 
 def fetch_rows(key):
-    """전체 행을 PAGE_SIZE씩 받는다. 한 페이지라도 실패하면 아무것도 쓰지 않고 멈춘다."""
+    """전체 행을 PAGE_SIZE씩 받는다. 한 페이지라도 실패하면 아무것도 쓰지 않고 멈춘다.
+    fix round 1 (S1): 응답은 스트리밍으로 읽어 MAX_RESPONSE_BYTES를 넘으면 즉시 그만두고,
+    total_count는 MAX_TOTAL_ROWS로 상한을 둔다(악의적이거나 잘못된 응답이 무한정 페이지를 돌게 하지 않는다)."""
     rows, start, total = [], 1, None
     while total is None or start <= total:
         end = start + PAGE_SIZE - 1
         try:
-            res = requests.get(API_URL.format(key=key, start=start, end=end), timeout=30)
+            res = requests.get(API_URL.format(key=key, start=start, end=end), timeout=30, stream=True)
             res.raise_for_status()
-            body = res.json()["COOKRCP01"]
+            data = res.raw.read(MAX_RESPONSE_BYTES + 1, decode_content=True)
+            if len(data) > MAX_RESPONSE_BYTES:
+                raise click.ClickException("식약처 응답이 예상보다 커요. 잠시 후 다시 시도해주세요.")
+            body = json.loads(data)["COOKRCP01"]
             code = body["RESULT"]["CODE"]
             page = body.get("row") or []
-            total = int(body.get("total_count") or 0)
+            total = min(int(body.get("total_count") or 0), MAX_TOTAL_ROWS)
+        except click.ClickException:
+            raise
         except (requests.RequestException, ValueError, KeyError, TypeError) as e:
             # 요청 URL에 인증키가 들어 있으니 예외 내용은 찍지 않는다
             raise click.ClickException(f"식약처 레시피를 받지 못했어요({start}~{end}번, {type(e).__name__}).")
