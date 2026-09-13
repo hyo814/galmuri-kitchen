@@ -4,12 +4,16 @@ interface Props {
   title: string;
   description?: string;
   action?: ReactNode;
+  /** 시트 크기·모양 변형(예: "scan-tall") */
+  className?: string;
+  /** 제목을 화면에서 숨기고 스크린리더에만 읽힌다(로딩·실패 화면처럼 본문이 제목을 대신할 때) */
+  hideHeader?: boolean;
   onClose: () => void;
   children: ReactNode;
 }
 
 /** 네이티브 <dialog> 바텀시트. Esc·안드로이드 뒤로가기·배경 탭으로 닫힌다. */
-export default function Sheet({ title, description, action, onClose, children }: Props) {
+export default function Sheet({ title, description, action, className, hideHeader, onClose, children }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const pointerDownOnDialog = useRef(false);
   const titleId = useId();
@@ -25,7 +29,7 @@ export default function Sheet({ title, description, action, onClose, children }:
   return (
     <dialog
       ref={ref}
-      className="sheet"
+      className={className ? `sheet ${className}` : "sheet"}
       aria-labelledby={titleId}
       onClose={onClose}
       onPointerDown={(e) => {
@@ -39,7 +43,7 @@ export default function Sheet({ title, description, action, onClose, children }:
     >
       <div className="sheet-body">
         <div className="sheet-handle" aria-hidden="true" />
-        <div className="sheet-header">
+        <div className={hideHeader ? "sheet-header sr-only" : "sheet-header"}>
           <div>
             <h2 id={titleId}>{title}</h2>
             {description && <p className="sheet-desc">{description}</p>}
