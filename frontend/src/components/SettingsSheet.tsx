@@ -1,9 +1,12 @@
 import Icon from "./Icon";
 import Sheet from "./Sheet";
 
-export type SettingsTarget = "locations";
+export type SettingsTarget = "locations" | "staples";
 
-const MENU: { target: SettingsTarget; label: string }[] = [{ target: "locations", label: "보관 위치" }];
+const MENU: { target: SettingsTarget; label: string }[] = [
+  { target: "locations", label: "보관 위치" },
+  { target: "staples", label: "필수품" },
+];
 
 interface Props {
   onOpen: (target: SettingsTarget) => void;

@@ -9,6 +9,13 @@ export interface StorageLocation {
   item_count: number;
 }
 
+export interface Staple {
+  id: number;
+  name: string;
+  category: string;
+  in_stock: boolean;
+}
+
 export interface User {
   id: number;
   nickname: string;

@@ -677,6 +677,60 @@ button {
   font-size: 16px;
 }
 
+.banner > svg {
+  flex-shrink: 0;
+  color: var(--placeholder);
+}
+
+.stock-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-3);
+  font-size: 14px;
+}
+
+.text-btn.strong {
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+.add-row {
+  display: flex;
+  gap: 8px;
+}
+
+.add-row .input {
+  flex: 1;
+  min-width: 0;
+  height: 52px;
+}
+
+.add-row .btn {
+  width: 72px;
+  min-height: 52px;
+  padding: 0;
+  border-radius: 14px;
+  font-size: 16px;
+}
+
+.staple-name {
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     scroll-behavior: auto !important;

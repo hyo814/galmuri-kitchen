@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { api, type Ingredient, type IngredientInput, type StorageLocation } from "../api";
+import { api, type Ingredient, type IngredientInput, type Staple, type StorageLocation } from "../api";
 import Icon from "../components/Icon";
 import IngredientForm from "../components/IngredientForm";
 import LocationsSheet from "../components/LocationsSheet";
 import SettingsSheet, { type SettingsTarget } from "../components/SettingsSheet";
+import StaplesSheet from "../components/StaplesSheet";
 import { formatDate, formatQuantity } from "../format";
 
 function badge(item: Ingredient): string | null {
@@ -16,6 +17,7 @@ function badge(item: Ingredient): string | null {
 export default function Fridge({ onLogout }: { onLogout: () => void }) {
   const [items, setItems] = useState<Ingredient[] | null>(null);
   const [locations, setLocations] = useState<StorageLocation[]>([]);
+  const [staples, setStaples] = useState<Staple[]>([]);
   const [filter, setFilter] = useState<number | "all">("all");
   const [editing, setEditing] = useState<Ingredient | "new" | null>(null);
   const [panel, setPanel] = useState<"settings" | SettingsTarget | null>(null);
@@ -26,6 +28,7 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
     Promise.all([
       api<Ingredient[]>("/api/ingredients").then(setItems),
       api<StorageLocation[]>("/api/locations").then(setLocations),
+      api<Staple[]>("/api/staples").then(setStaples),
     ]).catch((e: Error) => setError(e.message));
 
   useEffect(() => {
@@ -57,6 +60,7 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
   const defaultLocationId =
     activeFilter !== "all" ? activeFilter : (locations.find((l) => l.kind === "fridge") ?? locations[0])?.id;
   const soon = items?.filter((i) => i.status === "urgent").length ?? 0;
+  const missing = staples.filter((s) => !s.in_stock);
 
   return (
     <div className="page">
@@ -78,6 +82,19 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
         <p className="error" role="alert">
           {error}
         </p>
+      )}
+
+      {missing.length > 0 && (
+        <button className="banner" onClick={() => setPanel("staples")}>
+          <span className="banner-icon">
+            <Icon name="alert" size={22} />
+          </span>
+          <span className="row-main">
+            <span className="banner-title">필수품 {missing.length}개가 떨어졌어요</span>
+            <span className="banner-sub">{missing.map((s) => s.name).join(", ")}</span>
+          </span>
+          <Icon name="chevron" />
+        </button>
       )}
 
       {locations.length > 0 && (
@@ -156,6 +173,7 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
       {panel === "locations" && (
         <LocationsSheet locations={locations} onChanged={load} onClose={() => setPanel(null)} />
       )}
+      {panel === "staples" && <StaplesSheet staples={staples} onChanged={load} onClose={() => setPanel(null)} />}
     </div>
   );
 }
