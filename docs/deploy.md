@@ -66,7 +66,6 @@
 | `FOODSAFETY_API_KEY` | 선택 | 레시피 추천 구현 후 | 식약처 공공데이터포털(COOKRCP01) |
 | `FOOD_NUTRITION_API_KEY` | 선택 | 영양 계산기 구현 후 | 식약처 공공데이터포털(식품영양성분 DB) |
 | `YOUTUBE_API_KEY` | 선택 | 레시피 영상 연동 후 | Google Cloud Console(YouTube Data API v3) |
-| `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | 선택 | 장보기(가격 비교) 구현 후 | 네이버 개발자센터 |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | 선택 | 사진 업로드 구현 후 | Cloudflare 대시보드 R2 |
 | `DEV_MODE` | 로컬 전용 | 로컬 개발 | 운영(Render)에는 **넣지 않는다** |
 
