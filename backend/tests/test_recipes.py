@@ -266,6 +266,19 @@ def test_deeply_nested_json_body_returns_400_not_500(client, login):
     assert (res.status_code, res.get_json()) == (400, {"error": DEFAULT_MESSAGES[400]})
 
 
+def test_recursion_error_returns_400_json(client, login, monkeypatch):
+    # R1: 파서 환경과 상관없이 RecursionError 처리기가 실제로 JSON 400을 주는지 확인한다
+    from app import DEFAULT_MESSAGES
+
+    def boom(*_args, **_kwargs):
+        raise RecursionError("too deep")
+
+    monkeypatch.setattr(recipes_module, "parse_recipe", boom)
+    login()
+    res = client.post("/api/recipes", json={"title": "x"})
+    assert (res.status_code, res.get_json()) == (400, {"error": DEFAULT_MESSAGES[400]})
+
+
 def test_steps_raw_list_over_100_rejected_before_filtering_empties(client, login):
     # R4: 빈 문자열만 101개 보내면 다듬은 뒤엔 0개지만, 원본 길이 자체를 먼저 막는다(all()로 다 훑지 않는다)
     login()
