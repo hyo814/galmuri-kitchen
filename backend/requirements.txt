@@ -7,3 +7,4 @@ python-dotenv==1.2.3
 tzdata==2026.4
 gunicorn==26.2.0
 psycopg[binary]==3.3.5
+anthropic==1.5.0

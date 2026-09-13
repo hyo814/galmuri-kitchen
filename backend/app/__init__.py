@@ -41,6 +41,9 @@ def create_app(test_config=None):
         GOOGLE_CLIENT_ID=os.environ.get("GOOGLE_CLIENT_ID"),
         GOOGLE_CLIENT_SECRET=os.environ.get("GOOGLE_CLIENT_SECRET"),
         FRONTEND_DIST=os.environ.get("FRONTEND_DIST", DEFAULT_FRONTEND_DIST),
+        ANTHROPIC_API_KEY=os.environ.get("ANTHROPIC_API_KEY"),
+        CLAUDE_MODEL=os.environ.get("CLAUDE_MODEL", "claude-sonnet-5"),
+        AI_DAILY_SCAN_LIMIT=int(os.environ.get("AI_DAILY_SCAN_LIMIT", "10")),
     )
     if test_config:
         app.config.update(test_config)
@@ -60,6 +63,7 @@ def create_app(test_config=None):
     from .ingredients import bp as ingredients_bp
     from .item_rules import bp as item_rules_bp
     from .locations import bp as locations_bp
+    from .scan import bp as scan_bp
     from .staples import bp as staples_bp
     from .tools import bp as tools_bp
 
@@ -68,6 +72,7 @@ def create_app(test_config=None):
     app.register_blueprint(ingredients_bp)
     app.register_blueprint(item_rules_bp)
     app.register_blueprint(locations_bp)
+    app.register_blueprint(scan_bp)
     app.register_blueprint(staples_bp)
     app.register_blueprint(tools_bp)
 

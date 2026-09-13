@@ -103,3 +103,12 @@ class KitchenTool(db.Model):
     check_every_months = db.Column(db.Integer)
     last_checked_on = db.Column(db.Date)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class AiCall(db.Model):
+    __tablename__ = "ai_calls"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    kind = db.Column(db.String(20), nullable=False)  # fridge | receipt | order | memo | recipe | link
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, index=True)

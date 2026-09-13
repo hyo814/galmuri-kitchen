@@ -95,5 +95,5 @@ def test_upgrade_to_head_and_back_to_base(app):
         upgrade(directory=MIGRATIONS)
         with db.engine.connect() as conn:
             tables = set(sa.inspect(conn).get_table_names())
-        assert {"users", "ingredients", "storage_locations", "staples", "item_rules", "kitchen_tools"} <= tables
+        assert {"users", "ingredients", "storage_locations", "staples", "item_rules", "kitchen_tools", "ai_calls"} <= tables
         downgrade(directory=MIGRATIONS, revision="base")

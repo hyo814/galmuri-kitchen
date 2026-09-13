@@ -14,6 +14,7 @@ TEST_CONFIG = {
     "SQLALCHEMY_DATABASE_URI": database_url(TEST_DATABASE_URL),
     "DEV_MODE": True,
     "SESSION_COOKIE_SECURE": False,
+    "ANTHROPIC_API_KEY": None,  # 셸에 키가 있어도 테스트는 예시 모드로 시작한다
 }
 
 
