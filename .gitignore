@@ -1,0 +1,12 @@
+.idea/workspace.xml
+.omc/
+.env
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+frontend/dist/
+uploads/
+*.sqlite3
+*.db
+.DS_Store
