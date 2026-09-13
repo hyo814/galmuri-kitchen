@@ -22,9 +22,10 @@ def add_months(day, months):
 
 
 def check_base(tool):
-    """점검 기준일: 마지막 점검일 → 구매일 → 등록일(서울 날짜)."""
-    if tool.last_checked_on or tool.bought_on:
-        return tool.last_checked_on or tool.bought_on
+    """점검 기준일: last_checked_on·bought_on 중 늦은 날짜(둘 다 없으면 created_at의 서울 날짜)."""
+    dates = [d for d in (tool.last_checked_on, tool.bought_on) if d]
+    if dates:
+        return max(dates)
     created = tool.created_at
     if created.tzinfo is None:  # SQLite는 timezone 없이 돌려준다(UTC로 저장됨)
         created = created.replace(tzinfo=timezone.utc)
@@ -50,9 +51,12 @@ def _optional_date(value, message):
     if value in (None, ""):
         return None
     try:
-        return date.fromisoformat(value)
+        parsed = date.fromisoformat(value)
     except (TypeError, ValueError):
         abort(400, message)
+    if parsed > seoul_today():
+        abort(400, "구매일은 오늘 이후일 수 없어요.")
+    return parsed
 
 
 def parse_fields(data, creating):

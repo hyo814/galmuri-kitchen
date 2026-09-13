@@ -19,6 +19,8 @@ TEST_CONFIG = {
 
 @pytest.fixture
 def make_app():
+    apps = []
+
     def _make(**overrides):
         app = create_app({**TEST_CONFIG, **overrides})
         with app.app_context():
@@ -27,9 +29,17 @@ def make_app():
             if not TEST_DATABASE_URL.startswith("sqlite"):
                 db.drop_all()
             db.create_all()
+        apps.append(app)
         return app
 
-    return _make
+    yield _make
+
+    # Postgres connections aren't closed by garbage collection alone; dispose
+    # each app's engine explicitly so the pool doesn't leak across tests.
+    for app in apps:
+        with app.app_context():
+            db.session.remove()
+            db.engine.dispose()
 
 
 @pytest.fixture

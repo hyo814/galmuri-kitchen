@@ -787,7 +787,8 @@ button {
 }
 
 .tab[aria-current="page"] {
-  color: var(--text);
+  color: var(--accent-strong);
+  font-weight: 700;
 }
 
 a.row-btn {
@@ -827,4 +828,10 @@ a.row-btn > svg {
   background: var(--warn-tint);
   color: var(--warn);
   font-weight: 600;
+}
+
+/* 점검/교체 버튼이 상태 박스 배경(연한 색)에 묻히지 않도록 테두리와 대비되는 배경을 준다 */
+.status-box .btn {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
 }

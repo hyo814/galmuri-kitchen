@@ -1,9 +1,12 @@
-from datetime import date, timedelta
+import types
+from datetime import date, datetime, timedelta
 
 import pytest
 
 from app.ingredients import seoul_today
-from app.tools import add_months
+from app.tools import add_months, check_base, to_json
+
+TOMORROW = (seoul_today() + timedelta(days=1)).isoformat()
 
 
 @pytest.mark.parametrize(
@@ -80,6 +83,8 @@ def test_list_sorts_due_first(client, login):
         {"check_every_months": True},
         {"check_every_months": "6"},
         {"bought_on": "어제"},
+        {"bought_on": "9999-12-31"},
+        {"bought_on": TOMORROW},
     ],
 )
 def test_create_validation(client, login, fields):
@@ -87,6 +92,15 @@ def test_create_validation(client, login, fields):
     res = create(client, **fields)
     assert res.status_code == 400
     assert "error" in res.get_json()
+
+
+def test_patch_future_bought_on_rejected(client, login):
+    login()
+    tool = create(client).get_json()
+    res = client.patch(f"/api/tools/{tool['id']}", json={"bought_on": "9999-12-31"})
+    assert res.status_code == 400
+    assert "error" in res.get_json()
+    assert client.get("/api/tools").status_code == 200
 
 
 def test_patch_clears_cycle_and_dates(client, login):
@@ -118,3 +132,47 @@ def test_delete(client, login):
     tool = create(client).get_json()
     assert client.delete(f"/api/tools/{tool['id']}").status_code == 204
     assert client.get("/api/tools").get_json() == []
+
+
+def test_patch_name_only_keeps_other_fields(client, login):
+    login()
+    tool = create(client, bought_on="2026-01-01", check_every_months=6).get_json()
+    res = client.patch(f"/api/tools/{tool['id']}", json={"name": "새 이름"})
+    assert res.status_code == 200
+    body = res.get_json()
+    assert (body["name"], body["check_every_months"], body["bought_on"]) == ("새 이름", 6, "2026-01-01")
+
+
+def test_check_base_uses_later_of_check_and_purchase():
+    tool = types.SimpleNamespace(last_checked_on=date(2025, 1, 1), bought_on=date(2025, 6, 1), created_at=None)
+    assert check_base(tool) == date(2025, 6, 1)
+
+
+def test_check_base_falls_back_to_created_at_seoul_date_near_midnight():
+    tool = types.SimpleNamespace(
+        last_checked_on=None, bought_on=None, created_at=datetime(2026, 9, 13, 15, 30)
+    )
+    assert check_base(tool) == date(2026, 9, 14)
+
+
+def test_check_base_falls_back_to_created_at_seoul_date_before_midnight():
+    tool = types.SimpleNamespace(
+        last_checked_on=None, bought_on=None, created_at=datetime(2026, 9, 13, 14, 59)
+    )
+    assert check_base(tool) == date(2026, 9, 13)
+
+
+def test_is_due_when_due_exactly_today():
+    fixed_today = date(2026, 6, 15)
+    tool = types.SimpleNamespace(
+        id=1,
+        name="팬",
+        category="조리도구",
+        bought_on=None,
+        check_every_months=6,
+        last_checked_on=date(2025, 12, 15),
+        created_at=None,
+    )
+    result = to_json(tool, fixed_today)
+    assert result["due_on"] == "2026-06-15"
+    assert result["is_due"] is True

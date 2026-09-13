@@ -231,7 +231,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 ## 18. 1c단계: 주방 도구 (추가: 2026-09-13)
 - `kitchen_tools`: id, user_id, name(1~30자), category(`조리도구`|`조리기구`|`칼·도마`|`기타`), bought_on(선택), check_every_months(선택, 1~60),
   last_checked_on(선택), created_at.
-- 점검 기준일 = last_checked_on → bought_on → created_at 순으로 첫 값. 기준일 + check_every_months ≤ 오늘이면 `점검할 때가 됐어요`.
+- 점검 기준일 = last_checked_on·bought_on 중 늦은 날짜(둘 다 없으면 created_at의 서울 날짜). 기준일 + check_every_months ≤ 오늘이면 `점검할 때가 됐어요`.
 - 프리셋(추가 시 이름 매칭으로 제안, 수정 가능): `코팅 프라이팬`·`프라이팬`·`코팅 냄비` → 6개월 점검,
   안내 문구 "코팅이 30% 이상 벗겨졌다면 교체를 권장해요(식약처)". 그 외 도구는 기본 주기 없음(구매일도 선택).
   근거: 식약처는 기간이 아닌 상태 기준(코팅 30% 이상 벗겨짐) 교체 권고. 6개월 교체 근거는 확인되지 않아 '점검' 알림으로 둔다.

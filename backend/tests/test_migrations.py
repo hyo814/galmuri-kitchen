@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+import pytest
 import sqlalchemy as sa
 from flask_migrate import downgrade, upgrade
 
@@ -12,26 +13,31 @@ MIGRATIONS = str(Path(__file__).resolve().parents[1] / "migrations")
 MIGRATE_DATABASE_URL = os.environ.get("TEST_MIGRATE_DATABASE_URL")
 
 
-def migration_app(tmp_path, monkeypatch):
+@pytest.fixture
+def app(tmp_path, monkeypatch):
     # Alembic env.py의 fileConfig가 기존 로거(app 등)를 꺼 버려 다른 테스트의 caplog를 망가뜨리지 않도록 막는다
     monkeypatch.setattr("logging.config.fileConfig", lambda *args, **kwargs: None)
     if MIGRATE_DATABASE_URL:
         uri = database_url(MIGRATE_DATABASE_URL)
     else:
         uri = f"sqlite:///{tmp_path / 'migrate.sqlite3'}"
-    app = create_app({"TESTING": True, "SECRET_KEY": "t", "SQLALCHEMY_DATABASE_URI": uri})
+    flask_app = create_app({"TESTING": True, "SECRET_KEY": "t", "SQLALCHEMY_DATABASE_URI": uri})
     if MIGRATE_DATABASE_URL:
         # Postgres DB is shared across the whole run — drop everything
         # (including alembic_version) before each test starts from base.
-        with app.app_context():
+        with flask_app.app_context():
             db.drop_all()
             with db.engine.begin() as conn:
                 conn.execute(sa.text("DROP TABLE IF EXISTS alembic_version"))
-    return app
+    yield flask_app
+    # Dispose the Postgres engine explicitly so connections don't leak
+    # across tests (SQLite is unaffected — it's a fresh file per test).
+    with flask_app.app_context():
+        db.session.remove()
+        db.engine.dispose()
 
 
-def test_location_migration_moves_existing_ingredients_to_fridge(tmp_path, monkeypatch):
-    app = migration_app(tmp_path, monkeypatch)
+def test_location_migration_moves_existing_ingredients_to_fridge(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS, revision="69204259dd5d")
         with db.engine.begin() as conn:
@@ -63,8 +69,7 @@ def test_location_migration_moves_existing_ingredients_to_fridge(tmp_path, monke
         downgrade(directory=MIGRATIONS, revision="69204259dd5d")
 
 
-def test_item_rules_migration_seeds_existing_users(tmp_path, monkeypatch):
-    app = migration_app(tmp_path, monkeypatch)
+def test_item_rules_migration_seeds_existing_users(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS, revision="a2b2c2d2e2f2")
         with db.engine.begin() as conn:
@@ -85,8 +90,7 @@ def test_item_rules_migration_seeds_existing_users(tmp_path, monkeypatch):
         assert ("계란", 25, 30) in [tuple(r) for r in rows]
 
 
-def test_upgrade_to_head_and_back_to_base(tmp_path, monkeypatch):
-    app = migration_app(tmp_path, monkeypatch)
+def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)
         with db.engine.connect() as conn:
