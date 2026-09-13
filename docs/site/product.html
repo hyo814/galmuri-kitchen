@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>갈무리부엌 · 상하기 전에 먼저 알려 주는 냉장고</title>
+<meta name="description" content="넣은 날만 적어 두면 먹어야 할 순서와 떨어진 필수품을 알려 주는 휴대폰 웹앱, 갈무리부엌">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* 토큰: frontend/src/styles.css와 같은 값에 따뜻한 바탕(--warm)만 더함. 다크 --text-3은 surface 대비 4.5:1을 넘기도록 한 톤 밝게. */
+:root {
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --field: #f3f4f6;
+  --text: #17191c;
+  --text-2: #5b616b;
+  --text-3: #63697a;
+  --line: #e3e6ea;
+  --app-line: #eef0f2;
+  --chip-text: #3a3f46;
+  --handle: #e1e4e8;
+  --accent: #0b7a4c;
+  --accent-strong: #086a41;
+  --accent-tint: #e7f6ef;
+  --on-accent: #ffffff;
+  --inverse-bg: #17191c;
+  --inverse-text: #ffffff;
+  --danger: #c4262e;
+  --danger-tint: #fdeded;
+  --warn: #8f5500;
+  --warn-tint: #fff3dc;
+  --neutral-tint: #eef0f2;
+  --warm: #fbf5ea;
+  --scrim: rgb(15 17 20 / 0.48);
+  --shadow: 0 2px 4px rgb(15 17 20 / 0.04), 0 32px 64px -32px rgb(15 17 20 / 0.30);
+  --sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e0f11;
+    --surface: #1a1c20;
+    --field: #24272c;
+    --text: #f1f2f4;
+    --text-2: #a6acb5;
+    --text-3: #8a9099;
+    --line: #2a2d32;
+    --app-line: #2a2d32;
+    --chip-text: #d3d7dc;
+    --handle: #3a3d43;
+    --accent: #2fc07f;
+    --accent-strong: #5bd39c;
+    --accent-tint: #173a2a;
+    --on-accent: #07140d;
+    --inverse-bg: #f1f2f4;
+    --inverse-text: #0e0f11;
+    --danger: #ff6b6f;
+    --danger-tint: #3b1c1f;
+    --warn: #f2b04a;
+    --warn-tint: #3a2c12;
+    --neutral-tint: #2a2d32;
+    --warm: #1b1914;
+    --scrim: rgb(0 0 0 / 0.6);
+    --shadow: 0 0 0 1px #2a2d32, 0 32px 64px -32px rgb(0 0 0 / 0.8);
+  }
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 17px/1.7 var(--sans);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+a { color: var(--accent-strong); text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+h1, h2, h3 { margin: 0; line-height: 1.3; letter-spacing: -0.025em; text-wrap: balance; }
+p { margin: 0; text-wrap: pretty; }
+ul, ol { margin: 0; padding: 0; list-style: none; }
+svg { flex-shrink: 0; }
+
+.skip {
+  position: absolute; left: 16px; top: -60px; z-index: 10;
+  padding: 10px 14px; border-radius: 10px;
+  background: var(--inverse-bg); color: var(--inverse-text); text-decoration: none;
+}
+.skip:focus { top: 16px; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 56px; padding: 0 26px; border: 0; border-radius: 16px;
+  background: var(--accent); color: var(--on-accent);
+  font: 600 17px/1 var(--sans); text-decoration: none; cursor: pointer;
+}
+.btn:hover { background: var(--accent-strong); }
+@media (prefers-color-scheme: dark) { .btn:hover { background: var(--accent); filter: brightness(1.08); } }
+.placeholder-tag {
+  display: block; margin-top: 10px; font-size: 13px; color: var(--text-3);
+}
+
+/* 상단 */
+.top { padding-block: 16px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 700; font-size: 18px; letter-spacing: -0.02em; color: var(--text); text-decoration: none; }
+.brand-mark { display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 11px; overflow: hidden; }
+
+/* 히어로 */
+.hero { padding-block: 24px 64px; }
+.hero-grid { display: grid; gap: 48px; align-items: center; }
+@media (min-width: 900px) { .hero-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 40px; } }
+.pill {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 12px;
+  border-radius: 999px; background: var(--warn-tint); color: var(--warn);
+  font-size: 14px; font-weight: 600;
+}
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.hero h1 { margin-top: 18px; font-size: clamp(34px, 6.4vw, 58px); line-height: 1.2; letter-spacing: -0.04em; }
+.hero h1 em { font-style: normal; color: var(--accent-strong); }
+.hero-sub { margin-top: 18px; max-width: 30em; font-size: clamp(17px, 2.2vw, 20px); color: var(--text-2); }
+.hero-cta { margin-top: 32px; }
+.hero-meta { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 15px; color: var(--text-2); }
+.hero-meta li { display: inline-flex; align-items: center; gap: 6px; }
+.hero-meta svg { color: var(--accent); }
+
+.stage { position: relative; display: flex; justify-content: center; padding-block: 12px; }
+.stage::before {
+  content: ""; position: absolute; inset: 8% 4% 0; border-radius: 48px;
+  background: var(--accent-tint);
+}
+.float-note {
+  position: absolute; z-index: 2; display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 16px; background: var(--surface); box-shadow: var(--shadow);
+  font-size: 14px; line-height: 1.4; font-weight: 600;
+}
+.float-note small { display: block; font-weight: 400; color: var(--text-2); font-size: 13px; }
+.float-note .dot { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; }
+.float-note.a { left: 0; top: 26%; }
+.float-note.a .dot { background: var(--danger-tint); color: var(--danger); }
+.float-note.b { right: 0; bottom: 16%; }
+.float-note.b .dot { background: var(--warn-tint); color: var(--warn); }
+@media (max-width: 520px) { .float-note { display: none; } }
+
+/* 휴대폰 목업 (앱 실제 토큰·치수 384px, zoom으로 축소) */
+.phone { position: relative; z-index: 1; width: 290px; max-width: 100%; padding: 7px; border-radius: 40px; background: var(--surface); box-shadow: var(--shadow); }
+.app {
+  zoom: 0.72;
+  position: relative; width: 384px; height: 800px; overflow: hidden;
+  border-radius: 44px; background: var(--bg); color: var(--text);
+  font: 16px/1.5 var(--sans); word-break: normal;
+}
+.app .topbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 40px 20px 0; }
+.app .title { font-size: 26px; line-height: 34px; font-weight: 700; letter-spacing: -0.5px; }
+.app .summary { margin-top: 4px; font-size: 15px; line-height: 22px; color: var(--text-2); }
+.app .icon-btn { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; color: var(--text-3); }
+.app .banner { display: flex; align-items: center; gap: 12px; min-height: 72px; margin: 20px 20px 0; padding: 16px; border-radius: 18px; background: var(--surface); }
+.banner-icon { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 20px; background: var(--danger-tint); color: var(--danger); flex-shrink: 0; }
+.banner-title { font-size: 16px; line-height: 23px; font-weight: 600; }
+.banner-sub { font-size: 14px; line-height: 20px; color: var(--text-2); }
+.app .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.app .chev { display: flex; color: var(--text-3); }
+.app .chip-row { position: relative; margin-top: 16px; }
+.app .chips { display: flex; gap: 8px; padding: 0 20px; overflow: hidden; white-space: nowrap; }
+.app .chip { display: flex; align-items: center; height: 44px; padding: 0 16px; border-radius: 22px; background: var(--surface); color: var(--chip-text); font-size: 15px; font-weight: 500; flex-shrink: 0; }
+.app .chip.on { background: var(--inverse-bg); color: var(--inverse-text); font-weight: 600; }
+.app .chip-end { position: absolute; top: 0; right: 0; display: flex; align-items: center; height: 44px; padding: 0 20px 0 28px; background: linear-gradient(to right, transparent, var(--bg) 30%); }
+.app .chip-end .icon-btn { background: var(--surface); color: var(--chip-text); }
+.app .list { margin: 16px 20px 0; padding: 6px 0; border-radius: 20px; background: var(--surface); }
+.app .row { display: flex; align-items: center; gap: 12px; min-height: 72px; padding: 12px 20px; }
+.app .row-title { font-size: 17px; line-height: 25px; font-weight: 600; }
+.app .row-sub { font-size: 14px; line-height: 20px; color: var(--text-3); }
+.badge { display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border-radius: 8px; background: var(--neutral-tint); color: var(--text-2); font-size: 13px; line-height: 1; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0; }
+.badge.red { background: var(--danger-tint); color: var(--danger); font-weight: 700; }
+.badge.yellow { background: var(--warn-tint); color: var(--warn); font-weight: 700; }
+.app .cta { position: absolute; left: 0; right: 0; bottom: 64px; padding: 32px 20px 16px; background: linear-gradient(to bottom, transparent, var(--bg) 36%); }
+.app .cta-btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 56px; border-radius: 16px; background: var(--accent); color: var(--on-accent); font-size: 17px; font-weight: 600; }
+.app .tabbar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; height: 64px; border-top: 1px solid var(--app-line); background: var(--surface); }
+.app .tab { flex: 1; max-width: 160px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--text-3); font-size: 12px; font-weight: 600; line-height: 16px; }
+.app .tab.on { color: var(--accent-strong); font-weight: 700; }
+
+/* 공통 섹션 */
+.section { padding-block: 72px; }
+.section.warm { background: var(--warm); }
+.section.surface { background: var(--surface); }
+.section-head { max-width: 40em; }
+.section-head h2 { font-size: clamp(28px, 4.4vw, 40px); }
+.section-head p { margin-top: 12px; color: var(--text-2); }
+
+/* 고민 */
+.pains { margin-top: 36px; display: grid; gap: 16px; }
+@media (min-width: 820px) { .pains { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.pain { padding: 28px 24px; border-radius: 24px; background: var(--surface); }
+.pain-icon { display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 16px; background: var(--warn-tint); color: var(--warn); }
+.pain h3 { margin-top: 18px; font-size: 21px; }
+.pain p { margin-top: 8px; color: var(--text-2); font-size: 16px; }
+.pain .answer { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 15px; color: var(--text); }
+.pain .answer b { color: var(--accent-strong); font-weight: 600; }
+
+/* 사용 흐름 */
+.steps { margin-top: 36px; display: grid; gap: 16px; counter-reset: step; }
+@media (min-width: 820px) { .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.step { position: relative; padding: 28px 24px; border-radius: 24px; background: var(--bg); counter-increment: step; }
+.step::before {
+  content: counter(step);
+  display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%;
+  background: var(--accent); color: var(--on-accent); font-weight: 700; font-size: 18px;
+}
+.step h3 { margin-top: 16px; font-size: 21px; }
+.step p { margin-top: 8px; color: var(--text-2); font-size: 16px; }
+.avail { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 0 10px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+.tag.now { background: var(--accent-tint); color: var(--accent-strong); }
+.tag.soon { background: var(--neutral-tint); color: var(--text-2); }
+
+/* 기능 */
+.feature-group { margin-top: 40px; }
+.group-title { display: flex; align-items: center; gap: 10px; font-size: 20px; }
+.features { margin-top: 18px; display: grid; gap: 14px; }
+@media (min-width: 700px) { .features { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1000px) { .features { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.feature { display: flex; flex-direction: column; gap: 8px; padding: 24px; border-radius: 22px; background: var(--surface); }
+.feature h4 { margin: 0; font-size: 18px; letter-spacing: -0.02em; }
+.feature p { color: var(--text-2); font-size: 16px; }
+.feature .demo { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.demo-chip { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 16px; background: var(--bg); color: var(--chip-text); font-size: 14px; font-weight: 500; }
+.demo-chip.on { background: var(--inverse-bg); color: var(--inverse-text); font-weight: 600; }
+.demo-banner { margin-top: 8px; display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; background: var(--bg); }
+.feature.soon { background: transparent; border: 1.5px dashed var(--line); }
+.feature.soon h4 { color: var(--text); }
+
+/* 시나리오 */
+.personas { margin-top: 36px; display: grid; gap: 16px; }
+@media (min-width: 860px) { .personas { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; } }
+.persona { padding: 32px 28px; border-radius: 28px; background: var(--surface); }
+.persona-head { display: flex; align-items: center; gap: 14px; }
+.persona-icon { display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 18px; background: var(--accent-tint); color: var(--accent-strong); }
+.persona h3 { font-size: 23px; }
+.persona-head p { font-size: 15px; color: var(--text-2); }
+.moments { margin-top: 22px; display: grid; gap: 0; }
+.moment { display: grid; grid-template-columns: 24px 1fr; gap: 12px; padding: 14px 0; border-top: 1px solid var(--line); }
+.moment svg { margin-top: 3px; color: var(--accent); }
+.moment b { display: block; font-weight: 600; }
+.moment span { display: block; margin-top: 2px; font-size: 16px; color: var(--text-2); }
+.moment.later svg { color: var(--text-3); }
+
+/* 신뢰 */
+.trust-grid { margin-top: 36px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+@media (min-width: 900px) { .trust-grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 28px; align-items: start; } }
+.card { padding: 28px 24px; border-radius: 24px; background: var(--surface); }
+.card h3 { font-size: 20px; }
+.card > p { margin-top: 8px; color: var(--text-2); font-size: 16px; }
+.table-scroll { margin-top: 18px; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 16px; }
+caption { text-align: left; font-size: 14px; color: var(--text-2); padding-bottom: 10px; }
+th, td { padding: 12px 12px 12px 0; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+th { font-size: 14px; font-weight: 600; color: var(--text-2); }
+td { font-variant-numeric: tabular-nums; color: var(--text-2); }
+td:first-child { color: var(--text); font-weight: 600; }
+.notes { margin-top: 0; display: grid; gap: 14px; }
+.note { display: grid; grid-template-columns: 24px 1fr; gap: 12px; }
+.note svg { margin-top: 3px; color: var(--accent); }
+.note span { font-size: 16px; color: var(--text-2); }
+.note b { color: var(--text); font-weight: 600; }
+.sources { margin-top: 20px; padding: 18px 20px; border-radius: 18px; background: var(--bg); font-size: 14px; color: var(--text-2); line-height: 1.65; }
+.sources h3 { font-size: 15px; color: var(--text); }
+.sources ul { margin-top: 6px; display: grid; gap: 4px; padding-left: 18px; list-style: disc; }
+.sources a { word-break: break-all; }
+
+/* 로드맵 */
+.timeline { margin-top: 36px; display: grid; gap: 12px; counter-reset: t; }
+@media (min-width: 820px) { .timeline { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.timeline li { padding: 22px; border-radius: 20px; background: var(--surface); counter-increment: t; }
+.timeline li::before { content: counter(t); font-size: 13px; font-weight: 600; color: var(--text-3); }
+.timeline li.done { background: var(--accent-tint); }
+.timeline li.done::before { content: "지금"; color: var(--accent-strong); }
+.timeline b { display: block; margin-top: 4px; font-size: 18px; letter-spacing: -0.02em; }
+.timeline span { display: block; margin-top: 4px; font-size: 15px; color: var(--text-2); }
+.timeline li.done span { color: var(--text); }
+
+/* 마지막 CTA */
+.final { padding-block: 24px 72px; }
+.final-box { padding: 48px 28px; border-radius: 32px; background: var(--inverse-bg); color: var(--inverse-text); text-align: center; }
+.final-box h2 { font-size: clamp(26px, 4.4vw, 38px); }
+.final-box p { margin: 12px auto 0; max-width: 30em; opacity: 0.86; }
+.final-box .btn { margin-top: 28px; }
+.final-box .btn { background: var(--accent); color: var(--on-accent); }
+.final-box .placeholder-tag { display: block; color: inherit; opacity: 0.8; }
+
+footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size: 14px; color: var(--text-2); }
+.foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+.foot ul { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+.foot li { min-height: 32px; display: flex; align-items: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+
+<header class="top">
+  <div class="wrap" style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+    <a class="brand" href="#main">
+      <span class="brand-mark" aria-hidden="true"><svg width="36" height="36" viewBox="0 0 512 512"><rect width="512" height="512" rx="115" fill="#0b7a4c"/><g transform="translate(256 256) scale(0.78) translate(-286 -240)"><path d="M330 382 C440 374 462 262 414 218 C384 190 390 146 434 136" fill="none" style="stroke:#ffffff" stroke-width="68" stroke-linecap="round"/><path d="M168 360 H304 L252 426 Q236 444 220 426 Z" style="fill:#ffc94a"/><path d="M236 186 C300 186 346 214 354 262 C358 288 366 306 382 326 C360 330 346 330 336 334 C322 360 280 386 236 386 C192 386 150 360 136 334 C126 330 112 330 90 326 C106 306 114 288 118 262 C126 214 172 186 236 186 Z" style="fill:#ffffff;stroke:#0b7a4c" stroke-width="16" stroke-linejoin="round" paint-order="stroke"/><path d="M130 250 C112 206 98 160 84 94 L104 116 L110 88 C142 126 176 168 196 206 Z" style="fill:#ffffff"/><path d="M342 250 C360 206 374 160 388 94 L368 116 L362 88 C330 126 296 168 276 206 Z" style="fill:#ffffff"/><path d="M138 228 C128 198 118 170 110 140 C134 162 156 186 172 212 Z" style="fill:#ffc94a"/><path d="M334 228 C344 198 354 170 362 140 C338 162 316 186 300 212 Z" style="fill:#ffc94a"/><path d="M176 284 Q194 266 212 284" fill="none" style="stroke:#07140d" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/><ellipse cx="278" cy="282" rx="17" ry="21" style="fill:#07140d"/><circle cx="284" cy="273" r="6" style="fill:#ffffff"/><path d="M258 246 Q282 232 304 244" fill="none" style="stroke:#07140d" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/><path d="M222 312 H250 Q256 312 252 318 L240 330 Q236 334 232 330 L220 318 Q216 312 222 312 Z" style="fill:#07140d"/><rect x="224" y="344" width="24" height="22" rx="5" style="fill:#ffffff;stroke:#07140d" stroke-width="6"/><path d="M236 346 V364" style="stroke:#07140d" stroke-width="5"/><path d="M208 336 Q236 354 266 332" fill="none" style="stroke:#07140d" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><g transform="rotate(-9 236 196) translate(236 196) scale(.82) translate(-236 -196)"><path d="M170 174 L162 112 C126 104 124 50 168 44 C178 8 222 0 236 24 C250 0 294 8 304 44 C348 50 346 104 310 112 L302 174 Z" style="fill:#ffffff;stroke:#0b7a4c" stroke-width="20" stroke-linejoin="round" paint-order="stroke"/><path d="M204 118 V160" style="stroke:#0b7a4c" stroke-width="10" stroke-linecap="round"/><path d="M236 100 V160" style="stroke:#0b7a4c" stroke-width="10" stroke-linecap="round"/><path d="M268 118 V160" style="stroke:#0b7a4c" stroke-width="10" stroke-linecap="round"/><rect x="158" y="166" width="156" height="48" rx="14" style="fill:#ffffff;stroke:#0b7a4c" stroke-width="20" paint-order="stroke"/></g></g></svg></span>
+      갈무리부엌
+    </a>
+    <a href="portfolio.html" style="font-size:14px; color:var(--text-2); text-decoration:underline; text-underline-offset:3px;">개발 과정 보기</a>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="pill">출시 준비 중</span>
+        <h1 id="hero-title">재료가 상하기 전에,<br><em>먼저 알려 드려요</em></h1>
+        <p class="hero-sub">냉장고에 넣은 날만 적어 두세요. 먼저 먹어야 할 재료와 떨어진 필수품을 휴대폰 첫 화면에서 바로 보여 드려요.<br>사둔 재료, 남김없이 챙겨요 — 갈무리부엌</p>
+        <div class="hero-cta">
+          <a class="btn" href="#notify">[출시 알림 받기]</a>
+          <span class="placeholder-tag">알림 신청 연결은 준비 중이에요.</span>
+        </div>
+        <ul class="hero-meta">
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>앱 설치 없이 휴대폰 브라우저에서</li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>카카오·구글로 시작</li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>식약처 참고값 기반 경고</li>
+        </ul>
+      </div>
+
+      <div class="stage">
+        <div class="float-note a" aria-hidden="true">
+          <span class="dot"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg></span>
+          <span>요거트 섭취 주의<small>구입 26일째</small></span>
+        </div>
+        <div class="float-note b" aria-hidden="true">
+          <span class="dot"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="12" r="6"/><path d="M16 12h6"/></svg></span>
+          <span>프라이팬 점검할 때<small>6개월마다</small></span>
+        </div>
+        <div class="phone" role="img" aria-label="앱 첫 화면 예시: 필수품 2개가 떨어졌다는 배너, 보관 위치 칩, 섭취 주의와 D-day 배지가 붙은 재료 목록">
+          <div class="app" aria-hidden="true">
+            <div class="topbar">
+              <div><div class="title">내 재고</div><div class="summary">재료 6개 · 곧 먹어야 할 재료 2개</div></div>
+              <div class="icon-btn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></div>
+            </div>
+            <div class="banner">
+              <div class="banner-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg></div>
+              <div class="grow"><div class="banner-title">필수품 2개가 떨어졌어요</div><div class="banner-sub">대파, 참기름</div></div>
+              <div class="chev"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></div>
+            </div>
+            <div class="chip-row">
+              <div class="chips"><div class="chip on">전체</div><div class="chip">냉장실</div><div class="chip">냉동실</div><div class="chip">김치냉장고</div><div class="chip">실온</div></div>
+              <div class="chip-end"><div class="icon-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h9M19 7h1M4 17h2M11 17h9"/><circle cx="16" cy="7" r="2.5"/><circle cx="8.5" cy="17" r="2.5"/></svg></div></div>
+            </div>
+            <div class="list">
+              <div class="row"><div class="grow"><div class="row-title">요거트</div><div class="row-sub">4개 · 냉장실 · 8월 18일 구입 · 구입 26일째</div></div><span class="badge red">섭취 주의</span></div>
+              <div class="row"><div class="grow"><div class="row-title">우유</div><div class="row-sub">1개 · 냉장실 · 9월 10일 구입</div></div><span class="badge red">D-day</span></div>
+              <div class="row"><div class="grow"><div class="row-title">두부</div><div class="row-sub">1모 · 김치냉장고 · 8월 28일 구입</div></div><span class="badge yellow">구입 16일째</span></div>
+              <div class="row"><div class="grow"><div class="row-title">애호박</div><div class="row-sub">1개 · 냉장실 · 9월 4일 구입</div></div><span class="badge yellow">구입 9일째</span></div>
+              <div class="row"><div class="grow"><div class="row-title">계란</div><div class="row-sub">10개 · 냉장실 · 9월 8일 구입</div></div><span class="badge">D-12</span></div>
+              <div class="row"><div class="grow"><div class="row-title">냉동만두</div><div class="row-sub">1봉 · 냉동실 · 8월 30일 구입</div></div></div>
+            </div>
+            <div class="cta"><div class="cta-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>재료 추가</div></div>
+            <div class="tabbar">
+              <div class="tab on"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M5 10h14M9 5.5v2M9 13v3"/></svg>재고</div>
+              <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3M9 7h6"/></svg>레시피</div>
+              <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 4h2.5l2.2 10.5h10.1L20 7.5H6.5"/><circle cx="9.5" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></svg>장보기</div>
+              <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="5" width="16" height="16" rx="2.5"/><path d="M4 10h16M8.5 3v4M15.5 3v4"/></svg>식단</div>
+              <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>더보기</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section warm" aria-labelledby="pain-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="pain-title">냉장고 앞에서 이런 적 있으시죠</h2>
+      </div>
+      <div class="pains">
+        <article class="pain">
+          <div class="pain-icon" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></div>
+          <h3>잊고 있던 재료가 상해서 버렸어요</h3>
+          <p>안쪽에 밀려 있던 두부, 반쯤 남은 요거트. 발견했을 땐 이미 늦었죠.</p>
+          <p class="answer"><b>지금 가능</b> · 넣은 날 기준으로 먼저 먹어야 할 재료를 위로 올려요.</p>
+        </article>
+        <article class="pain">
+          <div class="pain-icon" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11h16a8 8 0 0 1-16 0zM2 11h20M9 7c0-1.5 1-2 1-3.5M14 7c0-1.5 1-2 1-3.5"/></svg></div>
+          <h3>오늘 저녁 뭐 해 먹지?</h3>
+          <p>재료는 있는데 조합이 떠오르지 않아 결국 늘 먹던 메뉴로.</p>
+          <p class="answer"><b>준비 중</b> · 있는 재료로 만들 수 있는 레시피를 추천해 드릴 거예요.</p>
+        </article>
+        <article class="pain">
+          <div class="pain-icon" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 11h10.2L20 8H7"/><circle cx="9" cy="19.5" r="1.5"/><circle cx="17" cy="19.5" r="1.5"/></svg></div>
+          <h3>있는 걸 또 사고, 필요한 건 빠뜨려요</h3>
+          <p>마트에서 대파가 있었는지 기억이 안 나고, 집에 와 보니 참기름이 떨어져 있고.</p>
+          <p class="answer"><b>지금 가능</b> · 떨어진 필수품을 첫 화면에서 알려요. 장보기 목록은 준비 중이에요.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section surface" aria-labelledby="how-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="how-title">이렇게 써요</h2>
+        <p>세 단계면 충분해요. 지금 되는 것과 준비 중인 것을 함께 표시했어요.</p>
+      </div>
+      <ol class="steps">
+        <li class="step">
+          <h3>찍거나 입력하기</h3>
+          <p>재료 이름, 넣은 날, 보관 위치를 적어요. 곧 사진이나 영수증을 찍어 한 번에 넣을 수 있게 할게요.</p>
+          <div class="avail"><span class="tag now">직접 입력 · 지금</span><span class="tag soon">사진·영수증 · 준비 중</span></div>
+        </li>
+        <li class="step">
+          <h3>상할 재료·떨어진 필수품 알림</h3>
+          <p>먹어야 할 순서대로 배지가 붙고, 늘 있어야 하는 재료가 없으면 첫 화면에 알려요.</p>
+          <div class="avail"><span class="tag now">지금</span></div>
+        </li>
+        <li class="step">
+          <h3>레시피·장보기·식단으로</h3>
+          <p>있는 재료로 만들 요리, 살 것 목록, 한 주 식단까지 이어 드릴 거예요.</p>
+          <div class="avail"><span class="tag soon">준비 중</span></div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="features-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="features-title">할 수 있는 일</h2>
+      </div>
+
+      <div class="feature-group">
+        <h3 class="group-title"><span class="tag now">지금 쓸 수 있어요</span></h3>
+        <div class="features">
+          <article class="feature">
+            <h4>보관 위치대로 정리</h4>
+            <p>냉장실·냉동실·실온에 김치냉장고, 찬장처럼 우리 집 자리를 더해 나눠 봐요.</p>
+            <div class="demo" aria-hidden="true"><span class="demo-chip on">전체</span><span class="demo-chip">냉장실</span><span class="demo-chip">김치냉장고</span><span class="demo-chip">찬장</span></div>
+          </article>
+          <article class="feature">
+            <h4>한눈에 보이는 배지</h4>
+            <p>남은 날, 구입 후 지난 날, 섭취 주의를 색으로 구분해요.</p>
+            <div class="demo" aria-hidden="true"><span class="badge red">D-2</span><span class="badge yellow">구입 16일째</span><span class="badge red">섭취 주의</span></div>
+          </article>
+          <article class="feature">
+            <h4>떨어진 필수품 알림</h4>
+            <p>대파, 참기름처럼 늘 있어야 하는 재료를 정해 두면 없을 때 알려요.</p>
+            <div class="demo-banner" aria-hidden="true">
+              <span class="banner-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg></span>
+              <span><span class="banner-title" style="display:block">필수품 2개가 떨어졌어요</span><span class="banner-sub">대파, 참기름</span></span>
+            </div>
+          </article>
+          <article class="feature">
+            <h4>품목별 경고</h4>
+            <p>두부, 요거트, 햄처럼 날짜가 헷갈리는 재료는 식약처 참고값으로 알려요. 우리 집 기준으로 바꿀 수도 있어요.</p>
+          </article>
+          <article class="feature">
+            <h4>주방 도구 점검</h4>
+            <p>코팅 프라이팬은 6개월마다 상태를 확인하도록 알려요. 코팅이 30% 이상 벗겨졌다면 교체를 권장해요.</p>
+          </article>
+          <article class="feature">
+            <h4>눈이 편한 화면</h4>
+            <p>밝은 화면과 어두운 화면을 휴대폰 설정에 맞춰 바꾸고, 글자는 두 화면 모두 잘 읽히는 대비로 맞췄어요.</p>
+          </article>
+          <article class="feature">
+            <h4>재료 빨리 넣기</h4>
+            <p>장 보고 온 날 여러 개를 이어서 넣어요. 단위는 칩으로 고르고, 유통기한은 “구입일 +3일”처럼 빠르게 넣고, 수량은 −/+ 버튼으로 조절해요. 다 쓴 재료는 “다 썼어요”로 바로 지워요.</p>
+          </article>
+          <article class="feature">
+            <h4>재고 검색</h4>
+            <p>재료가 많아지면 이름으로 바로 찾아요.</p>
+          </article>
+          <article class="feature">
+            <h4>정리된 필수품 시트</h4>
+            <p>떨어진 것만 모아 보고, 눌러서 바로 재고에 추가해요. 이미 있으면 어떤 재료로 잡혔는지도 보여 줘요.</p>
+          </article>
+        </div>
+      </div>
+
+      <div class="feature-group">
+        <h3 class="group-title"><span class="tag soon">준비 중</span></h3>
+        <div class="features">
+          <article class="feature soon">
+            <h4>사진·영수증으로 등록</h4>
+            <p>냉장고 사진, 영수증, 온라인 주문 완료 화면을 찍으면 재료를 알아서 채워요. 확인한 뒤 한 번에 넣어요.</p>
+          </article>
+          <article class="feature soon">
+            <h4>있는 재료로 레시피</h4>
+            <p>내 레시피, 식약처 공공 레시피, AI 추천. 유튜브·인스타그램 링크로 레시피를 가져오고, 양념 비율은 숟가락 단위로 계산해요.</p>
+          </article>
+          <article class="feature soon">
+            <h4>장보기</h4>
+            <p>쇼핑몰 7곳 검색·정렬 링크와 네이버 최저가, 마트에서 쓰는 메모와 사진까지.</p>
+          </article>
+          <article class="feature soon">
+            <h4>식단과 영양</h4>
+            <p>한 주·한 달 식단, 다이어트 식단 초안, 기초대사량과 칼로리·당류 합계, 먹은 것 기록.</p>
+          </article>
+          <article class="feature soon">
+            <h4>요리 기록</h4>
+            <p>만든 요리와 날짜, 메모와 사진을 남겨요.</p>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section warm" aria-labelledby="persona-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="persona-title">살림하는 집에도, 혼자 사는 집에도</h2>
+        <p>이런 순간을 떠올리며 만들고 있어요.</p>
+      </div>
+      <div class="personas">
+        <article class="persona">
+          <div class="persona-head">
+            <span class="persona-icon" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7M5 9.5V20h14V9.5M10 20v-5h4v5"/></svg></span>
+            <div><h3>가족 살림을 맡은 분</h3><p>냉장고가 여러 대, 챙길 재료도 많은 집</p></div>
+          </div>
+          <ul class="moments">
+            <li class="moment"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><div><b>김치냉장고와 베란다도 따로</b><span>보관 위치를 직접 만들어, 어디에 뭐가 있는지 칩 하나로 걸러 봐요.</span></div></li>
+            <li class="moment"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><div><b>장 보러 나가기 전에 한 번</b><span>첫 화면 배너에서 참기름, 대파가 떨어졌는지 바로 확인해요.</span></div></li>
+            <li class="moment"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><div><b>한 판 사 둔 달걀</b><span>구입 25일째부터 노랑, 30일째엔 섭취 주의로 알려요.</span></div></li>
+            <li class="moment later"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><div><b>준비 중 · 한 주 식단과 장보기</b><span>식단을 짜면 모자란 재료만 장보기 목록으로 옮겨 드릴 거예요.</span></div></li>
+          </ul>
+        </article>
+
+        <article class="persona">
+          <div class="persona-head">
+            <span class="persona-icon" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+            <div><h3>혼자 사는 분</h3><p>조금씩 사서 오래 두게 되는 집</p></div>
+          </div>
+          <ul class="moments">
+            <li class="moment"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><div><b>반 모 남긴 두부</b><span>포장 날짜를 안 적었어도 구입 15일째부터 노랑 배지로 알려요.</span></div></li>
+            <li class="moment"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><div><b>얼려 둔 만두는 재촉하지 않게</b><span>냉동실 재료는 냉장 기준 대신 60일을 기준으로 봐요.</span></div></li>
+            <li class="moment"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><div><b>매일 쓰는 프라이팬 하나</b><span>6개월마다 코팅 상태를 확인할 때라고 알려요.</span></div></li>
+            <li class="moment later"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><div><b>준비 중 · 남은 재료로 한 끼</b><span>냉장고에 있는 것만으로 만들 수 있는 레시피를 추천해 드릴 거예요.</span></div></li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section surface" aria-labelledby="trust-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="trust-title">경고 기준은 식약처 참고값에서</h2>
+        <p>감으로 정하지 않았어요. 공개된 참고값을 확인하고, 구입일 기준으로 보수적으로 바꿨어요.</p>
+      </div>
+
+      <div class="trust-grid">
+        <div class="card" style="background:var(--bg)">
+          <h3>품목별 기본 경고</h3>
+          <p>식약처 참고값은 제조일 기준이에요. 앱은 구입한 날부터 세기 때문에, 참고값의 80%가 되는 날 빨강(섭취 주의), 그 3일 전부터 노랑으로 알려요.</p>
+          <div class="table-scroll">
+            <table>
+              <caption>구입일부터 센 날짜</caption>
+              <thead><tr><th scope="col">품목</th><th scope="col">식약처 참고값</th><th scope="col">노랑</th><th scope="col">빨강</th></tr></thead>
+              <tbody>
+                <tr><td>두부</td><td>23일</td><td>15일째</td><td>18일째</td></tr>
+                <tr><td>요거트 등 발효유</td><td>32일</td><td>22일째</td><td>25일째</td></tr>
+                <tr><td>과채주스</td><td>35일</td><td>25일째</td><td>28일째</td></tr>
+                <tr><td>빵</td><td>31일</td><td>21일째</td><td>24일째</td></tr>
+                <tr><td>어묵</td><td>42일</td><td>30일째</td><td>33일째</td></tr>
+                <tr><td>소시지</td><td>56일</td><td>41일째</td><td>44일째</td></tr>
+                <tr><td>햄</td><td>57일</td><td>42일째</td><td>45일째</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div>
+          <ul class="notes card">
+            <li class="note"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>포장 날짜가 가장 우선이에요.</b> 유통기한을 직접 적으면 그 날짜만 보고 D-3부터 알려요.</span></li>
+            <li class="note"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>우유는 기준을 두지 않았어요.</b> 우유류 소비기한 표시는 2031년부터라 참고값이 없어요. 포장 날짜를 적으시도록 안내해요.</span></li>
+            <li class="note"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>달걀은 구입 25일째부터 노랑, 30일째부터 섭취 주의.</b> 가정 보관 권장 기간을 바탕으로 구입일 기준으로 정했어요.</span></li>
+            <li class="note"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>모든 기준은 바꿀 수 있어요.</b> 우리 집 보관 습관에 맞게 일수를 고치거나 지워요.</span></li>
+          </ul>
+          <div class="sources">
+            <h3>출처와 참고</h3>
+            <ul>
+              <li>식품의약품안전처 「식품유형별 소비기한 설정 보고서」 참고값. 확인에 사용한 보도:
+                <a href="https://www.foodnews.co.kr/news/articleView.html?idxno=99913">foodnews.co.kr</a>,
+                <a href="https://www.lecturernews.com/news/articleView.html?idxno=113115">lecturernews.com</a></li>
+              <li>코팅 조리기구: 식약처는 기간이 아니라 코팅이 30% 이상 벗겨진 상태를 교체 기준으로 권고해요. 6개월은 상태를 확인하는 주기로 앱이 제안하는 값이에요.</li>
+              <li>앱의 경고는 참고용이에요. 보관 온도와 상태에 따라 달라질 수 있으니 포장 표시와 재료 상태를 함께 확인해 주세요.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="roadmap-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="roadmap-title">앞으로의 순서</h2>
+        <p>재고 관리는 지금 동작해요. 나머지는 아래 순서대로 만들고 있어요.</p>
+      </div>
+      <ol class="timeline">
+        <li class="done"><b>재고·필수품·경고</b><span>보관 위치, 배지, 필수품 알림, 품목별 경고, 주방 도구</span></li>
+        <li class="done"><b>빠른 입력·검색</b><span>여러 재료 연속 추가, 재고 검색, 매칭 오탐 차단, 시작 화면</span></li>
+        <li><b>사진으로 등록</b><span>냉장고 사진·영수증·주문 화면</span></li>
+        <li><b>레시피</b><span>있는 재료로 추천, 링크 가져오기, 양념 비율</span></li>
+        <li><b>장보기</b><span>쇼핑몰 링크, 최저가, 마트 메모</span></li>
+        <li><b>식단과 영양</b><span>식단 짜기, 칼로리·당류, 먹은 것 기록</span></li>
+        <li><b>요리 기록</b><span>만든 요리와 사진</span></li>
+        <li><b>공개</b><span>누구나 가입해 쓸 수 있게 배포. "갈무리부엌" 상표 조사(KIPRIS 9류·42류)를 먼저 확인해요.</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="final" id="notify" aria-labelledby="final-title">
+    <div class="wrap">
+      <div class="final-box">
+        <h2 id="final-title">출시되면 가장 먼저 알려 드릴게요</h2>
+        <p>버리는 재료를 줄이는 냉장고 노트, 곧 휴대폰에서 만나요.</p>
+        <a class="btn" href="#notify">[출시 알림 받기]</a>
+        <span class="placeholder-tag">알림 신청 연결은 준비 중이에요.</span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span>갈무리부엌 · [회사명] · <a href="portfolio.html">개발 과정 보기</a> · <a href="../../README.md">저장소 README</a></span>
+    <ul aria-label="사업자 정보와 약관">
+      <li>[문의 이메일]</li>
+      <li>[제휴·투자 문의]</li>
+      <li>[이용약관]</li>
+      <li>[개인정보처리방침]</li>
+    </ul>
+  </div>
+</footer>
+</body>
+</html>

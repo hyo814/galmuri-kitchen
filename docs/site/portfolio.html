@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>갈무리부엌 · 케이스 스터디</title>
+<meta name="description" content="모바일 우선 식재료 관리 웹앱 갈무리부엌의 설계 결정, 품질 검증, 개발 과정을 정리한 케이스 스터디">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* 토큰: frontend/src/styles.css와 같은 값. 다크 --text-3만 surface 대비 4.5:1을 넘기도록 한 톤 밝게. */
+:root {
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --field: #f3f4f6;
+  --text: #17191c;
+  --text-2: #5b616b;
+  --text-3: #63697a;
+  --line: #e3e6ea;
+  --app-line: #eef0f2;
+  --chip-text: #3a3f46;
+  --handle: #e1e4e8;
+  --accent: #0b7a4c;
+  --accent-strong: #086a41;
+  --accent-tint: #e7f6ef;
+  --on-accent: #ffffff;
+  --inverse-bg: #17191c;
+  --inverse-text: #ffffff;
+  --danger: #c4262e;
+  --danger-tint: #fdeded;
+  --warn: #8f5500;
+  --warn-tint: #fff3dc;
+  --neutral-tint: #eef0f2;
+  --scrim: rgb(15 17 20 / 0.48);
+  --shadow: 0 1px 2px rgb(15 17 20 / 0.06), 0 24px 48px -28px rgb(15 17 20 / 0.28);
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e0f11;
+    --surface: #1a1c20;
+    --field: #24272c;
+    --text: #f1f2f4;
+    --text-2: #a6acb5;
+    --text-3: #8a9099;
+    --line: #2a2d32;
+    --app-line: #2a2d32;
+    --chip-text: #d3d7dc;
+    --handle: #3a3d43;
+    --accent: #2fc07f;
+    --accent-strong: #5bd39c;
+    --accent-tint: #173a2a;
+    --on-accent: #07140d;
+    --inverse-bg: #f1f2f4;
+    --inverse-text: #0e0f11;
+    --danger: #ff6b6f;
+    --danger-tint: #3b1c1f;
+    --warn: #f2b04a;
+    --warn-tint: #3a2c12;
+    --neutral-tint: #2a2d32;
+    --scrim: rgb(0 0 0 / 0.6);
+    --shadow: 0 0 0 1px #2a2d32, 0 24px 48px -28px rgb(0 0 0 / 0.8);
+  }
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.7 var(--sans);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+a { color: var(--accent-strong); text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+code, .mono { font-family: var(--mono); font-size: 0.9em; }
+code { padding: 1px 5px; border-radius: 5px; background: var(--neutral-tint); color: var(--chip-text); }
+h1, h2, h3 { margin: 0; line-height: 1.3; letter-spacing: -0.02em; text-wrap: balance; }
+p { margin: 0; text-wrap: pretty; }
+ul, ol { margin: 0; padding: 0; }
+
+.skip {
+  position: absolute; left: 16px; top: -60px; z-index: 10;
+  padding: 10px 14px; border-radius: 10px;
+  background: var(--inverse-bg); color: var(--inverse-text); text-decoration: none;
+}
+.skip:focus { top: 16px; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; }
+
+/* 상단 */
+.masthead { border-bottom: 1px solid var(--line); }
+.masthead .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; flex-wrap: wrap; padding-block: 8px; }
+.masthead-brand { display: inline-flex; align-items: center; gap: 8px; }
+.masthead-mark { flex-shrink: 0; border-radius: 8px; }
+.masthead-name { font-weight: 700; letter-spacing: -0.01em; }
+.masthead-meta { display: inline-flex; align-items: center; gap: 14px; font-family: var(--mono); font-size: 13px; color: var(--text-3); }
+.masthead-meta a { color: inherit; }
+
+/* 히어로 */
+.hero { padding-block: 56px 48px; border-bottom: 1px solid var(--line); }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.02em; color: var(--accent-strong); }
+.hero h1 { margin-top: 14px; font-size: clamp(34px, 7vw, 60px); line-height: 1.15; letter-spacing: -0.035em; }
+.hero-lede { margin-top: 20px; max-width: 40em; font-size: clamp(17px, 2.2vw, 20px); line-height: 1.65; color: var(--text-2); }
+.hero-lede strong { color: var(--text); font-weight: 600; }
+.badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px; list-style: none; }
+.badges li {
+  display: inline-flex; align-items: center; height: 32px; padding: 0 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
+  font-family: var(--mono); font-size: 13px; color: var(--chip-text);
+}
+.hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 48px; padding: 0 18px; border-radius: 12px;
+  font-size: 16px; font-weight: 600; text-decoration: none;
+}
+.btn-primary { background: var(--accent); color: var(--on-accent); }
+.btn-ghost { border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+.placeholder-note { margin-top: 10px; font-size: 13px; color: var(--text-3); }
+
+.facts {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 44px; border-top: 1px solid var(--line);
+}
+.fact { padding: 18px 16px 0 0; }
+.fact dt { font-size: 13px; color: var(--text-3); }
+.fact dd { margin: 2px 0 0; font-family: var(--mono); font-size: clamp(22px, 4vw, 30px); font-weight: 500; letter-spacing: -0.02em; }
+.fact dd small { font-family: var(--sans); font-size: 14px; color: var(--text-2); font-weight: 500; letter-spacing: 0; }
+@media (min-width: 760px) { .facts { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* 본문 레이아웃 */
+.body-grid { display: block; }
+.toc { display: none; }
+@media (min-width: 1024px) {
+  .body-grid { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 56px; }
+  .toc { display: block; }
+  .toc nav { position: sticky; top: 24px; padding-top: 56px; }
+  .toc ol { list-style: none; border-left: 1px solid var(--line); }
+  .toc a {
+    display: flex; align-items: center; min-height: 44px; padding-left: 14px; margin-left: -1px;
+    border-left: 2px solid transparent; color: var(--text-2); font-size: 14px; text-decoration: none;
+  }
+  .toc a:hover { color: var(--text); border-left-color: var(--text-3); }
+}
+
+.section { padding-block: 56px; border-bottom: 1px solid var(--line); scroll-margin-top: 16px; }
+.section:last-child { border-bottom: 0; }
+.section-kicker { font-family: var(--mono); font-size: 13px; color: var(--text-3); }
+.section h2 { margin-top: 6px; font-size: clamp(26px, 4vw, 34px); }
+.section-intro { margin-top: 14px; max-width: 42em; font-size: 17px; color: var(--text-2); }
+
+.two-col { display: grid; gap: 28px; margin-top: 28px; }
+@media (min-width: 760px) { .two-col { grid-template-columns: 1fr 1fr; gap: 40px; } }
+.two-col h3 { font-size: 18px; }
+.ticks { margin-top: 12px; list-style: none; display: grid; gap: 10px; }
+.ticks li { position: relative; padding-left: 20px; }
+.ticks li::before {
+  content: ""; position: absolute; left: 2px; top: 0.72em;
+  width: 8px; height: 2px; border-radius: 1px; background: var(--accent);
+}
+
+/* 기능 목록 */
+.feature-list { margin-top: 28px; display: grid; gap: 0; list-style: none; border-top: 1px solid var(--line); }
+.feature-list li { display: grid; gap: 4px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+@media (min-width: 760px) { .feature-list li { grid-template-columns: 220px 1fr; gap: 24px; } }
+.feature-list b { font-weight: 600; }
+.feature-list span { color: var(--text-2); }
+
+/* 휴대폰 목업: 앱 실제 토큰·치수(384px 뷰포트)를 그대로 그리고 zoom으로 축소 */
+.screens { display: grid; gap: 36px; justify-items: center; margin-top: 40px; }
+@media (min-width: 1000px) {
+  .screens { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+  .screens .phone { width: 260px; }
+  .screens .app { zoom: 0.64; }
+}
+.screens figure { margin: 0; display: grid; justify-items: center; gap: 14px; max-width: 100%; }
+.screens figcaption { max-width: min(300px, 100%); font-size: 14px; line-height: 1.6; color: var(--text-2); text-align: center; }
+.screens figcaption b { display: block; color: var(--text); font-weight: 600; }
+.screens-note { margin-top: 20px; font-size: 13px; color: var(--text-3); text-align: center; }
+
+.phone {
+  width: 300px; max-width: 100%;
+  padding: 7px; border-radius: 40px;
+  background: var(--surface); box-shadow: var(--shadow);
+}
+.app {
+  zoom: 0.73;
+  position: relative; width: 384px; height: 800px; overflow: hidden;
+  border-radius: 44px; background: var(--bg); color: var(--text);
+  font: 16px/1.5 var(--sans); word-break: normal;
+}
+.app * { line-height: inherit; }
+.app .topbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 40px 20px 0; }
+.app .title { font-size: 26px; line-height: 34px; font-weight: 700; letter-spacing: -0.5px; }
+.app .summary { margin-top: 4px; font-size: 15px; line-height: 22px; color: var(--text-2); }
+.app .icon-btn { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 22px; color: var(--text-3); flex-shrink: 0; }
+.app .banner { display: flex; align-items: center; gap: 12px; min-height: 72px; margin: 20px 20px 0; padding: 16px; border-radius: 18px; background: var(--surface); }
+.app .banner-icon { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 20px; background: var(--danger-tint); color: var(--danger); flex-shrink: 0; }
+.app .banner-title { font-size: 16px; line-height: 23px; font-weight: 600; }
+.app .banner-sub { font-size: 14px; line-height: 20px; color: var(--text-2); }
+.app .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.app .chev { color: var(--text-3); display: flex; }
+.app .chip-row { position: relative; margin-top: 16px; }
+.app .chips { display: flex; gap: 8px; padding: 0 20px; overflow: hidden; white-space: nowrap; }
+.app .chip { display: flex; align-items: center; height: 44px; padding: 0 16px; border-radius: 22px; background: var(--surface); color: var(--chip-text); font-size: 15px; font-weight: 500; flex-shrink: 0; }
+.app .chip.on { background: var(--inverse-bg); color: var(--inverse-text); font-weight: 600; }
+.app .chip-end { position: absolute; top: 0; right: 0; display: flex; align-items: center; height: 44px; padding: 0 20px 0 28px; background: linear-gradient(to right, transparent, var(--bg) 30%); }
+.app .chip-end .icon-btn { background: var(--surface); color: var(--chip-text); }
+.app .list { margin: 16px 20px 0; padding: 6px 0; border-radius: 20px; background: var(--surface); }
+.app .row { display: flex; align-items: center; gap: 12px; min-height: 72px; padding: 12px 20px; }
+.app .row-title { font-size: 17px; line-height: 25px; font-weight: 600; }
+.app .row-sub { font-size: 14px; line-height: 20px; color: var(--text-3); }
+.app .badge { display: flex; align-items: center; height: 28px; padding: 0 10px; border-radius: 8px; background: var(--neutral-tint); color: var(--text-2); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0; }
+.app .badge.red { background: var(--danger-tint); color: var(--danger); font-weight: 700; }
+.app .badge.yellow { background: var(--warn-tint); color: var(--warn); font-weight: 700; }
+.app .cta { position: absolute; left: 0; right: 0; bottom: 64px; padding: 32px 20px 16px; background: linear-gradient(to bottom, transparent, var(--bg) 36%); }
+.app .cta-btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 56px; border-radius: 16px; background: var(--accent); color: var(--on-accent); font-size: 17px; font-weight: 600; }
+.app .tabbar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; height: 64px; border-top: 1px solid var(--app-line); background: var(--surface); }
+.app .tab { flex: 1; max-width: 160px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--text-3); font-size: 12px; font-weight: 600; line-height: 16px; }
+.app .tab.on { color: var(--accent-strong); font-weight: 700; }
+.app .scrim { position: absolute; inset: 0; background: var(--scrim); }
+.app .sheet { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 20px; padding: 12px 20px 28px; border-radius: 24px 24px 0 0; background: var(--surface); }
+.app .handle { align-self: center; width: 40px; height: 4px; border-radius: 2px; background: var(--handle); }
+.app .sheet-title { font-size: 22px; line-height: 30px; font-weight: 700; letter-spacing: -0.4px; }
+.app .field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.app .label { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--text-2); }
+.app .label i { font-style: normal; font-weight: 400; color: var(--text-3); }
+.app .input { display: flex; align-items: center; height: 56px; padding: 0 16px; border-radius: 14px; background: var(--field); font-size: 17px; font-variant-numeric: tabular-nums; }
+.app .input.ph { color: var(--text-3); }
+.app .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.app .choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.app .choice { display: flex; align-items: center; gap: 4px; height: 44px; padding: 0 14px; border: 1.5px solid transparent; border-radius: 12px; background: var(--field); color: var(--chip-text); font-size: 15px; font-weight: 500; }
+.app .choice.on { border-color: var(--accent); background: var(--accent-tint); color: var(--accent-strong); font-weight: 600; }
+.app .hint { margin-top: -8px; font-size: 13px; line-height: 19px; color: var(--text-3); }
+.app .actions { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; margin-top: 4px; }
+.app .act { display: flex; align-items: center; justify-content: center; height: 56px; border-radius: 16px; font-size: 17px; font-weight: 600; }
+.app .act.secondary { background: var(--neutral-tint); color: var(--chip-text); }
+.app .act.primary { background: var(--accent); color: var(--on-accent); }
+.app .back { display: inline-flex; align-items: center; gap: 2px; height: 44px; margin: 24px 0 -28px 12px; padding: 0 8px; color: var(--text-2); font-size: 15px; }
+
+/* 설계 결정 */
+.decisions { margin-top: 32px; display: grid; gap: 16px; }
+.decision { padding: 24px; border-radius: 20px; background: var(--surface); }
+@media (min-width: 760px) { .decision { display: grid; grid-template-columns: 260px 1fr; gap: 32px; padding: 28px 32px; } }
+.decision h3 { font-size: 19px; }
+.decision .tag { display: block; margin-top: 6px; font-family: var(--mono); font-size: 12.5px; color: var(--text-3); }
+.decision dl { margin: 16px 0 0; display: grid; gap: 14px; }
+@media (min-width: 760px) { .decision dl { margin-top: 0; } }
+.decision dt { font-size: 13px; font-weight: 600; color: var(--accent-strong); }
+.decision dd { margin: 2px 0 0; color: var(--text-2); }
+.decision dd strong { color: var(--text); font-weight: 600; }
+.priority { margin-top: 6px; padding-left: 22px; display: grid; gap: 4px; color: var(--text-2); }
+.priority li::marker { font-family: var(--mono); color: var(--text-3); }
+
+.table-scroll { margin-top: 10px; overflow-x: auto; }
+table { border-collapse: collapse; min-width: 100%; font-size: 14px; }
+th, td { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+th { font-weight: 600; color: var(--text-3); font-size: 13px; }
+td { color: var(--text-2); font-variant-numeric: tabular-nums; }
+td:first-child { color: var(--text); }
+
+/* 품질 */
+.quality { margin-top: 32px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; border-radius: 20px; overflow: hidden; background: var(--line); }
+@media (min-width: 760px) { .quality { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.q { padding: 24px; background: var(--surface); }
+.q h3 { font-size: 17px; }
+.q p { margin-top: 8px; color: var(--text-2); font-size: 15px; }
+.q .num { font-family: var(--mono); font-size: 28px; font-weight: 500; letter-spacing: -0.02em; color: var(--text); line-height: 1.2; }
+.swatches { margin-top: 12px; display: grid; gap: 8px; list-style: none; font-size: 14px; }
+.swatches li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.swatches .name { min-width: 76px; font-family: var(--mono); font-size: 13px; color: var(--text-3); }
+.sw { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 13px; color: var(--text-2); }
+.sw::before { content: ""; width: 14px; height: 14px; border-radius: 4px; background: var(--c); box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.08); }
+.arrow { color: var(--text-3); }
+pre {
+  margin: 12px 0 0; padding: 14px 16px; overflow-x: auto; border-radius: 12px;
+  background: var(--inverse-bg); color: var(--inverse-text);
+  font: 13px/1.7 var(--mono);
+}
+
+/* 프로세스 */
+.flow { margin-top: 32px; display: grid; gap: 10px; list-style: none; counter-reset: step; }
+@media (min-width: 760px) { .flow { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1100px) { .flow { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.flow li { position: relative; padding: 16px; border-radius: 16px; background: var(--surface); counter-increment: step; }
+.flow li::before { content: counter(step); font-family: var(--mono); font-size: 13px; color: var(--accent-strong); }
+.flow b { display: block; margin-top: 2px; font-size: 16px; font-weight: 600; }
+.flow span { display: block; margin-top: 4px; font-size: 14px; line-height: 1.55; color: var(--text-2); }
+
+.graph-title { margin-top: 44px; font-size: 18px; }
+.graph-intro { margin-top: 6px; color: var(--text-2); font-size: 15px; }
+.graph { margin-top: 18px; list-style: none; position: relative; padding-left: 28px; }
+.graph::before { content: ""; position: absolute; left: 7px; top: 8px; bottom: 8px; width: 2px; background: var(--line); }
+.graph li { position: relative; padding: 8px 0; }
+.graph li::before {
+  content: ""; position: absolute; left: -26px; top: 15px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--bg); box-shadow: 0 0 0 2px var(--text-3);
+}
+.graph li.merge-feature::before { background: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.graph li.merge-docs::before { background: var(--bg); box-shadow: 0 0 0 2px var(--accent); }
+.graph li.merge-fix::before { background: var(--warn); box-shadow: 0 0 0 2px var(--warn); }
+.graph code { background: none; padding: 0; color: var(--text); font-size: 14px; }
+.graph span { display: block; font-size: 14px; color: var(--text-2); line-height: 1.55; }
+.legend { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px 18px; list-style: none; font-size: 13px; color: var(--text-3); }
+.legend li { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 50%; }
+
+/* 배운 점 */
+.lessons { margin-top: 32px; display: grid; gap: 28px; list-style: none; }
+@media (min-width: 900px) { .lessons { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; } }
+.lessons li { padding-top: 16px; border-top: 2px solid var(--text); }
+.lessons h3 { font-size: 18px; }
+.lessons p { margin-top: 10px; color: var(--text-2); font-size: 15px; }
+.lessons p.take { color: var(--text); font-weight: 500; }
+
+/* 로드맵 */
+.roadmap { margin-top: 28px; padding-left: 0; list-style: none; display: grid; gap: 0; counter-reset: rm; border-top: 1px solid var(--line); }
+.roadmap li { display: grid; grid-template-columns: 36px 1fr; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--line); counter-increment: rm; }
+.roadmap li::before { content: counter(rm); font-family: var(--mono); color: var(--text-3); }
+.roadmap b { font-weight: 600; }
+.roadmap span { display: block; color: var(--text-2); font-size: 15px; }
+.status { display: inline-block; margin-left: 8px; padding: 0 8px; border-radius: 6px; background: var(--neutral-tint); color: var(--text-2); font-size: 12.5px; font-weight: 600; vertical-align: 2px; }
+
+/* 연락처 */
+.contact { margin-top: 24px; display: grid; gap: 10px; list-style: none; }
+@media (min-width: 760px) { .contact { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.contact li { display: flex; flex-direction: column; justify-content: center; min-height: 72px; padding: 14px 18px; border: 1px dashed var(--text-3); border-radius: 14px; }
+.contact small { font-size: 13px; color: var(--text-3); }
+.contact span { font-family: var(--mono); font-size: 15px; }
+
+footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size: 13px; color: var(--text-3); }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+
+<header class="masthead">
+  <div class="wrap">
+    <span class="masthead-brand">
+      <svg class="masthead-mark" width="28" height="28" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="115" fill="#0b7a4c"/><g transform="translate(256 256) scale(0.78) translate(-286 -240)"><path d="M330 382 C440 374 462 262 414 218 C384 190 390 146 434 136" fill="none" style="stroke:#ffffff" stroke-width="68" stroke-linecap="round"/><path d="M168 360 H304 L252 426 Q236 444 220 426 Z" style="fill:#ffc94a"/><path d="M236 186 C300 186 346 214 354 262 C358 288 366 306 382 326 C360 330 346 330 336 334 C322 360 280 386 236 386 C192 386 150 360 136 334 C126 330 112 330 90 326 C106 306 114 288 118 262 C126 214 172 186 236 186 Z" style="fill:#ffffff;stroke:#0b7a4c" stroke-width="16" stroke-linejoin="round" paint-order="stroke"/><path d="M130 250 C112 206 98 160 84 94 L104 116 L110 88 C142 126 176 168 196 206 Z" style="fill:#ffffff"/><path d="M342 250 C360 206 374 160 388 94 L368 116 L362 88 C330 126 296 168 276 206 Z" style="fill:#ffffff"/><path d="M138 228 C128 198 118 170 110 140 C134 162 156 186 172 212 Z" style="fill:#ffc94a"/><path d="M334 228 C344 198 354 170 362 140 C338 162 316 186 300 212 Z" style="fill:#ffc94a"/><path d="M176 284 Q194 266 212 284" fill="none" style="stroke:#07140d" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/><ellipse cx="278" cy="282" rx="17" ry="21" style="fill:#07140d"/><circle cx="284" cy="273" r="6" style="fill:#ffffff"/><path d="M258 246 Q282 232 304 244" fill="none" style="stroke:#07140d" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/><path d="M222 312 H250 Q256 312 252 318 L240 330 Q236 334 232 330 L220 318 Q216 312 222 312 Z" style="fill:#07140d"/><rect x="224" y="344" width="24" height="22" rx="5" style="fill:#ffffff;stroke:#07140d" stroke-width="6"/><path d="M236 346 V364" style="stroke:#07140d" stroke-width="5"/><path d="M208 336 Q236 354 266 332" fill="none" style="stroke:#07140d" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><g transform="rotate(-9 236 196) translate(236 196) scale(.82) translate(-236 -196)"><path d="M170 174 L162 112 C126 104 124 50 168 44 C178 8 222 0 236 24 C250 0 294 8 304 44 C348 50 346 104 310 112 L302 174 Z" style="fill:#ffffff;stroke:#0b7a4c" stroke-width="20" stroke-linejoin="round" paint-order="stroke"/><path d="M204 118 V160" style="stroke:#0b7a4c" stroke-width="10" stroke-linecap="round"/><path d="M236 100 V160" style="stroke:#0b7a4c" stroke-width="10" stroke-linecap="round"/><path d="M268 118 V160" style="stroke:#0b7a4c" stroke-width="10" stroke-linecap="round"/><rect x="158" y="166" width="156" height="48" rx="14" style="fill:#ffffff;stroke:#0b7a4c" stroke-width="20" paint-order="stroke"/></g></g></svg>
+      <span class="masthead-name">갈무리부엌</span>
+    </span>
+    <span class="masthead-meta">
+      케이스 스터디 · 1d단계 기준
+      <a href="product.html">제품 페이지 보기</a>
+    </span>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap">
+      <p class="eyebrow">개인 프로젝트 · 설계부터 구현, 검증까지</p>
+      <h1 id="hero-title">갈무리부엌</h1>
+      <p class="hero-lede">
+        식재료가 상하기 전에 알려 주는 <strong>모바일 우선 웹앱</strong>을 설계 문서부터 테스트, 컨테이너 검증까지 만들고 있습니다.
+        식약처 참고값을 규칙으로 옮기고, 사용자 결정이 바뀔 때마다 문서를 먼저 고친 뒤 기능 브랜치와 리뷰로 반영했습니다.
+        이름 "갈무리"는 물건을 잘 간수하고 일을 끝맺는다는 뜻의 순우리말이고, 마스코트는 셰프 다람쥐 <strong>다람이</strong>입니다.
+      </p>
+      <ul class="badges" aria-label="기술 스택">
+        <li>React 19</li>
+        <li>TypeScript</li>
+        <li>Vite 8</li>
+        <li>Flask 3.1</li>
+        <li>SQLAlchemy</li>
+        <li>Flask-Migrate</li>
+        <li>PostgreSQL 17</li>
+        <li>SQLite</li>
+        <li>Authlib</li>
+        <li>Docker</li>
+        <li>gunicorn</li>
+        <li>pytest</li>
+      </ul>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#">[GitHub 저장소]</a>
+        <a class="btn btn-ghost" href="#">[데모 영상]</a>
+      </div>
+      <p class="placeholder-note">대괄호로 표시한 링크는 공개 후 채웁니다. 배포 주소는 아직 없습니다.</p>
+
+      <dl class="facts">
+        <div class="fact"><dt>구현 완료</dt><dd>1–1d <small>단계</small></dd></div>
+        <div class="fact"><dt>백엔드 테스트</dt><dd>172 <small>개 통과</small></dd></div>
+        <div class="fact"><dt>테스트 DB</dt><dd>2 <small>SQLite · PostgreSQL</small></dd></div>
+        <div class="fact"><dt>페르소나 사용성 리뷰</dt><dd>44 <small>건 발견</small></dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <div class="wrap body-grid">
+    <aside class="toc">
+      <nav aria-label="목차">
+        <ol>
+          <li><a href="#problem">문제와 목표</a></li>
+          <li><a href="#work">내가 한 일</a></li>
+          <li><a href="#decisions">설계 결정</a></li>
+          <li><a href="#quality">품질과 검증</a></li>
+          <li><a href="#process">개발 프로세스</a></li>
+          <li><a href="#lessons">배운 점</a></li>
+          <li><a href="#roadmap">로드맵</a></li>
+          <li><a href="#contact">연락처</a></li>
+        </ol>
+      </nav>
+    </aside>
+
+    <div>
+      <section class="section" id="problem" aria-labelledby="problem-title">
+        <p class="section-kicker">문제와 목표</p>
+        <h2 id="problem-title">장 본 재료를 끝까지 먹게 돕기</h2>
+        <p class="section-intro">
+          냉장고에 무엇이 있는지 기억에 의존하면 재료는 상해서 버려지고, 있는 걸 또 사고, 저녁마다 뭘 먹을지 고민하게 됩니다.
+          이 앱은 재고 기록을 출발점으로 레시피, 장보기, 식단까지 이어 가는 것을 목표로 합니다.
+        </p>
+        <div class="two-col">
+          <div>
+            <h3>풀려는 문제</h3>
+            <ul class="ticks">
+              <li>두부·요거트처럼 포장 날짜를 확인하지 않으면 언제 상하는지 모르는 재료</li>
+              <li>참기름·대파처럼 늘 있어야 하는데 떨어진 줄 모르는 필수품</li>
+              <li>냉장실, 냉동실, 김치냉장고, 찬장에 흩어진 재고</li>
+              <li>교체 시기를 놓치기 쉬운 코팅 프라이팬</li>
+            </ul>
+          </div>
+          <div>
+            <h3>목표와 제약</h3>
+            <ul class="ticks">
+              <li>네이티브 앱 없이 휴대폰 브라우저에서 동작 (실사용 기기 뷰포트 약 384px)</li>
+              <li>비밀번호를 저장하지 않는 소셜 로그인(카카오·구글)</li>
+              <li>단계마다 배포 가능한 상태 유지</li>
+              <li>식품 안전 기준은 추정이 아니라 확인한 공공 참고값을 쓰고 출처를 남기기</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="work" aria-labelledby="work-title">
+        <p class="section-kicker">내가 한 일</p>
+        <h2 id="work-title">구현한 핵심 기능</h2>
+        <p class="section-intro">설계 문서 작성, 단계별 구현 계획, 백엔드 API와 마이그레이션, 프론트엔드 화면, 테스트와 배포 준비까지 전 과정을 맡았습니다.</p>
+
+        <ul class="feature-list">
+          <li><b>재고와 보관 위치</b><span>재료 등록·수정·삭제. 기본 냉장실·냉동실·실온에 사용자 정의 위치를 더하고, 위치마다 오래됨 기준(냉장 7일, 냉동 60일, 실온 없음)을 둡니다.</span></li>
+          <li><b>임박·경고 배지</b><span><code>D-2</code>, <code>구입 16일째</code>, <code>섭취 주의</code>. 서버가 상태를 판정하고 임박 순으로 정렬해 내려줍니다.</span></li>
+          <li><b>필수품 배너</b><span>재고와 이름을 매칭해 떨어진 필수품을 첫 화면 배너로. 이름은 앞 3개와 “외 N개”만 보여 줘 화면을 차지하지 않게 했습니다.</span></li>
+          <li><b>품목별 경고 규칙</b><span>식약처 소비기한 참고값을 구입일 기준으로 환산해 기본 규칙으로 시드. 사용자가 수정·삭제할 수 있습니다.</span></li>
+          <li><b>주방 도구</b><span>도구 목록과 주기 점검. 이름에 코팅·프라이팬이 들어가면 6개월 점검을 미리 선택합니다(논코팅·무코팅 제외).</span></li>
+          <li><b>하단 탭 5개</b><span>재고 · 레시피 · 장보기 · 식단 · 더보기. 아직 만들지 않은 탭은 준비 중 화면으로 앞으로 나올 기능을 안내합니다. 탭 전환은 히스토리를 쌓지 않고, 더보기 → 주방 도구는 쌓아서 휴대폰 뒤로가기가 기대대로 동작합니다.</span></li>
+          <li><b>인증</b><span>Authlib 기반 카카오·구글 OAuth. 사설 IP는 리다이렉트 URI로 등록할 수 없어, <code>DEV_MODE=1</code>에서만 개발용 로그인을 열고 운영 환경에서 켜진 채 시작하면 거부합니다.</span></li>
+          <li><b>재료 빠른 입력(1d)</b><span><code>저장하고 계속 추가</code>로 연속 등록, 단위 칩, <code>구입일 +N일</code> 유통기한 빠른 입력, 수량 −/+ 스테퍼, 수량 0에서 <code>다 썼어요</code>로 바로 삭제. 이중 제출 방지 가드를 넣었습니다.</span></li>
+          <li><b>재고 검색 · 필수품 시트 정리(1d)</b><span>재고 이름 검색, 필수품의 <code>떨어진 것만</code> 보기, 떨어진 항목을 누르면 이름이 채워진 재료 추가로 연결, 있으면 매칭된 재고 이름을 함께 표시.</span></li>
+          <li><b>매칭 오탐 차단(1d)</b><span>짧은 이름 매칭 규칙을 다듬어 <code>파</code>가 <code>양파</code>를, <code>고추</code>가 <code>고추장</code>을 잘못 잡지 않게 했습니다. 장류·소스로 등록한 필수품과 이름이 맞는 냉장 재료는 오래됨 배지에서 제외하되(고추장 불고기 같은 요리는 그대로 경고), 유통기한·품목 규칙 판정은 그대로 적용합니다.</span></li>
+          <li><b>시작 화면과 브랜드(1d)</b><span>셰프 다람쥐 <b>다람이</b> 스플래시, 앱 아이콘, 파비콘. 이름을 갈무리부엌으로 바꿨습니다.</span></li>
+        </ul>
+
+        <div class="screens">
+          <figure>
+            <div class="phone" aria-hidden="true">
+              <div class="app">
+                <div class="topbar">
+                  <div>
+                    <div class="title">내 재고</div>
+                    <div class="summary">재료 6개 · 곧 먹어야 할 재료 2개</div>
+                  </div>
+                  <div class="icon-btn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></div>
+                </div>
+                <div class="banner">
+                  <div class="banner-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg></div>
+                  <div class="grow">
+                    <div class="banner-title">필수품 2개가 떨어졌어요</div>
+                    <div class="banner-sub">대파, 참기름</div>
+                  </div>
+                  <div class="chev"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></div>
+                </div>
+                <div class="chip-row">
+                  <div class="chips">
+                    <div class="chip on">전체</div><div class="chip">냉장실</div><div class="chip">냉동실</div><div class="chip">김치냉장고</div><div class="chip">실온</div>
+                  </div>
+                  <div class="chip-end"><div class="icon-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h9M19 7h1M4 17h2M11 17h9"/><circle cx="16" cy="7" r="2.5"/><circle cx="8.5" cy="17" r="2.5"/></svg></div></div>
+                </div>
+                <div class="list">
+                  <div class="row"><div class="grow"><div class="row-title">요거트</div><div class="row-sub">4개 · 냉장실 · 8월 18일 구입 · 구입 26일째</div></div><div class="badge red">섭취 주의</div></div>
+                  <div class="row"><div class="grow"><div class="row-title">우유</div><div class="row-sub">1개 · 냉장실 · 9월 10일 구입</div></div><div class="badge red">D-day</div></div>
+                  <div class="row"><div class="grow"><div class="row-title">두부</div><div class="row-sub">1모 · 김치냉장고 · 8월 28일 구입</div></div><div class="badge yellow">구입 16일째</div></div>
+                  <div class="row"><div class="grow"><div class="row-title">애호박</div><div class="row-sub">1개 · 냉장실 · 9월 4일 구입</div></div><div class="badge yellow">구입 9일째</div></div>
+                  <div class="row"><div class="grow"><div class="row-title">계란</div><div class="row-sub">10개 · 냉장실 · 9월 8일 구입</div></div><div class="badge">D-12</div></div>
+                  <div class="row"><div class="grow"><div class="row-title">냉동만두</div><div class="row-sub">1봉 · 냉동실 · 8월 30일 구입</div></div></div>
+                </div>
+                <div class="cta"><div class="cta-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>재료 추가</div></div>
+                <div class="tabbar">
+                  <div class="tab on"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M5 10h14M9 5.5v2M9 13v3"/></svg>재고</div>
+                  <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3M9 7h6"/></svg>레시피</div>
+                  <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 4h2.5l2.2 10.5h10.1L20 7.5H6.5"/><circle cx="9.5" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></svg>장보기</div>
+                  <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="5" width="16" height="16" rx="2.5"/><path d="M4 10h16M8.5 3v4M15.5 3v4"/></svg>식단</div>
+                  <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>더보기</div>
+                </div>
+              </div>
+            </div>
+            <figcaption><b>재고 홈</b>위치 칩으로 거르고, 서버가 판정한 상태 순으로 정렬. 요거트는 품목 규칙, 우유는 입력한 유통기한, 애호박은 냉장실 기준입니다.</figcaption>
+          </figure>
+
+          <figure>
+            <div class="phone" aria-hidden="true">
+              <div class="app">
+                <div class="topbar"><div><div class="title">내 재고</div></div></div>
+                <div class="scrim"></div>
+                <div class="sheet">
+                  <div class="handle"></div>
+                  <div class="sheet-title">재료 추가</div>
+                  <div class="field"><div class="label">이름</div><div class="input">우유</div></div>
+                  <div class="grid2">
+                    <div class="field"><div class="label">수량</div><div class="input">1</div></div>
+                    <div class="field"><div class="label">단위</div><div class="input">개</div></div>
+                  </div>
+                  <div class="field">
+                    <div class="label">보관 위치</div>
+                    <div class="choices">
+                      <div class="choice on"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>냉장실</div>
+                      <div class="choice">냉동실</div><div class="choice">김치냉장고</div><div class="choice">실온</div>
+                    </div>
+                  </div>
+                  <div class="grid2">
+                    <div class="field"><div class="label">구입일</div><div class="input">2026. 9. 13.</div></div>
+                    <div class="field"><div class="label">유통기한 <i>(선택)</i></div><div class="input ph">날짜 선택</div></div>
+                  </div>
+                  <p class="hint">우유는 포장에 적힌 소비기한을 입력하면 가장 정확해요.</p>
+                  <div class="actions"><div class="act secondary">취소</div><div class="act primary">저장</div></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><b>재료 추가 시트</b>네이티브 <code>&lt;dialog&gt;</code> 바텀시트. 우유는 참고값이 없어 규칙 대신 포장 날짜 입력을 안내합니다.</figcaption>
+          </figure>
+
+          <figure>
+            <div class="phone" aria-hidden="true">
+              <div class="app">
+                <div class="back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>더보기</div>
+                <div class="topbar">
+                  <div>
+                    <div class="title">주방 도구</div>
+                    <div class="summary">도구 3개 · 점검할 도구 1개</div>
+                  </div>
+                </div>
+                <div class="list">
+                  <div class="row"><div class="grow"><div class="row-title">코팅 프라이팬</div><div class="row-sub">조리기구 · 6개월마다 점검 · 3월 2일 구매</div></div><div class="badge yellow">점검할 때</div></div>
+                  <div class="row"><div class="grow"><div class="row-title">코팅 냄비</div><div class="row-sub">조리기구 · 6개월마다 점검 · 마지막 점검 9월 1일</div></div></div>
+                  <div class="row"><div class="grow"><div class="row-title">뒤집개</div><div class="row-sub">조리도구</div></div></div>
+                </div>
+                <div class="cta"><div class="cta-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>도구 추가</div></div>
+                <div class="tabbar">
+                  <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M5 10h14M9 5.5v2M9 13v3"/></svg>재고</div>
+                  <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3M9 7h6"/></svg>레시피</div>
+                  <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 4h2.5l2.2 10.5h10.1L20 7.5H6.5"/><circle cx="9.5" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></svg>장보기</div>
+                  <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="5" width="16" height="16" rx="2.5"/><path d="M4 10h16M8.5 3v4M15.5 3v4"/></svg>식단</div>
+                  <div class="tab on"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>더보기</div>
+                </div>
+              </div>
+            </div>
+            <figcaption><b>주방 도구</b>점검 기준일은 마지막 점검일과 구매일 중 늦은 날. 기준일에 주기를 더한 날이 되면 “점검할 때” 배지.</figcaption>
+          </figure>
+        </div>
+        <p class="screens-note">앱의 실제 디자인 토큰과 치수로 그린 화면입니다. 화면 속 재료와 날짜는 2026년 9월 13일을 오늘로 둔 예시 데이터입니다.</p>
+      </section>
+
+      <section class="section" id="decisions" aria-labelledby="decisions-title">
+        <p class="section-kicker">설계 결정</p>
+        <h2 id="decisions-title">무엇을 골랐고, 왜 골랐는지</h2>
+        <p class="section-intro">결정마다 설계 문서에 근거를 남기고, 단순하게 고른 부분은 코드 주석에 한계와 교체 시점을 적었습니다.</p>
+
+        <div class="decisions">
+          <article class="decision">
+            <div>
+              <h3>Flask 한 앱이 React까지 서빙</h3>
+              <span class="tag">backend · 배포</span>
+            </div>
+            <dl>
+              <div><dt>결정</dt><dd>Flask가 <code>/api/*</code>, <code>/auth/*</code>와 React 빌드 결과를 같은 오리진에서 내보냅니다. Docker 멀티 스테이지로 node에서 빌드하고 python 이미지에 복사합니다.</dd></div>
+              <div><dt>이유</dt><dd>CORS 설정이 필요 없고, 세션 쿠키를 <code>HttpOnly</code>·<code>SameSite=Lax</code>로 둔 채 상태 변경 요청에 <code>X-Requested-With</code> 헤더를 요구하는 방식으로 CSRF를 막을 수 있습니다. 배포 단위도 이미지 하나로 끝납니다.</dd></div>
+              <div><dt>대가</dt><dd>로컬에서는 Vite 개발 서버(5180)가 <code>/api</code>·<code>/auth</code>를 Flask(5181)로 프록시해야 합니다.</dd></div>
+            </dl>
+          </article>
+
+          <article class="decision">
+            <div>
+              <h3>라우터 라이브러리 대신 해시 라우팅</h3>
+              <span class="tag">frontend · 내비게이션</span>
+            </div>
+            <dl>
+              <div><dt>결정</dt><dd><code>#/</code>, <code>#/more</code>, <code>#/tools</code>를 <code>hashchange</code>로 읽는 작은 훅. 모르는 경로는 <code>#/</code>로 돌립니다.</dd></div>
+              <div><dt>이유</dt><dd>화면이 셋뿐인 시점에 의존성 없이 휴대폰 뒤로가기를 살릴 수 있습니다. 탭 전환은 <code>location.replace</code>로 히스토리를 쌓지 않고, 더보기에서 들어간 화면만 <code>pushState</code>로 쌓아 뒤로가기가 한 단계씩 돌아갑니다.</dd></div>
+              <div><dt>교체 시점</dt><dd>경로 파라미터가 많아지면 React Router로 바꾼다고 코드 주석에 적어 두었습니다.</dd></div>
+            </dl>
+          </article>
+
+          <article class="decision">
+            <div>
+              <h3>상태 판정 우선순위</h3>
+              <span class="tag">backend · 도메인 규칙</span>
+            </div>
+            <dl>
+              <div><dt>결정</dt><dd>
+                위에서부터 처음 해당하는 기준 하나만 씁니다.
+                <ol class="priority">
+                  <li>유통기한을 입력했으면 그것만 봅니다. D-3 이내면 임박, 아니면 정상.</li>
+                  <li>냉동실이면 품목 규칙을 쓰지 않고 60일 기준.</li>
+                  <li>이름이 매칭되는 품목 규칙이 있으면 규칙(노랑 / 빨강 <code>섭취 주의</code>). 여러 개면 빨강 일수가 가장 짧은 규칙.</li>
+                  <li>없으면 위치 종류 기준(냉장 7일, 실온 없음).</li>
+                </ol>
+              </dd></div>
+              <div><dt>이유</dt><dd>처음에는 여러 기준 중 가장 심각한 상태를 고르는 방식이었습니다. 포장에 적힌 날짜를 직접 넣었다면 그 날짜가 가장 정확하고, 냉동 보관은 냉장 기준 참고값과 맞지 않습니다. 사용자와 순서를 정해 스펙 14절을 먼저 고친 뒤, 판정 로직을 우선순위대로 바로 분기하도록 단순화했습니다.</dd></div>
+            </dl>
+          </article>
+
+          <article class="decision">
+            <div>
+              <h3>식약처 참고값을 80%로 환산</h3>
+              <span class="tag">backend · 기본 데이터</span>
+            </div>
+            <dl>
+              <div><dt>결정</dt><dd>식약처 「식품유형별 소비기한 설정 보고서」 참고값에 0.8을 곱해 내림한 날을 빨강, 그 3일 전을 노랑으로 시드합니다.</dd></div>
+              <div><dt>이유</dt><dd><strong>참고값은 제조일 기준</strong>인데 앱이 아는 날짜는 구입일입니다. 유통 기간만큼의 차이를 모르므로 보수적으로 줄였습니다. 달걀·계란은 사용자 결정으로 구입 25일부터 노랑, 30일부터 섭취 주의, 우유는 소비기한 표시제가 2031년부터라 값을 지어내지 않고 규칙을 두지 않았습니다. 출처 URL은 코드 주석에 남겼습니다.</dd></div>
+              <div><dt>시드 값</dt><dd>
+                <div class="table-scroll">
+                  <table>
+                    <thead><tr><th scope="col">품목</th><th scope="col">참고값</th><th scope="col">노랑</th><th scope="col">빨강</th></tr></thead>
+                    <tbody>
+                      <tr><td>두부</td><td>23일</td><td>15일</td><td>18일</td></tr>
+                      <tr><td>발효유</td><td>32일</td><td>22일</td><td>25일</td></tr>
+                      <tr><td>과채주스</td><td>35일</td><td>25일</td><td>28일</td></tr>
+                      <tr><td>빵류</td><td>31일</td><td>21일</td><td>24일</td></tr>
+                      <tr><td>어묵</td><td>42일</td><td>30일</td><td>33일</td></tr>
+                      <tr><td>소시지</td><td>56일</td><td>41일</td><td>44일</td></tr>
+                      <tr><td>햄</td><td>57일</td><td>42일</td><td>45일</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </dd></div>
+            </dl>
+          </article>
+
+          <article class="decision">
+            <div>
+              <h3>API 키 없이 도는 샘플 모드</h3>
+              <span class="tag">설계 · 2단계부터 적용</span>
+            </div>
+            <dl>
+              <div><dt>결정</dt><dd>AI 스캔·레시피처럼 외부 키가 필요한 기능은 키가 비어 있을 때 개발 모드에서는 샘플 데이터로 동작하고, 운영에서는 기능을 숨깁니다. 설계와 환경 변수 문서에 정해 두었고 해당 기능을 구현할 때 적용합니다.</dd></div>
+              <div><dt>이유</dt><dd>리뷰어나 새 개발자가 비용과 키 발급 없이 전체 흐름을 휴대폰에서 확인할 수 있고, 운영에서는 설정이 빠진 기능이 오류 화면으로 드러나지 않습니다.</dd></div>
+            </dl>
+          </article>
+
+          <article class="decision">
+            <div>
+              <h3>PostgreSQL에서도 같은 테스트를 실행</h3>
+              <span class="tag">테스트 · 인프라</span>
+            </div>
+            <dl>
+              <div><dt>결정</dt><dd>평소에는 빠른 SQLite로 테스트하되, <code>TEST_DATABASE_URL</code>을 주면 같은 스위트를 실제 PostgreSQL에서 테스트마다 격리해 돌립니다. 배포 전에는 Postgres 대상 <code>flask db upgrade</code>와 <code>db check</code>, Docker 이미지 스모크 테스트까지 거칩니다.</dd></div>
+              <div><dt>이유</dt><dd>운영 DB는 PostgreSQL입니다. 마이그레이션, 외래 키 CASCADE, 정수 범위처럼 엔진마다 다르게 동작할 수 있는 부분을 배포 전에 로컬에서 확인하려고 했습니다.</dd></div>
+            </dl>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="quality" aria-labelledby="quality-title">
+        <p class="section-kicker">품질과 검증</p>
+        <h2 id="quality-title">통과했다고 말할 수 있는 근거</h2>
+
+        <div class="quality">
+          <div class="q">
+            <p class="num">172</p>
+            <h3>백엔드 테스트, 경고 0</h3>
+            <p>SQLite와 PostgreSQL 두 엔진에서 모두 통과. <code>DeprecationWarning</code>을 오류로 올려 실행합니다.</p>
+            <pre>backend/.venv/bin/pytest -q -W error::DeprecationWarning</pre>
+          </div>
+          <div class="q">
+            <h3>데이터를 채우는 마이그레이션</h3>
+            <p>보관 위치와 품목 규칙을 추가할 때 기존 사용자에게도 기본값을 넣고, 기존 재료는 냉장실로 옮기는 Alembic 마이그레이션을 테스트로 확인했습니다. 테스트는 마이그레이션 시점의 기본값을 리터럴로 고정해 비교하고, 기본값을 바꿀 때는 기존 마이그레이션이 아니라 새 마이그레이션을 추가하도록 했습니다.</p>
+          </div>
+          <div class="q">
+            <h3>Docker 이미지와 PostgreSQL</h3>
+            <p>Render가 쓸 이미지를 로컬에서 빌드해 호스트 PostgreSQL에 붙여 실행. 비루트 사용자로 뜨는지, 첫 화면·<code>/api/me</code> 401·manifest 200 응답과 마이그레이션 로그를 확인했습니다.</p>
+          </div>
+          <div class="q">
+            <h3>독립 코드 리뷰</h3>
+            <p>단계마다 구현과 분리된 코드 리뷰를 받고, 마지막에 브랜치 전체를 다시 리뷰했습니다. 지적은 <code>fix/phase1b-review</code>, <code>fix/phase1c-review</code> 같은 별도 브랜치로 반영했습니다(거대 id 요청의 500 방지, UNIQUE 경합을 400으로, 미래 구매일 거부 등).</p>
+          </div>
+          <div class="q">
+            <h3>라이트·다크 테마 대비를 AA로</h3>
+            <p>승인된 시안 색 일부가 라이트 테마에서 4.5:1에 못 미친다는 리뷰 지적을 받고, 토큰 단위로 한 톤 진하게 바꿨습니다. 다크 테마의 보조 글자(<code>--text-3</code>)도 <code>#8a9099</code>로 맞춰, 두 테마 모두 텍스트 대비 WCAG AA(4.5:1) 기준을 만족합니다.</p>
+            <ul class="swatches">
+              <li><span class="name">accent</span><span class="sw" style="--c:#0f9d63">#0f9d63</span><span class="arrow" aria-label="에서">→</span><span class="sw" style="--c:#0b7a4c">#0b7a4c</span></li>
+              <li><span class="name">text-3</span><span class="sw" style="--c:#8b919a">#8b919a</span><span class="arrow" aria-label="에서">→</span><span class="sw" style="--c:#63697a">#63697a</span></li>
+              <li><span class="name">danger</span><span class="sw" style="--c:#e5484d">#e5484d</span><span class="arrow" aria-label="에서">→</span><span class="sw" style="--c:#c4262e">#c4262e</span></li>
+              <li><span class="name">warn</span><span class="sw" style="--c:#b86e00">#b86e00</span><span class="arrow" aria-label="에서">→</span><span class="sw" style="--c:#8f5500">#8f5500</span></li>
+              <li><span class="name">text-3 (다크)</span><span class="sw" style="--c:#8a9099">#8a9099</span></li>
+            </ul>
+          </div>
+          <div class="q">
+            <p class="num">44</p>
+            <h3>페르소나 사용성 리뷰</h3>
+            <p>주부(4인 가족)와 1인 가구 페르소나로 사용성을 점검해 44건을 찾았습니다. 지금 화면에서 고칠 것과 설계에 반영할 것으로 나누고, 사용자가 고른 항목을 스펙 23절과 1d단계 계획으로 옮겼습니다.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="process" aria-labelledby="process-title">
+        <p class="section-kicker">개발 프로세스</p>
+        <h2 id="process-title">문서 먼저, 브랜치 단위로, 휴대폰에서 확인</h2>
+
+        <ol class="flow">
+          <li><b>설계 문서</b><span>요구사항과 결정을 절 단위로. 추가 요구는 날짜와 함께 새 절로.</span></li>
+          <li><b>구현 계획</b><span>단계마다 태스크, 파일, 테스트까지 적은 계획.</span></li>
+          <li><b>기능 브랜치</b><span><code>feature/*</code>에서 구현하고 <code>main</code>에 <code>--no-ff</code> 병합.</span></li>
+          <li><b>태스크 리뷰</b><span>태스크가 끝날 때마다 독립 리뷰.</span></li>
+          <li><b>최종 리뷰</b><span>단계 끝에 브랜치 전체 리뷰, 지적은 <code>fix/*</code>로.</span></li>
+          <li><b>휴대폰 체크포인트</b><span>실제 기기에서 주요 흐름을 사용자가 직접 확인.</span></li>
+        </ol>
+
+        <h3 class="graph-title">실제 병합 순서</h3>
+        <p class="graph-intro"><code>git log --oneline --graph</code>에서 1b단계 후반부터 1c단계까지의 병합을 순서대로 옮겼습니다. 기능 사이사이에 요구사항 문서 브랜치가 끼어 있습니다.</p>
+        <ol class="graph">
+          <li class="merge-docs"><code>docs/phase1b-plan</code><span>보관 위치·필수품·품목별 경고·새 디자인 계획</span></li>
+          <li class="merge-feature"><code>feature/staples</code><span>필수품 목록과 떨어진 필수품 배너</span></li>
+          <li class="merge-feature"><code>feature/item-warning-rules</code><span>식약처 참고값 규칙과 섭취 주의 배지</span></li>
+          <li class="merge-docs"><code>docs/meal-planning</code><span>구현 도중 추가된 식단·영양 요구사항</span></li>
+          <li class="merge-fix"><code>fix/phase1b-review</code><span>대비, 판정 순서, 백엔드 경계값, StrictMode 회귀</span></li>
+          <li class="merge-feature"><code>chore/deploy-readiness</code><span>Postgres 테스트, 비루트 Docker, 배포 전 검증 문서</span></li>
+          <li class="merge-docs"><code>docs/phase1c-plan</code><span>하단 탭과 주방 도구 계획</span></li>
+          <li class="merge-feature"><code>feature/bottom-tabs</code><span>하단 탭과 해시 라우팅</span></li>
+          <li class="merge-feature"><code>feature/kitchen-tools</code><span>주방 도구 등록과 점검 화면</span></li>
+          <li class="merge-docs"><code>docs/seasoning-ratios</code><span>양념 비율 계산기 요구사항</span></li>
+          <li class="merge-fix"><code>fix/phase1c-review</code><span>탭 히스토리, 미지원 경로, 도구 폼 안전장치</span></li>
+        </ol>
+        <ul class="legend" aria-label="범례">
+          <li><i style="background:var(--accent)"></i>기능·준비 작업</li>
+          <li><i style="box-shadow:inset 0 0 0 2px var(--accent)"></i>문서</li>
+          <li><i style="background:var(--warn)"></i>리뷰 반영</li>
+        </ul>
+      </section>
+
+      <section class="section" id="lessons" aria-labelledby="lessons-title">
+        <p class="section-kicker">배운 점</p>
+        <h2 id="lessons-title">실제로 부딪힌 것들</h2>
+        <ul class="lessons">
+          <li>
+            <h3>리뷰 반영이 만든 회귀</h3>
+            <p>시트를 닫을 때 포커스를 돌려주려고 언마운트 정리 함수에서 <code>dialog.close()</code>를 부르게 고쳤습니다. 그런데 개발 모드 StrictMode는 마운트, 정리, 마운트를 한 번씩 더 실행하고, 그 <code>close</code> 이벤트가 부모의 <code>onClose</code>를 불러 모든 시트가 열리자마자 닫혔습니다. 다음 리뷰에서 잡아 되돌리고 이유를 주석으로 남겼습니다.</p>
+            <p class="take">네이티브 요소에 부작용을 거는 effect는 두 번 실행돼도 안전한지 먼저 따집니다.</p>
+          </li>
+          <li>
+            <h3>눈으로 본 대비는 틀린다</h3>
+            <p>승인된 시안의 초록·보조 글자·경고 색은 화면에서 충분히 읽혔지만, 계산해 보니 라이트 테마에서 AA에 못 미쳤습니다. 사용자 승인을 받아 토큰을 한 톤 진하게 바꾸고, 다크 테마는 기준에 못 미친 placeholder만 조정했습니다.</p>
+            <p class="take">대비는 시안 단계에서 토큰 쌍으로 계산해 확인합니다.</p>
+          </li>
+          <li>
+            <h3>요구사항은 도중에 늘어난다</h3>
+            <p>구현 중에 식단·영양 계산기, 매장 장보기, 쇼핑몰 정렬 링크, 양념 비율 계산기, 주방 도구가 추가됐습니다. 매번 진행 중인 코드에 끼워 넣지 않고 <code>docs/*</code> 브랜치로 설계 문서에 날짜와 함께 먼저 반영했고, 판정 순서처럼 이미 만든 동작이 바뀔 때도 스펙을 먼저 고쳤습니다.</p>
+            <p class="take">문서를 먼저 고치면 진행 중인 브랜치의 범위가 흔들리지 않습니다.</p>
+          </li>
+        </ul>
+      </section>
+
+      <section class="section" id="roadmap" aria-labelledby="roadmap-title">
+        <p class="section-kicker">로드맵</p>
+        <h2 id="roadmap-title">다음에 만들 것</h2>
+        <p class="section-intro">1d단계 사용성 개선까지 구현을 마쳤습니다. 아래는 그다음에 만들 것이며, 설계 문서에만 있고 아직 구현하지 않았습니다. 이 순서대로 진행합니다.</p>
+        <ol class="roadmap">
+          <li><div><b>AI 스캔</b><span class="status">준비 중</span><span>냉장고 사진·영수증·온라인 주문 캡처를 Claude 비전으로 인식해 확인 후 일괄 등록. 키가 없으면 샘플 모드.</span></div></li>
+          <li><div><b>레시피</b><span class="status">준비 중</span><span>내 레시피, 식약처 공공 레시피 DB, AI 추천, 유튜브·인스타그램 링크 가져오기, 숟가락 단위 양념 비율 계산기.</span></div></li>
+          <li><div><b>장보기</b><span class="status">준비 중</span><span>쇼핑몰 7곳 검색·정렬 링크, 네이버 최저가, 메모·사진과 동기화를 갖춘 매장 장보기.</span></div></li>
+          <li><div><b>식단과 영양</b><span class="status">준비 중</span><span>주·월 식단, 다이어트 AI 초안, Mifflin–St Jeor 기초대사량, 식약처 식품영양성분 DB 기반 칼로리·당류 합산, 먹은 것 기록.</span></div></li>
+          <li><div><b>조리 기록</b><span class="status">준비 중</span><span>요리한 날짜, 사용한 재료 차감, 메모와 사진.</span></div></li>
+          <li><div><b>Render 배포</b><span class="status">준비 중</span><span>Docker 웹 서비스와 PostgreSQL. 배포 전 로컬 검증 절차는 문서화를 마쳤습니다.</span></div></li>
+          <li><div><b>"갈무리부엌" 상표 조사</b><span class="status">출시 전 확인 필요</span><span>KIPRIS 9류(소프트웨어)·42류(SaaS) 선등록 여부를 출시 전에 확인합니다.</span></div></li>
+        </ol>
+      </section>
+
+      <section class="section" id="contact" aria-labelledby="contact-title">
+        <p class="section-kicker">연락처</p>
+        <h2 id="contact-title">이야기 나눠요</h2>
+        <ul class="contact">
+          <li><small>이름</small><span>[이름]</span></li>
+          <li><small>이메일</small><span>[이메일]</span></li>
+          <li><small>GitHub</small><span>[GitHub]</span></li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">화면은 이미지 없이 앱의 디자인 토큰으로 그렸습니다. 실제 앱 스크린샷은 배포 후 추가합니다. <a href="product.html">제품 페이지 보기</a> · <a href="../../README.md">저장소 README</a></div>
+</footer>
+</body>
+</html>
