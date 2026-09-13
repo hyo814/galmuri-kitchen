@@ -8,6 +8,12 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
   );
 
   useEffect(() => {
+    if (new URLSearchParams(location.search).has("login_error")) {
+      history.replaceState(null, "", location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
     api<AuthOptions>("/api/auth-options").then(setOptions, (e: Error) => setError(e.message));
   }, []);
 

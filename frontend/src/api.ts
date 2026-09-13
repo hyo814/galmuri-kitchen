@@ -36,12 +36,17 @@ export class ApiError extends Error {
 
 export async function api<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
   const hasBody = options.body !== undefined;
-  const res = await fetch(path, {
-    method: options.method ?? "GET",
-    headers: { "X-Requested-With": "fetch", ...(hasBody ? { "Content-Type": "application/json" } : {}) },
-    body: hasBody ? JSON.stringify(options.body) : undefined,
-    credentials: "same-origin",
-  });
+  let res;
+  try {
+    res = await fetch(path, {
+      method: options.method ?? "GET",
+      headers: { "X-Requested-With": "fetch", ...(hasBody ? { "Content-Type": "application/json" } : {}) },
+      body: hasBody ? JSON.stringify(options.body) : undefined,
+      credentials: "same-origin",
+    });
+  } catch {
+    throw new ApiError(0, "네트워크에 연결할 수 없어요. 연결을 확인해 주세요.");
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, data.error ?? "문제가 생겼어요. 잠시 후 다시 시도해 주세요.");
   return data as T;
