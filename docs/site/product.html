@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>냉장고 레시피 · 상하기 전에 먼저 알려 주는 냉장고</title>
-<meta name="description" content="넣은 날만 적어 두면 먹어야 할 순서와 떨어진 필수품을 알려 주는 휴대폰 웹앱, 냉장고 레시피">
+<title>갈무리부엌 · 상하기 전에 먼저 알려 주는 냉장고</title>
+<meta name="description" content="넣은 날만 적어 두면 먹어야 할 순서와 떨어진 필수품을 알려 주는 휴대폰 웹앱, 갈무리부엌">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
@@ -108,7 +108,7 @@ svg { flex-shrink: 0; }
 /* 상단 */
 .top { padding-block: 16px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 700; font-size: 18px; letter-spacing: -0.02em; color: var(--text); text-decoration: none; }
-.brand-mark { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 11px; background: var(--accent); color: var(--on-accent); }
+.brand-mark { display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 11px; overflow: hidden; }
 
 /* 히어로 */
 .hero { padding-block: 24px 64px; }
@@ -306,11 +306,12 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
 <a class="skip" href="#main">본문으로 건너뛰기</a>
 
 <header class="top">
-  <div class="wrap">
+  <div class="wrap" style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
     <a class="brand" href="#main">
-      <span class="brand-mark" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M5 10h14M9 5.5v2M9 13v3"/></svg></span>
-      냉장고 레시피
+      <span class="brand-mark" aria-hidden="true"><svg width="36" height="36" viewBox="0 0 512 512"><rect width="512" height="512" rx="115" fill="#0b7a4c"/><g transform="translate(256 256) scale(0.78) translate(-286 -240)"><path d="M330 382 C440 374 462 262 414 218 C384 190 390 146 434 136" fill="none" style="stroke:#ffffff" stroke-width="68" stroke-linecap="round"/><path d="M168 360 H304 L252 426 Q236 444 220 426 Z" style="fill:#ffc94a"/><path d="M236 186 C300 186 346 214 354 262 C358 288 366 306 382 326 C360 330 346 330 336 334 C322 360 280 386 236 386 C192 386 150 360 136 334 C126 330 112 330 90 326 C106 306 114 288 118 262 C126 214 172 186 236 186 Z" style="fill:#ffffff;stroke:#0b7a4c" stroke-width="16" stroke-linejoin="round" paint-order="stroke"/><path d="M130 250 C112 206 98 160 84 94 L104 116 L110 88 C142 126 176 168 196 206 Z" style="fill:#ffffff"/><path d="M342 250 C360 206 374 160 388 94 L368 116 L362 88 C330 126 296 168 276 206 Z" style="fill:#ffffff"/><path d="M138 228 C128 198 118 170 110 140 C134 162 156 186 172 212 Z" style="fill:#ffc94a"/><path d="M334 228 C344 198 354 170 362 140 C338 162 316 186 300 212 Z" style="fill:#ffc94a"/><path d="M176 284 Q194 266 212 284" fill="none" style="stroke:#07140d" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/><ellipse cx="278" cy="282" rx="17" ry="21" style="fill:#07140d"/><circle cx="284" cy="273" r="6" style="fill:#ffffff"/><path d="M258 246 Q282 232 304 244" fill="none" style="stroke:#07140d" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/><path d="M222 312 H250 Q256 312 252 318 L240 330 Q236 334 232 330 L220 318 Q216 312 222 312 Z" style="fill:#07140d"/><rect x="224" y="344" width="24" height="22" rx="5" style="fill:#ffffff;stroke:#07140d" stroke-width="6"/><path d="M236 346 V364" style="stroke:#07140d" stroke-width="5"/><path d="M208 336 Q236 354 266 332" fill="none" style="stroke:#07140d" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><g transform="rotate(-9 236 196) translate(236 196) scale(.82) translate(-236 -196)"><path d="M170 174 L162 112 C126 104 124 50 168 44 C178 8 222 0 236 24 C250 0 294 8 304 44 C348 50 346 104 310 112 L302 174 Z" style="fill:#ffffff;stroke:#0b7a4c" stroke-width="20" stroke-linejoin="round" paint-order="stroke"/><path d="M204 118 V160" style="stroke:#0b7a4c" stroke-width="10" stroke-linecap="round"/><path d="M236 100 V160" style="stroke:#0b7a4c" stroke-width="10" stroke-linecap="round"/><path d="M268 118 V160" style="stroke:#0b7a4c" stroke-width="10" stroke-linecap="round"/><rect x="158" y="166" width="156" height="48" rx="14" style="fill:#ffffff;stroke:#0b7a4c" stroke-width="20" paint-order="stroke"/></g></g></svg></span>
+      갈무리부엌
     </a>
+    <a href="portfolio.html" style="font-size:14px; color:var(--text-2); text-decoration:underline; text-underline-offset:3px;">개발 과정 보기</a>
   </div>
 </header>
 
@@ -320,7 +321,7 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
       <div>
         <span class="pill">출시 준비 중</span>
         <h1 id="hero-title">재료가 상하기 전에,<br><em>먼저 알려 드려요</em></h1>
-        <p class="hero-sub">냉장고에 넣은 날만 적어 두세요. 먼저 먹어야 할 재료와 떨어진 필수품을 휴대폰 첫 화면에서 바로 보여 드려요.</p>
+        <p class="hero-sub">냉장고에 넣은 날만 적어 두세요. 먼저 먹어야 할 재료와 떨어진 필수품을 휴대폰 첫 화면에서 바로 보여 드려요.<br>사둔 재료, 남김없이 챙겨요 — 갈무리부엌</p>
         <div class="hero-cta">
           <a class="btn" href="#notify">[출시 알림 받기]</a>
           <span class="placeholder-tag">알림 신청 연결은 준비 중이에요.</span>
@@ -367,6 +368,9 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
             <div class="cta"><div class="cta-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>재료 추가</div></div>
             <div class="tabbar">
               <div class="tab on"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M5 10h14M9 5.5v2M9 13v3"/></svg>재고</div>
+              <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3M9 7h6"/></svg>레시피</div>
+              <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 4h2.5l2.2 10.5h10.1L20 7.5H6.5"/><circle cx="9.5" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></svg>장보기</div>
+              <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="5" width="16" height="16" rx="2.5"/><path d="M4 10h16M8.5 3v4M15.5 3v4"/></svg>식단</div>
               <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>더보기</div>
             </div>
           </div>
@@ -466,7 +470,19 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
           </article>
           <article class="feature">
             <h4>눈이 편한 화면</h4>
-            <p>밝은 화면과 어두운 화면을 휴대폰 설정에 맞춰 바꾸고, 글자는 잘 읽히는 대비로 맞췄어요.</p>
+            <p>밝은 화면과 어두운 화면을 휴대폰 설정에 맞춰 바꾸고, 글자는 두 화면 모두 잘 읽히는 대비로 맞췄어요.</p>
+          </article>
+          <article class="feature">
+            <h4>재료 빨리 넣기</h4>
+            <p>장 보고 온 날 여러 개를 이어서 넣어요. 단위는 칩으로 고르고, 유통기한은 “구입일 +3일”처럼 빠르게 넣고, 수량은 −/+ 버튼으로 조절해요. 다 쓴 재료는 “다 썼어요”로 바로 지워요.</p>
+          </article>
+          <article class="feature">
+            <h4>재고 검색</h4>
+            <p>재료가 많아지면 이름으로 바로 찾아요.</p>
+          </article>
+          <article class="feature">
+            <h4>정리된 필수품 시트</h4>
+            <p>떨어진 것만 모아 보고, 눌러서 바로 재고에 추가해요. 이미 있으면 어떤 재료로 잡혔는지도 보여 줘요.</p>
           </article>
         </div>
       </div>
@@ -567,7 +583,7 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
           <ul class="notes card">
             <li class="note"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>포장 날짜가 가장 우선이에요.</b> 유통기한을 직접 적으면 그 날짜만 보고 D-3부터 알려요.</span></li>
             <li class="note"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>우유는 기준을 두지 않았어요.</b> 우유류 소비기한 표시는 2031년부터라 참고값이 없어요. 포장 날짜를 적으시도록 안내해요.</span></li>
-            <li class="note"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>달걀은 구입 30일.</b> 가정 보관 권장 기간을 바탕으로 구입일 기준으로 정했어요.</span></li>
+            <li class="note"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>달걀은 구입 25일째부터 노랑, 30일째부터 섭취 주의.</b> 가정 보관 권장 기간을 바탕으로 구입일 기준으로 정했어요.</span></li>
             <li class="note"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>모든 기준은 바꿀 수 있어요.</b> 우리 집 보관 습관에 맞게 일수를 고치거나 지워요.</span></li>
           </ul>
           <div class="sources">
@@ -593,13 +609,13 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
       </div>
       <ol class="timeline">
         <li class="done"><b>재고·필수품·경고</b><span>보관 위치, 배지, 필수품 알림, 품목별 경고, 주방 도구</span></li>
-        <li><b>더 편한 입력</b><span>여러 재료 연속 추가, 재고 검색</span></li>
+        <li class="done"><b>빠른 입력·검색</b><span>여러 재료 연속 추가, 재고 검색, 매칭 오탐 차단, 시작 화면</span></li>
         <li><b>사진으로 등록</b><span>냉장고 사진·영수증·주문 화면</span></li>
         <li><b>레시피</b><span>있는 재료로 추천, 링크 가져오기, 양념 비율</span></li>
         <li><b>장보기</b><span>쇼핑몰 링크, 최저가, 마트 메모</span></li>
         <li><b>식단과 영양</b><span>식단 짜기, 칼로리·당류, 먹은 것 기록</span></li>
         <li><b>요리 기록</b><span>만든 요리와 사진</span></li>
-        <li><b>공개</b><span>누구나 가입해 쓸 수 있게 배포</span></li>
+        <li><b>공개</b><span>누구나 가입해 쓸 수 있게 배포. "갈무리부엌" 상표 조사(KIPRIS 9류·42류)를 먼저 확인해요.</span></li>
       </ol>
     </div>
   </section>
@@ -618,7 +634,7 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
 
 <footer>
   <div class="wrap foot">
-    <span>냉장고 레시피 · [회사명]</span>
+    <span>갈무리부엌 · [회사명] · <a href="portfolio.html">개발 과정 보기</a> · <a href="../../README.md">저장소 README</a></span>
     <ul aria-label="사업자 정보와 약관">
       <li>[문의 이메일]</li>
       <li>[제휴·투자 문의]</li>

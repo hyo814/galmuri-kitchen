@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>냉장고 레시피 · 케이스 스터디</title>
-<meta name="description" content="모바일 우선 식재료 관리 웹앱 냉장고 레시피의 설계 결정, 품질 검증, 개발 과정을 정리한 케이스 스터디">
+<title>갈무리부엌 · 케이스 스터디</title>
+<meta name="description" content="모바일 우선 식재료 관리 웹앱 갈무리부엌의 설계 결정, 품질 검증, 개발 과정을 정리한 케이스 스터디">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
@@ -95,9 +95,12 @@ ul, ol { margin: 0; padding: 0; }
 
 /* 상단 */
 .masthead { border-bottom: 1px solid var(--line); }
-.masthead .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; }
+.masthead .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; flex-wrap: wrap; padding-block: 8px; }
+.masthead-brand { display: inline-flex; align-items: center; gap: 8px; }
+.masthead-mark { flex-shrink: 0; border-radius: 8px; }
 .masthead-name { font-weight: 700; letter-spacing: -0.01em; }
-.masthead-meta { font-family: var(--mono); font-size: 13px; color: var(--text-3); }
+.masthead-meta { display: inline-flex; align-items: center; gap: 14px; font-family: var(--mono); font-size: 13px; color: var(--text-3); }
+.masthead-meta a { color: inherit; }
 
 /* 히어로 */
 .hero { padding-block: 56px 48px; border-bottom: 1px solid var(--line); }
@@ -345,8 +348,14 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
 
 <header class="masthead">
   <div class="wrap">
-    <span class="masthead-name">냉장고 레시피</span>
-    <span class="masthead-meta">케이스 스터디 · 1c단계 기준</span>
+    <span class="masthead-brand">
+      <svg class="masthead-mark" width="28" height="28" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="115" fill="#0b7a4c"/><g transform="translate(256 256) scale(0.78) translate(-286 -240)"><path d="M330 382 C440 374 462 262 414 218 C384 190 390 146 434 136" fill="none" style="stroke:#ffffff" stroke-width="68" stroke-linecap="round"/><path d="M168 360 H304 L252 426 Q236 444 220 426 Z" style="fill:#ffc94a"/><path d="M236 186 C300 186 346 214 354 262 C358 288 366 306 382 326 C360 330 346 330 336 334 C322 360 280 386 236 386 C192 386 150 360 136 334 C126 330 112 330 90 326 C106 306 114 288 118 262 C126 214 172 186 236 186 Z" style="fill:#ffffff;stroke:#0b7a4c" stroke-width="16" stroke-linejoin="round" paint-order="stroke"/><path d="M130 250 C112 206 98 160 84 94 L104 116 L110 88 C142 126 176 168 196 206 Z" style="fill:#ffffff"/><path d="M342 250 C360 206 374 160 388 94 L368 116 L362 88 C330 126 296 168 276 206 Z" style="fill:#ffffff"/><path d="M138 228 C128 198 118 170 110 140 C134 162 156 186 172 212 Z" style="fill:#ffc94a"/><path d="M334 228 C344 198 354 170 362 140 C338 162 316 186 300 212 Z" style="fill:#ffc94a"/><path d="M176 284 Q194 266 212 284" fill="none" style="stroke:#07140d" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/><ellipse cx="278" cy="282" rx="17" ry="21" style="fill:#07140d"/><circle cx="284" cy="273" r="6" style="fill:#ffffff"/><path d="M258 246 Q282 232 304 244" fill="none" style="stroke:#07140d" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/><path d="M222 312 H250 Q256 312 252 318 L240 330 Q236 334 232 330 L220 318 Q216 312 222 312 Z" style="fill:#07140d"/><rect x="224" y="344" width="24" height="22" rx="5" style="fill:#ffffff;stroke:#07140d" stroke-width="6"/><path d="M236 346 V364" style="stroke:#07140d" stroke-width="5"/><path d="M208 336 Q236 354 266 332" fill="none" style="stroke:#07140d" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><g transform="rotate(-9 236 196) translate(236 196) scale(.82) translate(-236 -196)"><path d="M170 174 L162 112 C126 104 124 50 168 44 C178 8 222 0 236 24 C250 0 294 8 304 44 C348 50 346 104 310 112 L302 174 Z" style="fill:#ffffff;stroke:#0b7a4c" stroke-width="20" stroke-linejoin="round" paint-order="stroke"/><path d="M204 118 V160" style="stroke:#0b7a4c" stroke-width="10" stroke-linecap="round"/><path d="M236 100 V160" style="stroke:#0b7a4c" stroke-width="10" stroke-linecap="round"/><path d="M268 118 V160" style="stroke:#0b7a4c" stroke-width="10" stroke-linecap="round"/><rect x="158" y="166" width="156" height="48" rx="14" style="fill:#ffffff;stroke:#0b7a4c" stroke-width="20" paint-order="stroke"/></g></g></svg>
+      <span class="masthead-name">갈무리부엌</span>
+    </span>
+    <span class="masthead-meta">
+      케이스 스터디 · 1d단계 기준
+      <a href="product.html">제품 페이지 보기</a>
+    </span>
   </div>
 </header>
 
@@ -354,10 +363,11 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
   <section class="hero" aria-labelledby="hero-title">
     <div class="wrap">
       <p class="eyebrow">개인 프로젝트 · 설계부터 구현, 검증까지</p>
-      <h1 id="hero-title">냉장고 레시피</h1>
+      <h1 id="hero-title">갈무리부엌</h1>
       <p class="hero-lede">
         식재료가 상하기 전에 알려 주는 <strong>모바일 우선 웹앱</strong>을 설계 문서부터 테스트, 컨테이너 검증까지 만들고 있습니다.
         식약처 참고값을 규칙으로 옮기고, 사용자 결정이 바뀔 때마다 문서를 먼저 고친 뒤 기능 브랜치와 리뷰로 반영했습니다.
+        이름 "갈무리"는 물건을 잘 간수하고 일을 끝맺는다는 뜻의 순우리말이고, 마스코트는 셰프 다람쥐 <strong>다람이</strong>입니다.
       </p>
       <ul class="badges" aria-label="기술 스택">
         <li>React 19</li>
@@ -380,8 +390,8 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
       <p class="placeholder-note">대괄호로 표시한 링크는 공개 후 채웁니다. 배포 주소는 아직 없습니다.</p>
 
       <dl class="facts">
-        <div class="fact"><dt>구현 완료</dt><dd>1 · 1b · 1c <small>단계</small></dd></div>
-        <div class="fact"><dt>백엔드 테스트</dt><dd>138 <small>개 통과</small></dd></div>
+        <div class="fact"><dt>구현 완료</dt><dd>1–1d <small>단계</small></dd></div>
+        <div class="fact"><dt>백엔드 테스트</dt><dd>172 <small>개 통과</small></dd></div>
         <div class="fact"><dt>테스트 DB</dt><dd>2 <small>SQLite · PostgreSQL</small></dd></div>
         <div class="fact"><dt>페르소나 사용성 리뷰</dt><dd>44 <small>건 발견</small></dd></div>
       </dl>
@@ -445,8 +455,12 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
           <li><b>필수품 배너</b><span>재고와 이름을 매칭해 떨어진 필수품을 첫 화면 배너로. 이름은 앞 3개와 “외 N개”만 보여 줘 화면을 차지하지 않게 했습니다.</span></li>
           <li><b>품목별 경고 규칙</b><span>식약처 소비기한 참고값을 구입일 기준으로 환산해 기본 규칙으로 시드. 사용자가 수정·삭제할 수 있습니다.</span></li>
           <li><b>주방 도구</b><span>도구 목록과 주기 점검. 이름에 코팅·프라이팬이 들어가면 6개월 점검을 미리 선택합니다(논코팅·무코팅 제외).</span></li>
-          <li><b>하단 탭과 해시 라우팅</b><span>탭 전환은 히스토리를 쌓지 않고, 더보기 → 주방 도구는 쌓아서 휴대폰 뒤로가기가 기대대로 동작합니다.</span></li>
+          <li><b>하단 탭 5개</b><span>재고 · 레시피 · 장보기 · 식단 · 더보기. 아직 만들지 않은 탭은 준비 중 화면으로 앞으로 나올 기능을 안내합니다. 탭 전환은 히스토리를 쌓지 않고, 더보기 → 주방 도구는 쌓아서 휴대폰 뒤로가기가 기대대로 동작합니다.</span></li>
           <li><b>인증</b><span>Authlib 기반 카카오·구글 OAuth. 사설 IP는 리다이렉트 URI로 등록할 수 없어, <code>DEV_MODE=1</code>에서만 개발용 로그인을 열고 운영 환경에서 켜진 채 시작하면 거부합니다.</span></li>
+          <li><b>재료 빠른 입력(1d)</b><span><code>저장하고 계속 추가</code>로 연속 등록, 단위 칩, <code>구입일 +N일</code> 유통기한 빠른 입력, 수량 −/+ 스테퍼, 수량 0에서 <code>다 썼어요</code>로 바로 삭제. 이중 제출 방지 가드를 넣었습니다.</span></li>
+          <li><b>재고 검색 · 필수품 시트 정리(1d)</b><span>재고 이름 검색, 필수품의 <code>떨어진 것만</code> 보기, 떨어진 항목을 누르면 이름이 채워진 재료 추가로 연결, 있으면 매칭된 재고 이름을 함께 표시.</span></li>
+          <li><b>매칭 오탐 차단(1d)</b><span>짧은 이름 매칭 규칙을 다듬어 <code>파</code>가 <code>양파</code>를, <code>고추</code>가 <code>고추장</code>을 잘못 잡지 않게 했습니다. 장류·소스로 등록한 필수품과 이름이 맞는 냉장 재료는 오래됨 배지에서 제외하되(고추장 불고기 같은 요리는 그대로 경고), 유통기한·품목 규칙 판정은 그대로 적용합니다.</span></li>
+          <li><b>시작 화면과 브랜드(1d)</b><span>셰프 다람쥐 <b>다람이</b> 스플래시, 앱 아이콘, 파비콘. 이름을 갈무리부엌으로 바꿨습니다.</span></li>
         </ul>
 
         <div class="screens">
@@ -485,6 +499,9 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
                 <div class="cta"><div class="cta-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>재료 추가</div></div>
                 <div class="tabbar">
                   <div class="tab on"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M5 10h14M9 5.5v2M9 13v3"/></svg>재고</div>
+                  <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3M9 7h6"/></svg>레시피</div>
+                  <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 4h2.5l2.2 10.5h10.1L20 7.5H6.5"/><circle cx="9.5" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></svg>장보기</div>
+                  <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="5" width="16" height="16" rx="2.5"/><path d="M4 10h16M8.5 3v4M15.5 3v4"/></svg>식단</div>
                   <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>더보기</div>
                 </div>
               </div>
@@ -542,6 +559,9 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
                 <div class="cta"><div class="cta-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>도구 추가</div></div>
                 <div class="tabbar">
                   <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M5 10h14M9 5.5v2M9 13v3"/></svg>재고</div>
+                  <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3M9 7h6"/></svg>레시피</div>
+                  <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 4h2.5l2.2 10.5h10.1L20 7.5H6.5"/><circle cx="9.5" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></svg>장보기</div>
+                  <div class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="5" width="16" height="16" rx="2.5"/><path d="M4 10h16M8.5 3v4M15.5 3v4"/></svg>식단</div>
                   <div class="tab on"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>더보기</div>
                 </div>
               </div>
@@ -608,7 +628,7 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
             </div>
             <dl>
               <div><dt>결정</dt><dd>식약처 「식품유형별 소비기한 설정 보고서」 참고값에 0.8을 곱해 내림한 날을 빨강, 그 3일 전을 노랑으로 시드합니다.</dd></div>
-              <div><dt>이유</dt><dd><strong>참고값은 제조일 기준</strong>인데 앱이 아는 날짜는 구입일입니다. 유통 기간만큼의 차이를 모르므로 보수적으로 줄였습니다. 달걀·계란은 사용자 결정으로 구입 30일, 우유는 소비기한 표시제가 2031년부터라 값을 지어내지 않고 규칙을 두지 않았습니다. 출처 URL은 코드 주석에 남겼습니다.</dd></div>
+              <div><dt>이유</dt><dd><strong>참고값은 제조일 기준</strong>인데 앱이 아는 날짜는 구입일입니다. 유통 기간만큼의 차이를 모르므로 보수적으로 줄였습니다. 달걀·계란은 사용자 결정으로 구입 25일부터 노랑, 30일부터 섭취 주의, 우유는 소비기한 표시제가 2031년부터라 값을 지어내지 않고 규칙을 두지 않았습니다. 출처 URL은 코드 주석에 남겼습니다.</dd></div>
               <div><dt>시드 값</dt><dd>
                 <div class="table-scroll">
                   <table>
@@ -658,7 +678,7 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
 
         <div class="quality">
           <div class="q">
-            <p class="num">138</p>
+            <p class="num">172</p>
             <h3>백엔드 테스트, 경고 0</h3>
             <p>SQLite와 PostgreSQL 두 엔진에서 모두 통과. <code>DeprecationWarning</code>을 오류로 올려 실행합니다.</p>
             <pre>backend/.venv/bin/pytest -q -W error::DeprecationWarning</pre>
@@ -676,13 +696,14 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
             <p>단계마다 구현과 분리된 코드 리뷰를 받고, 마지막에 브랜치 전체를 다시 리뷰했습니다. 지적은 <code>fix/phase1b-review</code>, <code>fix/phase1c-review</code> 같은 별도 브랜치로 반영했습니다(거대 id 요청의 500 방지, UNIQUE 경합을 400으로, 미래 구매일 거부 등).</p>
           </div>
           <div class="q">
-            <h3>라이트 테마 대비를 AA로</h3>
-            <p>승인된 시안 색 일부가 라이트 테마에서 4.5:1에 못 미친다는 리뷰 지적을 받고, 토큰 단위로 한 톤 진하게 바꿨습니다.</p>
+            <h3>라이트·다크 테마 대비를 AA로</h3>
+            <p>승인된 시안 색 일부가 라이트 테마에서 4.5:1에 못 미친다는 리뷰 지적을 받고, 토큰 단위로 한 톤 진하게 바꿨습니다. 다크 테마의 보조 글자(<code>--text-3</code>)도 <code>#8a9099</code>로 맞춰, 두 테마 모두 텍스트 대비 WCAG AA(4.5:1) 기준을 만족합니다.</p>
             <ul class="swatches">
               <li><span class="name">accent</span><span class="sw" style="--c:#0f9d63">#0f9d63</span><span class="arrow" aria-label="에서">→</span><span class="sw" style="--c:#0b7a4c">#0b7a4c</span></li>
               <li><span class="name">text-3</span><span class="sw" style="--c:#8b919a">#8b919a</span><span class="arrow" aria-label="에서">→</span><span class="sw" style="--c:#63697a">#63697a</span></li>
               <li><span class="name">danger</span><span class="sw" style="--c:#e5484d">#e5484d</span><span class="arrow" aria-label="에서">→</span><span class="sw" style="--c:#c4262e">#c4262e</span></li>
               <li><span class="name">warn</span><span class="sw" style="--c:#b86e00">#b86e00</span><span class="arrow" aria-label="에서">→</span><span class="sw" style="--c:#8f5500">#8f5500</span></li>
+              <li><span class="name">text-3 (다크)</span><span class="sw" style="--c:#8a9099">#8a9099</span></li>
             </ul>
           </div>
           <div class="q">
@@ -753,15 +774,15 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
       <section class="section" id="roadmap" aria-labelledby="roadmap-title">
         <p class="section-kicker">로드맵</p>
         <h2 id="roadmap-title">다음에 만들 것</h2>
-        <p class="section-intro">아래는 모두 설계 문서에만 있고 아직 구현하지 않았습니다. 이 순서대로 진행합니다.</p>
+        <p class="section-intro">1d단계 사용성 개선까지 구현을 마쳤습니다. 아래는 그다음에 만들 것이며, 설계 문서에만 있고 아직 구현하지 않았습니다. 이 순서대로 진행합니다.</p>
         <ol class="roadmap">
-          <li><div><b>1d단계 사용성 개선</b><span class="status">계획 작성됨</span><span>페르소나 점검에서 고른 항목. 재료 연속 추가, 재고 검색, 짧은 이름 매칭 오탐 차단(필수품 “파”가 양파에 잡히지 않게), 필수품 시트 정리.</span></div></li>
           <li><div><b>AI 스캔</b><span class="status">준비 중</span><span>냉장고 사진·영수증·온라인 주문 캡처를 Claude 비전으로 인식해 확인 후 일괄 등록. 키가 없으면 샘플 모드.</span></div></li>
           <li><div><b>레시피</b><span class="status">준비 중</span><span>내 레시피, 식약처 공공 레시피 DB, AI 추천, 유튜브·인스타그램 링크 가져오기, 숟가락 단위 양념 비율 계산기.</span></div></li>
           <li><div><b>장보기</b><span class="status">준비 중</span><span>쇼핑몰 7곳 검색·정렬 링크, 네이버 최저가, 메모·사진과 동기화를 갖춘 매장 장보기.</span></div></li>
           <li><div><b>식단과 영양</b><span class="status">준비 중</span><span>주·월 식단, 다이어트 AI 초안, Mifflin–St Jeor 기초대사량, 식약처 식품영양성분 DB 기반 칼로리·당류 합산, 먹은 것 기록.</span></div></li>
           <li><div><b>조리 기록</b><span class="status">준비 중</span><span>요리한 날짜, 사용한 재료 차감, 메모와 사진.</span></div></li>
           <li><div><b>Render 배포</b><span class="status">준비 중</span><span>Docker 웹 서비스와 PostgreSQL. 배포 전 로컬 검증 절차는 문서화를 마쳤습니다.</span></div></li>
+          <li><div><b>"갈무리부엌" 상표 조사</b><span class="status">출시 전 확인 필요</span><span>KIPRIS 9류(소프트웨어)·42류(SaaS) 선등록 여부를 출시 전에 확인합니다.</span></div></li>
         </ol>
       </section>
 
@@ -779,7 +800,7 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
 </main>
 
 <footer>
-  <div class="wrap">화면은 이미지 없이 앱의 디자인 토큰으로 그렸습니다. 실제 앱 스크린샷은 배포 후 추가합니다.</div>
+  <div class="wrap">화면은 이미지 없이 앱의 디자인 토큰으로 그렸습니다. 실제 앱 스크린샷은 배포 후 추가합니다. <a href="product.html">제품 페이지 보기</a> · <a href="../../README.md">저장소 README</a></div>
 </footer>
 </body>
 </html>
