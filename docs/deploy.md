@@ -1,5 +1,84 @@
 # 배포 가이드 (Render + 카카오/구글 로그인)
 
+## 0. 로컬 개발
+
+- `./dev.sh` 실행: Flask는 `127.0.0.1:5181`, Vite는 `0.0.0.0:5180`(폰은 같은 와이파이에서 `http://<맥 IP>:5180`).
+- 백엔드 의존성: `cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt`
+  (테스트 없이 앱만 돌릴 때는 `requirements.txt`만 설치해도 된다).
+
+## 배포 전 로컬 검증
+
+배포하기 전에 아래를 순서대로 실행해 문제를 미리 잡는다. Postgres는
+`brew install postgresql@17`, 컨테이너 실행은 `brew install colima docker`로 준비한다.
+
+1. **SQLite 테스트 스위트**
+   ```
+   backend/.venv/bin/pytest -q -W error::DeprecationWarning
+   ```
+2. **Postgres 테스트 스위트** (실제 배포 DB와 같은 엔진으로 재검증)
+   ```
+   brew services start postgresql@17
+   createdb recipe_ai_test
+   createdb recipe_ai_migrate
+   TEST_DATABASE_URL=postgresql://localhost/recipe_ai_test \
+   TEST_MIGRATE_DATABASE_URL=postgresql://localhost/recipe_ai_migrate \
+   backend/.venv/bin/pytest -q -W error::DeprecationWarning
+   ```
+3. **마이그레이션 점검**
+   ```
+   DATABASE_URL=postgresql://localhost/recipe_ai_migrate DEV_MODE=1 SECRET_KEY=x \
+   backend/.venv/bin/flask --app app db upgrade
+   DATABASE_URL=postgresql://localhost/recipe_ai_migrate DEV_MODE=1 SECRET_KEY=x \
+   backend/.venv/bin/flask --app app db check
+   ```
+4. **Docker 이미지 빌드 + 스모크 테스트** (Render가 쓰는 것과 같은 이미지)
+   ```
+   colima start
+   docker build -t recipe-ai:local .
+   createdb recipe_ai_docker
+   docker run -d --name recipe-ai-smoke -p 18000:8000 \
+     --add-host=host.docker.internal:host-gateway \
+     -e DATABASE_URL=postgresql://$(whoami)@host.docker.internal:5432/recipe_ai_docker \
+     -e SECRET_KEY=local-docker-check -e PORT=8000 \
+     recipe-ai:local
+   curl -s http://localhost:18000/                     # <title>냉장고 레시피</title> 포함
+   curl -s -o /dev/null -w '%{http_code}\n' http://localhost:18000/api/me            # 401
+   curl -s -o /dev/null -w '%{http_code}\n' http://localhost:18000/manifest.webmanifest  # 200
+   docker logs recipe-ai-smoke   # 마이그레이션 로그 + gunicorn access log 확인
+   docker stop recipe-ai-smoke && docker rm recipe-ai-smoke
+   ```
+   colima의 Lima VM은 `host.docker.internal`을 macOS 호스트로 자동 연결해 주므로,
+   이 로컬 검증에는 `pg_hba.conf`/`listen_addresses` 변경이 필요 없었다(맥 로컬
+   Postgres에 이미 있는 `127.0.0.1` trust 규칙으로 충분). 만약 환경에 따라 컨테이너가
+   호스트 Postgres에 연결하지 못하면 `postgresql.conf`의 `listen_addresses`를 `*`로,
+   `pg_hba.conf`에 컨테이너 네트워크 대역(`host` 레코드)을 로컬 전용으로 추가한다.
+
+## 환경 변수
+
+| 변수 | 필수/선택 | 사용 단계 | 발급처 |
+|---|---|---|---|
+| `SECRET_KEY` | 필수 | 항상(세션 서명) | 직접 생성(긴 랜덤 문자열) |
+| `DATABASE_URL` | 필수(운영) | 항상 | Render PostgreSQL Internal Database URL |
+| `KAKAO_CLIENT_ID` / `KAKAO_CLIENT_SECRET` | 선택 | 로그인 | 카카오 개발자 콘솔 |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 선택 | 로그인 | Google Cloud Console |
+| `ANTHROPIC_API_KEY` / `CLAUDE_MODEL` | 선택 | AI 레시피/스캔 기능 구현 후 | console.anthropic.com |
+| `AI_DAILY_SCAN_LIMIT` / `AI_DAILY_RECIPE_LIMIT` | 선택 | AI 기능 구현 후(기본 10) | 직접 설정 |
+| `FOODSAFETY_API_KEY` | 선택 | 레시피 추천 구현 후 | 식약처 공공데이터포털(COOKRCP01) |
+| `FOOD_NUTRITION_API_KEY` | 선택 | 영양 계산기 구현 후 | 식약처 공공데이터포털(식품영양성분 DB) |
+| `YOUTUBE_API_KEY` | 선택 | 레시피 영상 연동 후 | Google Cloud Console(YouTube Data API v3) |
+| `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | 선택 | 장보기(가격 비교) 구현 후 | 네이버 개발자센터 |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | 선택 | 사진 업로드 구현 후 | Cloudflare 대시보드 R2 |
+| `DEV_MODE` | 로컬 전용 | 로컬 개발 | 운영(Render)에는 **넣지 않는다** |
+
+키가 비어 있으면 개발 모드에서는 샘플 데이터로 동작(각 기능 구현 시 적용), 운영에서는 해당 기능을 숨긴다.
+
+## 배포 전 체크리스트
+
+- [ ] `DEV_MODE` 환경변수가 없다 (있으면 Render에서 시작 거부).
+- [ ] `SECRET_KEY`를 새로 생성해 넣었다(로컬 값 재사용 금지).
+- [ ] 카카오/구글 OAuth 리다이렉트 URI가 실제 배포 도메인으로 등록돼 있다.
+- [ ] `flask db upgrade` 후 `flask db check`가 깨끗하다(Postgres 대상).
+
 ## 1. GitHub에 올리기
 1. GitHub에서 **비공개** 저장소 생성
 2. `git remote add origin <주소> && git push -u origin main`
