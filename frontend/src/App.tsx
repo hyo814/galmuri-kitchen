@@ -47,7 +47,34 @@ export default function App() {
   }, [route.path]);
 
   useLayoutEffect(() => {
-    window.scrollTo(0, scrollTops.get(route.path) ?? 0);
+    const savedY = scrollTops.get(route.path) ?? 0;
+    window.scrollTo(0, savedY);
+    if (savedY === 0) return;
+
+    // 재고처럼 데이터를 여러 번에 걸쳐 비동기로 받는 화면(재고 목록 → 필수품 배너 순)은
+    // 이 시점엔 내용이 짧아 스크롤이 그만큼 안 먹을 수 있고, 나중에 위쪽에 내용이 더 끼어들면
+    // 브라우저가 스크롤 위치를 슬쩍 밀기도 한다(scroll anchoring). 그래서 한 번 맞춰도 계속 지켜보다가
+    // 사용자가 직접 스크롤을 시작하면(휠·터치) 그만두거나, ~2초 뒤엔 그만둔다.
+    let stopped = false;
+    function stop() {
+      if (stopped) return;
+      stopped = true;
+      observer.disconnect();
+      clearTimeout(timer);
+      window.removeEventListener("wheel", stop);
+      window.removeEventListener("touchstart", stop);
+      window.removeEventListener("pointerdown", stop);
+    }
+    const observer = new ResizeObserver(() => {
+      if (document.documentElement.scrollHeight - window.innerHeight >= savedY) window.scrollTo(0, savedY);
+    });
+    observer.observe(document.body);
+    const timer = setTimeout(stop, 2000);
+    window.addEventListener("wheel", stop, { passive: true, once: true });
+    window.addEventListener("touchstart", stop, { passive: true, once: true });
+    window.addEventListener("pointerdown", stop, { passive: true, once: true });
+
+    return stop;
   }, [route.path]);
 
   // 로그아웃·세션 만료: 다른 계정으로 들어와도 이전 사용자의 화면 캐시가 보이지 않게

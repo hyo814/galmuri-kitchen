@@ -139,5 +139,5 @@ export async function api<T>(
   return data as T;
 }
 
-/** 기기 로컬 날짜 YYYY-MM-DD (toISOString은 UTC라 새벽에 하루 밀림) */
-export const localToday = () => new Date().toLocaleDateString("sv-SE");
+/** 오늘 날짜 YYYY-MM-DD, 서울 기준(서버도 서울 기준으로 계산하므로 기기 시간대와 상관없이 맞춘다) */
+export const localToday = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });

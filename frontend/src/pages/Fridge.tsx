@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type Ingredient, type IngredientInput, type ItemRule, type Staple, type StorageLocation, type User } from "../api";
 import Icon from "../components/Icon";
 import InfiniteSentinel from "../components/InfiniteSentinel";
@@ -41,6 +41,7 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
   useEffect(() => {
     setShown(50);
   }, [filter, query]);
+  const showMore = useCallback(() => setShown((s) => s + 50), []);
 
   // 401은 api()의 전역 핸들러(App.tsx)가 처리한다.
   const load = () => {
@@ -248,9 +249,7 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
               );
             })}
           </ul>
-          {visible.length > 50 && (
-            <InfiniteSentinel onVisible={() => setShown((s) => s + 50)} hasMore={shown < visible.length} />
-          )}
+          {visible.length > 50 && <InfiniteSentinel onVisible={showMore} hasMore={shown < visible.length} />}
         </>
       )}
 

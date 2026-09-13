@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import type { KitchenTool, KitchenToolInput, ToolCategory } from "../api";
+import { localToday, type KitchenTool, type KitchenToolInput, type ToolCategory } from "../api";
 import { cycleLabel, formatDate } from "../format";
 import { useAsyncAction } from "../useAsyncAction";
 import Icon from "./Icon";
@@ -131,6 +131,7 @@ export default function ToolForm({ initial, onSubmit, onChecked, onReplaced, onD
             id="tool-bought"
             type="date"
             value={boughtOn}
+            max={localToday()}
             onChange={(e) => setBoughtOn(e.target.value)}
           />
         </label>

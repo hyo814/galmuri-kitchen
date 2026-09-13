@@ -30,7 +30,12 @@ export default function InfiniteSentinel({ onVisible, hasMore, loading, error, o
     return () => observer.disconnect();
   }, [onVisible, hasMore, loading, error]);
 
-  if (!hasMore) return <p className="list-end muted">다 봤어요</p>;
+  if (!hasMore)
+    return (
+      <p className="list-end muted" role="status" aria-live="polite">
+        다 봤어요
+      </p>
+    );
 
   if (error)
     return (
@@ -48,7 +53,9 @@ export default function InfiniteSentinel({ onVisible, hasMore, loading, error, o
   return (
     <div ref={ref} className="list-end">
       {loading ? (
-        <p className="muted">불러오는 중…</p>
+        <p className="muted" role="status" aria-live="polite">
+          불러오는 중…
+        </p>
       ) : (
         <button className="btn secondary inline" onClick={onVisible}>
           더 보기
