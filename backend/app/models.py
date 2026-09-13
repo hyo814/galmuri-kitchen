@@ -90,3 +90,16 @@ class ItemRule(db.Model):
     danger_days = db.Column(db.Integer, nullable=False)
     source = db.Column(db.String(10), nullable=False, default="user")  # mfds | user
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class KitchenTool(db.Model):
+    __tablename__ = "kitchen_tools"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = db.Column(db.String(30), nullable=False)
+    category = db.Column(db.String(10), nullable=False, default="조리도구")
+    bought_on = db.Column(db.Date)
+    check_every_months = db.Column(db.Integer)
+    last_checked_on = db.Column(db.Date)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
