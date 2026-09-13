@@ -50,6 +50,7 @@ def test_empty_inventory_recommends_nothing(client, login, app):
         "mine_total": 0,
         "public": [],
         "public_total": 0,
+        "public_count": 1,
         "next_offset": None,
         "sample": False,
         "inventory_count": 0,
@@ -303,6 +304,7 @@ def test_other_users_recipes_and_inventory_are_not_used(client, login, app):
         "mine_total": 0,
         "public": [],
         "public_total": 0,
+        "public_count": 0,
         "next_offset": None,
         "sample": False,
         "inventory_count": 0,
@@ -361,3 +363,45 @@ def test_recommendations_first_call_and_cached_call_with_large_inventory(client,
     recommend(client)
     cached_elapsed = time.perf_counter() - started
     assert cached_elapsed < 0.1, f"{cached_elapsed:.3f}s"
+
+
+# --- 3a final review fix wave ---
+
+
+def test_rank_cache_prunes_expired_entries_on_insert(client, login, app, monkeypatch):
+    # I3: 새 사용자 항목을 넣을 때(insert) TTL이 지난 다른 사용자 항목도 같이 치운다
+    recipes_module._RANK_CACHE.clear()
+    u1 = login("cache-u1")
+    add_ingredient(client, "계란")
+    add_public(app, public("1", "계란찜", ["계란"]))
+    recommend(client)
+    assert u1.id in recipes_module._RANK_CACHE
+
+    real_monotonic = recipes_module.time.monotonic
+    monkeypatch.setattr(recipes_module.time, "monotonic", lambda: real_monotonic() + 121)  # u1 항목 TTL 지남
+
+    u2 = login("cache-u2")
+    add_ingredient(client, "계란")
+    recommend(client)  # u2를 새로 넣으면서 만료된 u1도 같이 지워야 한다
+    assert u1.id not in recipes_module._RANK_CACHE
+    assert u2.id in recipes_module._RANK_CACHE
+
+
+def test_rank_cache_caps_at_50_users(app):
+    with app.app_context():
+        recipes_module._RANK_CACHE.clear()
+        now = recipes_module.time.monotonic()
+        for uid in range(50):
+            recipes_module._RANK_CACHE[uid] = {"signature": "sig", "created": now, "mine": None, "public": None}
+        recipes_module._rank_cache_entry(999, "새-서명")
+        assert len(recipes_module._RANK_CACHE) == 50
+        assert 999 in recipes_module._RANK_CACHE
+
+
+def test_public_count_counts_all_public_rows_even_without_overlap(client, login, app):
+    # M11: public_total은 재고와 겹치는 것만 세지만 public_count는 카탈로그 전체를 센다
+    login()
+    add_public(app, public("1", "무관한 레시피", ["당면", "시금치"]))  # 재고와 하나도 안 겹친다
+    add_ingredient(client, "계란")
+    body = recommend(client)
+    assert (body["public_total"], body["public_count"]) == (0, 1)

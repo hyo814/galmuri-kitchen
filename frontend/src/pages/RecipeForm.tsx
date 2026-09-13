@@ -3,7 +3,7 @@ import { api, type MyRecipe, type RecipeInput } from "../api";
 import Icon from "../components/Icon";
 import { useAsyncAction } from "../useAsyncAction";
 import { goBack, navigate } from "../useHashRoute";
-import { forgetResources, useResource } from "../useResource";
+import { forgetRecipeCaches, useResource } from "../useResource";
 
 const MAX_INGREDIENTS = 50;
 const MAX_STEPS = 30;
@@ -29,12 +29,6 @@ function autoGrowTextarea(el: HTMLTextAreaElement | null) {
   if (!el) return;
   el.style.height = "auto";
   el.style.height = `${el.scrollHeight}px`;
-}
-
-// 저장 뒤 상세 자신(useResource)뿐 아니라 목록·추천(useInfiniteList)도 새로 받게 한다
-function forgetRecipeCaches() {
-  forgetResources("/api/rec");
-  forgetResources("list:");
 }
 
 function BackLink({ onClick }: { onClick: () => void }) {
@@ -295,12 +289,15 @@ function RecipeEditor({ initial }: { initial: MyRecipe | null }) {
 }
 
 function EditRecipe({ id }: { id: string }) {
-  const { data, error, reload } = useResource<MyRecipe>(`/api/recipes/${id}`);
+  const { data, error, status, reload } = useResource<MyRecipe>(`/api/recipes/${id}`);
   if (data) return <RecipeEditor initial={data} />;
   return (
     <main className="page">
       <BackLink onClick={() => goBack(`/recipes/mine/${id}`)} />
-      {error ? (
+      {status === 404 ? (
+        // M8: 지워진 레시피는 다시 불러와도 또 404라 재시도 버튼을 주지 않는다
+        <p className="center muted">레시피를 찾을 수 없어요.</p>
+      ) : error ? (
         <div className="list-end">
           <p className="error" role="alert">
             {error}

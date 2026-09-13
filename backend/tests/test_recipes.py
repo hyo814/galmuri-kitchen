@@ -1,8 +1,12 @@
+import time
+from datetime import datetime, timezone
+from types import SimpleNamespace
+
 import pytest
 
 import app.recipes as recipes_module
 from app.ingredients import seoul_today
-from app.models import PublicRecipe, Recipe, User, db
+from app.models import Ingredient, PublicRecipe, Recipe, StorageLocation, User, db
 from app.recipe_parse import ingredient_key
 
 BODY = {
@@ -412,3 +416,39 @@ def test_recipe_list_pagination_never_leaks_other_users_recipes(client, login, a
         if cursor is None:
             break
     assert sorted(seen) == sorted(owner_ids)
+
+
+# --- 3a final review fix wave ---
+
+
+def test_recipe_list_cursor_id_out_of_range_is_400(client, login):
+    # M4: 커서 안의 id가 DB int 컬럼 범위를 넘으면(Postgres에서 500이 나던 값) 조회 없이 400
+    login()
+    huge = recipes_module._encode_cursor(SimpleNamespace(id=2**31, updated_at=datetime(2026, 1, 1, tzinfo=timezone.utc)))
+    zero = recipes_module._encode_cursor(SimpleNamespace(id=0, updated_at=datetime(2026, 1, 1, tzinfo=timezone.utc)))
+    for cursor in (huge, zero):
+        res = client.get(f"/api/recipes?cursor={cursor}")
+        assert (res.status_code, res.get_json()) == (400, {"error": "잘못된 요청이에요."})
+
+
+def test_recipe_detail_annotate_is_fast_with_large_inventory(client, login, app):
+    # M7: annotate가 추천과 같은 준비된 재고 + 빠른 매칭을 쓰는지 — 재고 2,000개 × 재료 50개가 0.15초 안(넉넉히)
+    words = ["대파", "양파", "두부", "계란", "감자", "당근", "애호박", "돼지고기", "소고기", "닭가슴살",
+             "김치", "콩나물", "시금치", "표고버섯", "고추", "마늘", "간장", "고추장", "된장", "설탕"]
+    user = login()
+    with app.app_context():
+        location = StorageLocation.query.filter_by(user_id=user.id).first()
+        db.session.add_all(
+            Ingredient(user_id=user.id, location_id=location.id, name=f"{words[i % 20]} {i}", purchased_on=seoul_today())
+            for i in range(2000)
+        )
+        db.session.commit()
+    ingredients = [{"name": words[i % 20], "amount": "1개"} for i in range(50)]
+    recipe = create(client, ingredients=ingredients).get_json()
+
+    started = time.perf_counter()
+    res = client.get(f"/api/recipes/{recipe['id']}")
+    elapsed = time.perf_counter() - started
+    assert res.status_code == 200
+    assert all(row["have"] for row in res.get_json()["ingredients"])
+    assert elapsed < 0.15, f"{elapsed:.3f}s"

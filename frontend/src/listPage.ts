@@ -9,10 +9,13 @@ export interface ListState<T> {
   items: T[];
   cursor: string | null;
   hasMore: boolean;
+  // 두 번째 페이지가 있었던 적이 있는지(첫 페이지 응답의 next부터 non-null이면 true). "다 봤어요"는
+  // 이때만 보여준다 — 애초에 한 페이지뿐인 짧은 목록에는 안 어울린다 (M5).
+  multiPage: boolean;
 }
 
 export function emptyState<T>(): ListState<T> {
-  return { items: [], cursor: null, hasMore: true };
+  return { items: [], cursor: null, hasMore: true, multiPage: false };
 }
 
 /**
@@ -30,8 +33,9 @@ export function applyPage<T extends { id: number | string }>(
   replace: boolean,
 ): ListState<T> {
   if (gen !== currentGen) return state;
-  if (replace) return { items: page.items, cursor: page.next, hasMore: page.next !== null };
+  const multiPage = state.multiPage || page.next !== null;
+  if (replace) return { items: page.items, cursor: page.next, hasMore: page.next !== null, multiPage };
   const known = new Set(state.items.map((item) => item.id));
   const items = [...state.items, ...page.items.filter((item) => !known.has(item.id))];
-  return { items, cursor: page.next, hasMore: page.next !== null };
+  return { items, cursor: page.next, hasMore: page.next !== null, multiPage };
 }

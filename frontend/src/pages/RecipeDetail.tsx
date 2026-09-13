@@ -4,8 +4,8 @@ import Icon from "../components/Icon";
 import { imageSrc, scaleAmount, withJosa } from "../format";
 import { useAsyncAction } from "../useAsyncAction";
 import { goBack, navigate } from "../useHashRoute";
-import { forgetResources, useResource } from "../useResource";
-import { MatchLine } from "./Recipes";
+import { forgetRecipeCaches, useResource } from "../useResource";
+import { MatchLine, setRecipesSegment } from "./Recipes";
 
 function BackLink() {
   return (
@@ -23,14 +23,13 @@ function BackLink() {
   );
 }
 
-// 저장·수정·삭제 뒤 상세 자신(useResource)뿐 아니라 목록·추천(useInfiniteList)도 새로 받게 한다
-function forgetRecipeCaches() {
-  forgetResources("/api/rec");
-  forgetResources("list:");
-}
-
 export default function RecipeDetail({ kind, id }: { kind: "mine" | "public"; id: string }) {
-  const { data: recipe, error, reload } = useResource<Detail>(kind === "mine" ? `/api/recipes/${id}` : `/api/public-recipes/${id}`);
+  const {
+    data: recipe,
+    error,
+    status,
+    reload,
+  } = useResource<Detail>(kind === "mine" ? `/api/recipes/${id}` : `/api/public-recipes/${id}`);
   const [servings, setServings] = useState<number | null>(null); // null이면 레시피 기준 인분
   const { busy, error: actionError, run } = useAsyncAction();
 
@@ -38,7 +37,10 @@ export default function RecipeDetail({ kind, id }: { kind: "mine" | "public"; id
     return (
       <main className="page">
         <BackLink />
-        {error ? (
+        {status === 404 ? (
+          // M8: 지워진 레시피는 다시 불러와도 또 404라 재시도 버튼을 주지 않는다
+          <p className="center muted">레시피를 찾을 수 없어요.</p>
+        ) : error ? (
           <div className="list-end">
             <p className="error" role="alert">
               {error}
@@ -79,6 +81,7 @@ export default function RecipeDetail({ kind, id }: { kind: "mine" | "public"; id
     run(async () => {
       await api(`/api/recipes/${recipe.id}`, { method: "DELETE" });
       forgetRecipeCaches();
+      setRecipesSegment("mine"); // E1: 삭제 뒤 뒤로가기하면 내 레시피 탭에 있게
       goBack("/recipes");
     });
   };

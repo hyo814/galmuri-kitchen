@@ -49,13 +49,25 @@ const currentRoute = (): Route => {
   return { path: "/", pattern: "/", params: {} };
 };
 
+// 경로별 마지막 스크롤 위치: 상세에서 돌아오면 목록을 보던 자리로, 처음 여는 화면은 맨 위로
+export const scrollTops = new Map<string, number>();
+history.scrollRestoration = "manual";
+
+/** path의 저장된 스크롤을 지운다. 새로 들어가는 화면(push)은 이전에 그 경로를 보던 자리가 아니라 맨 위에서 시작해야 한다 (I2) */
+export function forgetScroll(path: string) {
+  scrollTops.delete(path);
+}
+
 /**
  * 화면 이동. 기본은 히스토리에 쌓아 폰 뒤로가기로 돌아올 수 있게 한다(상세·폼).
  * replace는 지금 칸을 바꾼다(저장 후 상세로 넘어갈 때). 탭 전환은 TabBar가 location.replace를 쓴다.
  */
 export function navigate(path: string, { replace = false } = {}) {
   if (replace) history.replaceState(history.state, "", `#${path}`);
-  else history.pushState({ from: location.hash.replace(/^#/, "") || "/" }, "", `#${path}`);
+  else {
+    forgetScroll(path); // 새 push는 맨 위에서 시작한다(뒤로가기·탭 복귀는 그대로 복원, I2)
+    history.pushState({ from: location.hash.replace(/^#/, "") || "/" }, "", `#${path}`);
+  }
   // pushState·replaceState는 hashchange를 스스로 쏘지 않으므로 직접 알린다.
   window.dispatchEvent(new HashChangeEvent("hashchange"));
 }

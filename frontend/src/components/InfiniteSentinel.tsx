@@ -7,13 +7,16 @@ interface Props {
   loading?: boolean;
   error?: string;
   onRetry?: () => void;
+  // false면 목록이 애초에 한 페이지뿐이었다는 뜻 — "다 봤어요"를 보여주지 않는다(M5). 서버 페이지가 없는
+  // 목록(예: 재고의 점진 렌더)은 신경 쓸 필요가 없어 기본값 true(기존과 동일하게 항상 보여줌).
+  multiPage?: boolean;
 }
 
 /**
  * 목록 끝의 무한 스크롤 손잡이. 화면에 들어오면 자동으로 더 받고(IntersectionObserver),
  * 안 되는 환경에서도 "더 보기" 버튼으로 그대로 동작한다(접근성 대체 수단).
  */
-export default function InfiniteSentinel({ onVisible, hasMore, loading, error, onRetry }: Props) {
+export default function InfiniteSentinel({ onVisible, hasMore, loading, error, onRetry, multiPage = true }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,12 +33,14 @@ export default function InfiniteSentinel({ onVisible, hasMore, loading, error, o
     return () => observer.disconnect();
   }, [onVisible, hasMore, loading, error]);
 
-  if (!hasMore)
+  if (!hasMore) {
+    if (!multiPage) return null;
     return (
       <p className="list-end muted" role="status" aria-live="polite">
         다 봤어요
       </p>
     );
+  }
 
   if (error)
     return (
