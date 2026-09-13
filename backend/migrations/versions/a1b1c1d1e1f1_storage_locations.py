@@ -43,13 +43,14 @@ def upgrade():
     # 기존 사용자에게 기본 위치를 만들고, 기존 재료는 모두 냉장실로 옮긴다
     conn = op.get_bind()
     now = datetime.now(timezone.utc)
+    insert_location = sa.text(
+        "INSERT INTO storage_locations (user_id, name, kind, sort_order, created_at) "
+        "VALUES (:user_id, :name, :kind, :sort_order, :created_at)"
+    ).bindparams(sa.bindparam("created_at", type_=sa.DateTime(timezone=True)))
     for (user_id,) in conn.execute(sa.text("SELECT id FROM users")).all():
         for order, (name, kind) in enumerate(DEFAULT_LOCATIONS):
             conn.execute(
-                sa.text(
-                    "INSERT INTO storage_locations (user_id, name, kind, sort_order, created_at) "
-                    "VALUES (:user_id, :name, :kind, :sort_order, :created_at)"
-                ),
+                insert_location,
                 {"user_id": user_id, "name": name, "kind": kind, "sort_order": order, "created_at": now},
             )
         fridge_id = conn.execute(
