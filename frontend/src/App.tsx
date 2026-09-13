@@ -13,7 +13,7 @@ export default function App() {
     setUser(undefined);
     api<User>("/api/me").then(setUser, (e: unknown) => {
       if (e instanceof ApiError && e.status === 0) setOffline(true);
-      else setUser(null);
+      else if (!(e instanceof ApiError && e.status === 401)) setUser(null); // 401은 전역 핸들러가 처리
     });
   };
 
@@ -27,7 +27,7 @@ export default function App() {
     return (
       <div className="center">
         <p>서버에 연결할 수 없어요.</p>
-        <button className="btn primary" style={{ width: "auto", padding: "0 24px" }} onClick={checkMe}>
+        <button className="btn primary inline" onClick={checkMe}>
           다시 시도
         </button>
       </div>

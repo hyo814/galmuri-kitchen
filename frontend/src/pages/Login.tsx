@@ -27,8 +27,15 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
 
   return (
     <main className="login">
-      <h1>냉장고 레시피</h1>
-      <p className="muted">냉장고 속 재료로 오늘 뭐 해 먹을지 정해요.</p>
+      <div className="login-hero">
+        <h1>냉장고 레시피</h1>
+        <p>냉장고 속 재료로 오늘 뭐 해 먹을지 정해요.</p>
+      </div>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
       {options?.providers.includes("kakao") && (
         <a className="btn kakao" href="/auth/login/kakao">
           카카오 로그인
@@ -40,14 +47,13 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
         </a>
       )}
       {options?.dev_login && (
-        <button className="btn ghost" onClick={devLogin}>
+        <button className="btn secondary" onClick={devLogin}>
           개발용 로그인
         </button>
       )}
       {options && options.providers.length === 0 && !options.dev_login && (
-        <p className="muted">아직 로그인 방법이 설정되지 않았어요.</p>
+        <p className="center muted">아직 로그인 방법이 설정되지 않았어요.</p>
       )}
-      {error && <p className="error">{error}</p>}
     </main>
   );
 }
