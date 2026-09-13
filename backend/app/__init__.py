@@ -4,6 +4,7 @@ import re
 from flask import Flask, jsonify, request
 from flask_migrate import Migrate
 from werkzeug.exceptions import HTTPException
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .models import db
 
@@ -33,6 +34,10 @@ def create_app(test_config=None):
         SESSION_COOKIE_SECURE=not dev,
         PERMANENT_SESSION_LIFETIME=60 * 60 * 24 * 30,
         MAX_CONTENT_LENGTH=10 * 1024 * 1024,
+        KAKAO_CLIENT_ID=os.environ.get("KAKAO_CLIENT_ID"),
+        KAKAO_CLIENT_SECRET=os.environ.get("KAKAO_CLIENT_SECRET"),
+        GOOGLE_CLIENT_ID=os.environ.get("GOOGLE_CLIENT_ID"),
+        GOOGLE_CLIENT_SECRET=os.environ.get("GOOGLE_CLIENT_SECRET"),
     )
     if test_config:
         app.config.update(test_config)
@@ -41,12 +46,17 @@ def create_app(test_config=None):
     if app.config["DEV_MODE"] and os.environ.get("RENDER"):
         raise RuntimeError("운영(Render)에서는 DEV_MODE를 켤 수 없습니다.")
 
+    # Render 프록시 뒤에서 OAuth 콜백 URL이 https://<도메인> 으로 만들어지도록
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
     db.init_app(app)
     Migrate(app, db, render_as_batch=True)
 
     from .auth import bp as auth_bp
+    from .auth import init_oauth
     from .ingredients import bp as ingredients_bp
 
+    init_oauth(app)
     app.register_blueprint(auth_bp)
     app.register_blueprint(ingredients_bp)
 
