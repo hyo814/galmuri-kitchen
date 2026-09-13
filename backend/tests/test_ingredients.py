@@ -3,7 +3,7 @@ from datetime import date, timedelta
 import pytest
 
 from app.ingredients import ingredient_status, seoul_today
-from app.models import Ingredient, User, db
+from app.models import Ingredient, StorageLocation, User, db
 
 TODAY = date(2026, 9, 13)
 
@@ -21,6 +21,34 @@ TODAY = date(2026, 9, 13)
 )
 def test_ingredient_status(purchased, expires, expected):
     assert ingredient_status(purchased, expires, TODAY) == expected
+
+
+@pytest.mark.parametrize(
+    "kind, days, expected",
+    [
+        ("fridge", 6, "ok"),
+        ("fridge", 7, "old"),
+        ("freezer", 59, "ok"),
+        ("freezer", 60, "old"),
+        ("room", 400, "ok"),
+    ],
+)
+def test_old_threshold_depends_on_location_kind(kind, days, expected):
+    assert ingredient_status(TODAY - timedelta(days=days), None, TODAY, kind) == expected
+
+
+def test_location_defaults_and_fields(client, login):
+    login()
+    freezer = client.get("/api/locations").get_json()[1]
+    res = create(client, name="만두", purchased_on=(seoul_today() - timedelta(days=30)).isoformat(), location_id=freezer["id"])
+    body = res.get_json()
+    assert (body["location_name"], body["location_kind"], body["status"]) == ("냉동실", "freezer", "ok")
+
+    body = create(client, name="우유").get_json()
+    assert (body["location_name"], body["location_kind"]) == ("냉장실", "fridge")
+
+    moved = client.patch(f"/api/ingredients/{body['id']}", json={"location_id": freezer["id"]}).get_json()
+    assert moved["location_id"] == freezer["id"]
 
 
 def create(client, **fields):
@@ -58,6 +86,9 @@ def test_create_and_list_sorted_by_urgency(client, login):
         {"purchased_on": "2026-13-01"},
         {"purchased_on": None},
         {"expires_on": "내일"},
+        {"name": 123},
+        {"quantity": True},
+        {"location_id": "1"},
     ],
 )
 def test_create_validation(client, login, fields):
@@ -97,10 +128,14 @@ def test_deleting_user_cascades_ingredients(app):
         user = User(provider="test", provider_id="cascade", nickname="x")
         db.session.add(user)
         db.session.commit()
-        db.session.add(Ingredient(user_id=user.id, name="계란", purchased_on=date(2026, 1, 1)))
+        location = StorageLocation(user_id=user.id, name="냉장실", kind="fridge")
+        db.session.add(location)
+        db.session.commit()
+        db.session.add(Ingredient(user_id=user.id, location_id=location.id, name="계란", purchased_on=date(2026, 1, 1)))
         db.session.commit()
 
         db.session.delete(user)
         db.session.commit()
 
         assert Ingredient.query.filter_by(user_id=user.id).count() == 0
+        assert StorageLocation.query.filter_by(user_id=user.id).count() == 0

@@ -41,11 +41,25 @@ class User(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
 
+class StorageLocation(db.Model):
+    __tablename__ = "storage_locations"
+    __table_args__ = (db.UniqueConstraint("user_id", "name"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = db.Column(db.String(20), nullable=False)
+    kind = db.Column(db.String(10), nullable=False)  # fridge | freezer | room
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
 class Ingredient(db.Model):
     __tablename__ = "ingredients"
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    location_id = db.Column(db.Integer, db.ForeignKey("storage_locations.id"), nullable=False, index=True)
+    location = db.relationship("StorageLocation")
     name = db.Column(db.String(50), nullable=False)
     quantity = db.Column(db.Float, nullable=False, default=1)
     unit = db.Column(db.String(10), nullable=False, default="개")

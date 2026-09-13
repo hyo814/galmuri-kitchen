@@ -1,3 +1,5 @@
+import type { LocationKind } from "./api";
+
 /** 1 → "1", 0.25 → "0.25", 1.5 → "1.5" (소수 둘째 자리까지) */
 export const formatQuantity = (q: number) => String(Number(q.toFixed(2)));
 
@@ -7,3 +9,5 @@ export function formatDate(iso: string): string {
   const md = `${m}월 ${d}일`;
   return y === new Date().getFullYear() ? md : `${y}년 ${md}`;
 }
+
+export const KIND_LABEL: Record<LocationKind, string> = { fridge: "냉장", freezer: "냉동", room: "실온" };

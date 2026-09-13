@@ -1,5 +1,14 @@
 export type Status = "urgent" | "old" | "ok";
 
+export type LocationKind = "fridge" | "freezer" | "room";
+
+export interface StorageLocation {
+  id: number;
+  name: string;
+  kind: LocationKind;
+  item_count: number;
+}
+
 export interface User {
   id: number;
   nickname: string;
@@ -16,6 +25,7 @@ export interface IngredientInput {
   unit: string;
   purchased_on: string;
   expires_on: string | null;
+  location_id: number;
 }
 
 export interface Ingredient extends IngredientInput {
@@ -23,6 +33,8 @@ export interface Ingredient extends IngredientInput {
   status: Status;
   days_left: number | null;
   days_since_purchase: number;
+  location_name: string;
+  location_kind: LocationKind;
 }
 
 export class ApiError extends Error {

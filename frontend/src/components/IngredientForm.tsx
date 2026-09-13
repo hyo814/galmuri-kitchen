@@ -1,9 +1,12 @@
 import { useState, type FormEvent } from "react";
-import { localToday, type Ingredient, type IngredientInput } from "../api";
+import { localToday, type Ingredient, type IngredientInput, type StorageLocation } from "../api";
+import Icon from "./Icon";
 import Sheet from "./Sheet";
 
 interface Props {
   initial: Ingredient | null;
+  locations: StorageLocation[];
+  defaultLocationId: number;
   onSubmit: (input: IngredientInput) => Promise<void>;
   onDelete?: () => Promise<void>;
   onClose: () => void;
@@ -11,12 +14,13 @@ interface Props {
 
 const UNITS = ["개", "g", "kg", "ml", "L", "팩", "봉", "병", "모", "단"];
 
-export default function IngredientForm({ initial, onSubmit, onDelete, onClose }: Props) {
+export default function IngredientForm({ initial, locations, defaultLocationId, onSubmit, onDelete, onClose }: Props) {
   const [name, setName] = useState(initial?.name ?? "");
   const [quantity, setQuantity] = useState(String(initial?.quantity ?? 1));
   const [unit, setUnit] = useState(initial?.unit ?? "개");
   const [purchasedOn, setPurchasedOn] = useState(initial?.purchased_on ?? localToday());
   const [expiresOn, setExpiresOn] = useState(initial?.expires_on ?? "");
+  const [locationId, setLocationId] = useState(initial?.location_id ?? defaultLocationId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -41,6 +45,7 @@ export default function IngredientForm({ initial, onSubmit, onDelete, onClose }:
         unit: unit.trim() || "개",
         purchased_on: purchasedOn,
         expires_on: expiresOn || null,
+        location_id: locationId,
       }),
     );
   };
@@ -91,6 +96,23 @@ export default function IngredientForm({ initial, onSubmit, onDelete, onClose }:
               ))}
             </datalist>
           </label>
+        </div>
+        <div className="field" role="group" aria-label="보관 위치">
+          <span className="field-label">보관 위치</span>
+          <div className="choices">
+            {locations.map((location) => (
+              <button
+                key={location.id}
+                type="button"
+                className="choice"
+                aria-pressed={locationId === location.id}
+                onClick={() => setLocationId(location.id)}
+              >
+                {locationId === location.id && <Icon name="check" size={16} />}
+                {location.name}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="grid-2">
           <label className="field">
