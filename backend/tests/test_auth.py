@@ -1,8 +1,9 @@
 import pytest
 
-from app import database_url
+from app import create_app, database_url
 from app.auth import upsert_user
-from app.models import User
+from app.models import User, db
+from tests.conftest import TEST_DATABASE_URL
 
 
 def test_me_requires_login(client):
@@ -73,6 +74,39 @@ def test_dev_mode_refused_on_render(make_app, monkeypatch):
     monkeypatch.setenv("RENDER", "true")
     with pytest.raises(RuntimeError):
         make_app()
+
+
+def test_blank_ai_env_values_fall_back_to_defaults(monkeypatch):
+    # 배포 환경에서 값이 비어있는 채로 설정된 경우("") os.environ.get(...)의
+    # 기본값은 적용되지 않으므로, 빈 문자열은 명시적으로 걸러내야 한다.
+    monkeypatch.setenv("SECRET_KEY", "test")
+    monkeypatch.setenv("DEV_MODE", "1")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("CLAUDE_MODEL", "")
+    monkeypatch.setenv("AI_DAILY_SCAN_LIMIT", "")
+    monkeypatch.setenv("AI_SCAN_BURST_LIMIT", "")
+
+    app = create_app({
+        "TESTING": True,
+        "SQLALCHEMY_DATABASE_URI": database_url(TEST_DATABASE_URL),
+        "SESSION_COOKIE_SECURE": False,
+    })
+
+    assert app.config["ANTHROPIC_API_KEY"] is None
+    assert app.config["CLAUDE_MODEL"] == "claude-sonnet-5"
+    assert app.config["AI_DAILY_SCAN_LIMIT"] == 10
+    assert app.config["AI_SCAN_BURST_LIMIT"] == 3
+
+    with app.app_context():
+        db.create_all()
+        try:
+            client = app.test_client()
+            client.environ_base["HTTP_X_REQUESTED_WITH"] = "fetch"
+            dev = client.post("/api/dev-login").get_json()
+            assert (dev["scan"], dev["scan_limit"]) == ("sample", 10)
+        finally:
+            db.session.remove()
+            db.engine.dispose()
 
 
 def test_me_reports_scan_mode_and_limit(client, app):

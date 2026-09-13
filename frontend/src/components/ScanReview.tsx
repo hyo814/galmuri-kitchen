@@ -1,8 +1,21 @@
-import { useState, type FormEvent } from "react";
-import { ApiError, api, localToday, type ScanKind, type ScanResult, type StorageLocation } from "../api";
+import { useEffect, useState, type FormEvent } from "react";
+import {
+  ApiError,
+  api,
+  localToday,
+  type LocationKind,
+  type ScanKind,
+  type ScanResult,
+  type StorageLocation,
+} from "../api";
 import { formatQuantity } from "../format";
 import { useAsyncAction } from "../useAsyncAction";
 import Icon from "./Icon";
+
+// backend/app/locations.py INVALID_LOCATION, backend/app/ingredients.py의 커밋 시 위치 사라짐 오류.
+// 둘 중 하나면 부모가 들고 있는 locations 목록이 낡았다는 뜻이라 다시 불러와야 한다.
+const INVALID_LOCATION = "보관 위치를 다시 선택해 주세요.";
+const LOCATION_CHANGED = "선택한 보관 위치가 방금 바뀌었어요. 다시 시도해 주세요.";
 
 interface Row {
   key: number;
@@ -11,6 +24,7 @@ interface Row {
   quantity: string;
   unit: string;
   locationId: number;
+  locationKind: LocationKind;
 }
 
 interface Props {
@@ -19,6 +33,7 @@ interface Props {
   locations: StorageLocation[];
   onRetake: () => void;
   onAdded: (count: number) => Promise<void>;
+  onLocationsStale?: () => void;
 }
 
 const DATE_SOURCE: Partial<Record<ScanKind, string>> = {
@@ -26,7 +41,7 @@ const DATE_SOURCE: Partial<Record<ScanKind, string>> = {
   order: "주문 날짜로 채웠어요",
 };
 
-export default function ScanReview({ kind, result, locations, onRetake, onAdded }: Props) {
+export default function ScanReview({ kind, result, locations, onRetake, onAdded, onLocationsStale }: Props) {
   const today = localToday();
   const [rows, setRows] = useState<Row[]>(() =>
     result.items.map((item, key) => ({
@@ -37,9 +52,22 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded 
       unit: item.unit,
       // AI가 추정한 보관 종류의 첫 위치, 그런 위치가 없으면 첫 위치 (스펙 15절)
       locationId: (locations.find((l) => l.kind === item.location_kind) ?? locations[0]).id,
+      locationKind: item.location_kind,
     })),
   );
   const [openKey, setOpenKey] = useState<number | null>(null);
+
+  // 보관 위치가 새로 로드된 뒤(onLocationsStale), 사라진 위치를 고르고 있던 행은 같은 종류의
+  // 첫 위치로, 그런 위치도 없으면 첫 위치로 되돌린다(위 초기값과 같은 규칙, 스펙 15절).
+  useEffect(() => {
+    setRows((prev) =>
+      prev.map((r) =>
+        locations.some((l) => l.id === r.locationId)
+          ? r
+          : { ...r, locationId: (locations.find((l) => l.kind === r.locationKind) ?? locations[0]).id },
+      ),
+    );
+  }, [locations]);
   const [purchasedOn, setPurchasedOn] = useState(result.purchased_on ?? today);
   const { busy, error, setError, run } = useAsyncAction();
 
@@ -75,6 +103,8 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded 
         // 없으면(상한·위치 변경처럼 항목과 무관한 오류) 서버가 준 top-level error를 그대로 보여 준다.
         const first = e instanceof ApiError ? e.errors?.[0] : undefined;
         const row = first && chosen[first.index];
+        const message = row ? first.error : e instanceof ApiError ? e.message : undefined;
+        if (message === INVALID_LOCATION || message === LOCATION_CHANGED) onLocationsStale?.();
         if (row) {
           setOpenKey(row.key);
           throw new Error(first.error);

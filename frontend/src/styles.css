@@ -1099,6 +1099,9 @@ a.row-btn > svg {
   line-height: 28px;
   font-weight: 700;
   letter-spacing: -0.3px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
 .scan-thumb {
@@ -1375,6 +1378,7 @@ a.row-btn > svg {
   line-height: 30px;
   font-weight: 700;
   letter-spacing: -0.4px;
-  text-wrap: balance;
   word-break: keep-all;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }

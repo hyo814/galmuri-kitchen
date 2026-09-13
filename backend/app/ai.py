@@ -85,7 +85,9 @@ def sample_result(kind, today):
 
 def extract(kind, image_bytes, media_type):
     """사진 한 장에서 재료 목록을 뽑는다. 실패하면 AiError."""
-    # timeout(45s) x (1 재시도 + 최초 1회) = 최악 약 90초. gunicorn --timeout 120과 맞춘 값이다(Dockerfile).
+    # gthread 워커는 요청 처리 중에도 계속 heartbeat를 보내므로 gunicorn --timeout(120s, Dockerfile)이
+    # 이 호출을 끊지 않는다. SDK는 두 번의 시도(45s + 45s) 사이에 retry-after(최대 60s)를 기다릴 수 있어
+    # 최악의 경우 약 150초까지 걸릴 수 있다. 그동안 사용자는 화면에서 취소할 수 있다.
     client = anthropic.Anthropic(api_key=current_app.config["ANTHROPIC_API_KEY"], timeout=45, max_retries=1)
     image = base64.standard_b64encode(image_bytes).decode("utf-8")
     try:

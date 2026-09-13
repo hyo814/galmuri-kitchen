@@ -41,10 +41,10 @@ def create_app(test_config=None):
         GOOGLE_CLIENT_ID=os.environ.get("GOOGLE_CLIENT_ID"),
         GOOGLE_CLIENT_SECRET=os.environ.get("GOOGLE_CLIENT_SECRET"),
         FRONTEND_DIST=os.environ.get("FRONTEND_DIST", DEFAULT_FRONTEND_DIST),
-        ANTHROPIC_API_KEY=os.environ.get("ANTHROPIC_API_KEY"),
-        CLAUDE_MODEL=os.environ.get("CLAUDE_MODEL", "claude-sonnet-5"),
-        AI_DAILY_SCAN_LIMIT=int(os.environ.get("AI_DAILY_SCAN_LIMIT", "10")),
-        AI_SCAN_BURST_LIMIT=int(os.environ.get("AI_SCAN_BURST_LIMIT", "3")),
+        ANTHROPIC_API_KEY=os.environ.get("ANTHROPIC_API_KEY") or None,
+        CLAUDE_MODEL=os.environ.get("CLAUDE_MODEL") or "claude-sonnet-5",
+        AI_DAILY_SCAN_LIMIT=int(os.environ.get("AI_DAILY_SCAN_LIMIT") or 10),
+        AI_SCAN_BURST_LIMIT=int(os.environ.get("AI_SCAN_BURST_LIMIT") or 3),
     )
     if test_config:
         app.config.update(test_config)
