@@ -811,3 +811,20 @@ a.row-btn > svg {
   font-size: 15px;
   text-decoration: none;
 }
+
+.status-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--field);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.status-box.due {
+  background: var(--warn-tint);
+  color: var(--warn);
+  font-weight: 600;
+}

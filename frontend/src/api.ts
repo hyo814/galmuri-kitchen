@@ -24,6 +24,23 @@ export interface ItemRule {
   source: "mfds" | "user";
 }
 
+export type ToolCategory = "조리도구" | "조리기구" | "칼·도마" | "기타";
+
+export interface KitchenToolInput {
+  name: string;
+  category: ToolCategory;
+  bought_on: string | null;
+  check_every_months: number | null;
+}
+
+export interface KitchenTool extends KitchenToolInput {
+  id: number;
+  last_checked_on: string | null;
+  due_on: string | null;
+  is_due: boolean;
+  days_until_due: number | null;
+}
+
 export interface User {
   id: number;
   nickname: string;

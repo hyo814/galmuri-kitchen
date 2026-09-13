@@ -4,6 +4,7 @@ import TabBar from "./components/TabBar";
 import Fridge from "./pages/Fridge";
 import Login from "./pages/Login";
 import More from "./pages/More";
+import Tools from "./pages/Tools";
 import { useHashRoute } from "./useHashRoute";
 
 export default function App() {
@@ -41,7 +42,7 @@ export default function App() {
   if (user === null) return <Login onLogin={setUser} />;
   return (
     <>
-      {route === "/more" ? <More /> : <Fridge onLogout={() => setUser(null)} />}
+      {route === "/more" ? <More /> : route === "/tools" ? <Tools /> : <Fridge onLogout={() => setUser(null)} />}
       <TabBar route={route} />
     </>
   );
