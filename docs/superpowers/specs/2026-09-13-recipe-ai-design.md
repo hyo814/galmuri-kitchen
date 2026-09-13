@@ -22,9 +22,10 @@
 | 2. 스캔 | 냉장고 사진·영수증·온라인 주문완료 캡처 → Claude 비전 → 확인 화면(보관 위치 추정 포함) → 일괄 등록, AI 일일 한도 |
 | 3. 레시피 | 내 레시피 CRUD, 식약처 공공 DB 동기화·매칭, AI 레시피 생성, 유튜브·인스타그램 링크 가져오기, 추천 화면 |
 | 4. 장보기 | 장보기 목록(살 날짜·쇼핑몰), 부족 재료·떨어진 필수품·임박 재료 담기, 7개 쇼핑몰 검색·정렬 링크, 네이버 최저가, 구매 완료 → 냉장고, 오프라인 장보기(메모·사진·AI 목록 변환·인터넷 없이 보기/체크) |
+| 4b. 식단 | 1주·1달 식단 달력(셀프 배치·복사/반복), 다이어트 AI 초안(칼로리 추정), 유튜브 인기 레시피, 식단 → 장보기 자동 생성 (20절) |
 | 5. 조리 기록 | 사용 재료 차감, 날짜·별점·메모·완성 사진, 기록 목록 |
 
-단계별 상세는 14~18절(2026-09-13 추가 요구사항)이 4~7절보다 우선한다.
+단계별 상세는 14~20절(2026-09-13 추가 요구사항)이 4~7절보다 우선한다.
 
 ## 3. 구조
 
@@ -209,7 +210,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 
 ## 16. 4단계: 장보기
 - `shopping_items`: id, user_id, name, quantity, unit, planned_on(date, 선택), store(`coupang`|`naver`|`kurly`|`emart`|`homeplus`|`lottemart`|`gmarket`|null),
-  location_id(선택, 구매 후 넣을 위치), source(`manual`|`recipe`|`staple`|`urgent`), done_at(선택), created_at.
+  location_id(선택, 구매 후 넣을 위치), source(`manual`|`recipe`|`staple`|`urgent`|`meal_plan`), done_at(선택), created_at.
 - 담기 경로: 직접 추가, 레시피 상세의 부족 재료, 떨어진 필수품 배너, 임박/소진 재료.
 - 목록: 살 날짜별 그룹(오늘·이번 주·날짜 미정), 완료 항목은 아래로.
 - 쇼핑몰 검색 링크: 항목마다 7개 쇼핑몰(쿠팡·네이버스토어·컬리·이마트·홈플러스·롯데마트·G마켓) 검색 결과로 이동(URL 형식은 구현 시 실제 동작 검증).
@@ -247,3 +248,15 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
   - 충돌 규칙: 항목 체크는 `done_at` 타임스탬프 기준 마지막 변경 우선, 메모 본문은 `updated_at` 기준 마지막 저장 우선(덮어쓰기 전 기기 쪽 사본 보관).
   - 화면에 `오프라인 · 연결되면 저장돼요` 표시, 대기 중 건수 표시.
   - 앱 모드(PWA standalone)·서비스 워커는 HTTPS에서만 동작 → 배포 이후 동작 확인.
+
+## 20. 4b단계: 식단 짜기 (추가: 2026-09-13)
+- `meal_plans`: id, user_id, name(예: `9월 둘째 주`), start_on, days(7 또는 30 등 1~31), goal(선택: `kcal_per_day` int, `note` ≤100자), created_at.
+- `meal_slots`: id, plan_id(CASCADE), date, meal(`breakfast`|`lunch`|`dinner`|`snack`), recipe_id(선택, SET NULL), title(레시피가 없을 때 자유 입력), servings(기본 1), est_kcal(선택, AI 추정).
+- **셀프**: 달력(주 보기 기본, 월 보기)에서 칸을 눌러 내 레시피·저장된 링크 레시피·자유 입력으로 채움. 주 단위 복사, N주 반복.
+- **다이어트 AI 초안**: 목표(하루 kcal, 단백질 위주 등 메모)와 기간 → Claude가 보유·임박 재료를 우선 써서 끼니별 레시피 초안(구조화 출력, 끼니별 추정 kcal). 확인 화면에서 칸별 수락/교체. kcal은 **AI 추정치**라고 화면에 명시.
+  정확한 영양성분(식약처 식품영양성분 DB 연동)은 범위 밖, 필요해지면 추가. AI 일일 한도 recipe 그룹.
+- **유튜브 인기 레시피**: YouTube Data API v3 `search.list`(q=`레시피`, regionCode=KR, order=viewCount, publishedAfter=최근 30일, type=video) 결과를 목록으로 보여주고,
+  고른 영상은 17절 링크 가져오기로 레시피화해 식단 칸에 넣는다(`YOUTUBE_API_KEY`, 결과 1시간 캐시로 쿼터 절약).
+  인스타그램·틱톡은 인기 목록 공개 API가 없어 링크 공유로만 추가(17절).
+- **장보기 자동 생성**: 식단 기간의 레시피 재료 합산 → 냉장고 재고와 이름 매칭(4절)해 없는 것만 → `shopping_items`(source `meal_plan`, planned_on=해당 끼니 전날) 미리보기 후 추가.
+- 순서: 4단계(장보기) 다음, 5단계(조리 기록) 앞.
