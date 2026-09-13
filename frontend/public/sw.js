@@ -18,8 +18,10 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
-  // /api, /auth, POST 등, 다른 오리진 요청은 절대 가로채지 않는다 — 네트워크로 그대로 보낸다.
-  if (request.method !== "GET" || request.mode !== "navigate" || new URL(request.url).origin !== self.location.origin) return;
+  const url = new URL(request.url);
+  // 같은 오리진의 화면 이동(GET)만 다룬다. /api·/auth(로그인 리다이렉트), POST, 다른 오리진은 가로채지 않고 네트워크로 그대로 보낸다.
+  if (request.method !== "GET" || request.mode !== "navigate" || url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth/")) return;
 
   event.respondWith(
     fetch(request)
