@@ -61,8 +61,8 @@
 | `DATABASE_URL` | 필수(운영) | 항상 | Render PostgreSQL Internal Database URL |
 | `KAKAO_CLIENT_ID` / `KAKAO_CLIENT_SECRET` | 선택 | 로그인 | 카카오 개발자 콘솔 |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 선택 | 로그인 | Google Cloud Console |
-| `ANTHROPIC_API_KEY` / `CLAUDE_MODEL` | 선택 | AI 레시피/스캔 기능 구현 후 | console.anthropic.com |
-| `AI_DAILY_SCAN_LIMIT` / `AI_DAILY_RECIPE_LIMIT` | 선택 | AI 기능 구현 후(기본 10) | 직접 설정 |
+| `ANTHROPIC_API_KEY` / `CLAUDE_MODEL` | 선택 | 2단계 사진으로 추가, 3단계 AI 레시피(없으면 개발 모드는 예시 결과, 운영은 버튼 숨김) | console.anthropic.com |
+| `AI_DAILY_SCAN_LIMIT` / `AI_DAILY_RECIPE_LIMIT` | 선택 | 사진 인식 / AI 레시피 하루 한도(기본 10, 서울 날짜) | 직접 설정 |
 | `FOODSAFETY_API_KEY` | 선택 | 레시피 추천 구현 후 | 식약처 공공데이터포털(COOKRCP01) |
 | `FOOD_NUTRITION_API_KEY` | 선택 | 영양 계산기 구현 후 | 식약처 공공데이터포털(식품영양성분 DB) |
 | `YOUTUBE_API_KEY` | 선택 | 레시피 영상 연동 후 | Google Cloud Console(YouTube Data API v3) |
@@ -73,7 +73,7 @@
 
 ## 배포 전 체크리스트
 
-- [ ] `DEV_MODE` 환경변수가 없다 (있으면 Render에서 시작 거부).
+- [ ] `DEV_MODE` 환경변수가 없다 (있으면 Render에서 시작 거부). 이 거부 장치는 `RENDER` 환경변수를 기준으로 동작하므로, Render가 아닌 다른 호스팅에 올릴 때는 `DEV_MODE`를 직접 비워 둬야 한다.
 - [ ] `SECRET_KEY`를 새로 생성해 넣었다(로컬 값 재사용 금지).
 - [ ] 카카오/구글 OAuth 리다이렉트 URI가 실제 배포 도메인으로 등록돼 있다.
 - [ ] `flask db upgrade` 후 `flask db check`가 깨끗하다(Postgres 대상).

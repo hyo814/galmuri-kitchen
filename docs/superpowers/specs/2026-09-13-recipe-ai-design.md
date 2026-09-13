@@ -42,7 +42,7 @@ recipe-ai/
 - DB: 로컬/테스트 SQLite, 운영 Render PostgreSQL (SQLAlchemy로 동일 코드)
 - 사진: Cloudflare R2(S3 호환, 비공개 버킷, presigned URL). R2 환경변수가 없으면 로컬 `uploads/` 폴더.
 - 인증: 소셜 로그인만(카카오, 구글). 비밀번호를 저장하지 않는다.
-- AI: Anthropic API, 모델은 `CLAUDE_MODEL` 환경변수(기본 `claude-sonnet-5`).
+- AI: Anthropic API, 모델은 `CLAUDE_MODEL` 환경변수(기본 `claude-sonnet-5`). `ANTHROPIC_API_KEY`가 없으면 개발 모드(`DEV_MODE=1`)의 스캔은 종류별 예시 결과(`sample: true`, 한도·기록 없음)를 돌려주고, 운영에서는 503이며 화면에서 `사진으로 추가`를 숨긴다(`/api/me`의 `scan`).
 
 ## 4. 데이터 모델
 
@@ -53,7 +53,7 @@ recipe-ai/
 - `recipes`: id, user_id, title, ingredients(JSON `[{name, amount}]`), steps(JSON `[str]`), source(`mine`|`public`|`ai`), image_url(선택), created_at
 - `public_recipes`: id, rcp_seq(UNIQUE), title, ingredients_text(원문), ingredient_names(JSON, 파싱된 이름 목록), steps(JSON), image_url. 사용자 소유 아님.
 - `cook_logs`: id, user_id, recipe_id(선택, SET NULL), title, cooked_on(date), rating(1~5, 선택), memo(선택), photo_key(선택), created_at
-- `ai_calls`: id, user_id, kind(`fridge`|`receipt`|`order`|`recipe`|`link`), created_at
+- `ai_calls`: id, user_id, kind(`fridge`|`receipt`|`order`|`memo`|`recipe`|`link`), created_at(인덱스)
 - `storage_locations`, `staples`, `item_rules`(14절), `shopping_items`(16절), `kitchen_tools`(18절)
 
 ### 규칙
@@ -74,11 +74,11 @@ recipe-ai/
 | GET | `/auth/login/<provider>` | OAuth 시작 |
 | GET | `/auth/callback/<provider>` | OAuth 콜백 → 세션 발급 → `/`로 리다이렉트 |
 | POST | `/api/logout` | 세션 삭제 |
-| GET | `/api/me` | 현재 사용자 (비로그인 401) |
+| GET | `/api/me` | 현재 사용자 `{id, nickname, scan: "on"\|"sample"\|"off", scan_limit}` (비로그인 401). 개발용 로그인 응답도 같은 모양 |
 | GET/POST | `/api/ingredients` | 목록(임박 순, status 포함) / 생성 |
-| POST | `/api/ingredients/bulk` | 스캔 확인 후 일괄 생성 |
+| POST | `/api/ingredients/bulk` | 스캔 확인 후 일괄 생성 `{items:[{name, quantity, unit, purchased_on, expires_on?, location_id?}]}` 1~50개. 하나라도 틀리면 아무것도 만들지 않고 400 `{error: "N번째 재료: …", errors:[{index, error}]}` |
 | PATCH/DELETE | `/api/ingredients/<id>` | 수정 / 삭제 |
-| POST | `/api/scan?kind=fridge\|receipt` | multipart 이미지 → `{items:[{name, quantity, unit}], purchased_on?}` |
+| POST | `/api/scan?kind=fridge\|receipt\|order` | multipart `image` → `{items:[{name, quantity, unit, location_kind}], purchased_on, sample}` |
 | GET/POST | `/api/recipes` | 내 레시피 목록 / 생성 |
 | GET/PUT/DELETE | `/api/recipes/<id>` | 상세 / 수정 / 삭제 |
 | GET | `/api/public-recipes/<id>` | 공공 레시피 상세 |
@@ -98,7 +98,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 
 1. **로그인**: 카카오/구글 버튼.
 2. **냉장고**: 임박 순 목록 + 배지. `+ 직접 추가`(이름, 수량, 단위, 구입일[기본 오늘], 유통기한). 항목 탭 → 수정/삭제.
-   `📷 냉장고 사진` / `🧾 영수증` → 브라우저에서 긴 변 1568px JPEG로 축소 → `/api/scan` → 확인 화면(체크, 이름·수량·단위 수정, 구입일 일괄 입력; 영수증은 인식된 날짜로 프리필) → `/api/ingredients/bulk`.
+   `사진으로 추가`(냉장고 사진 · 영수증 · 온라인 주문 캡처, 카메라·갤러리는 폰이 고르게 함) → 브라우저에서 긴 변 1568px JPEG로 축소 → `/api/scan` → 확인 화면(체크, 행을 펼쳐 이름·수량·단위·보관 위치 수정, 구입일 일괄 입력; 영수증·주문은 인식된 날짜로 프리필) → `/api/ingredients/bulk`. 시안 `docs/design/scan-2/`.
 3. **추천**: 내 레시피 / 공공 DB 섹션(일치율 순, 부족 재료 표시). `AI에게 물어보기` 버튼 → AI 제안 3개. 카드 → 상세.
 4. **레시피 상세**(공통): 재료(보유 여부 표시), 단계. `내 레시피로 저장`(public/ai일 때), `요리했어요`.
 5. **레시피 탭**: 내 레시피 목록, 등록/수정/삭제 폼(재료 행 추가, 단계 행 추가).
@@ -108,16 +108,16 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 ## 7. 핵심 동작
 
 - **스캔**: Claude Messages API에 이미지(base64) + 종류별 프롬프트, 구조화 출력(JSON 스키마)으로
-  `{items:[{name, quantity, unit}], purchased_on: "YYYY-MM-DD"|null}`. 영수증에서 식재료가 아닌 항목(봉투, 세제 등)은 제외하도록 지시.
+  `{items:[{name, quantity, unit, location_kind}], purchased_on: "YYYY-MM-DD"|null}`. 영수증·주문에서 식재료가 아닌 항목(봉투, 세제 등)은 제외하도록 지시. 서버가 결과를 정리한다(최대 50개, 이름 50자·단위 10자, 수량이 0 이하·숫자 아님 → 1, 미래 구입일·냉장고 사진의 구입일 → null).
 - **AI 레시피**: 보유 재료 목록(임박 표시 포함)을 전달, 구조화 출력으로 `[{title, ingredients:[{name, amount}], steps:[str]}]` 3개. 임박 재료 우선 사용 지시.
 - **조리 기록 저장**: 한 트랜잭션에서 `usages=[{ingredient_id, amount}]` 각각 소유 확인 → quantity 차감 → 0 이하면 삭제 → cook_log 생성. 사진 업로드 실패 시 전체 롤백.
-- **AI 일일 한도**: 요청 전 오늘(서버 기준 Asia/Seoul) 해당 사용자의 `ai_calls` 수를 kind 그룹(scan: fridge+receipt / recipe)별로 센다.
-  한도 `AI_DAILY_SCAN_LIMIT`(기본 10), `AI_DAILY_RECIPE_LIMIT`(기본 10) 초과 시 429. 호출 성공 시에만 기록.
+- **AI 일일 한도**: 요청 전 오늘(서버 기준 Asia/Seoul) 해당 사용자의 `ai_calls` 수를 kind 그룹(scan: fridge+receipt+order+memo / recipe)별로 센다. 서울 하루를 UTC 구간으로 바꿔 created_at으로 센다.
+  한도 `AI_DAILY_SCAN_LIMIT`(기본 10), `AI_DAILY_RECIPE_LIMIT`(기본 10) 초과 시 429. AI로 보낸 호출은 성공·실패와 관계없이 센다(실패도 비용이 들어 남용을 막기 위해). 업로드 검증에서 걸린 요청은 세지 않는다. 짧은 연속 호출은 `AI_SCAN_BURST_LIMIT`(기본 3, 60초)로 별도 429.
 
 ## 8. 에러 처리
 
 - AI 실패/타임아웃/스키마 불일치 → 502 `{"error": "인식에 실패했어요. 직접 입력해 주세요."}`, 프론트는 수기 입력 폼으로 이동.
-- 업로드: `MAX_CONTENT_LENGTH` 10MB(413), `image/*` 외 415.
+- 업로드: `MAX_CONTENT_LENGTH` 10MB(413), 파일 시그니처로 판별해 JPEG·PNG·WEBP 외 415(선언된 Content-Type은 신뢰하지 않는다). 스캔 한도 초과 429, 키 없는 운영 503.
 - 남의 리소스 id → 404.
 - 입력 검증: name 1~50자, quantity > 0, rating 1~5, 날짜 ISO 형식. 위반 시 400.
 - 프론트: fetch 래퍼 하나에서 401 → 로그인 화면, 그 외 오류 → 토스트.
@@ -140,7 +140,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 ## 11. 배포
 
 - Render Web Service(Docker) + Render PostgreSQL + Cloudflare R2.
-- 시작 명령: `flask db upgrade && gunicorn -w 2 -b 0.0.0.0:$PORT "app:create_app()"`.
+- 시작 명령: `flask db upgrade && gunicorn -w 2 --threads 4 -k gthread --timeout 120 -b 0.0.0.0:$PORT "app:create_app()"` (Claude 호출 타임아웃 45초 × 최대 2회 시도로 최악 약 90초 < 120초, 스레드 워커로 동시 요청 처리).
 - 단계 1 완료 시 `docs/deploy.md`: OAuth 앱 등록(카카오 개발자, Google Cloud), 식약처 API 키, R2 버킷, Render 환경변수 설정 절차.
 
 ## 12. 로컬 개발 & 폰 확인 (추가: 2026-09-13)

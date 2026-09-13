@@ -15,4 +15,4 @@ ENV FRONTEND_DIST=/srv/frontend/dist
 RUN useradd --system --create-home --home-dir /srv/backend --shell /usr/sbin/nologin appuser \
     && chown -R appuser:appuser /srv/backend /srv/frontend
 USER appuser
-CMD flask --app app db upgrade && exec gunicorn -w 2 -b 0.0.0.0:${PORT:-8000} --access-logfile - "app:create_app()"
+CMD flask --app app db upgrade && exec gunicorn -w 2 --threads 4 -k gthread --timeout 120 -b 0.0.0.0:${PORT:-8000} --access-logfile - "app:create_app()"

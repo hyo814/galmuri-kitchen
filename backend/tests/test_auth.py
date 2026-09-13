@@ -73,3 +73,14 @@ def test_dev_mode_refused_on_render(make_app, monkeypatch):
     monkeypatch.setenv("RENDER", "true")
     with pytest.raises(RuntimeError):
         make_app()
+
+
+def test_me_reports_scan_mode_and_limit(client, app):
+    dev = client.post("/api/dev-login").get_json()
+    assert (dev["scan"], dev["scan_limit"]) == ("sample", 10)
+    assert client.get("/api/me").get_json()["scan"] == "sample"
+    app.config.update(ANTHROPIC_API_KEY="test-key", AI_DAILY_SCAN_LIMIT=5)
+    me = client.get("/api/me").get_json()
+    assert (me["scan"], me["scan_limit"]) == ("on", 5)
+    app.config.update(ANTHROPIC_API_KEY=None, DEV_MODE=False)
+    assert client.get("/api/me").get_json()["scan"] == "off"

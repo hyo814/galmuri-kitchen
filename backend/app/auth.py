@@ -5,6 +5,7 @@ from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, abort, current_app, g, jsonify, redirect, session, url_for
 
+from .ai import scan_mode
 from .defaults import seed_user_defaults
 from .models import User, db
 
@@ -72,6 +73,16 @@ def get_owned_or_404(model, obj_id):
     return obj
 
 
+def user_json(user):
+    """/api/me와 개발용 로그인이 같은 모양을 돌려준다. scan·scan_limit은 사진으로 추가 버튼 표시용."""
+    return jsonify(
+        id=user.id,
+        nickname=user.nickname,
+        scan=scan_mode(),
+        scan_limit=current_app.config["AI_DAILY_SCAN_LIMIT"],
+    )
+
+
 def upsert_user(provider, provider_id, nickname):
     user = User.query.filter_by(provider=provider, provider_id=provider_id).first()
     if user is None:
@@ -99,13 +110,13 @@ def dev_login():
         abort(404)
     user = upsert_user("dev", "dev", "개발자")
     login_user(user)
-    return jsonify(id=user.id, nickname=user.nickname)
+    return user_json(user)
 
 
 @bp.get("/api/me")
 @login_required
 def me():
-    return jsonify(id=g.user.id, nickname=g.user.nickname)
+    return user_json(g.user)
 
 
 @bp.post("/api/logout")
