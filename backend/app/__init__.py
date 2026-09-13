@@ -1,12 +1,14 @@
 import os
 import re
 
-from flask import Flask, jsonify, request
+from flask import Flask, abort, jsonify, request, send_from_directory
 from flask_migrate import Migrate
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .models import db
+
+DEFAULT_FRONTEND_DIST = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))
 
 DEFAULT_MESSAGES = {
     400: "잘못된 요청이에요.",
@@ -38,6 +40,7 @@ def create_app(test_config=None):
         KAKAO_CLIENT_SECRET=os.environ.get("KAKAO_CLIENT_SECRET"),
         GOOGLE_CLIENT_ID=os.environ.get("GOOGLE_CLIENT_ID"),
         GOOGLE_CLIENT_SECRET=os.environ.get("GOOGLE_CLIENT_SECRET"),
+        FRONTEND_DIST=os.environ.get("FRONTEND_DIST", DEFAULT_FRONTEND_DIST),
     )
     if test_config:
         app.config.update(test_config)
@@ -77,5 +80,15 @@ def create_app(test_config=None):
         custom = e.description != type(e).description
         message = e.description if custom else DEFAULT_MESSAGES.get(e.code, "문제가 생겼어요.")
         return jsonify(error=message), e.code
+
+    @app.get("/", defaults={"path": ""})
+    @app.get("/<path:path>")
+    def spa(path):
+        if path.startswith("api/"):
+            abort(404)
+        dist = app.config["FRONTEND_DIST"]
+        if path and os.path.isfile(os.path.join(dist, path)):
+            return send_from_directory(dist, path)
+        return send_from_directory(dist, "index.html")
 
     return app
