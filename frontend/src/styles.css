@@ -835,3 +835,37 @@ a.row-btn > svg {
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--line);
 }
+
+.stepper {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 56px;
+  gap: 8px;
+}
+
+.stepper .icon-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: var(--field);
+  color: var(--text);
+}
+
+.stepper .input {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.notice {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.btn.used-up {
+  background: var(--danger);
+  color: var(--bg);
+}
