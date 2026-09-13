@@ -7,15 +7,26 @@ from . import ai
 from .auth import login_required
 from .ingredients import SEOUL, seoul_today
 from .locations import KINDS
-from .models import AiCall, db
+from .models import AiCall, db, utcnow
 
 bp = Blueprint("scan", __name__, url_prefix="/api/scan")
 
 UPLOAD_KINDS = ("fridge", "receipt", "order")
 SCAN_KINDS = ("fridge", "receipt", "order", "memo")  # 일일 한도를 함께 세는 kind (memo는 4단계 장보기 메모 사진)
-IMAGE_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
 MAX_ITEMS = 50
 MAX_QUANTITY = 9999
+BURST_WINDOW_SECONDS = 60
+
+
+def sniff_image_type(data):
+    """선언된 Content-Type은 클라이언트가 마음대로 붙일 수 있으므로 믿지 않고, 파일 시그니처(매직 넘버)로 실제 형식을 판별한다."""
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
 
 
 def scans_today(user_id):
@@ -30,12 +41,22 @@ def scans_today(user_id):
     ).count()
 
 
+def scans_recent(user_id):
+    """지난 60초 안에 이 사용자가 보낸 사진 인식 횟수. 짧은 시간에 몰아 보내는 것(계정당 동시 진행 스캔 포함)을 막는다."""
+    cutoff = utcnow() - timedelta(seconds=BURST_WINDOW_SECONDS)
+    return AiCall.query.filter(
+        AiCall.user_id == user_id,
+        AiCall.kind.in_(SCAN_KINDS),
+        AiCall.created_at >= cutoff,
+    ).count()
+
+
 def _quantity(value):
     if isinstance(value, bool):
         return 1
     try:
         quantity = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):  # OverflowError: 10**400 같은 거대한 정수
         return 1
     return min(quantity, MAX_QUANTITY) if math.isfinite(quantity) and quantity > 0 else 1
 
@@ -82,11 +103,12 @@ def scan():
     image = request.files.get("image")  # 10MB 초과는 여기서 413
     if image is None:
         abort(400, "사진을 올려 주세요.")
-    if image.mimetype not in IMAGE_TYPES:
-        abort(415, "사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요.")
     data = image.read()
     if not data:
         abort(400, "사진을 올려 주세요.")
+    media_type = sniff_image_type(data)  # 선언된 Content-Type이 아니라 파일 시그니처를 믿는다
+    if media_type is None:
+        abort(415, "사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요.")
 
     today = seoul_today()
     mode = ai.scan_mode()
@@ -95,13 +117,20 @@ def scan():
     if mode == "sample":
         return jsonify(**clean_result(kind, ai.sample_result(kind, today), today), sample=True)
 
+    if scans_recent(g.user.id) >= current_app.config["AI_SCAN_BURST_LIMIT"]:
+        abort(429, "잠시 후 다시 시도해 주세요.")
     limit = current_app.config["AI_DAILY_SCAN_LIMIT"]
     if scans_today(g.user.id) >= limit:
         abort(429, f"오늘 사진 인식은 {limit}번까지 쓸 수 있어요. 내일 다시 써 주세요.")
+
+    # AI로 보낸 호출은 성공·실패와 관계없이 센다(실패도 비용이 들어 남용을 막기 위해).
+    # 업로드 검증(kind·사진 유무·형식)에서 걸린 요청은 세지 않는다.
+    # created_at을 명시적으로 넣는다: 모델 기본값(utcnow) 대신 이 모듈의 utcnow를 써서
+    # scans_today/scans_recent와 같은 시계를 보게 한다(테스트에서 시계를 고정하기 쉽다).
+    db.session.add(AiCall(user_id=g.user.id, kind=kind, created_at=utcnow()))
+    db.session.commit()
     try:
-        raw = ai.extract(kind, data, image.mimetype)
+        raw = ai.extract(kind, data, media_type)
     except ai.AiError:
         abort(502, "인식에 실패했어요. 직접 입력해 주세요.")
-    db.session.add(AiCall(user_id=g.user.id, kind=kind))  # 성공한 호출만 한도에 센다 (스펙 7절)
-    db.session.commit()
     return jsonify(**clean_result(kind, raw, today), sample=False)

@@ -74,7 +74,7 @@
 
 ## 배포 전 체크리스트
 
-- [ ] `DEV_MODE` 환경변수가 없다 (있으면 Render에서 시작 거부).
+- [ ] `DEV_MODE` 환경변수가 없다 (있으면 Render에서 시작 거부). 이 거부 장치는 `RENDER` 환경변수를 기준으로 동작하므로, Render가 아닌 다른 호스팅에 올릴 때는 `DEV_MODE`를 직접 비워 둬야 한다.
 - [ ] `SECRET_KEY`를 새로 생성해 넣었다(로컬 값 재사용 금지).
 - [ ] 카카오/구글 OAuth 리다이렉트 URI가 실제 배포 도메인으로 등록돼 있다.
 - [ ] `flask db upgrade` 후 `flask db check`가 깨끗하다(Postgres 대상).

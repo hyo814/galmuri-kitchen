@@ -44,6 +44,7 @@ def create_app(test_config=None):
         ANTHROPIC_API_KEY=os.environ.get("ANTHROPIC_API_KEY"),
         CLAUDE_MODEL=os.environ.get("CLAUDE_MODEL", "claude-sonnet-5"),
         AI_DAILY_SCAN_LIMIT=int(os.environ.get("AI_DAILY_SCAN_LIMIT", "10")),
+        AI_SCAN_BURST_LIMIT=int(os.environ.get("AI_SCAN_BURST_LIMIT", "3")),
     )
     if test_config:
         app.config.update(test_config)

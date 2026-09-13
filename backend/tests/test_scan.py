@@ -7,15 +7,19 @@ import anthropic
 import pytest
 from pydantic import ValidationError
 
-from app import ai
+from app import ai, scan
 from app.ingredients import SEOUL, seoul_today
 from app.models import AiCall, User, db
 from app.scan import MAX_ITEMS, clean_result
 
 TODAY = date(2026, 9, 13)
 
+JPEG_BYTES = b"\xff\xd8\xff" + b"fake-jpeg-body"
+PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"fake-png-body"
+WEBP_BYTES = b"RIFF" + b"\x00\x00\x00\x00" + b"WEBP" + b"fake-webp-body"
 
-def upload(client, kind="receipt", data=b"\xff\xd8fake-jpeg", mimetype="image/jpeg"):
+
+def upload(client, kind="receipt", data=JPEG_BYTES, mimetype="image/jpeg"):
     return client.post(f"/api/scan?kind={kind}", data={"image": (io.BytesIO(data), "photo.jpg", mimetype)})
 
 
@@ -78,6 +82,25 @@ def test_clean_result_caps_items_and_handles_garbage():
     assert clean_result("order", {"items": "대파"}, TODAY) == {"items": [], "purchased_on": None}
 
 
+def test_clean_result_negative_quantity_and_empty_name():
+    raw = {
+        "items": [
+            {"name": "당근", "quantity": -5, "unit": "개", "location_kind": "fridge"},
+            {"name": "", "quantity": 1, "unit": "개", "location_kind": "fridge"},
+        ]
+    }
+    assert clean_result("receipt", raw, TODAY)["items"] == [
+        {"name": "당근", "quantity": 1, "unit": "개", "location_kind": "fridge"},
+    ]
+
+
+def test_clean_result_quantity_overflow_falls_back_to_one():
+    raw = {"items": [{"name": "쌀", "quantity": 10**400, "unit": "포", "location_kind": "room"}]}
+    assert clean_result("receipt", raw, TODAY)["items"] == [
+        {"name": "쌀", "quantity": 1, "unit": "포", "location_kind": "room"},
+    ]
+
+
 # --- ai.extract (가짜 Anthropic 클라이언트) ---
 
 
@@ -112,7 +135,7 @@ def test_extract_sends_image_prompt_and_schema(app, monkeypatch):
         "items": [{"name": "우유", "quantity": 1.0, "unit": "개", "location_kind": "fridge"}],
         "purchased_on": "2026-09-12",
     }
-    assert calls["client"] == {"api_key": "test-key", "timeout": 60, "max_retries": 2}
+    assert calls["client"] == {"api_key": "test-key", "timeout": 45, "max_retries": 1}
     request = calls["parse"]
     assert (request["model"], request["max_tokens"], request["output_format"]) == ("claude-sonnet-5", 4096, ai.ScanResult)
     image, prompt = request["messages"][0]["content"]
@@ -161,7 +184,10 @@ def test_rejects_bad_kind_missing_image_and_non_image(client, login):
     assert (res.status_code, res.get_json()) == (400, {"error": "사진을 올려 주세요."})
     res = upload(client, data=b"")
     assert (res.status_code, res.get_json()) == (400, {"error": "사진을 올려 주세요."})
-    res = upload(client, mimetype="text/plain")
+    res = upload(client, data=b"not-an-image-just-plain-bytes", mimetype="text/plain")
+    assert (res.status_code, res.get_json()) == (415, {"error": "사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요."})
+    # 선언된 Content-Type을 image/jpeg로 위조해도 실제 바이트(서명)가 이미지가 아니면 415
+    res = upload(client, data=b"not-an-image-just-plain-bytes", mimetype="image/jpeg")
     assert (res.status_code, res.get_json()) == (415, {"error": "사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요."})
 
 
@@ -169,6 +195,15 @@ def test_too_large_upload_is_413_json(client, login):
     login()
     res = upload(client, data=b"x" * (10 * 1024 * 1024 + 1))
     assert (res.status_code, res.get_json()) == (413, {"error": "파일이 너무 커요. 10MB 이하로 올려 주세요."})
+
+
+def test_scan_accepts_valid_image_signatures_by_content_not_label(client, login, app, monkeypatch):
+    login()
+    app.config["ANTHROPIC_API_KEY"] = "test-key"
+    monkeypatch.setattr(ai, "extract", lambda *a: {"items": [], "purchased_on": None})
+    for data in (JPEG_BYTES, PNG_BYTES, WEBP_BYTES):
+        # 선언된 Content-Type은 항상 text/plain으로 위조하지만, 실제 바이트 서명이 유효하면 통과한다
+        assert upload(client, data=data, mimetype="text/plain").status_code == 200
 
 
 def test_sample_mode_without_key_in_dev(client, login, app, monkeypatch):
@@ -201,19 +236,20 @@ def test_real_scan_cleans_result_and_logs_call(client, login, app, monkeypatch):
         return {"items": [{"name": " 우유 ", "quantity": 0, "unit": "", "location_kind": "fridge"}], "purchased_on": "2999-01-01"}
 
     monkeypatch.setattr(ai, "extract", fake_extract)
-    res = upload(client, kind="order", data=b"png-bytes", mimetype="image/png")
+    # 선언된 Content-Type은 image/jpeg로 위조하지만 실제 바이트는 PNG 서명 → extract는 스니핑한 image/png를 받는다
+    res = upload(client, kind="order", data=PNG_BYTES, mimetype="image/jpeg")
     assert res.status_code == 200
     assert res.get_json() == {
         "items": [{"name": "우유", "quantity": 1, "unit": "개", "location_kind": "fridge"}],
         "purchased_on": None,
         "sample": False,
     }
-    assert seen == [("order", b"png-bytes", "image/png")]
+    assert seen == [("order", PNG_BYTES, "image/png")]
     assert ai_calls(app) == [(user.id, "order")]
 
 
-def test_ai_failure_is_502_and_not_counted(client, login, app, monkeypatch):
-    login()
+def test_ai_failure_is_502_and_counted(client, login, app, monkeypatch):
+    user = login()
     app.config["ANTHROPIC_API_KEY"] = "test-key"
 
     def broken(*args):
@@ -222,14 +258,19 @@ def test_ai_failure_is_502_and_not_counted(client, login, app, monkeypatch):
     monkeypatch.setattr(ai, "extract", broken)
     res = upload(client)
     assert (res.status_code, res.get_json()) == (502, {"error": "인식에 실패했어요. 직접 입력해 주세요."})
-    assert ai_calls(app) == []
+    # F1: 실패도 비용이 들었으므로 한도에는 센다(업로드 검증 실패만 세지 않는다)
+    assert ai_calls(app) == [(user.id, "receipt")]
 
 
 def test_daily_limit_counts_scan_kinds_in_seoul_day(client, login, app, monkeypatch):
     user = login()
     app.config.update(ANTHROPIC_API_KEY="test-key", AI_DAILY_SCAN_LIMIT=3)
     monkeypatch.setattr(ai, "extract", lambda *args: {"items": [], "purchased_on": None})
-    start = datetime.combine(seoul_today(), time.min, tzinfo=SEOUL).astimezone(timezone.utc)
+    fixed_today = date(2026, 9, 13)
+    start = datetime.combine(fixed_today, time.min, tzinfo=SEOUL).astimezone(timezone.utc)
+    fixed_now = start + timedelta(hours=12)  # 벽시계와 무관하게 고정 — burst 윈도우가 seed 데이터와 안 겹치게 정오로 둔다
+    monkeypatch.setattr(scan, "seoul_today", lambda: fixed_today)
+    monkeypatch.setattr(scan, "utcnow", lambda: fixed_now)
     with app.app_context():
         other = User(provider="test", provider_id="other", nickname="x")
         db.session.add(other)
@@ -237,10 +278,10 @@ def test_daily_limit_counts_scan_kinds_in_seoul_day(client, login, app, monkeypa
         db.session.add_all(
             [
                 AiCall(user_id=user.id, kind="fridge", created_at=start + timedelta(seconds=1)),  # 오늘 첫 순간 → 셈
-                AiCall(user_id=user.id, kind="order"),  # 지금 → 셈
+                AiCall(user_id=user.id, kind="order", created_at=fixed_now - timedelta(seconds=5)),  # 지금 → 셈
                 AiCall(user_id=user.id, kind="receipt", created_at=start - timedelta(seconds=1)),  # 어제 → 안 셈
-                AiCall(user_id=user.id, kind="recipe"),  # 레시피 한도 → 안 셈
-                *[AiCall(user_id=other.id, kind="fridge") for _ in range(5)],  # 다른 사용자 → 안 셈
+                AiCall(user_id=user.id, kind="recipe", created_at=fixed_now),  # 레시피 한도 → 안 셈
+                *[AiCall(user_id=other.id, kind="fridge", created_at=fixed_now) for _ in range(5)],  # 다른 사용자 → 안 셈
             ]
         )
         db.session.commit()
@@ -248,6 +289,39 @@ def test_daily_limit_counts_scan_kinds_in_seoul_day(client, login, app, monkeypa
     assert upload(client).status_code == 200  # 2번 썼으니 3번째는 된다
     res = upload(client)
     assert (res.status_code, res.get_json()) == (429, {"error": "오늘 사진 인식은 3번까지 쓸 수 있어요. 내일 다시 써 주세요."})
+
+
+def test_burst_limit_blocks_rapid_calls(client, login, app, monkeypatch):
+    user = login()
+    app.config.update(ANTHROPIC_API_KEY="test-key", AI_SCAN_BURST_LIMIT=3)
+    monkeypatch.setattr(ai, "extract", fail_if_called)
+    fixed_now = datetime(2026, 9, 13, 12, 0, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(scan, "utcnow", lambda: fixed_now)
+    with app.app_context():
+        db.session.add_all(
+            [
+                AiCall(user_id=user.id, kind="fridge", created_at=fixed_now - timedelta(seconds=10)),
+                AiCall(user_id=user.id, kind="receipt", created_at=fixed_now - timedelta(seconds=30)),
+                AiCall(user_id=user.id, kind="order", created_at=fixed_now - timedelta(seconds=59)),
+            ]
+        )
+        db.session.commit()
+    res = upload(client)
+    assert (res.status_code, res.get_json()) == (429, {"error": "잠시 후 다시 시도해 주세요."})
+
+
+def test_burst_limit_ignores_calls_older_than_a_minute(client, login, app, monkeypatch):
+    user = login()
+    app.config.update(ANTHROPIC_API_KEY="test-key", AI_SCAN_BURST_LIMIT=3)
+    monkeypatch.setattr(ai, "extract", lambda *args: {"items": [], "purchased_on": None})
+    fixed_now = datetime(2026, 9, 13, 12, 0, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(scan, "utcnow", lambda: fixed_now)
+    with app.app_context():
+        db.session.add_all(
+            [AiCall(user_id=user.id, kind="fridge", created_at=fixed_now - timedelta(seconds=61)) for _ in range(3)]
+        )
+        db.session.commit()
+    assert upload(client).status_code == 200
 
 
 def test_scan_requires_fetch_header(raw_client):

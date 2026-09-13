@@ -85,7 +85,8 @@ def sample_result(kind, today):
 
 def extract(kind, image_bytes, media_type):
     """사진 한 장에서 재료 목록을 뽑는다. 실패하면 AiError."""
-    client = anthropic.Anthropic(api_key=current_app.config["ANTHROPIC_API_KEY"], timeout=60, max_retries=2)
+    # timeout(45s) x (1 재시도 + 최초 1회) = 최악 약 90초. gunicorn --timeout 120과 맞춘 값이다(Dockerfile).
+    client = anthropic.Anthropic(api_key=current_app.config["ANTHROPIC_API_KEY"], timeout=45, max_retries=1)
     image = base64.standard_b64encode(image_bytes).decode("utf-8")
     try:
         response = client.messages.parse(

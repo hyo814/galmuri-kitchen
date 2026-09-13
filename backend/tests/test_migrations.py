@@ -90,6 +90,27 @@ def test_item_rules_migration_seeds_existing_users(app):
         assert ("계란", 25, 30) in [tuple(r) for r in rows]
 
 
+def test_ai_calls_migration_adds_and_removes_table_and_indexes(app):
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="a4b4c4d4e4f4")
+        with db.engine.connect() as conn:
+            tables = set(sa.inspect(conn).get_table_names())
+        assert "ai_calls" not in tables
+
+        upgrade(directory=MIGRATIONS, revision="a5b5c5d5e5f5")
+        with db.engine.connect() as conn:
+            inspector = sa.inspect(conn)
+            tables = set(inspector.get_table_names())
+            index_names = {ix["name"] for ix in inspector.get_indexes("ai_calls")}
+        assert "ai_calls" in tables
+        assert {"ix_ai_calls_created_at", "ix_ai_calls_user_id"} <= index_names
+
+        downgrade(directory=MIGRATIONS, revision="a4b4c4d4e4f4")
+        with db.engine.connect() as conn:
+            tables = set(sa.inspect(conn).get_table_names())
+        assert "ai_calls" not in tables
+
+
 def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)

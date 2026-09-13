@@ -112,12 +112,12 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **AI 레시피**: 보유 재료 목록(임박 표시 포함)을 전달, 구조화 출력으로 `[{title, ingredients:[{name, amount}], steps:[str]}]` 3개. 임박 재료 우선 사용 지시.
 - **조리 기록 저장**: 한 트랜잭션에서 `usages=[{ingredient_id, amount}]` 각각 소유 확인 → quantity 차감 → 0 이하면 삭제 → cook_log 생성. 사진 업로드 실패 시 전체 롤백.
 - **AI 일일 한도**: 요청 전 오늘(서버 기준 Asia/Seoul) 해당 사용자의 `ai_calls` 수를 kind 그룹(scan: fridge+receipt+order+memo / recipe)별로 센다. 서울 하루를 UTC 구간으로 바꿔 created_at으로 센다.
-  한도 `AI_DAILY_SCAN_LIMIT`(기본 10), `AI_DAILY_RECIPE_LIMIT`(기본 10) 초과 시 429. 호출 성공 시에만 기록.
+  한도 `AI_DAILY_SCAN_LIMIT`(기본 10), `AI_DAILY_RECIPE_LIMIT`(기본 10) 초과 시 429. AI로 보낸 호출은 성공·실패와 관계없이 센다(실패도 비용이 들어 남용을 막기 위해). 업로드 검증에서 걸린 요청은 세지 않는다. 짧은 연속 호출은 `AI_SCAN_BURST_LIMIT`(기본 3, 60초)로 별도 429.
 
 ## 8. 에러 처리
 
 - AI 실패/타임아웃/스키마 불일치 → 502 `{"error": "인식에 실패했어요. 직접 입력해 주세요."}`, 프론트는 수기 입력 폼으로 이동.
-- 업로드: `MAX_CONTENT_LENGTH` 10MB(413), JPEG·PNG·WEBP·GIF 외 415. 스캔 한도 초과 429, 키 없는 운영 503.
+- 업로드: `MAX_CONTENT_LENGTH` 10MB(413), 파일 시그니처로 판별해 JPEG·PNG·WEBP 외 415(선언된 Content-Type은 신뢰하지 않는다). 스캔 한도 초과 429, 키 없는 운영 503.
 - 남의 리소스 id → 404.
 - 입력 검증: name 1~50자, quantity > 0, rating 1~5, 날짜 ISO 형식. 위반 시 400.
 - 프론트: fetch 래퍼 하나에서 401 → 로그인 화면, 그 외 오류 → 토스트.
@@ -140,7 +140,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 ## 11. 배포
 
 - Render Web Service(Docker) + Render PostgreSQL + Cloudflare R2.
-- 시작 명령: `flask db upgrade && gunicorn -w 2 --threads 4 --timeout 200 -b 0.0.0.0:$PORT "app:create_app()"` (AI 호출이 수십 초 걸릴 수 있어 스레드 워커와 긴 타임아웃).
+- 시작 명령: `flask db upgrade && gunicorn -w 2 --threads 4 -k gthread --timeout 120 -b 0.0.0.0:$PORT "app:create_app()"` (Claude 호출 타임아웃 45초 × 최대 2회 시도로 최악 약 90초 < 120초, 스레드 워커로 동시 요청 처리).
 - 단계 1 완료 시 `docs/deploy.md`: OAuth 앱 등록(카카오 개발자, Google Cloud), 식약처 API 키, R2 버킷, Render 환경변수 설정 절차.
 
 ## 12. 로컬 개발 & 폰 확인 (추가: 2026-09-13)
