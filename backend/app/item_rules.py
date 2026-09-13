@@ -2,7 +2,7 @@ from flask import Blueprint, abort, g, jsonify, request
 
 from .auth import get_owned_or_404, login_required
 from .models import ItemRule, db
-from .validation import integer, text
+from .validation import commit_or_duplicate, integer, text
 
 bp = Blueprint("item_rules", __name__, url_prefix="/api/item-rules")
 
@@ -58,7 +58,7 @@ def create_rule():
     _check_order(warn_days, danger_days)
     rule = ItemRule(user_id=g.user.id, keyword=keyword, warn_days=warn_days, danger_days=danger_days, source="user")
     db.session.add(rule)
-    db.session.commit()
+    commit_or_duplicate("이미 있는 품목이에요.")
     return jsonify(to_json(rule)), 201
 
 
@@ -74,7 +74,7 @@ def update_rule(rule_id):
     )
     _check_order(warn_days, danger_days)
     rule.keyword, rule.warn_days, rule.danger_days, rule.source = keyword, warn_days, danger_days, "user"
-    db.session.commit()
+    commit_or_duplicate("이미 있는 품목이에요.")
     return jsonify(to_json(rule))
 
 

@@ -1,4 +1,16 @@
 from flask import abort
+from sqlalchemy.exc import IntegrityError
+
+from .models import db
+
+
+def commit_or_duplicate(message):
+    """db.session.commit()하되, UNIQUE 제약 충돌은 500 대신 400으로 (동시 요청 경합 대비)."""
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        abort(400, message)
 
 
 def text(value, label, max_len):

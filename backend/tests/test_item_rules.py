@@ -81,14 +81,38 @@ def test_other_users_rule_is_hidden(client, login):
     assert client.delete(f"/api/item-rules/{rule_id}").status_code == 404
 
 
+# 마이그레이션 a3b3c3d3e3f3가 실행된 시점의 기본 규칙을 그대로 고정한 값.
+# 이후 app.defaults.DEFAULT_RULES를 바꾸더라도 이미 배포된 마이그레이션은 절대 수정하지 않는다 —
+# 기본값을 바꾸려면 새 마이그레이션을 추가한다.
+FROZEN_MIGRATION_DEFAULTS = [
+    ("달걀", 25, 30, "user"),
+    ("계란", 25, 30, "user"),
+    ("두부", 15, 18, "mfds"),
+    ("요거트", 22, 25, "mfds"),
+    ("요구르트", 22, 25, "mfds"),
+    ("주스", 25, 28, "mfds"),
+    ("빵", 21, 24, "mfds"),
+    ("어묵", 30, 33, "mfds"),
+    ("소시지", 41, 44, "mfds"),
+    ("햄", 42, 45, "mfds"),
+]
+
+
 def test_migration_defaults_match_app_defaults():
     import importlib.util
     from pathlib import Path
-
-    from app.defaults import DEFAULT_RULES
 
     path = Path(__file__).resolve().parents[1] / "migrations" / "versions" / "a3b3c3d3e3f3_item_rules.py"
     spec = importlib.util.spec_from_file_location("item_rules_migration", path)
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
-    assert migration.DEFAULT_RULES == DEFAULT_RULES
+    assert migration.DEFAULT_RULES == FROZEN_MIGRATION_DEFAULTS
+
+
+def test_app_defaults_match_frozen_defaults_today():
+    # 오늘 기준으로 app.defaults.DEFAULT_RULES가 마이그레이션 시점 값과 같은지 확인.
+    # 앞으로 기본값을 바꾸면 이 테스트가 실패한다 — 그때는 위 마이그레이션 상수를 고치는 게 아니라
+    # 새 마이그레이션을 추가하고, 이 테스트의 기대값만 최신 app.defaults로 갱신한다.
+    from app.defaults import DEFAULT_RULES
+
+    assert DEFAULT_RULES == FROZEN_MIGRATION_DEFAULTS

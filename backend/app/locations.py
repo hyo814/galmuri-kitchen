@@ -3,7 +3,7 @@ from sqlalchemy import func
 
 from .auth import get_owned_or_404, login_required
 from .models import Ingredient, StorageLocation, db
-from .validation import text
+from .validation import commit_or_duplicate, text
 
 bp = Blueprint("locations", __name__, url_prefix="/api/locations")
 
@@ -27,7 +27,7 @@ def default_location(user_id):
 
 
 def owned_location(value):
-    if isinstance(value, bool) or not isinstance(value, int):
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 2**31 - 1:
         abort(400, INVALID_LOCATION)
     location = db.session.get(StorageLocation, value)
     if location is None or location.user_id != g.user.id:
@@ -90,7 +90,7 @@ def create_location():
         user_id=g.user.id, name=name, kind=kind, sort_order=0 if last is None else last + 1
     )
     db.session.add(location)
-    db.session.commit()
+    commit_or_duplicate("이미 있는 위치 이름이에요.")
     return jsonify(to_json(location, 0)), 201
 
 
@@ -103,7 +103,7 @@ def update_location(location_id):
         location.name = _unique_name(data["name"], exclude_id=location.id)
     if "kind" in data:
         location.kind = _kind(data["kind"])
-    db.session.commit()
+    commit_or_duplicate("이미 있는 위치 이름이에요.")
     return jsonify(to_json(location, item_counts(g.user.id).get(location.id, 0)))
 
 

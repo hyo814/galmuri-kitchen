@@ -64,6 +64,8 @@ def login_required(view):
 
 
 def get_owned_or_404(model, obj_id):
+    if obj_id > 2**31 - 1:  # DB의 int 컬럼 범위 밖 → 조회 없이 바로 404 (500 방지)
+        abort(404, "찾을 수 없어요.")
     obj = db.session.get(model, obj_id)
     if obj is None or obj.user_id != g.user.id:
         abort(404, "찾을 수 없어요.")
