@@ -127,13 +127,20 @@ function useRecommendations() {
 }
 
 function RecommendList({ onShowMine }: { onShowMine: () => void }) {
-  const { meta, items, loading, error, hasMore, loadMore } = useRecommendations();
+  const { meta, items, loading, error, hasMore, loadMore, reload } = useRecommendations();
 
+  // C-L2: 첫 페이지가 실패하면(메타가 없음) 다시 불러오기 버튼을 보여 준다
   if (!meta)
     return error ? (
-      <p className="error" role="alert">
-        {error}
-      </p>
+      <div className="list-end">
+        <p className="error" role="alert">
+          {error}
+        </p>
+        <button className="btn secondary inline" onClick={reload}>
+          <Icon name="refresh" size={16} />
+          다시 불러오기
+        </button>
+      </div>
     ) : (
       <p className="center muted">불러오는 중…</p>
     );
@@ -162,11 +169,6 @@ function RecommendList({ onShowMine }: { onShowMine: () => void }) {
 
   return (
     <>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
       {meta.sample && (meta.mine.length > 0 || items.length > 0) && (
         <p className="rc-sample">
           <Icon name="info" size={16} />
@@ -219,18 +221,24 @@ function MyRecipeList() {
     const data = await api<RecipeListPage>(path);
     return { items: data.items, next: data.next_cursor };
   }, []);
-  const { items, loading, error, hasMore, loadMore } = useInfiniteList<RecipeSummary>(fetchPage, ["my-recipes"]);
+  const { items, loading, error, hasMore, loadMore, reload } = useInfiniteList<RecipeSummary>(fetchPage, ["my-recipes"]);
 
   return (
     <>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
       {items.length === 0 ? (
-        loading || hasMore ? (
-          !error && <p className="center muted">불러오는 중…</p>
+        // C-L2: 첫 페이지가 실패하면 다시 불러오기 버튼을 보여 준다(로딩·빈 상태보다 먼저 확인)
+        error ? (
+          <div className="list-end">
+            <p className="error" role="alert">
+              {error}
+            </p>
+            <button className="btn secondary inline" onClick={reload}>
+              <Icon name="refresh" size={16} />
+              다시 불러오기
+            </button>
+          </div>
+        ) : loading || hasMore ? (
+          <p className="center muted">불러오는 중…</p>
         ) : (
           <section className="empty">
             <p>저장한 레시피가 없어요.</p>
@@ -309,7 +317,7 @@ export default function Recipes() {
   }, []);
 
   return (
-    <div className="page">
+    <main className="page">
       <header className="topbar">
         <h1>레시피</h1>
       </header>
@@ -324,6 +332,6 @@ export default function Recipes() {
       {segment === "mine" && <MyRecipeList />}
       {segment === "video" && <VideoSoon />}
       {segment === "seasoning" && <SeasoningSoon />}
-    </div>
+    </main>
   );
 }

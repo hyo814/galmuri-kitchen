@@ -6,7 +6,10 @@ export type { ListState, Page };
 
 // ponytail: useResource와 같은 모듈 Map에 목록 상태(항목·커서)를 둔다. 상세를 오가도 목록·스크롤이 그대로다.
 // deps가 바뀌면(필터·검색) 캐시가 없을 때만 처음부터 다시 받는다.
-export function useInfiniteList<T>(fetchPage: (cursor: string | null) => Promise<Page<T>>, deps: unknown[]) {
+export function useInfiniteList<T extends { id: number | string }>(
+  fetchPage: (cursor: string | null) => Promise<Page<T>>,
+  deps: unknown[],
+) {
   const key = "list:" + JSON.stringify(deps);
   const [state, setState] = useState<ListState<T>>(() => (cache.get(key) as ListState<T>) ?? emptyState<T>());
   const [loading, setLoading] = useState(false);

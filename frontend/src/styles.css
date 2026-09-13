@@ -578,7 +578,7 @@ button {
 }
 
 .segmented button {
-  height: 44px;
+  min-height: 44px;
   border: 0;
   border-radius: 10px;
   background: none;
@@ -1847,6 +1847,7 @@ button.row-btn > svg {
   font-size: 17px;
   line-height: 26px;
   resize: vertical;
+  field-sizing: content; /* U-B1: 지원 브라우저는 이것만으로 자라고, 나머지는 JS(autoGrowTextarea)가 맡는다 */
 }
 
 .rc-add {

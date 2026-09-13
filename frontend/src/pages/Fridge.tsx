@@ -113,7 +113,7 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
   const missing = staples.filter((s) => !s.in_stock);
 
   return (
-    <div className="page">
+    <main className="page">
       <header className="topbar">
         <div>
           <h1>내 재고</h1>
@@ -308,6 +308,6 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
         />
       )}
       {panel === "rules" && <RulesSheet rules={rules} onChanged={load} onClose={() => setPanel(null)} />}
-    </div>
+    </main>
   );
 }

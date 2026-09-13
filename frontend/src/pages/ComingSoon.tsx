@@ -28,7 +28,7 @@ export default function ComingSoon({ route }: { route: string }) {
   const page = PAGES[route];
   if (!page) return null;
   return (
-    <div className="page">
+    <main className="page">
       <header className="topbar">
         <h1>{page.title}</h1>
       </header>
@@ -45,6 +45,6 @@ export default function ComingSoon({ route }: { route: string }) {
           ))}
         </ul>
       </section>
-    </div>
+    </main>
   );
 }

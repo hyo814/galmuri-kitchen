@@ -30,22 +30,28 @@ function forgetRecipeCaches() {
 }
 
 export default function RecipeDetail({ kind, id }: { kind: "mine" | "public"; id: string }) {
-  const { data: recipe, error } = useResource<Detail>(kind === "mine" ? `/api/recipes/${id}` : `/api/public-recipes/${id}`);
+  const { data: recipe, error, reload } = useResource<Detail>(kind === "mine" ? `/api/recipes/${id}` : `/api/public-recipes/${id}`);
   const [servings, setServings] = useState<number | null>(null); // null이면 레시피 기준 인분
   const { busy, error: actionError, run } = useAsyncAction();
 
   if (!recipe)
     return (
-      <div className="page">
+      <main className="page">
         <BackLink />
         {error ? (
-          <p className="error" role="alert">
-            {error}
-          </p>
+          <div className="list-end">
+            <p className="error" role="alert">
+              {error}
+            </p>
+            <button className="btn secondary inline" onClick={reload}>
+              <Icon name="refresh" size={16} />
+              다시 불러오기
+            </button>
+          </div>
         ) : (
           <p className="center muted">불러오는 중…</p>
         )}
-      </div>
+      </main>
     );
 
   const shown = servings ?? recipe.servings;
@@ -78,7 +84,7 @@ export default function RecipeDetail({ kind, id }: { kind: "mine" | "public"; id
   };
 
   return (
-    <div className="page">
+    <main className="page">
       <BackLink />
       {src && <img className="rc-hero" src={src} alt="" />}
       <header className="rc-head">
@@ -124,7 +130,7 @@ export default function RecipeDetail({ kind, id }: { kind: "mine" | "public"; id
                 {item.amount && <span className="rc-amt">{scaleAmount(item.amount, ratio)}</span>}
               </span>
               {item.have ? (
-                <span className="stock-ok" aria-label="있음">
+                <span className="stock-ok">
                   <Icon name="check" size={16} />
                   {item.matched_name ? `있음 · ${item.matched_name}` : "있음"}
                 </span>
@@ -176,6 +182,6 @@ export default function RecipeDetail({ kind, id }: { kind: "mine" | "public"; id
           </button>
         </div>
       )}
-    </div>
+    </main>
   );
 }

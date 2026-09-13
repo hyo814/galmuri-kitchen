@@ -23,6 +23,14 @@ interface StepRow {
 let lastKey = 0;
 const newKey = () => ++lastKey;
 
+// U-B1: 만드는 법 textarea가 내용만큼 자란다. field-sizing: content(styles.css)가 안 먹는 브라우저를 위한 JS 보강 —
+// ref(마운트 시)와 onChange(입력마다) 양쪽에서 부른다.
+function autoGrowTextarea(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${el.scrollHeight}px`;
+}
+
 // 저장 뒤 상세 자신(useResource)뿐 아니라 목록·추천(useInfiniteList)도 새로 받게 한다
 function forgetRecipeCaches() {
   forgetResources("/api/rec");
@@ -94,7 +102,13 @@ function RecipeEditor({ initial }: { initial: MyRecipe | null }) {
     e.preventDefault();
     const nameless = rows.find((row) => !row.name.trim() && row.amount.trim());
     setInvalidKey(nameless?.key ?? null);
-    if (nameless) return;
+    if (nameless) {
+      // U-S4: 잘못된 줄을 화면 가운데로 가져오고 이름 입력으로 포커스를 옮긴다
+      const invalidInput = document.getElementById(`ingredient-name-${nameless.key}`);
+      invalidInput?.scrollIntoView({ block: "center" });
+      (invalidInput as HTMLInputElement | null)?.focus();
+      return;
+    }
     const body = input();
     if (body.ingredients.length === 0) {
       setError("재료를 하나 이상 입력해주세요.");
@@ -112,7 +126,7 @@ function RecipeEditor({ initial }: { initial: MyRecipe | null }) {
   };
 
   return (
-    <div className="page">
+    <main className="page">
       <BackLink onClick={leave} />
       <header className="topbar">
         <h1>{initial ? "레시피 수정" : "레시피 추가"}</h1>
@@ -174,6 +188,7 @@ function RecipeEditor({ initial }: { initial: MyRecipe | null }) {
                 <Fragment key={row.key}>
                   <div className="rc-ing-row">
                     <input
+                      id={`ingredient-name-${row.key}`}
                       className={invalid ? "input invalid" : "input"}
                       aria-label={`${index + 1}번째 재료 이름`}
                       aria-invalid={invalid}
@@ -229,15 +244,17 @@ function RecipeEditor({ initial }: { initial: MyRecipe | null }) {
                   {index + 1}
                 </span>
                 <textarea
+                  ref={autoGrowTextarea}
                   className="input rc-area"
                   aria-label={`${index + 1}단계`}
                   rows={2}
                   maxLength={500}
                   value={step.text}
                   autoFocus={focusKey === step.key}
-                  onChange={(e) =>
-                    setSteps((prev) => prev.map((s) => (s.key === step.key ? { ...s, text: e.target.value } : s)))
-                  }
+                  onChange={(e) => {
+                    autoGrowTextarea(e.currentTarget);
+                    setSteps((prev) => prev.map((s) => (s.key === step.key ? { ...s, text: e.target.value } : s)));
+                  }}
                 />
                 <button
                   type="button"
@@ -273,24 +290,30 @@ function RecipeEditor({ initial }: { initial: MyRecipe | null }) {
           </div>
         </div>
       </form>
-    </div>
+    </main>
   );
 }
 
 function EditRecipe({ id }: { id: string }) {
-  const { data, error } = useResource<MyRecipe>(`/api/recipes/${id}`);
+  const { data, error, reload } = useResource<MyRecipe>(`/api/recipes/${id}`);
   if (data) return <RecipeEditor initial={data} />;
   return (
-    <div className="page">
+    <main className="page">
       <BackLink onClick={() => goBack(`/recipes/mine/${id}`)} />
       {error ? (
-        <p className="error" role="alert">
-          {error}
-        </p>
+        <div className="list-end">
+          <p className="error" role="alert">
+            {error}
+          </p>
+          <button className="btn secondary inline" onClick={reload}>
+            <Icon name="refresh" size={16} />
+            다시 불러오기
+          </button>
+        </div>
       ) : (
         <p className="center muted">불러오는 중…</p>
       )}
-    </div>
+    </main>
   );
 }
 

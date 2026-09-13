@@ -53,15 +53,24 @@ export function formatAmountNumber(value: number): string {
 
 /**
  * 인분 조절: 양의 앞 숫자만 배율로 바꾼다(화면에서만, 저장하지 않음 — 스펙 23절 D1).
- * "200g" ×2 → "400g", "1/2모(150g)" ×2 → "1모(150g)", "1½큰술" ×2 → "3큰술". "약간"·"10~15개"는 그대로
+ * "200g" ×2 → "400g", "1/2모(150g)" ×2 → "1모(150g)", "1½큰술" ×2 → "3큰술", "2 1/2컵" ×2 → "5컵".
+ * "약간"·"10~15개"·"100g-200g"는 그대로(범위·분수 없는 문구는 배율을 매길 수 없다).
  */
 export function scaleAmount(amount: string, ratio: number): string {
-  const match = amount.match(/^(\d+(?:\.\d+)?)?(?:([¼⅓½⅔¾])|\/(\d+))?/);
-  if (ratio === 1 || !match || (match[1] === undefined && match[2] === undefined)) return amount;
-  if (match[3] !== undefined && (match[1] === undefined || Number(match[3]) === 0)) return amount;
+  // 대분수("2 1/2", 띄어쓰기)를 먼저 시도하고, 아니면 기존 형태(정수 | 유니코드 분수 | "1/2")를 본다.
+  const match = amount.match(/^(?:(\d+)\s+(\d+)\/(\d+)|(\d+(?:\.\d+)?)?(?:([¼⅓½⅔¾])|\/(\d+))?)/);
+  if (ratio === 1 || !match) return amount;
+  const [, mixedWhole, mixedNum, mixedDenom, whole, symbol, denom] = match;
+  if (mixedWhole === undefined && whole === undefined && symbol === undefined) return amount; // 숫자·분수가 없다("약간" 등)
+  if (mixedWhole !== undefined && Number(mixedDenom) === 0) return amount; // "2 1/0컵" 같은 잘못된 분모
+  if (denom !== undefined && (whole === undefined || Number(denom) === 0)) return amount; // "2/0개", "/2" 그대로
   const rest = amount.slice(match[0].length);
-  if (/^\s*[~-]\s*\d/.test(rest)) return amount; // 범위(10~15개)는 어느 숫자를 바꿀지 애매해서 그대로
-  let value = Number(match[1] ?? 0) + (match[2] ? FRACTIONS[match[2]] : 0);
-  if (match[3] !== undefined) value /= Number(match[3]);
+  if (/[~\-–]\s*\d/.test(rest)) return amount; // 범위(10~15개, 100g-200g)는 어느 숫자를 바꿀지 애매해서 그대로
+  let value: number;
+  if (mixedWhole !== undefined) value = Number(mixedWhole) + Number(mixedNum) / Number(mixedDenom);
+  else {
+    value = Number(whole ?? 0) + (symbol ? FRACTIONS[symbol] : 0);
+    if (denom !== undefined) value /= Number(denom);
+  }
   return formatAmountNumber(value * ratio) + rest;
 }
