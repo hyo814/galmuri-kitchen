@@ -17,13 +17,14 @@
 | 단계 | 범위 |
 |---|---|
 | 1. 기반 | 카카오/구글 로그인, 냉장고 재료 수기 CRUD(구입일 필수), 임박 표시 |
-| 1b. 보관 위치·필수품 | 사용자 정의 보관 위치(종류별 오래됨 기준), 필수품 목록과 떨어진 필수품 표시 → 이후 Render 배포 |
+| 1b. 보관 위치·필수품·품목별 경고 | 사용자 정의 보관 위치(종류별 오래됨 기준), 필수품 목록과 떨어진 필수품 표시, 품목별 경고 규칙(식약처 참고값 기본 제공), 새 디자인 적용 → 이후 Render 배포 |
+| 1c. 주방 도구 | 조리도구·조리기구 목록, 코팅 프라이팬 등 주기 점검 알림 (18절) |
 | 2. 스캔 | 냉장고 사진·영수증·온라인 주문완료 캡처 → Claude 비전 → 확인 화면(보관 위치 추정 포함) → 일괄 등록, AI 일일 한도 |
 | 3. 레시피 | 내 레시피 CRUD, 식약처 공공 DB 동기화·매칭, AI 레시피 생성, 유튜브·인스타그램 링크 가져오기, 추천 화면 |
 | 4. 장보기 | 장보기 목록(살 날짜·쇼핑몰), 부족 재료·떨어진 필수품·임박 재료 담기, 6개 쇼핑몰 검색 링크, 네이버 최저가, 구매 완료 → 냉장고 |
 | 5. 조리 기록 | 사용 재료 차감, 날짜·별점·메모·완성 사진, 기록 목록 |
 
-단계별 상세는 14~17절(2026-09-13 추가 요구사항)이 4~7절보다 우선한다.
+단계별 상세는 14~18절(2026-09-13 추가 요구사항)이 4~7절보다 우선한다.
 
 ## 3. 구조
 
@@ -52,7 +53,7 @@ recipe-ai/
 - `public_recipes`: id, rcp_seq(UNIQUE), title, ingredients_text(원문), ingredient_names(JSON, 파싱된 이름 목록), steps(JSON), image_url. 사용자 소유 아님.
 - `cook_logs`: id, user_id, recipe_id(선택, SET NULL), title, cooked_on(date), rating(1~5, 선택), memo(선택), photo_key(선택), created_at
 - `ai_calls`: id, user_id, kind(`fridge`|`receipt`|`order`|`recipe`|`link`), created_at
-- `storage_locations`, `staples`(14절), `shopping_items`(16절)
+- `storage_locations`, `staples`, `item_rules`(14절), `shopping_items`(16절), `kitchen_tools`(18절)
 
 ### 규칙
 
@@ -169,9 +170,25 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - `in_stock`: 사용자의 재료 중 이름 매칭(4절 규칙)되는 것이 하나라도 있으면 true.
 - 필수품은 재료를 삭제해도 남는다(떨어짐으로 표시).
 
+### 품목별 경고 규칙
+- `item_rules`: id, user_id, keyword(1~20자, 재료 이름 매칭 4절 규칙), warn_days(int ≥1), danger_days(int > warn_days), source(`mfds`|`user`), created_at. UNIQUE(user_id, keyword).
+- 기준일은 **구입일**. `today - purchased_on >= warn_days` → `old`(노랑), `>= danger_days` → `danger`(빨강, 문구 `섭취 주의`).
+- 기본 규칙(사용자 생성 시 시드, 모두 수정·삭제 가능):
+  - 달걀·계란: warn 25 / danger 30 (사용자 결정 2026-09-13; 식약처 권장 산란일 기준 45일·가정 3~5주 권장을 구입일 기준으로 보수화).
+  - 식약처 「식품유형별 소비기한 설정 보고서」 참고값이 있는 흔한 품목(예: 두부 23일, 가공유 24일, 발효유 32일, 과채주스 35일, 소시지 56일, 햄 57일):
+    참고값은 **제조일 기준**이므로 구입일 기준 danger_days = 참고값의 80%(내림), warn_days = danger_days − 3. **구현 시 공식 문서에서 품목·값을 확인하고 출처를 코드 주석에 남긴다.**
+- 판정 우선순위: 여러 규칙의 결과 중 **가장 심각한 상태**를 쓴다(`danger` > `urgent` > `old` > `ok`).
+  - 유통기한(expires_on)이 있으면 D-3 규칙(urgent)을 계산하고, 품목 규칙도 함께 계산해 더 심각한 쪽.
+  - 유통기한이 없고 매칭되는 품목 규칙이 있으면 품목 규칙만 사용(위치 종류 기준은 무시).
+  - 둘 다 없으면 위치 종류 기준(fridge 7일 / freezer 60일 / room 없음).
+- 여러 키워드가 매칭되면 danger_days가 가장 짧은 규칙.
+- 화면: 설정 시트의 `품목별 경고` 목록(키워드, 노랑/빨강 일수, 식약처 참고값 표시), 추가·수정·삭제. 빨강 배지 `섭취 주의`, 재료 줄에 `구입 31일째` 보조 문구.
+
 ### API
 | 메서드 | 경로 | 설명 |
 |---|---|---|
+| GET/POST | `/api/item-rules` | 목록 / 생성 |
+| PATCH/DELETE | `/api/item-rules/<id>` | 수정 / 삭제 |
 | GET/POST | `/api/locations` | 목록(sort_order 순, 각 위치 재료 수 포함) / 생성 |
 | PATCH/DELETE | `/api/locations/<id>` | 이름·종류 변경 / 삭제(규칙 위) |
 | GET/POST | `/api/staples` | 목록(`in_stock` 포함, 떨어진 것 먼저) / 생성 |
@@ -202,3 +219,14 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - 유튜브: 영상 설명란 + 자막(자동 자막 포함)을 가져와 정리. 데이터센터 IP 차단 등으로 실패하면 설명란만 사용하거나 텍스트 붙여넣기로 안내.
 - 인스타그램: 공식적으로 타인 게시물 본문 조회 불가 → 링크 미리보기(og:description) 시도, 부족하면 캡션 붙여넣기 안내. 링크만으로 항상 성공을 약속하지 않는다.
 - AI 일일 한도에 `link` 포함(recipe 그룹).
+
+## 18. 1c단계: 주방 도구 (추가: 2026-09-13)
+- `kitchen_tools`: id, user_id, name(1~30자), category(`조리도구`|`조리기구`|`칼·도마`|`기타`), bought_on(선택), check_every_months(선택, 1~60),
+  last_checked_on(선택), created_at.
+- 점검 기준일 = last_checked_on → bought_on → created_at 순으로 첫 값. 기준일 + check_every_months ≤ 오늘이면 `점검할 때가 됐어요`.
+- 프리셋(추가 시 이름 매칭으로 제안, 수정 가능): `코팅 프라이팬`·`프라이팬`·`코팅 냄비` → 6개월 점검,
+  안내 문구 "코팅이 30% 이상 벗겨졌다면 교체를 권장해요(식약처)". 그 외 도구는 기본 주기 없음(구매일도 선택).
+  근거: 식약처는 기간이 아닌 상태 기준(코팅 30% 이상 벗겨짐) 교체 권고. 6개월 교체 근거는 확인되지 않아 '점검' 알림으로 둔다.
+- 동작: `점검했어요`(last_checked_on=오늘), `교체했어요`(bought_on=오늘, last_checked_on=오늘), 수정, 삭제.
+- 3단계 연결(선택): 레시피에 필요한 도구 표시와 보유 여부.
+- API: `GET/POST /api/tools`, `PATCH/DELETE /api/tools/<id>`, `POST /api/tools/<id>/checked`, `POST /api/tools/<id>/replaced`.
