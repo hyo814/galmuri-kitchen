@@ -116,6 +116,7 @@ button {
 
 .text-btn {
   min-height: 44px;
+  min-width: 44px;
   padding: 0 4px;
   border: 0;
   background: none;

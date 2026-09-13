@@ -27,13 +27,15 @@ export default function Fridge({ onLogout }: { onLogout: () => void }) {
   const [error, setError] = useState("");
 
   // 401은 api()의 전역 핸들러(App.tsx)가 처리한다.
-  const load = () =>
-    Promise.all([
+  const load = () => {
+    setError("");
+    return Promise.all([
       api<Ingredient[]>("/api/ingredients").then(setItems),
       api<StorageLocation[]>("/api/locations").then(setLocations),
       api<Staple[]>("/api/staples").then(setStaples),
       api<ItemRule[]>("/api/item-rules").then(setRules),
     ]).catch((e: Error) => setError(e.message));
+  };
 
   useEffect(() => {
     load();

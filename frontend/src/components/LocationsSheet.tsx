@@ -31,17 +31,18 @@ export default function LocationsSheet({ locations, onChanged, onClose }: Props)
   const [newName, setNewName] = useState("");
   const [newKind, setNewKind] = useState<LocationKind>("fridge");
   const [busy, setBusy] = useState(false);
+  const [editError, setEditError] = useState("");
   const [error, setError] = useState("");
 
-  const run = async (action: () => Promise<unknown>) => {
+  const run = async (action: () => Promise<unknown>, setFieldError: (message: string) => void) => {
     setBusy(true);
-    setError("");
+    setFieldError("");
     try {
       await action();
       await onChanged();
       return true;
     } catch (e) {
-      setError((e as Error).message);
+      setFieldError((e as Error).message);
       return false;
     } finally {
       setBusy(false);
@@ -52,24 +53,24 @@ export default function LocationsSheet({ locations, onChanged, onClose }: Props)
     setEditingId(location.id);
     setEditName(location.name);
     setEditKind(location.kind);
-    setError("");
+    setEditError("");
   };
 
   const saveEdit = async (e: FormEvent) => {
     e.preventDefault();
     const body = { name: editName, kind: editKind };
-    if (await run(() => api(`/api/locations/${editingId}`, { method: "PATCH", body }))) setEditingId(null);
+    if (await run(() => api(`/api/locations/${editingId}`, { method: "PATCH", body }), setEditError)) setEditingId(null);
   };
 
   const remove = async (location: StorageLocation) => {
     if (!confirm(`${location.name}을(를) 삭제할까요?`)) return;
-    if (await run(() => api(`/api/locations/${location.id}`, { method: "DELETE" }))) setEditingId(null);
+    if (await run(() => api(`/api/locations/${location.id}`, { method: "DELETE" }), setEditError)) setEditingId(null);
   };
 
   const add = async (e: FormEvent) => {
     e.preventDefault();
     const body = { name: newName, kind: newKind };
-    if (await run(() => api("/api/locations", { method: "POST", body }))) setNewName("");
+    if (await run(() => api("/api/locations", { method: "POST", body }), setError)) setNewName("");
   };
 
   return (
@@ -100,6 +101,11 @@ export default function LocationsSheet({ locations, onChanged, onClose }: Props)
                 <button type="button" className="btn danger-text" disabled={busy} onClick={() => remove(location)}>
                   이 위치 삭제
                 </button>
+                {editError && (
+                  <p className="error" role="alert">
+                    {editError}
+                  </p>
+                )}
               </form>
             ) : (
               <div className="plain-row location-row">
