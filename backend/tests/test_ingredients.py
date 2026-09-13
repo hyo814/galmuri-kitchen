@@ -480,3 +480,31 @@ def test_bulk_49_valid_then_trailing_invalid_creates_nothing(client, login):
     assert res.status_code == 400
     assert res.get_json()["errors"] == [{"index": 49, "error": "이름은 1~50자로 입력해주세요."}]
     assert client.get("/api/ingredients").get_json() == []
+
+
+# --- 3단계 T1: 미래 구입일 거부, 날짜 형식 ---
+
+FUTURE_PURCHASE = "구입일은 오늘보다 뒤일 수 없어요."
+
+
+def test_future_purchased_on_rejected_on_create_bulk_and_patch(client, login):
+    login()
+    today = seoul_today()
+    tomorrow = (today + timedelta(days=1)).isoformat()
+    res = create(client, purchased_on=tomorrow)
+    assert (res.status_code, res.get_json()) == (400, {"error": FUTURE_PURCHASE})
+    res = bulk(client, {"name": "대파", "purchased_on": today.isoformat()}, {"name": "우유", "purchased_on": tomorrow})
+    assert res.get_json() == {"error": f"2번째 재료: {FUTURE_PURCHASE}", "errors": [{"index": 1, "error": FUTURE_PURCHASE}]}
+    item = create(client, purchased_on=today.isoformat()).get_json()
+    res = client.patch(f"/api/ingredients/{item['id']}", json={"purchased_on": tomorrow})
+    assert (res.status_code, res.get_json()) == (400, {"error": FUTURE_PURCHASE})
+    assert [i["purchased_on"] for i in client.get("/api/ingredients").get_json()] == [today.isoformat()]
+
+
+@pytest.mark.parametrize("value", ["20260101", "2026-9-1", "2026-09-01T00:00", " 2026-09-01"])
+def test_dates_must_be_yyyy_mm_dd(client, login, value):
+    login()
+    res = create(client, purchased_on=value)
+    assert (res.status_code, res.get_json()) == (400, {"error": "구입일은 YYYY-MM-DD 형식으로 입력해주세요."})
+    res = create(client, expires_on=value)
+    assert (res.status_code, res.get_json()) == (400, {"error": "유통기한은 YYYY-MM-DD 형식으로 입력해주세요."})
