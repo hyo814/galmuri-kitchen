@@ -12,4 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./
 COPY --from=web /web/dist /srv/frontend/dist
 ENV FRONTEND_DIST=/srv/frontend/dist
+RUN useradd --system --create-home --home-dir /srv/backend --shell /usr/sbin/nologin appuser \
+    && chown -R appuser:appuser /srv/backend /srv/frontend
+USER appuser
 CMD flask --app app db upgrade && exec gunicorn -w 2 -b 0.0.0.0:${PORT:-8000} --access-logfile - "app:create_app()"
