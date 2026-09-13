@@ -1,8 +1,9 @@
 from datetime import date, timedelta
+from types import SimpleNamespace
 
 import pytest
 
-from app.ingredients import ingredient_status, seoul_today
+from app.ingredients import ingredient_status, matching_rule, seoul_today
 from app.models import Ingredient, StorageLocation, User, db
 
 TODAY = date(2026, 9, 13)
@@ -37,6 +38,44 @@ def test_old_threshold_depends_on_location_kind(kind, days, expected):
     assert ingredient_status(TODAY - timedelta(days=days), None, TODAY, kind) == expected
 
 
+@pytest.mark.parametrize(
+    "days, expires_in, expected",
+    [
+        (24, None, "ok"),
+        (25, None, "old"),
+        (30, None, "danger"),
+        (30, 10, "danger"),  # 유통기한이 넉넉해도 품목 규칙이 더 심각하면 위험
+        (5, 1, "urgent"),  # 유통기한 임박이 품목 규칙보다 심각
+    ],
+)
+def test_item_rule_status(days, expires_in, expected):
+    expires = None if expires_in is None else TODAY + timedelta(days=expires_in)
+    assert ingredient_status(TODAY - timedelta(days=days), expires, TODAY, "fridge", (25, 30)) == expected
+
+
+def test_item_rule_replaces_location_kind_rule():
+    assert ingredient_status(TODAY - timedelta(days=10), None, TODAY, "fridge", (25, 30)) == "ok"
+    assert ingredient_status(TODAY - timedelta(days=31), None, TODAY, "room", (25, 30)) == "danger"
+
+
+def test_matching_rule_picks_shortest_danger():
+    rules = [
+        SimpleNamespace(keyword="빵", warn_days=21, danger_days=24),
+        SimpleNamespace(keyword="소시지", warn_days=41, danger_days=44),
+    ]
+    assert matching_rule("소시지빵", rules) == (21, 24)
+    assert matching_rule("우유", rules) is None
+
+
+def test_egg_rule_applied_and_sorted_first(client, login):
+    login()
+    today = seoul_today()
+    create(client, name="우유", expires_on=today.isoformat())
+    res = create(client, name="유정란 계란 10구", purchased_on=(today - timedelta(days=31)).isoformat())
+    assert res.get_json()["status"] == "danger"
+    assert client.get("/api/ingredients").get_json()[0]["name"] == "유정란 계란 10구"
+
+
 def test_location_defaults_and_fields(client, login):
     login()
     freezer = client.get("/api/locations").get_json()[1]
@@ -64,13 +103,13 @@ def test_create_and_list_sorted_by_urgency(client, login):
     login()
     today = seoul_today()
     create(client, name="계란")
-    create(client, name="두부", purchased_on=(today - timedelta(days=30)).isoformat())
+    create(client, name="애호박", purchased_on=(today - timedelta(days=30)).isoformat())
     res = create(client, name="우유", expires_on=today.isoformat())
     assert res.status_code == 201
     assert res.get_json()["status"] == "urgent"
 
     items = client.get("/api/ingredients").get_json()
-    assert [(i["name"], i["status"]) for i in items] == [("우유", "urgent"), ("두부", "old"), ("계란", "ok")]
+    assert [(i["name"], i["status"]) for i in items] == [("우유", "urgent"), ("애호박", "old"), ("계란", "ok")]
     assert items[0]["days_left"] == 0
     assert items[1]["days_since_purchase"] == 30
     assert items[2]["days_left"] is None

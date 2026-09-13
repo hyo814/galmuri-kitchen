@@ -50,11 +50,33 @@ def test_location_migration_moves_existing_ingredients_to_fridge(tmp_path, monke
         downgrade(directory=MIGRATIONS, revision="69204259dd5d")
 
 
+def test_item_rules_migration_seeds_existing_users(tmp_path, monkeypatch):
+    app = migration_app(tmp_path, monkeypatch)
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="a2b2c2d2e2f2")
+        with db.engine.begin() as conn:
+            conn.execute(
+                sa.text(
+                    "INSERT INTO users (id, provider, provider_id, nickname, created_at) "
+                    "VALUES (1, 'test', '1', 'u', '2026-09-01 00:00:00')"
+                )
+            )
+
+        upgrade(directory=MIGRATIONS, revision="a3b3c3d3e3f3")
+
+        with db.engine.connect() as conn:
+            rows = conn.execute(
+                sa.text("SELECT keyword, warn_days, danger_days FROM item_rules WHERE user_id = 1")
+            ).all()
+        assert len(rows) == 10
+        assert ("계란", 25, 30) in [tuple(r) for r in rows]
+
+
 def test_upgrade_to_head_and_back_to_base(tmp_path, monkeypatch):
     app = migration_app(tmp_path, monkeypatch)
     with app.app_context():
         upgrade(directory=MIGRATIONS)
         with db.engine.connect() as conn:
             tables = set(sa.inspect(conn).get_table_names())
-        assert {"users", "ingredients", "storage_locations", "staples"} <= tables
+        assert {"users", "ingredients", "storage_locations", "staples", "item_rules"} <= tables
         downgrade(directory=MIGRATIONS, revision="base")

@@ -77,3 +77,16 @@ class Staple(db.Model):
     name = db.Column(db.String(50), nullable=False)
     category = db.Column(db.String(10), nullable=False, default="기타")
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class ItemRule(db.Model):
+    __tablename__ = "item_rules"
+    __table_args__ = (db.UniqueConstraint("user_id", "keyword"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    keyword = db.Column(db.String(20), nullable=False)
+    warn_days = db.Column(db.Integer, nullable=False)
+    danger_days = db.Column(db.Integer, nullable=False)
+    source = db.Column(db.String(10), nullable=False, default="user")  # mfds | user
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
