@@ -16,11 +16,12 @@ def test_dev_login_then_me(client):
     assert client.get("/api/me").get_json()["nickname"] == "개발자"
 
 
-def test_dev_login_reuses_same_user(client):
+def test_dev_login_reuses_same_user(client, app):
     first = client.post("/api/dev-login").get_json()["id"]
     second = client.post("/api/dev-login").get_json()["id"]
     assert first == second
-    assert User.query.count() == 1
+    with app.app_context():
+        assert User.query.count() == 1
 
 
 def test_dev_login_hidden_without_dev_mode(make_app):
@@ -49,11 +50,12 @@ def test_unknown_api_route_is_json_404(client):
 
 
 def test_upsert_user_updates_nickname(app):
-    first = upsert_user("kakao", "1", "옛이름")
-    second = upsert_user("kakao", "1", "새이름")
-    assert first.id == second.id
-    assert second.nickname == "새이름"
-    assert upsert_user("kakao", "2", None).nickname == "사용자"
+    with app.app_context():
+        first = upsert_user("kakao", "1", "옛이름")
+        second = upsert_user("kakao", "1", "새이름")
+        assert first.id == second.id
+        assert second.nickname == "새이름"
+        assert upsert_user("kakao", "2", None).nickname == "사용자"
 
 
 def test_database_url_normalizes_render_postgres():

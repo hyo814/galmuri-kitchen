@@ -25,9 +25,11 @@ def make_app():
 
 @pytest.fixture
 def app(make_app):
-    app = make_app()
-    with app.app_context():
-        yield app
+    # No app_context held here: Flask must push/pop a fresh request+app context
+    # (and therefore a fresh db.session) per test-client request, the same as
+    # in production. Holding one open here would make Flask reuse it for every
+    # request the test makes, silently masking routes that forget to commit().
+    return make_app()
 
 
 @pytest.fixture
@@ -43,13 +45,15 @@ def client(app):
 
 
 @pytest.fixture
-def login(client):
+def login(client, app):
     def _login(provider_id="1"):
-        user = User(provider="test", provider_id=provider_id, nickname=f"user{provider_id}")
-        db.session.add(user)
-        db.session.commit()
+        with app.app_context():
+            user = User(provider="test", provider_id=provider_id, nickname=f"user{provider_id}")
+            db.session.add(user)
+            db.session.commit()
+            user_id = user.id
         with client.session_transaction() as s:
-            s["user_id"] = user.id
+            s["user_id"] = user_id
         return user
 
     return _login
