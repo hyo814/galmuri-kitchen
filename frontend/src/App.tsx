@@ -64,6 +64,7 @@ export default function App() {
       window.removeEventListener("wheel", stop);
       window.removeEventListener("touchstart", stop);
       window.removeEventListener("pointerdown", stop);
+      window.removeEventListener("keydown", stop);
     }
     const observer = new ResizeObserver(() => {
       if (document.documentElement.scrollHeight - window.innerHeight >= savedY) window.scrollTo(0, savedY);
@@ -73,6 +74,7 @@ export default function App() {
     window.addEventListener("wheel", stop, { passive: true, once: true });
     window.addEventListener("touchstart", stop, { passive: true, once: true });
     window.addEventListener("pointerdown", stop, { passive: true, once: true });
+    window.addEventListener("keydown", stop, { passive: true, once: true });
 
     return stop;
   }, [route.path]);
