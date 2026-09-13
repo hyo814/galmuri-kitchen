@@ -1,0 +1,104 @@
+{
+  "artboards": [
+    {
+      "file": "Recommend.dc.html",
+      "title": "1 · 추천 (추천안: 작은 카드)",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "RecommendBig.dc.html",
+      "title": "1-대안 · 큰 사진 카드",
+      "x": 464,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "RecommendEmpty.dc.html",
+      "title": "2 · 추천 · 재고가 비었을 때",
+      "x": 928,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "Mine.dc.html",
+      "title": "3 · 내 레시피",
+      "x": 1392,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "MineEmpty.dc.html",
+      "title": "3-빈 상태 · 내 레시피가 없을 때",
+      "x": 1856,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "DetailPublic.dc.html",
+      "title": "4 · 레시피 상세 (추천 레시피)",
+      "x": 2320,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "DetailMine.dc.html",
+      "title": "5 · 레시피 상세 (내 레시피) · 맨 아래까지 스크롤",
+      "x": 2784,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "Form.dc.html",
+      "title": "6 · 레시피 추가/수정 폼 · 검사 메시지 예시",
+      "x": 3248,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "FormBottom.dc.html",
+      "title": "6-아래 · 폼 맨 아래",
+      "x": 3712,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "RecommendDark.dc.html",
+      "title": "7 · 추천 · 다크",
+      "x": 4176,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "DetailPublicDark.dc.html",
+      "title": "7 · 레시피 상세 · 다크",
+      "x": 4640,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    }
+  ],
+  "annotations": [
+    {
+      "id": "direction",
+      "x": 0,
+      "y": -190,
+      "w": 720,
+      "text": "레시피 탭(3a) 시안: 기존 앱 토큰(styles.css) 그대로, 새 요소만 rc- 접두사\n추천은 작은 카드(72px 사진 + 일치 막대 + 없는 재료 한 줄) 추천, 큰 사진 카드는 대안으로 비교\n세그먼트는 페이지 배경 위라 트랙 --handle / 선택 --surface (다크는 트랙 --surface / 선택 --handle)\n상세: 인분 조절은 재료 제목 옆, 내 레시피는 맨 아래 수정 → 그 아래 삭제(.btn.danger-text)\n폼: 재료 행(이름 · 양 · 빼기), 단계 행(번호 · 여러 줄 입력 · 빼기), 취소·저장은 하단 고정"
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}
