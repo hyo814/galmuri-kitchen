@@ -251,6 +251,7 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
                         inputMode="numeric"
                         value={row.price}
                         placeholder="모르면 비워두세요"
+                        maxLength={8}
                         onChange={(e) => update(row.key, { price: e.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, "") })}
                       />
                       <span className="suffix">원</span>
