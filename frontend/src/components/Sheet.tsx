@@ -8,6 +8,8 @@ interface Props {
   className?: string;
   /** 제목을 화면에서 숨기고 스크린리더에만 읽힌다(로딩·실패 화면처럼 본문이 제목을 대신할 때) */
   hideHeader?: boolean;
+  /** 첫 칸이 입력 칸이어도 제목에 포커스한다(고치기 시트처럼 열자마자 키보드가 올라오면 안 될 때) */
+  focusTitle?: boolean;
   onClose: () => void;
   children: ReactNode;
 }
@@ -17,7 +19,7 @@ interface Props {
 let lastClosed: { el: HTMLElement; claimed: boolean } | null = null;
 
 /** 네이티브 <dialog> 바텀시트. Esc·안드로이드 뒤로가기·배경 탭으로 닫힌다. */
-export default function Sheet({ title, description, action, className, hideHeader, onClose, children }: Props) {
+export default function Sheet({ title, description, action, className, hideHeader, focusTitle, onClose, children }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const pointerDownOnDialog = useRef(false);
   const titleId = useId();
@@ -42,7 +44,7 @@ export default function Sheet({ title, description, action, className, hideHeade
       // ponytail: 닫힌 dialog 안에서는 React autoFocus가 먹지 않아 showModal이 고른 첫 칸으로 판단한다.
       // 입력 칸이 첫 칸이 아닌데 autoFocus가 필요한 시트가 생기면 prop(initialFocus)으로 넘긴다.
       const h2 = heading.current;
-      if (h2 && !document.activeElement?.matches('input:not([type="checkbox"], [type="radio"]), textarea')) {
+      if (h2 && (focusTitle || !document.activeElement?.matches('input:not([type="checkbox"], [type="radio"]), textarea'))) {
         h2.tabIndex = -1; // showModal 뒤에 붙인다 — 먼저 붙이면 showModal이 제목을 첫 칸으로 고른다
         h2.focus();
       }

@@ -36,13 +36,18 @@ export default function ShoppingItemSheet({ item, today, onSave, onDelete, onClo
   const [when, setWhen] = useState<When>(initial.when);
   const [date, setDate] = useState(initial.date);
   const [added, setAdded] = useState("");
+  /** 수량 칸을 떠났거나 저장을 눌렀을 때만 틀렸다고 보여준다 */
+  const [touched, setTouched] = useState(false);
+  /** showPicker가 없는 브라우저: 날짜 칸을 보이게 해서 직접 고르게 한다 */
+  const [dateVisible, setDateVisible] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   const whenLabel = useId();
   const quantityError = useId();
 
   const parsed = parseQuantityText(quantity);
-  const dirty = name !== (item?.name ?? "") || quantity !== startQuantity;
+  const showQuantityError = touched && !parsed;
+  const dirty = name !== (item?.name ?? "") || quantity !== startQuantity || when !== initial.when || date !== initial.date;
   const canSave = name.trim() !== "" && parsed !== null;
 
   // 작성 중에 탭을 옮기면 묻는다
@@ -60,8 +65,15 @@ export default function ShoppingItemSheet({ item, today, onSave, onDelete, onClo
     return plannedOnFor(when, today);
   };
 
+  useEffect(() => {
+    if (dateVisible) dateRef.current?.focus();
+  }, [dateVisible]);
+
   const save = (keepOpen: boolean) => {
-    if (!canSave || !parsed) return;
+    if (!canSave || !parsed) {
+      setTouched(true);
+      return;
+    }
     const fields: ItemInput = { name: name.trim(), ...parsed, planned_on: plannedOn() };
     if (!item) {
       onSave(fields, keepOpen);
@@ -69,6 +81,7 @@ export default function ShoppingItemSheet({ item, today, onSave, onDelete, onClo
       // 이름·수량만 비우고 언제 살까요는 그대로
       setName("");
       setQuantity("");
+      setTouched(false);
       setAdded(fields.name);
       nameRef.current?.focus();
       return;
@@ -92,12 +105,12 @@ export default function ShoppingItemSheet({ item, today, onSave, onDelete, onClo
     try {
       input.showPicker();
     } catch {
-      input.focus(); // showPicker가 없는 브라우저
+      setDateVisible(true); // showPicker가 없는 브라우저: 보이는 날짜 칸으로 바꾸고 포커스
     }
   };
 
   return (
-    <Sheet title={item ? "살 것 고치기" : "살 것 추가"} onClose={onClose}>
+    <Sheet title={item ? "살 것 고치기" : "살 것 추가"} focusTitle={!!item} onClose={onClose}>
       <form className="sh-form" onSubmit={submit}>
         <p className="sr-only" role="status">
           {added && `${withJosa(added, "을", "를")} 담았어요`}
@@ -118,17 +131,18 @@ export default function ShoppingItemSheet({ item, today, onSave, onDelete, onClo
           <label className="field">
             <span className="field-label">수량</span>
             <input
-              className={parsed ? "input" : "input invalid"}
+              className={showQuantityError ? "input invalid" : "input"}
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
+              onBlur={() => setTouched(true)}
               placeholder="1개"
               maxLength={20}
-              aria-invalid={!parsed}
-              aria-describedby={parsed ? undefined : quantityError}
+              aria-invalid={showQuantityError}
+              aria-describedby={showQuantityError ? quantityError : undefined}
             />
           </label>
         </div>
-        {!parsed && (
+        {showQuantityError && (
           <p id={quantityError} className="rc-err">
             수량을 1모, 30구처럼 입력해주세요
           </p>
@@ -149,10 +163,11 @@ export default function ShoppingItemSheet({ item, today, onSave, onDelete, onClo
             </button>
             <input
               ref={dateRef}
-              className="sr-only"
+              className={dateVisible ? "input" : "sr-only"}
               type="date"
-              tabIndex={-1}
-              aria-hidden="true"
+              tabIndex={dateVisible ? undefined : -1}
+              aria-hidden={dateVisible ? undefined : true}
+              aria-label="날짜 고르기"
               min={today}
               value={date}
               onChange={(e) => {

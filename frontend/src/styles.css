@@ -3663,3 +3663,8 @@ button.sh-offline svg:last-child {
   font-weight: 700;
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
+
+/* showPicker가 없는 브라우저에서 보이게 바꾼 날짜 칸 */
+.sh-when .input {
+  flex-basis: 100%;
+}
