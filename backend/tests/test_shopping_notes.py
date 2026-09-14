@@ -181,8 +181,6 @@ def test_upload_photo_errors(client, login, app, monkeypatch):
     app.config["DEV_MODE"] = False  # 운영에서 R2가 없으면
     res = upload(client, note_id)
     assert (res.status_code, res.get_json()) == (503, {"error": "사진을 지금은 올릴 수 없어요."})
-    app.config.update(R2_ACCOUNT_ID="a", R2_ACCESS_KEY_ID="b", R2_SECRET_ACCESS_KEY="c", R2_BUCKET="d")
-    assert upload(client, note_id).status_code == 503  # R2는 아직 연결 전
 
 
 def test_user_total_photo_bytes_cap(client, login, monkeypatch):

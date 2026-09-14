@@ -40,7 +40,7 @@ recipe-ai/
 ```
 
 - DB: 로컬/테스트 SQLite, 운영 Render PostgreSQL (SQLAlchemy로 동일 코드)
-- 사진: Cloudflare R2(S3 호환, 비공개 버킷, presigned URL). R2 환경변수가 없으면 로컬 `uploads/` 폴더. 단 운영(`RENDER`)에서 R2가 없으면 로컬에 두지 않고 사진 올리기를 503 `사진을 지금은 올릴 수 없어요.`로 막는다(Render 디스크는 배포 때 지워짐) (2026-09-14, 4단계 시안 승인). 오프라인에서 사진을 기기에 보관하려면 R2 버킷 CORS에 앱 주소 GET을 허용한다(19절).
+- 사진: Cloudflare R2(S3 호환, 비공개 버킷, boto3). 보기는 서버가 R2에서 받아 흘려보낸다(2026-09-14 연결, presigned 302는 대역폭이 문제될 때). R2 환경변수가 없으면 로컬 `uploads/` 폴더. 단 운영(`RENDER`)에서 R2가 없으면 로컬에 두지 않고 사진 올리기를 503 `사진을 지금은 올릴 수 없어요.`로 막는다(Render 디스크는 배포 때 지워짐) (2026-09-14, 4단계 시안 승인). 사진이 앱 주소로 오므로 오프라인 보관에 R2 버킷 CORS는 필요 없다(19절).
 - 인증: 소셜 로그인만(카카오, 네이버, 구글 — 네이버는 2026-09-13 사용자 결정으로 추가). 비밀번호를 저장하지 않는다.
 - AI: Anthropic API, 모델은 `CLAUDE_MODEL` 환경변수(기본 `claude-sonnet-5`). `ANTHROPIC_API_KEY`가 없으면 개발 모드(`DEV_MODE=1`)의 스캔은 종류별 예시 결과(`sample: true`, 한도·기록 없음)를 돌려주고, 운영에서는 503이며 화면에서 `사진으로 추가`를 숨긴다(`/api/me`의 `scan`).
 
@@ -105,7 +105,7 @@ recipe-ai/
 | GET/POST | `/api/channels` · PATCH/DELETE `/api/channels/<id>` | 채널 목록·추가 / 기본 채널 숨기기·내 채널 빼기(17절) |
 | GET/POST | `/api/cook-logs` | 기록 목록 / 생성(multipart: 필드 + 사진 + `usages` JSON) |
 | DELETE | `/api/cook-logs/<id>` | 기록 삭제(재고 복원 안 함) |
-| GET | `/api/photos/<key>` | 소유자 확인(내 접두사 + 사진 행) 후 로컬은 파일 전송(`private, max-age=3600`·nosniff·`Content-Security-Policy: default-src 'none'; sandbox`), R2는 presigned URL 302 예정 — 연결 전에는 503(28절). 남의 키·지운 사진 404 |
+| GET | `/api/photos/<key>` | 소유자 확인(내 접두사 + 사진 행) 후 로컬은 파일 전송(`private, max-age=3600`·nosniff·`Content-Security-Policy: default-src 'none'; sandbox`), R2는 같은 소유자 확인 뒤 R2에서 받아 같은 헤더로 흘려보냄(없는 객체 404, R2 오류 503 `사진을 지금은 볼 수 없어요.`)(28절). 남의 키·지운 사진 404 |
 
 CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를 1,000건 단위로 받아 upsert(`FOODSAFETY_API_KEY` 필요, 받으면 예시 레시피는 지움). `flask seed-sample-recipes` — 키 없이 화면을 확인하는 직접 쓴 예시 레시피 12개(`is_sample`).
 
@@ -518,7 +518,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - `DELETE /api/shopping/notes/<id>` → 204. 사진 올리기와 같은 사용자 잠금을 먼저 잡고 사진 목록을 읽어, 커밋 뒤 사진 파일 삭제(실패는 로그만).
 - `POST /api/shopping/notes/<id>/photos` multipart `image`, `client_id?` → 201 사진 모양(같은 `client_id`면 200). 순서: 저장소가 로컬이 아니면 503 `사진을 지금은 올릴 수 없어요.` → 남의/없는 메모 404 → 10MB 초과 413 → 사진 없음 400 `사진을 올려주세요.` → 3MB 초과 413 `사진이 너무 커요.` → 서명이 JPG·PNG·WEBP 아님 415 `사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요.` → 10장 400 `사진은 메모 하나에 10장까지 넣을 수 있어요.` → 사용자 합계 200MB 초과 400 `사진 저장 공간이 가득 찼어요. 오래된 메모 사진을 지워주세요.` → 키 `shopping/<user_id>/<uuid4 hex>.<jpg|png|webp>`(확장자는 서명으로) 저장 → 행 커밋(실패하면 방금 저장한 파일 삭제). EXIF는 서버가 지우지 않는다 — 화면(Task 10)이 캔버스로 다시 인코딩해 올려 빠진다(필요하면 나중에 서버에서 다시 저장).
 - `DELETE /api/shopping/notes/<id>/photos/<photo_id>` → 204, 커밋 뒤 파일 삭제. 다른 메모의 사진 id는 404.
-- 저장소 `app/storage.py`: `mode()` — R2 값 네 개가 모두 있으면 `r2`, 없고 `DEV_MODE`면 `local`, 아니면 `off`(닫힌 쪽이 기본)(`local`은 `backend/uploads/`, 키는 `safe_join`으로 `..`·앞 `/` 거부). **R2는 아직 연결하지 않았다(boto3 미설치)** — `r2`·`off` 모두 사진 올리기·보기 503. 운영에서 사진을 쓰기 전에 boto3를 넣고 put/delete/presigned 302를 붙인다.
+- 저장소 `app/storage.py`: `mode()` — R2 값 네 개가 모두 있으면 `r2`, 없고 `DEV_MODE`면 `local`, 아니면 `off`(닫힌 쪽이 기본)(`local`은 `backend/uploads/`, 키는 `safe_join`으로 `..`·앞 `/` 거부). R2는 boto3(`put_object`·`delete_objects`·`get_object` 스트리밍, 연결 3초·읽기 10초, 한 번 다시 시도). R2 오류는 올리기 503 `사진을 지금은 올릴 수 없어요.`, 보기 503, 지우기는 로그만(키·비밀값은 로그에 남기지 않음). `off`는 사진 올리기·보기 503. (2026-09-14 연결)
 - 회원 탈퇴 때 `shopping/<user_id>/` 파일을 따로 지운다(27절, 탈퇴 태스크).
 
 ### 재고에 넣기 (Task 2)
