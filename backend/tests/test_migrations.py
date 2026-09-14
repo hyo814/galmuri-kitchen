@@ -200,6 +200,22 @@ def test_youtube_videos_migration_adds_and_removes_tables(app):
             assert not tables & set(sa.inspect(conn).get_table_names())
 
 
+def test_ingredient_removals_migration_adds_and_removes_table(app):
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="b3b3c3d3e3f3")
+        with db.engine.connect() as conn:
+            inspector = sa.inspect(conn)
+            fks = {fk["referred_table"]: fk["options"].get("ondelete") for fk in inspector.get_foreign_keys("ingredient_removals")}
+            indexes = {ix["name"]: ix["column_names"] for ix in inspector.get_indexes("ingredient_removals")}
+        assert fks == {"users": "CASCADE"}
+        assert indexes["ix_ingredient_removals_user_id"] == ["user_id"]
+        assert indexes["ix_ingredient_removals_user_id_created_at"] == ["user_id", "created_at"]
+
+        downgrade(directory=MIGRATIONS, revision="b2b2c2d2e2f2")
+        with db.engine.connect() as conn:
+            assert "ingredient_removals" not in sa.inspect(conn).get_table_names()
+
+
 def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)
@@ -219,5 +235,6 @@ def test_upgrade_to_head_and_back_to_base(app):
             "youtube_channels",
             "user_channels",
             "youtube_videos",
+            "ingredient_removals",
         } <= tables
         downgrade(directory=MIGRATIONS, revision="base")

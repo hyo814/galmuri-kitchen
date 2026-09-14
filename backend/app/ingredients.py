@@ -10,7 +10,7 @@ from werkzeug.exceptions import BadRequest
 from .auth import get_owned_or_404, login_required
 from .locations import choose_location, default_location, owned_location, user_locations
 from .matching import head_is, keyword_in
-from .models import Ingredient, ItemRule, Staple, db
+from .models import Ingredient, IngredientRemoval, ItemRule, Staple, db
 from .validation import iso_date, text
 
 bp = Blueprint("ingredients", __name__, url_prefix="/api/ingredients")
@@ -23,6 +23,7 @@ OLD_DAYS_BY_KIND = {"fridge": 7, "freezer": 60, "room": None}  # 유통기한이
 SEVERITY = {"ok": 0, "old": 1, "urgent": 2, "danger": 3}
 STATUS_RANK = {"danger": 0, "urgent": 1, "old": 2, "ok": 3}
 SEOUL = ZoneInfo("Asia/Seoul")
+REMOVAL_REASONS = ("eaten", "discarded")  # 다 먹었어요 / 버렸어요 (스펙 27절)
 
 # 장류·소스는 냉장 보관해도 몇 달씩 쓰므로, 이렇게 분류한 필수품과 이름이 맞으면 위치 기준 '오래됨'을 건너뛴다 (사용성 점검 C3)
 SEASONING_CATEGORIES = ["조미료", "소스", "양념", "장류"]
@@ -231,6 +232,13 @@ def update_ingredient(item_id):
 @bp.delete("/<int:item_id>")
 @login_required
 def delete_ingredient(item_id):
-    db.session.delete(get_owned_or_404(Ingredient, item_id))
+    """?reason=eaten|discarded를 주면 지운 기록을 같은 커밋에 남긴다. 없거나 비어 있으면 기록 없이 지운다."""
+    reason = request.args.get("reason") or None
+    if reason is not None and reason not in REMOVAL_REASONS:
+        abort(400, "잘못된 요청이에요.")
+    item = get_owned_or_404(Ingredient, item_id)
+    if reason is not None:
+        db.session.add(IngredientRemoval(user_id=g.user.id, name=item.name, reason=reason))
+    db.session.delete(item)
     db.session.commit()
     return "", 204

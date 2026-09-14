@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 import app.ingredients as ingredients_module
 from app.ingredients import BULK_MAX, OLD_DAYS_BY_KIND, ingredient_status, matching_rule, seoul_today
 from app.locations import INVALID_LOCATION, KINDS, choose_location, user_locations
-from app.models import Ingredient, StorageLocation, User, db
+from app.models import Ingredient, IngredientRemoval, StorageLocation, User, db
 
 TODAY = date(2026, 9, 13)
 
@@ -232,6 +232,45 @@ def test_delete(client, login):
     item = create(client).get_json()
     assert client.delete(f"/api/ingredients/{item['id']}").status_code == 204
     assert client.get("/api/ingredients").get_json() == []
+
+
+def removals(app):
+    with app.app_context():
+        return [(r.name, r.reason) for r in IngredientRemoval.query.order_by(IngredientRemoval.id)]
+
+
+def test_delete_with_reason_records_removal(client, login, app):
+    login()
+    milk, tofu, egg = (create(client, name=n).get_json() for n in ("우유", "두부", "계란"))
+    assert client.delete(f"/api/ingredients/{milk['id']}?reason=eaten").status_code == 204
+    assert client.delete(f"/api/ingredients/{tofu['id']}?reason=discarded").status_code == 204
+    assert client.delete(f"/api/ingredients/{egg['id']}?reason=").status_code == 204  # 비어 있으면 이유 없이 지운다
+    assert client.get("/api/ingredients").get_json() == []
+    assert removals(app) == [("우유", "eaten"), ("두부", "discarded")]
+    with app.app_context():
+        me = User.query.filter_by(provider_id="1").one()
+        assert {r.user_id for r in IngredientRemoval.query} == {me.id}
+        db.session.delete(me)  # 사용자를 지우면 삭제 기록도 함께 지워진다(ON DELETE CASCADE)
+        db.session.commit()
+        assert IngredientRemoval.query.count() == 0
+
+
+@pytest.mark.parametrize("reason", ["EATEN", "lost", "eaten ", " "])
+def test_delete_with_invalid_reason_deletes_nothing(client, login, app, reason):
+    login()
+    item = create(client).get_json()
+    res = client.delete(f"/api/ingredients/{item['id']}", query_string={"reason": reason})
+    assert (res.status_code, res.get_json()) == (400, {"error": "잘못된 요청이에요."})
+    assert len(client.get("/api/ingredients").get_json()) == 1
+    assert removals(app) == []
+
+
+def test_delete_other_users_ingredient_with_reason_is_404(client, login, app):
+    login("owner")
+    item = create(client).get_json()
+    login("intruder")
+    assert client.delete(f"/api/ingredients/{item['id']}?reason=eaten").status_code == 404
+    assert removals(app) == []
 
 
 def test_other_users_ingredient_is_hidden(client, login):

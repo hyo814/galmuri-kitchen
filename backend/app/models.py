@@ -69,6 +69,19 @@ class Ingredient(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
 
+class IngredientRemoval(db.Model):
+    """재료를 지울 때 고른 이유(스펙 27절, 리포트의 버린 재료 수). 이유를 안 고르면 행을 만들지 않는다."""
+
+    __tablename__ = "ingredient_removals"
+    __table_args__ = (db.Index("ix_ingredient_removals_user_id_created_at", "user_id", "created_at"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = db.Column(db.String(50), nullable=False)  # 지운 재료 이름(재료 행은 지워지므로 복사)
+    reason = db.Column(db.String(10), nullable=False)  # eaten | discarded
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
 class Staple(db.Model):
     __tablename__ = "staples"
     __table_args__ = (db.UniqueConstraint("user_id", "name"),)
@@ -111,7 +124,7 @@ class AiCall(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    kind = db.Column(db.String(20), nullable=False)  # fridge | receipt | order | memo | recipe | link | link_fetch·channel_add·video_refresh(외부 요청 기록, 모델·토큰 없음)
+    kind = db.Column(db.String(20), nullable=False)  # fridge | receipt | order | memo | recipe | link | link_fetch·channel_add·video_refresh(외부 요청 기록)·export(데이터 내보내기), 모두 모델·토큰 없음
     # 원가 계산용. 단가는 모델마다 달라 모델 이름을 같이 남긴다. 응답을 못 받은 호출(오류·타임아웃)은 비어 있다.
     model = db.Column(db.String(60))
     input_tokens = db.Column(db.Integer)

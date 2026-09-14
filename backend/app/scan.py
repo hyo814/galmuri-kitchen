@@ -35,9 +35,9 @@ def sniff_image_type(data):
     return None
 
 
-def calls_today(user_id, kinds):
-    """오늘(서울 날짜) 이 사용자가 kinds로 쓴 AI 호출 횟수. created_at은 UTC로 저장되므로 서울 하루를 UTC 구간으로 바꿔 센다."""
-    start = datetime.combine(seoul_today(), time.min, tzinfo=SEOUL).astimezone(timezone.utc)
+def calls_today(user_id, kinds, day=None):
+    """오늘(서울 날짜, day를 주면 그날) 이 사용자가 kinds로 쓴 AI 호출 횟수. created_at은 UTC로 저장되므로 서울 하루를 UTC 구간으로 바꿔 센다."""
+    start = datetime.combine(day or seoul_today(), time.min, tzinfo=SEOUL).astimezone(timezone.utc)
     return AiCall.query.filter(
         AiCall.user_id == user_id,
         AiCall.kind.in_(kinds),
