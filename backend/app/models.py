@@ -210,6 +210,7 @@ class YoutubeVideo(db.Model):
     """채널 최근 영상 캐시. 새로 받을 때 채널 영상을 통째로 바꾸고, 30일 넘게 새로 받지 못한 행은 지운다(유튜브 약관)."""
 
     __tablename__ = "youtube_videos"
+    __table_args__ = (db.Index("ix_youtube_videos_published_at_id", "published_at", "id"),)  # 최신순 커서 페이지
 
     id = db.Column(db.Integer, primary_key=True)
     video_id = db.Column(db.String(20), nullable=False, unique=True)
@@ -218,5 +219,5 @@ class YoutubeVideo(db.Model):
     thumbnail_url = db.Column(db.String(500))
     duration_seconds = db.Column(db.Integer)
     description = db.Column(db.String(500))
-    published_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
-    fetched_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    published_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    fetched_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)

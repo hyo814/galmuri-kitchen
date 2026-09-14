@@ -193,7 +193,7 @@ def test_youtube_videos_migration_adds_and_removes_tables(app):
         assert ("video_id",) in uniques["youtube_videos"]
         assert user_fks == {"users": "CASCADE", "youtube_channels": "CASCADE"}
         assert video_fks == {"youtube_channels": "CASCADE"}
-        assert {"ix_youtube_videos_channel_id", "ix_youtube_videos_published_at"} <= video_indexes
+        assert {"ix_youtube_videos_channel_id", "ix_youtube_videos_fetched_at", "ix_youtube_videos_published_at_id"} <= video_indexes
 
         downgrade(directory=MIGRATIONS, revision="b1b1c1d1e1f1")
         with db.engine.connect() as conn:

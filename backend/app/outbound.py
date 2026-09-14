@@ -43,6 +43,7 @@ VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 CHANNELS_URL = "https://www.googleapis.com/youtube/v3/channels"
 PLAYLIST_ITEMS_URL = "https://www.googleapis.com/youtube/v3/playlistItems"
 PLAYLIST_SIZE = 30
+THUMBNAIL_HOSTS = {"i.ytimg.com", "yt3.ggpht.com", "yt3.googleusercontent.com"}
 MAX_CHANNEL_TITLE = 100
 MAX_DESCRIPTION = 500  # 영상 보기 화면 설명 미리보기
 ISO_DURATION = re.compile(r"P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?")
@@ -328,10 +329,21 @@ def video_snippet(video_id, key):
     }
 
 
+def _thumbnail_url(value):
+    """유튜브 이미지 호스트의 https 주소만(DB 칸 500자). 아니면 None."""
+    if not isinstance(value, str) or len(value) > 500:
+        return None
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return None
+    return value if parts.scheme == "https" and parts.netloc in THUMBNAIL_HOSTS else None
+
+
 def _thumbnail(snippet, sizes):
     thumbnails = snippet.get("thumbnails") if isinstance(snippet.get("thumbnails"), dict) else {}
     found = (thumbnails.get(size) for size in sizes)
-    return next((t["url"] for t in found if isinstance(t, dict) and _https(t.get("url")) and len(t["url"]) <= 500), None)  # DB 칸 500자
+    return next((t["url"] for t in found if isinstance(t, dict) and _thumbnail_url(t.get("url"))), None)
 
 
 def _youtube_items(url, params):
@@ -347,13 +359,13 @@ def _youtube_items(url, params):
 
 
 def iso_duration(value):
-    """"PT12M4S" → 724초. 0초(P0D, 생방송)·틀린 모양 → None."""
+    """"PT12M4S" → 724초. 0초(P0D, 생방송)·틀린 모양(P1W 등)·int 범위 밖 → None."""
     match = ISO_DURATION.fullmatch(value) if isinstance(value, str) else None
     if not match:
         return None
     days, hours, minutes, seconds = (int(part or 0) for part in match.groups())
     total = ((days * 24 + hours) * 60 + minutes) * 60 + seconds
-    return total or None
+    return total if 0 < total <= 2**31 - 1 else None  # DB int 칸
 
 
 def channel_info(key, *, channel_id=None, handle=None, username=None):

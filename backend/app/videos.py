@@ -2,26 +2,28 @@
 
 유튜브 Data API 사용량(units): 채널 새로 받기 = channels.list + playlistItems.list + videos.list = 3.
 검색은 캐시된 제목에서만 한다(search.list 100 units는 쓰지 않는다). 외부 요청은 outbound.py에서만 한다.
+쿼터 보호: 새로 받기는 `ai_calls.kind = video_refresh`, 채널 추가는 `channel_add`로 기록해(토큰 없음, AI 사용량·원가에 안 셈)
+사용자별 하루 새로 받기 20번·채널 추가 30번, 전체 24시간 추정 8,000 units 안에서만 유튜브를 부른다.
 """
 
-import base64
 import json
 import re
+import time
+import zlib
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 import click
 from flask import Blueprint, abort, current_app, g, jsonify, request
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 
 from . import outbound, scan
 from .auth import login_required
 from .models import AiCall, UserChannel, YoutubeChannel, YoutubeVideo, db, utcnow
 from .recipe_ai import FETCH_BURST_LIMIT, FETCH_DAILY_LIMIT
-from .recipes import _decode_cursor
-from .validation import commit_or_duplicate, iso_datetime
+from .validation import commit_or_duplicate, decode_cursor, encode_cursor, iso_datetime
 
 bp = Blueprint("videos", __name__, url_prefix="/api", cli_group=None)  # 명령은 `flask seed-default-channels`
 
@@ -32,6 +34,16 @@ MINE_LIMIT = 30
 STALE_AFTER = timedelta(hours=6)
 KEEP_FOR = timedelta(days=30)  # 유튜브 약관: 받은 정보를 30일 넘게 두지 않는다
 REFRESH_PER_REQUEST = 3
+REQUEST_SECONDS = 8  # 목록 요청 하나에서 새로 받기에 쓰는 시간. 넘으면 남은 채널은 다음 요청에서
+REFRESH_DAILY_LIMIT = 20  # 사용자별 하루(서울 날짜) 새로 받기
+CHANNEL_ADD_DAILY_LIMIT = 30
+CHANNEL_ADD_BURST_LIMIT = 10
+DAILY_UNIT_BUDGET = 8_000  # 무료 10,000 units 중 링크 가져오기·여유분을 남긴다
+UNITS_PER_REFRESH = 3
+UNITS_PER_ADD = 3  # 캐시된 채널 추가(0 units)도 넉넉히 센다
+REFRESH_KINDS = ("video_refresh",)
+CHANNEL_ADD_KINDS = ("channel_add",)
+CHANNEL_LOCK_KEY = zlib.crc32(b"user_channels") & 0x7FFFFFFF
 MAX_INT = 2**31 - 1
 CHANNEL_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com"}
 HANDLE = re.compile(r"@[\w.-]{3,30}")  # 한글 핸들도 있다
@@ -39,15 +51,17 @@ USERNAME = re.compile(r"[A-Za-z0-9._-]{1,50}")
 OFF = "영상을 지금은 볼 수 없어요."
 CANNOT_ADD = "지금은 채널을 추가할 수 없어요."
 CANNOT_CHANGE = "지금은 채널을 바꿀 수 없어요."
+BAD_LINK = "채널 링크를 다시 확인해주세요. youtube.com/@이름 또는 youtube.com/channel/… 모양의 주소를 붙여 넣어주세요."
 
 # 키 없는 개발 모드용 예시(시안 Videos·VideoPlay·Channels). 썸네일 없음, DB·네트워크 없음.
 SAMPLE_CHANNELS = [
-    {"id": 1, "title": "집밥 연구소", "thumbnail_url": None, "video_count": 248, "is_default": False, "hidden": False},
-    {"id": 2, "title": "자취요리 한 끼", "thumbnail_url": None, "video_count": 97, "is_default": False, "hidden": False},
-    {"id": 3, "title": "오늘의 반찬", "thumbnail_url": None, "video_count": None, "is_default": True, "hidden": False},
-    {"id": 4, "title": "한식 기본기", "thumbnail_url": None, "video_count": None, "is_default": True, "hidden": False},
-    {"id": 5, "title": "간단 도시락", "thumbnail_url": None, "video_count": None, "is_default": True, "hidden": True},
+    {"id": 1, "title": "집밥 연구소", "video_count": 248, "is_default": False, "hidden": False},
+    {"id": 2, "title": "자취요리 한 끼", "video_count": 97, "is_default": False, "hidden": False},
+    {"id": 3, "title": "오늘의 반찬", "video_count": None, "is_default": True, "hidden": False},
+    {"id": 4, "title": "한식 기본기", "video_count": None, "is_default": True, "hidden": False},
+    {"id": 5, "title": "간단 도시락", "video_count": None, "is_default": True, "hidden": True},
 ]
+SAMPLE_CHANNELS = [{**c, "thumbnail_url": None, "unavailable": False} for c in SAMPLE_CHANNELS]
 SAMPLE_VIDEOS = [  # (제목, 채널 id, 길이 초, 며칠 전, 설명)
     (
         "제육볶음 황금레시피, 이렇게만 하세요",
@@ -72,7 +86,7 @@ def video_mode():
 
 def parse_channel_link(value):
     """("id", UC…) | ("handle", "@이름") | ("username", 이름) | None. 사용자가 준 주소는 요청하지 않는다.
-    /c/이름은 공식 조회 방법이 없어 같은 이름의 핸들로 찾아본다(예전 맞춤 주소는 대부분 핸들과 같다)."""
+    /c/이름은 공식 조회 방법이 없어 받지 않는다(@이름이나 /channel/ 주소를 붙여 넣게 안내)."""
     if not isinstance(value, str):
         return None
     value = value.strip()
@@ -95,8 +109,6 @@ def parse_channel_link(value):
         return ("handle", first)
     if first == "channel" and outbound.CHANNEL_ID.fullmatch(second):
         return ("id", second)
-    if first == "c" and HANDLE.fullmatch(f"@{second}"):
-        return ("handle", f"@{second}")
     if first == "user" and USERNAME.fullmatch(second):
         return ("username", second)
     return None
@@ -111,10 +123,29 @@ def visible_filter(user_id):
     )
 
 
+def is_stale(now):
+    return or_(YoutubeChannel.fetched_at.is_(None), YoutubeChannel.fetched_at < now - STALE_AFTER)
+
+
+def units_left(cost):
+    """지난 24시간 추정 사용량(새로 받기 3, 채널 추가 3) + cost가 전체 예산 안인가.
+    ponytail: 잠그지 않은 추정치 — 동시에 몰리면 조금 넘을 수 있어 예산을 무료 한도보다 낮게 잡았다."""
+    since = scan.utcnow() - timedelta(days=1)
+    counts = dict(
+        db.session.query(AiCall.kind, func.count())
+        .filter(AiCall.kind.in_(REFRESH_KINDS + CHANNEL_ADD_KINDS), AiCall.created_at >= since)
+        .group_by(AiCall.kind)
+        .all()
+    )
+    used = counts.get("video_refresh", 0) * UNITS_PER_REFRESH + counts.get("channel_add", 0) * UNITS_PER_ADD
+    return used + cost <= DAILY_UNIT_BUDGET
+
+
 def refresh_channel(channel, key, info=None):
     """채널 정보·최근 영상 30개·길이/설명을 새로 받아 영상을 통째로 바꾼다(3 units, info를 주면 2).
-    채널·재생목록이 없어졌으면(삭제·비공개) 영상을 지운다. 성공·실패 모두 fetched_at을 지금으로.
-    외부 요청을 기다리는 동안 트랜잭션을 열어 두지 않는다."""
+    채널·재생목록이 없어졌으면(삭제·비공개) 영상과 썸네일·영상 수·재생목록을 비운다(화면에 unavailable).
+    요청 실패는 잠깐의 오류일 수 있어 캐시를 그대로 둔다. 성공·실패 모두 fetched_at을 지금으로.
+    외부 요청을 기다리는 동안 트랜잭션을 열어 두지 않는다. 기록·예산 확인은 부르는 쪽(claim_and_refresh)이 한다."""
     pk, channel_id = channel.id, channel.channel_id
     db.session.commit()
     videos, details = None, {}
@@ -137,14 +168,24 @@ def refresh_channel(channel, key, info=None):
     channel.fetched_at = now
     if videos is None:
         YoutubeVideo.query.filter_by(channel_id=pk).delete()
+        channel.thumbnail_url = channel.video_count = channel.uploads_playlist_id = None
     else:
         channel.title = info["title"] or channel.title
         channel.thumbnail_url, channel.video_count = info["thumbnail_url"], info["video_count"]
         channel.uploads_playlist_id = info["uploads_playlist_id"]
+        items = {v["video_id"]: v for v in videos}
+        taken = {  # 다른 채널 행에 이미 있는 영상(UNIQUE)은 건너뛴다
+            video_id
+            for (video_id,) in db.session.query(YoutubeVideo.video_id).filter(
+                YoutubeVideo.video_id.in_(list(items)), YoutubeVideo.channel_id != pk
+            )
+        }
         existing = {v.video_id: v for v in YoutubeVideo.query.filter_by(channel_id=pk)}
-        for item in {v["video_id"]: v for v in videos}.values():
-            row = existing.pop(item["video_id"], None) or YoutubeVideo(video_id=item["video_id"], channel_id=pk)
-            extra = details.get(item["video_id"], {})
+        for video_id, item in items.items():
+            if video_id in taken:
+                continue
+            row = existing.pop(video_id, None) or YoutubeVideo(video_id=video_id, channel_id=pk)
+            extra = details.get(video_id, {})
             row.title, row.thumbnail_url, row.published_at = item["title"], item["thumbnail_url"], item["published_at"]
             row.duration_seconds, row.description, row.fetched_at = extra.get("duration_seconds"), extra.get("description"), now
             db.session.add(row)
@@ -156,29 +197,40 @@ def refresh_channel(channel, key, info=None):
         db.session.rollback()
 
 
-def refresh_stale(user_id, key):
-    """30일 넘게 새로 받지 못한 영상을 지우고, 보이는 채널 중 6시간 지난(또는 받은 적 없는) 채널을 오래된 순 3개까지 새로 받는다.
-    채널마다 먼저 fetched_at을 조건부로 바꿔 차지해, 동시에 온 요청이 같은 채널을 두 번 받지 않는다.
-    ponytail: 요청 중 동기 갱신·요청당 3개 — 채널이 많아져 목록이 늦어지면 Render cron으로 옮긴다. 쿼터: 채널당 하루 최대 12 units.
-    ponytail: 30일 넘게 아무도 보지 않은 채널의 이름·썸네일은 남는다(화면에 보일 때 먼저 새로 받는다). 약관 확인에서 문제되면 같이 비운다."""
+def claim_and_refresh(user_id, key, pk, info=None):
+    """사용자·전체 예산이 남았으면 채널을 차지하고(fetched_at 조건부 갱신, 동시 요청이 두 번 받지 않게) 기록한 뒤 새로 받는다.
+    예산이 없으면 아무것도 하지 않는다(화면은 캐시된 영상을 그대로 본다)."""
+    if scan.calls_today(user_id, REFRESH_KINDS) >= REFRESH_DAILY_LIMIT or not units_left(UNITS_PER_REFRESH):
+        return
+    now = utcnow()
+    claimed = db.session.execute(update(YoutubeChannel).where(YoutubeChannel.id == pk, is_stale(now)).values(fetched_at=now)).rowcount
+    if claimed:
+        db.session.add(AiCall(user_id=user_id, kind="video_refresh", model=None, created_at=scan.utcnow()))
+    db.session.commit()
+    channel = db.session.get(YoutubeChannel, pk) if claimed else None
+    if channel is not None:
+        refresh_channel(channel, key, info)
+
+
+def refresh_stale(user_id, key, deadline):
+    """30일 넘게 새로 받지 못한 영상을 지우고, 보이는 채널 중 6시간 지난(또는 받은 적 없는) 채널을 오래된 순 3개까지,
+    deadline(time.monotonic)이 지나기 전까지만 새로 받는다. 목록 첫 페이지에서만 부른다.
+    ponytail: 요청 중 동기 갱신 — 채널이 많아져 목록이 늦어지면 Render cron으로 옮긴다. 채널 하나(외부 요청 3번)는 시간을 넘길 수 있다.
+    ponytail: 30일 넘게 아무도 보지 않은 채널의 이름은 남는다(화면에 보일 때 먼저 새로 받는다). 약관 확인에서 문제되면 같이 비운다."""
     now = utcnow()
     YoutubeVideo.query.filter(YoutubeVideo.fetched_at < now - KEEP_FOR).delete()
-    stale_before = now - STALE_AFTER
-    is_stale = or_(YoutubeChannel.fetched_at.is_(None), YoutubeChannel.fetched_at < stale_before)
     stale = (
         db.session.query(YoutubeChannel.id)
-        .filter(visible_filter(user_id), is_stale)
+        .filter(visible_filter(user_id), is_stale(now))
         .order_by(YoutubeChannel.fetched_at.isnot(None), YoutubeChannel.fetched_at, YoutubeChannel.id)
         .limit(REFRESH_PER_REQUEST)
         .all()
     )
     db.session.commit()
     for (pk,) in stale:
-        claimed = db.session.execute(update(YoutubeChannel).where(YoutubeChannel.id == pk, is_stale).values(fetched_at=now)).rowcount
-        db.session.commit()
-        channel = db.session.get(YoutubeChannel, pk) if claimed else None
-        if channel is not None:
-            refresh_channel(channel, key)
+        if time.monotonic() >= deadline:
+            break
+        claim_and_refresh(user_id, key, pk)
 
 
 def sample_videos():
@@ -221,7 +273,8 @@ def video_json(video, channel, detail=False):
 
 
 def channel_json(channel, mine=False, hidden=False):
-    """is_default는 화면 묶음(기본 채널)이다. 내가 추가한 뒤 기본 채널이 된 채널은 `내 채널`에 둔다."""
+    """is_default는 화면 묶음(기본 채널)이다. 내가 추가한 뒤 기본 채널이 된 채널은 `내 채널`에 둔다.
+    unavailable: 새로 받아 봤더니 채널·재생목록이 없어졌다(삭제·비공개)."""
     return {
         "id": channel.id,
         "title": channel.title,
@@ -229,13 +282,15 @@ def channel_json(channel, mine=False, hidden=False):
         "video_count": channel.video_count,
         "is_default": channel.is_default and not mine,
         "hidden": hidden,
+        "unavailable": channel.fetched_at is not None and channel.uploads_playlist_id is None,
     }
 
 
 @bp.get("/videos")
 @login_required
 def list_videos():
-    """보이는 채널 영상 published_at·id 내림차순 커서 페이지(스펙 26절). q는 캐시된 제목에서만 찾는다."""
+    """보이는 채널 영상 published_at·id 내림차순 커서 페이지(스펙 26절). q는 캐시된 제목에서만 찾는다.
+    새로 받기·오래된 영상 지우기는 첫 페이지(cursor 없음)에서만 한다."""
     mode = video_mode()
     if mode == "off":
         abort(503, OFF)
@@ -249,7 +304,7 @@ def list_videos():
             abort(400, "잘못된 요청이에요.")
         channel = int(channel)
     cursor = request.args.get("cursor")
-    cursor = _decode_cursor(cursor) if cursor else None
+    cursor = decode_cursor(cursor) if cursor else None
 
     if mode == "sample":
         items = [
@@ -259,9 +314,10 @@ def list_videos():
         ]
         return jsonify(items=items, next_cursor=None, sample=True)
 
-    refresh_stale(g.user.id, current_app.config["YOUTUBE_API_KEY"])
+    if cursor is None:
+        refresh_stale(g.user.id, current_app.config["YOUTUBE_API_KEY"], time.monotonic() + REQUEST_SECONDS)
     query = db.session.query(YoutubeVideo, YoutubeChannel).join(YoutubeChannel, YoutubeVideo.channel_id == YoutubeChannel.id)
-    query = query.filter(visible_filter(g.user.id))
+    query = query.filter(visible_filter(g.user.id), YoutubeVideo.fetched_at >= utcnow() - KEEP_FOR)
     if channel is not None:
         query = query.filter(YoutubeChannel.id == channel)
     if q:
@@ -275,12 +331,8 @@ def list_videos():
     rows = query.order_by(YoutubeVideo.published_at.desc(), YoutubeVideo.id.desc()).limit(limit + 1).all()
     has_more = len(rows) > limit
     items = [video_json(video, ch) for video, ch in rows[:limit]]
-    next_cursor = _encode_cursor(rows[limit - 1][0]) if has_more else None
-    return jsonify(items=items, next_cursor=next_cursor, sample=False)
-
-
-def _encode_cursor(video):
-    return base64.urlsafe_b64encode(f"{iso_datetime(video.published_at)}|{video.id}".encode()).decode()
+    last = rows[limit - 1][0] if has_more else None
+    return jsonify(items=items, next_cursor=encode_cursor(last.published_at, last.id) if last else None, sample=False)
 
 
 @bp.get("/videos/<int:video_pk>")
@@ -297,7 +349,7 @@ def get_video(video_pk):
     row = (
         db.session.query(YoutubeVideo, YoutubeChannel)
         .join(YoutubeChannel, YoutubeVideo.channel_id == YoutubeChannel.id)
-        .filter(YoutubeVideo.id == video_pk, visible_filter(g.user.id))
+        .filter(YoutubeVideo.id == video_pk, YoutubeVideo.fetched_at >= utcnow() - KEEP_FOR, visible_filter(g.user.id))
         .first()
         if video_pk <= MAX_INT
         else None
@@ -333,20 +385,37 @@ def list_channels():
     return jsonify(items=items, mine_count=len(mine), mine_limit=MINE_LIMIT, sample=False)
 
 
+def find_channel(channel_id):
+    return YoutubeChannel.query.filter_by(channel_id=channel_id).first()
+
+
+def lock_user_channels(user_id):
+    """PostgreSQL은 사용자별 트랜잭션 잠금으로 채널 개수 확인·추가를 한 줄로 세운다(커밋·롤백 때 풀린다)."""
+    if db.session.get_bind().dialect.name == "postgresql":
+        db.session.execute(text("SELECT pg_advisory_xact_lock(:key, :user_id)"), {"key": CHANNEL_LOCK_KEY, "user_id": user_id})
+    # ponytail: SQLite(개발용)는 잠그지 않는다 — 동시에 보내면 31개가 될 수 있다. 운영은 PostgreSQL이다.
+
+
 @bp.post("/channels")
 @login_required
 def add_channel():
-    """채널 링크로 내 채널 추가. 처음 보는 채널이면 channels.list로 찾고(외부 요청은 링크 가져오기와 같은 한도로 센다) 바로 영상을 받는다."""
+    """채널 링크로 내 채널 추가. 추가는 모두 사용자별 한도로 세고, 처음 보는 채널이면 channels.list로 찾는다
+    (링크 가져오기와 같은 link_fetch 한도·전체 예산 안에서). 받은 적 없는 채널은 바로 영상을 받는다(예산이 있으면)."""
     data = request.get_json(silent=True)
     link = parse_channel_link(data.get("url") if isinstance(data, dict) else None)
     if link is None:
-        abort(400, "채널 링크(youtube.com/@이름)를 붙여 넣어주세요.")
+        abort(400, BAD_LINK)
     if video_mode() != "on":
         abort(503, CANNOT_ADD)
     user_id, key = g.user.id, current_app.config["YOUTUBE_API_KEY"]
     kind, value = link
-    channel = YoutubeChannel.query.filter_by(channel_id=value).first() if kind == "id" else None
+    scan.check_ai_limits(user_id, CHANNEL_ADD_KINDS, CHANNEL_ADD_DAILY_LIMIT, "채널 추가는", burst=CHANNEL_ADD_BURST_LIMIT)
+    channel = find_channel(value) if kind == "id" else None
     info = None
+    if channel is None and not units_left(UNITS_PER_ADD):
+        abort(503, CANNOT_ADD)
+    db.session.add(AiCall(user_id=user_id, kind="channel_add", model=None, created_at=scan.utcnow()))
+    db.session.commit()
     if channel is None:
         scan.check_ai_limits(user_id, scan.FETCH_KINDS, FETCH_DAILY_LIMIT, "링크 가져오기는", burst=FETCH_BURST_LIMIT)
         db.session.add(AiCall(user_id=user_id, kind="link_fetch", model=None, created_at=scan.utcnow()))
@@ -359,44 +428,38 @@ def add_channel():
             abort(502, "채널 정보를 가져오지 못했어요. 잠시 후 다시 시도해주세요.")
         if info is None:
             abort(404, "채널을 찾을 수 없어요.")
-        channel = YoutubeChannel.query.filter_by(channel_id=info["channel_id"]).first()
+        if find_channel(info["channel_id"]) is None:
+            fields = {k: info[k] for k in ("channel_id", "title", "thumbnail_url", "uploads_playlist_id", "video_count")}
+            db.session.add(YoutubeChannel(**fields))
+            try:
+                db.session.commit()
+            except IntegrityError:  # 다른 사용자가 같은 채널을 방금 추가했다 → 그 행을 쓴다
+                db.session.rollback()
+        channel = find_channel(info["channel_id"])
+        # ponytail: 개수 한도에 걸리면 이 채널 행은 아무도 안 쓰는 채로 남는다(새로 받지 않으니 비용 없음).
 
-    row = UserChannel.query.filter_by(user_id=user_id, channel_id=channel.id).first() if channel else None
+    channel_pk = channel.id
+    lock_user_channels(user_id)
+    channel = db.session.get(YoutubeChannel, channel_pk)
+    row = UserChannel.query.filter_by(user_id=user_id, channel_id=channel_pk).first()
     if row is not None and not row.hidden:
         abort(400, "이미 추가한 채널이에요.")
-    if channel is not None and channel.is_default:
+    if channel.is_default:
         if row is None:
             abort(400, "기본 채널에 이미 있어요.")
         db.session.delete(row)  # 숨겨 둔 기본 채널을 다시 보이게
         db.session.commit()
         return jsonify(channel_json(channel))
-    # ponytail: 개수 확인과 추가 사이에 잠그지 않는다 — 동시에 보내면 31개가 될 수 있다. 문제되면 사용자 잠금을 잡는다.
     if UserChannel.query.filter_by(user_id=user_id, hidden=False).count() >= MINE_LIMIT:
         abort(400, "채널은 30개까지 추가할 수 있어요.")
-    new_channel = channel is None
-    if new_channel:
-        channel = YoutubeChannel(
-            channel_id=info["channel_id"],
-            title=info["title"],
-            thumbnail_url=info["thumbnail_url"],
-            uploads_playlist_id=info["uploads_playlist_id"],
-            video_count=info["video_count"],
-            fetched_at=utcnow(),  # 차지해 두고 아래에서 바로 받는다
-        )
-        db.session.add(channel)
-        try:
-            db.session.flush()
-        except IntegrityError:  # 같은 채널을 다른 사용자가 방금 추가했다
-            db.session.rollback()
-            abort(400, "잠시 후 다시 시도해주세요.")
     if row is None:
-        db.session.add(UserChannel(user_id=user_id, channel_id=channel.id))
+        db.session.add(UserChannel(user_id=user_id, channel_id=channel_pk))
     else:
         row.hidden = False  # 기본 채널에서 빠진 채널을 숨겨 뒀던 행
     commit_or_duplicate("이미 추가한 채널이에요.")
-    if new_channel:
-        refresh_channel(channel, key, info)
-    return jsonify(channel_json(db.session.get(YoutubeChannel, channel.id), mine=True)), 201
+    if db.session.get(YoutubeChannel, channel_pk).fetched_at is None:
+        claim_and_refresh(user_id, key, channel_pk, info)
+    return jsonify(channel_json(db.session.get(YoutubeChannel, channel_pk), mine=True)), 201
 
 
 @bp.patch("/channels/<int:channel_pk>")
@@ -442,14 +505,14 @@ def delete_channel(channel_pk):
 @bp.cli.command("seed-default-channels")
 def seed_default_channels():
     """app/data/default_channels.json([{"channel_id": "UC…", "name": "메모용 이름"}])대로 기본 채널을 켜고, 목록에서 빠진 채널은 끈다.
-    YOUTUBE_API_KEY가 있으면 각 채널을 새로 받는다(채널당 3 units). 목록은 사용자가 채널을 확정하기 전까지 비어 있다."""
+    YOUTUBE_API_KEY가 있으면 6시간 안에 받지 않은 채널만 새로 받는다(채널당 3 units). 목록은 사용자가 채널을 확정하기 전까지 비어 있다."""
     try:
         entries = json.loads(DEFAULT_CHANNELS_FILE.read_text(encoding="utf-8"))
-        valid = isinstance(entries, list) and all(
-            isinstance(e, dict) and isinstance(e.get("channel_id"), str) and outbound.CHANNEL_ID.fullmatch(e["channel_id"]) for e in entries
-        )
-    except ValueError:
-        valid = False
+    except (OSError, ValueError) as e:
+        raise click.ClickException(f"default_channels.json을 읽지 못했어요({type(e).__name__}).") from None
+    valid = isinstance(entries, list) and all(
+        isinstance(e, dict) and isinstance(e.get("channel_id"), str) and outbound.CHANNEL_ID.fullmatch(e["channel_id"]) for e in entries
+    )
     if not valid:
         raise click.ClickException('default_channels.json은 [{"channel_id": "UC…", "name": "메모용 이름"}] 모양이어야 해요.')
     names = {e["channel_id"]: e.get("name") if isinstance(e.get("name"), str) else "" for e in entries}
@@ -458,15 +521,14 @@ def seed_default_channels():
         {"is_default": False}, synchronize_session=False
     )
     existing = {c.channel_id: c for c in YoutubeChannel.query.filter(YoutubeChannel.channel_id.in_(ids))}
-    channels = []
     for channel_id in ids:
         channel = existing.get(channel_id) or YoutubeChannel(channel_id=channel_id, title=names[channel_id].strip()[:100])
         channel.is_default = True
         db.session.add(channel)
-        channels.append(channel)
     db.session.commit()
     key = current_app.config["YOUTUBE_API_KEY"]
     if key:
-        for channel in channels:
-            refresh_channel(channel, key)
+        stale = db.session.query(YoutubeChannel.id).filter(YoutubeChannel.channel_id.in_(ids), is_stale(utcnow())).order_by(YoutubeChannel.id)
+        for (pk,) in stale.all():
+            refresh_channel(db.session.get(YoutubeChannel, pk), key)
     click.echo(f"기본 채널 {len(ids)}개를 맞췄어요.")

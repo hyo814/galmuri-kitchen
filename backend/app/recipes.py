@@ -1,8 +1,5 @@
-import base64
-import binascii
 import threading
 import time
-from datetime import datetime
 from urllib.parse import urlparse
 
 from flask import Blueprint, abort, g, jsonify, request
@@ -15,7 +12,7 @@ from .ingredients import seasoning_names, seoul_today, status_of, user_rules
 from .matching import match_prepared, prepare
 from .models import Ingredient, PublicRecipe, Recipe, db
 from .recipe_parse import ingredient_key
-from .validation import integer, iso_datetime, text
+from .validation import decode_cursor, encode_cursor, integer, iso_datetime, text
 
 bp = Blueprint("recipes", __name__, url_prefix="/api")
 
@@ -352,22 +349,6 @@ def recommendations():
     return jsonify(**body)
 
 
-def _encode_cursor(recipe):
-    return base64.urlsafe_b64encode(f"{iso_datetime(recipe.updated_at)}|{recipe.id}".encode()).decode()
-
-
-def _decode_cursor(value):
-    try:
-        raw = base64.urlsafe_b64decode(value.encode()).decode()
-        updated_iso, id_text = raw.rsplit("|", 1)
-        updated_at, cursor_id = datetime.fromisoformat(updated_iso), int(id_text)
-    except (ValueError, UnicodeDecodeError, binascii.Error):
-        abort(400, "잘못된 요청이에요.")
-    if not 0 < cursor_id <= 2**31 - 1:  # M4: DB int 컬럼 범위 밖(Postgres에서 500 나던 값) → 400
-        abort(400, "잘못된 요청이에요.")
-    return updated_at, cursor_id
-
-
 @bp.get("/recipes")
 @login_required
 def list_recipes():
@@ -376,14 +357,14 @@ def list_recipes():
     query = Recipe.query.filter_by(user_id=g.user.id)
     cursor = request.args.get("cursor")
     if cursor:
-        cursor_updated_at, cursor_id = _decode_cursor(cursor)
+        cursor_updated_at, cursor_id = decode_cursor(cursor)
         query = query.filter(
             or_(Recipe.updated_at < cursor_updated_at, and_(Recipe.updated_at == cursor_updated_at, Recipe.id < cursor_id))
         )
     recipes = query.order_by(Recipe.updated_at.desc(), Recipe.id.desc()).limit(limit + 1).all()
     has_more = len(recipes) > limit
     recipes = recipes[:limit]
-    next_cursor = _encode_cursor(recipes[-1]) if has_more else None
+    next_cursor = encode_cursor(recipes[-1].updated_at, recipes[-1].id) if has_more else None
     return jsonify(items=[list_json(r) for r in recipes], next_cursor=next_cursor)
 
 

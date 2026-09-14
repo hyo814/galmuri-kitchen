@@ -134,7 +134,7 @@
 3. 키 수정 → API 제한사항 → **키 제한 → YouTube Data API v3만** 선택(다른 API에 쓰이지 않게)
 4. Render 환경변수 `YOUTUBE_API_KEY`에 넣고 다시 배포
 5. 기본 채널이 확정되면 `backend/app/data/default_channels.json`에 `[{"channel_id": "UC…", "name": "메모용 이름"}]` 모양으로 적고 배포한 뒤 Render Shell에서 `flask seed-default-channels`(목록에서 뺀 채널은 기본 채널에서 꺼진다). **지금 파일은 사용자 확정 전이라 빈 목록(`[]`)이다.**
-6. 사용량: 무료 한도 하루 10,000 units. 채널 하나 새로 받기 3 units(channels·playlistItems·videos 각 1), 채널당 6시간마다·요청당 3채널까지, 채널 추가 3 units, 유튜브 링크 가져오기 1 unit. 전체 검색(search.list, 100 units)은 쓰지 않는다.
+6. 사용량: 무료 한도 하루 10,000 units. 채널 하나 새로 받기 3 units(channels·playlistItems·videos 각 1), 채널당 6시간마다·요청당 3채널까지, 채널 추가 3 units, 유튜브 링크 가져오기 1 unit. 앱이 사용자별 하루 새로 받기 20번·채널 추가 30번, 전체 24시간 추정 8,000 units로 막는다(`backend/app/videos.py`의 `DAILY_UNIT_BUDGET`). 전체 검색(search.list, 100 units)은 쓰지 않는다.
 
 ## 6. 폰에 앱처럼 설치 (갤럭시)
 1. Chrome에서 `https://<도메인>` 열기

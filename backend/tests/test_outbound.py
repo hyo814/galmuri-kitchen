@@ -608,16 +608,11 @@ def test_playlist_videos_skips_private_and_404_is_none(monkeypatch):
 
 
 def test_video_details_and_iso_duration(monkeypatch):
-    assert [outbound.iso_duration(v) for v in ("PT12M4S", "PT1H2S", "P1DT1S", "P0D", "PT", "12:04", None, "PT1.5S")] == [
-        724,
-        3602,
-        86401,
-        None,
-        None,
-        None,
-        None,
-        None,
-    ]
+    good = {"PT12M4S": 724, "PT1H2S": 3602, "PT1H2M3S": 3723, "P1DT1S": 86401}
+    assert {v: outbound.iso_duration(v) for v in good} == good
+    for bad in ("P0D", "PT", "P", "P1W", "12:04", None, "PT1.5S", "P99999999D", f"PT{2**31}S"):
+        assert outbound.iso_duration(bad) is None, bad
+    assert outbound.iso_duration(f"PT{2**31 - 1}S") == 2**31 - 1
     items = [
         {"id": VIDEO_ID, "contentDetails": {"duration": "PT12M4S"}, "snippet": {"description": "  재료 " + "가" * 600}},
         {"id": "abcdefghijk", "contentDetails": {"duration": "P0D"}, "snippet": {"description": ""}},
@@ -629,3 +624,11 @@ def test_video_details_and_iso_duration(monkeypatch):
     assert details["abcdefghijk"] == {"duration_seconds": None, "description": None}
     assert sent[0][0] == f"https://www.googleapis.com/youtube/v3/videos?part=contentDetails%2Csnippet&id={VIDEO_ID}%2Cabcdefghijk&key=k"
     assert outbound.video_details("k", []) == {}  # 요청 없음
+
+
+def test_youtube_thumbnails_only_from_youtube_image_hosts():
+    snippet = lambda url: {"thumbnails": {"default": {"url": url}}}  # noqa: E731
+    for url in ("https://i.ytimg.com/vi/a/mq.jpg", "https://yt3.ggpht.com/a=s88", "https://yt3.googleusercontent.com/a"):
+        assert outbound._thumbnail(snippet(url), ("default",)) == url
+    for url in ("http://i.ytimg.com/a.jpg", "https://evil.example/a.jpg", "https://i.ytimg.com.evil.example/a.jpg", "https://u@i.ytimg.com/a", "https://i.ytimg.com/" + "a" * 500):
+        assert outbound._thumbnail(snippet(url), ("default",)) is None

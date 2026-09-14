@@ -52,7 +52,7 @@ def no_youtube(monkeypatch):
         monkeypatch.setattr(outbound, name, fail_if_called)
 
 
-def make_channel(app, name, *, default=False, fetched_ago=timedelta(0), videos_=(), user_rows=()):
+def make_channel(app, name, *, default=False, fetched_ago=timedelta(0), videos_=(), user_rows=(), uploads=True):
     """videos_: [(이름, 며칠 전, 제목)], user_rows: [(user_id, hidden)]. 채널 pk를 돌려준다."""
     with app.app_context():
         now = utcnow()
@@ -60,7 +60,7 @@ def make_channel(app, name, *, default=False, fetched_ago=timedelta(0), videos_=
             channel_id=cid(name),
             title=f"채널 {name}",
             is_default=default,
-            uploads_playlist_id=f"UU{name}",
+            uploads_playlist_id=f"UU{name}" if uploads else None,
             fetched_at=None if fetched_ago is None else now - fetched_ago,
         )
         db.session.add(channel)
@@ -91,7 +91,9 @@ def make_channel(app, name, *, default=False, fetched_ago=timedelta(0), videos_=
         ("@cookhouse", ("handle", "@cookhouse")),
         ("https://www.youtube.com/@%EC%A7%91%EB%B0%A5%EC%97%B0%EA%B5%AC%EC%86%8C", ("handle", "@집밥연구소")),
         ("http://www.youtube.com/user/maangchi", ("username", "maangchi")),
-        ("https://www.youtube.com/c/maangchi", ("handle", "@maangchi")),
+        ("https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv/videos", ("id", "UCabcdefghijklmnopqrstuv")),
+        ("https://www.youtube.com/c/maangchi", None),  # 공식 조회 방법이 없다
+        ("https://www.youtube.com/c/%EC%A7%91%EB%B0%A5%EC%97%B0%EA%B5%AC%EC%86%8C", None),
         ("https://evil.example/@cookhouse", None),
         ("https://www.youtube.com/channel/UCshort", None),
         ("https://www.youtube.com/watch?v=dQw4w9WgXcQ", None),
@@ -215,7 +217,9 @@ def test_refresh_stale_limits_to_three_and_updates_fetched_at(on_client, on_logi
     asked.clear()
     on_client.get("/api/videos")
     assert asked == [cid("Q"), cid("P")]  # 나머지 둘만, 방금 받은 채널·신선한 채널(F)은 다시 받지 않는다
-    assert fresh
+    with on_app.app_context():
+        assert db.session.get(YoutubeChannel, fresh).title == "채널 F"  # 한 번도 새로 받지 않았다
+        assert AiCall.query.filter_by(kind="video_refresh").count() == 5  # 새로 받기마다 기록(실패 포함)
 
 
 def test_refresh_replaces_videos_sets_duration_and_removes_gone_channel_videos(on_app, monkeypatch):
@@ -254,6 +258,9 @@ def test_refresh_replaces_videos_sets_duration_and_removes_gone_channel_videos(o
     with on_app.app_context():
         videos.refresh_channel(db.session.get(YoutubeChannel, pk), "k")
         assert YoutubeVideo.query.count() == 0
+        channel = db.session.get(YoutubeChannel, pk)
+        assert (channel.thumbnail_url, channel.video_count, channel.uploads_playlist_id) == (None, None, None)
+        assert videos.channel_json(channel)["unavailable"] is True
 
     make_channel(on_app, "B", default=True, videos_=[("b1", 1, "B")])
     monkeypatch.setattr(outbound, "channel_info", lambda key, channel_id: {"channel_id": channel_id, "title": "B", "thumbnail_url": None, "uploads_playlist_id": "UUb", "video_count": None})
@@ -316,7 +323,7 @@ def test_add_channel(on_client, on_login, on_app, monkeypatch):
     assert lookups == [{"handle": "@cookhouse"}]
     assert [v["title"] for v in on_client.get("/api/videos").get_json()["items"]] == ["첫 영상"]  # 바로 받아 둠
     with on_app.app_context():
-        assert [c.kind for c in AiCall.query.filter_by(user_id=me)] == ["link_fetch"]
+        assert [c.kind for c in AiCall.query.filter_by(user_id=me).order_by(AiCall.id)] == ["channel_add", "link_fetch", "video_refresh"]
 
     res = on_client.post("/api/channels", json={"url": "@cookhouse"})
     assert (res.status_code, res.get_json()["error"]) == (400, "이미 추가한 채널이에요.")
@@ -325,7 +332,10 @@ def test_add_channel(on_client, on_login, on_app, monkeypatch):
     assert len(lookups) == 2  # 채널 ID로 알고 있는 채널은 찾지 않는다
 
     res = on_client.post("/api/channels", json={"url": "https://recipe.example.com/@cookhouse"})
-    assert (res.status_code, res.get_json()["error"]) == (400, "채널 링크(youtube.com/@이름)를 붙여 넣어주세요.")
+    assert (res.status_code, res.get_json()["error"]) == (400, videos.BAD_LINK)
+    res = on_client.post("/api/channels", json={"url": "https://www.youtube.com/c/cookhouse"})
+    assert (res.status_code, res.get_json()["error"]) == (400, videos.BAD_LINK)
+    assert "@이름" in videos.BAD_LINK and "/channel/" in videos.BAD_LINK
 
     monkeypatch.setattr(outbound, "channel_info", lambda key, **kw: None)
     res = on_client.post("/api/channels", json={"url": "@nobody"})
@@ -367,7 +377,7 @@ def test_add_channel_default_cap_and_known_channel(on_client, on_login, on_app, 
     res = on_client.post("/api/channels", json={"url": "@one-more"})
     assert (res.status_code, res.get_json()["error"]) == (400, "채널은 30개까지 추가할 수 있어요.")
     with on_app.app_context():
-        assert YoutubeChannel.query.filter_by(channel_id=cid("NEW")).count() == 0
+        assert UserChannel.query.filter_by(user_id=me, hidden=False).count() == 30
 
 
 def test_add_channel_counts_toward_link_fetch_limit(on_client, on_login, on_app, monkeypatch):
@@ -384,6 +394,7 @@ def test_channels_list_mine_first_then_defaults(on_client, on_login, on_app, no_
     me = on_login()
     make_channel(on_app, "D1", default=True)
     make_channel(on_app, "D2", default=True, user_rows=[(me, True)])
+    make_channel(on_app, "D3", default=True, uploads=False)  # 새로 받아 보니 없어진 채널
     second = make_channel(on_app, "M2")
     first = make_channel(on_app, "M1")
     with on_app.app_context():
@@ -391,11 +402,12 @@ def test_channels_list_mine_first_then_defaults(on_client, on_login, on_app, no_
         db.session.add(UserChannel(user_id=me, channel_id=first))
         db.session.commit()
     body = on_client.get("/api/channels").get_json()
-    assert [(c["title"], c["is_default"], c["hidden"]) for c in body["items"]] == [
-        ("채널 M2", False, False),
-        ("채널 M1", False, False),
-        ("채널 D1", True, False),
-        ("채널 D2", True, True),
+    assert [(c["title"], c["is_default"], c["hidden"], c["unavailable"]) for c in body["items"]] == [
+        ("채널 M2", False, False, False),
+        ("채널 M1", False, False, False),
+        ("채널 D1", True, False, False),
+        ("채널 D2", True, True, False),
+        ("채널 D3", True, False, True),
     ]
     assert (body["mine_count"], body["mine_limit"], body["sample"]) == (2, 30, False)
 
@@ -407,6 +419,8 @@ def test_hide_and_unhide_default_channel(on_client, on_login, on_app, no_youtube
     res = on_client.patch(f"/api/channels/{default}", json={"hidden": True})
     assert res.status_code == 200 and res.get_json()["hidden"] is True
     assert on_client.patch(f"/api/channels/{default}", json={"hidden": True}).status_code == 200  # 두 번 눌러도 된다
+    with on_app.app_context():
+        assert UserChannel.query.filter_by(user_id=me, channel_id=default).count() == 1
     assert on_client.get("/api/videos").get_json()["items"] == []
     res = on_client.patch(f"/api/channels/{default}", json={"hidden": False})
     assert res.status_code == 200 and res.get_json()["hidden"] is False
@@ -414,6 +428,8 @@ def test_hide_and_unhide_default_channel(on_client, on_login, on_app, no_youtube
     assert on_client.patch(f"/api/channels/{mine}", json={"hidden": True}).status_code == 404
     assert on_client.patch(f"/api/channels/{default}", json={"hidden": "yes"}).status_code == 400
     assert on_client.patch("/api/channels/99999999999", json={"hidden": True}).status_code == 404
+    mine_default = make_channel(on_app, "MD", default=True, user_rows=[(me, False)])  # 내가 추가한 뒤 기본 채널이 됨(내 채널 묶음)
+    assert on_client.patch(f"/api/channels/{mine_default}", json={"hidden": True}).status_code == 404
 
 
 def test_delete_my_channel_and_404_for_default_or_other_user(on_client, on_login, on_app, no_youtube):
@@ -451,11 +467,25 @@ def test_seed_default_channels_cli(make_app, monkeypatch, tmp_path, no_youtube):
         new = YoutubeChannel.query.filter_by(channel_id=cid("NEW")).one()
         assert (new.is_default, new.title, new.fetched_at) == (True, "새 채널", None)
 
+    with app.app_context():
+        count = YoutubeChannel.query.count()
+    assert app.test_cli_runner().invoke(args=["seed-default-channels"]).exit_code == 0  # 다시 실행해도 같다
+    with app.app_context():
+        assert YoutubeChannel.query.count() == count
+
     refreshed = []
     monkeypatch.setattr(outbound, "channel_info", lambda key, channel_id: refreshed.append(channel_id))  # None → 채널 없음
     app.config["YOUTUBE_API_KEY"] = "k"
     assert app.test_cli_runner().invoke(args=["seed-default-channels"]).exit_code == 0
-    assert refreshed == [cid("KEEP"), cid("NEW")]
+    assert refreshed == [cid("NEW")]  # KEEP은 6시간 안에 받았다
+
+    data.write_text("[{", encoding="utf-8")
+    result = app.test_cli_runner().invoke(args=["seed-default-channels"])
+    assert result.exit_code != 0 and "읽지 못했어요(JSONDecodeError)" in result.output
+    monkeypatch.setattr(videos, "DEFAULT_CHANNELS_FILE", tmp_path / "missing.json")
+    result = app.test_cli_runner().invoke(args=["seed-default-channels"])
+    assert result.exit_code != 0 and "읽지 못했어요(FileNotFoundError)" in result.output
+    monkeypatch.setattr(videos, "DEFAULT_CHANNELS_FILE", data)
 
     data.write_text('[{"channel_id": "not-an-id"}]', encoding="utf-8")
     result = app.test_cli_runner().invoke(args=["seed-default-channels"])
@@ -466,3 +496,189 @@ def test_shipped_default_channels_file_is_empty():
     import json
 
     assert json.loads(videos.DEFAULT_CHANNELS_FILE.read_text(encoding="utf-8")) == []  # 사용자 확정 전
+
+
+# --- 리뷰 반영: 쿼터 예산·첫 페이지만 새로 받기·페이지 경계 ---
+
+
+def published(app, pk, name, when, title=None):
+    with app.app_context():
+        video = YoutubeVideo(video_id=vid(name), channel_id=pk, title=title or name, published_at=when, fetched_at=utcnow())
+        db.session.add(video)
+        db.session.commit()
+        return video.id
+
+
+def titles(res):
+    assert res.status_code == 200, res.get_json()
+    return [v["title"] for v in res.get_json()["items"]]
+
+
+def test_refresh_budget_per_user_and_global_serves_cache(on_client, on_login, on_app, monkeypatch, no_youtube):
+    me = on_login()
+    with on_app.app_context():
+        other = User(provider="test", provider_id="other", nickname="o")
+        db.session.add(other)
+        db.session.commit()
+        other_id = other.id
+    make_channel(on_app, "A", default=True, fetched_ago=timedelta(hours=7), videos_=[("a1", 1, "캐시된 영상")])
+
+    with on_app.app_context():  # 사용자별 하루 20번을 다 썼다
+        db.session.add_all([AiCall(user_id=me, kind="video_refresh", created_at=utcnow()) for _ in range(20)])
+        db.session.commit()
+    assert titles(on_client.get("/api/videos")) == ["캐시된 영상"]  # 오류 없이 캐시
+
+    with on_app.app_context():  # 내 기록은 지우고, 다른 사용자들이 전체 예산을 다 썼다
+        AiCall.query.filter_by(user_id=me).delete()
+        db.session.add_all([AiCall(user_id=other_id, kind=kind, created_at=utcnow()) for kind in ("video_refresh", "channel_add")])
+        db.session.commit()
+    monkeypatch.setattr(videos, "DAILY_UNIT_BUDGET", 8)  # 3 + 3 쓰고 남은 2 < 3
+    assert titles(on_client.get("/api/videos")) == ["캐시된 영상"]
+    res = on_client.post("/api/channels", json={"url": "@cookhouse"})  # 처음 보는 채널 찾기도 막는다
+    assert (res.status_code, res.get_json()["error"]) == (503, "지금은 채널을 추가할 수 없어요.")
+
+    monkeypatch.setattr(videos, "DAILY_UNIT_BUDGET", 9)  # 딱 맞으면 받는다
+    calls = []
+    monkeypatch.setattr(outbound, "channel_info", lambda key, channel_id: calls.append(channel_id))
+    on_client.get("/api/videos")
+    assert calls == [cid("A")]
+
+
+def test_video_rows_not_counted_as_ai_use(client, login, app):
+    user = login()
+    with app.app_context():
+        db.session.add_all([AiCall(user_id=user.id, kind=kind, created_at=utcnow()) for kind in ("video_refresh", "channel_add", "link_fetch")])
+        db.session.commit()
+    usage = client.get("/api/ai-usage").get_json()
+    assert (usage["scan"]["used"], usage["recipe"]["used"]) == (0, 0)
+    with app.app_context():
+        assert all(c.model is None and c.input_tokens is None for c in AiCall.query)
+
+
+def test_channel_add_daily_limit_counts_every_add(on_client, on_login, on_app, monkeypatch):
+    me = on_login()
+    known = make_channel(on_app, "KNOWN")
+    monkeypatch.setattr(outbound, "channel_info", fail_if_called)
+    assert on_client.post("/api/channels", json={"url": f"youtube.com/channel/{cid('KNOWN')}"}).status_code == 201
+    assert on_client.delete(f"/api/channels/{known}").status_code == 204
+    with on_app.app_context():
+        assert AiCall.query.filter_by(user_id=me, kind="channel_add").count() == 1  # 캐시된 채널 추가도 센다
+        earlier = utcnow() - timedelta(minutes=5)
+        db.session.add_all([AiCall(user_id=me, kind="channel_add", created_at=earlier) for _ in range(29)])
+        db.session.commit()
+    res = on_client.post("/api/channels", json={"url": f"youtube.com/channel/{cid('KNOWN')}"})
+    assert (res.status_code, res.get_json()["error"]) == (429, "오늘 채널 추가는 30번까지 쓸 수 있어요. 내일 다시 써주세요.")
+
+
+def test_refresh_stops_at_request_deadline(on_client, on_login, on_app, monkeypatch):
+    on_login()
+    for name in ("P", "Q"):
+        make_channel(on_app, name, default=True, fetched_ago=None)
+    clock = [1000.0]
+    monkeypatch.setattr(videos.time, "monotonic", lambda: clock[0])
+    asked = []
+
+    def slow_channel_info(key, channel_id):
+        asked.append(channel_id)
+        clock[0] += videos.REQUEST_SECONDS + 1
+
+    monkeypatch.setattr(outbound, "channel_info", slow_channel_info)
+    assert on_client.get("/api/videos").status_code == 200
+    assert asked == [cid("P")]
+
+
+def test_refresh_only_on_first_page(on_client, on_login, on_app, no_youtube):
+    on_login()
+    pk = make_channel(on_app, "A", default=True, videos_=[("a1", 1, "하나"), ("a2", 2, "둘")])
+    first = on_client.get("/api/videos?limit=1").get_json()
+    with on_app.app_context():
+        db.session.get(YoutubeChannel, pk).fetched_at = None  # 받아야 할 채널이지만
+        old = YoutubeVideo.query.filter_by(video_id=vid("a1")).one()
+        old.fetched_at = utcnow() - timedelta(days=31)
+        db.session.commit()
+    assert titles(on_client.get(f"/api/videos?limit=1&cursor={first['next_cursor']}")) == ["둘"]  # 유튜브를 부르지 않는다
+    with on_app.app_context():
+        assert YoutubeVideo.query.count() == 2  # 오래된 영상 지우기도 첫 페이지에서만(목록에서는 빠진다)
+
+
+def test_videos_pagination_ties_filters_and_limits(on_client, on_login, on_app, no_youtube):
+    on_login()
+    a = make_channel(on_app, "A", default=True)
+    b = make_channel(on_app, "B", default=True)
+    same = utcnow() - timedelta(days=1)
+    for i in range(3):
+        published(on_app, a, f"tie{i}", same, f"같은 시각 찌개 {i}")
+    published(on_app, b, "b1", same - timedelta(hours=1), "B 찌개")
+    published(on_app, a, "a9", same - timedelta(hours=2), "A 볶음")
+
+    def all_pages(query):
+        got, cursor = [], None
+        while True:
+            body = on_client.get(f"/api/videos?limit=1{query}" + (f"&cursor={cursor}" if cursor else "")).get_json()
+            got += [v["title"] for v in body["items"]]
+            cursor = body["next_cursor"]
+            if not cursor:
+                return got
+
+    assert all_pages("") == ["같은 시각 찌개 2", "같은 시각 찌개 1", "같은 시각 찌개 0", "B 찌개", "A 볶음"]
+    assert all_pages("&q=찌개") == ["같은 시각 찌개 2", "같은 시각 찌개 1", "같은 시각 찌개 0", "B 찌개"]
+    assert all_pages(f"&channel={a}") == ["같은 시각 찌개 2", "같은 시각 찌개 1", "같은 시각 찌개 0", "A 볶음"]
+
+    for i in range(50):
+        published(on_app, b, f"many{i}", same - timedelta(days=1, minutes=i))
+    count = lambda limit: len(on_client.get(f"/api/videos?limit={limit}").get_json()["items"])  # noqa: E731
+    assert (count(0), count(51), count("abc"), count(-5)) == (1, 50, 30, 1)
+
+
+def test_videos_search_backslash_is_literal(on_client, on_login, on_app, no_youtube):
+    on_login()
+    make_channel(on_app, "A", default=True, videos_=[("a1", 1, "역슬래시 \\ 제목"), ("a2", 2, "보통 제목")])
+    assert titles(on_client.get("/api/videos", query_string={"q": "\\"})) == ["역슬래시 \\ 제목"]
+
+
+def test_old_video_detail_is_404(on_client, on_login, on_app, no_youtube):
+    on_login()
+    make_channel(on_app, "A", default=True, videos_=[("a1", 1, "오래됨")])
+    with on_app.app_context():
+        video = YoutubeVideo.query.one()
+        video.fetched_at = utcnow() - timedelta(days=31)
+        db.session.commit()
+        video_pk = video.id
+    assert on_client.get(f"/api/videos/{video_pk}").status_code == 404
+
+
+def test_refresh_skips_video_already_under_another_channel(on_app, monkeypatch):
+    make_channel(on_app, "OTHER", videos_=[("dup", 1, "다른 채널 영상")])
+    pk = make_channel(on_app, "A", default=True)
+    when = utcnow() - timedelta(days=1)
+    monkeypatch.setattr(outbound, "playlist_videos", lambda key, playlist_id: [
+        {"video_id": vid("dup"), "title": "겹침", "thumbnail_url": None, "published_at": when},
+        {"video_id": vid("mine"), "title": "내 영상", "thumbnail_url": None, "published_at": when},
+    ])
+    monkeypatch.setattr(outbound, "video_details", lambda key, ids: {})
+    info = {"channel_id": cid("A"), "title": "A", "thumbnail_url": None, "uploads_playlist_id": "UUa", "video_count": 2}
+    with on_app.app_context():
+        videos.refresh_channel(db.session.get(YoutubeChannel, pk), "k", info)
+        assert {v.video_id: v.channel_id for v in YoutubeVideo.query.filter(YoutubeVideo.channel_id == pk)} == {vid("mine"): pk}
+        assert YoutubeVideo.query.filter_by(video_id=vid("dup")).one().title == "다른 채널 영상"
+
+
+def test_add_same_new_channel_race_reuses_row(on_client, on_login, on_app, monkeypatch):
+    on_login()
+    existing = make_channel(on_app, "NEW", fetched_ago=timedelta(0))  # 다른 사용자가 방금 추가한 행
+    real_find, misses = videos.find_channel, [1]
+
+    def racy_find(channel_id):  # 우리 요청이 확인할 때는 아직 없었다
+        if misses:
+            misses.pop()
+            return None
+        return real_find(channel_id)
+
+    monkeypatch.setattr(videos, "find_channel", racy_find)
+    monkeypatch.setattr(outbound, "channel_info", lambda key, **kw: channel_found())
+    for name in ("playlist_videos", "video_details"):
+        monkeypatch.setattr(outbound, name, fail_if_called)  # 이미 받아 둔 채널이라 새로 받지 않는다
+    res = on_client.post("/api/channels", json={"url": "@cookhouse"})
+    assert res.status_code == 201 and res.get_json()["id"] == existing
+    with on_app.app_context():
+        assert YoutubeChannel.query.filter_by(channel_id=cid("NEW")).count() == 1

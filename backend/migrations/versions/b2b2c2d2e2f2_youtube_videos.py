@@ -62,11 +62,13 @@ def upgrade():
         sa.UniqueConstraint("video_id", name=op.f("uq_youtube_videos_video_id")),
     )
     op.create_index(op.f("ix_youtube_videos_channel_id"), "youtube_videos", ["channel_id"], unique=False)
-    op.create_index(op.f("ix_youtube_videos_published_at"), "youtube_videos", ["published_at"], unique=False)
+    op.create_index(op.f("ix_youtube_videos_fetched_at"), "youtube_videos", ["fetched_at"], unique=False)
+    op.create_index("ix_youtube_videos_published_at_id", "youtube_videos", ["published_at", "id"], unique=False)
 
 
 def downgrade():
-    op.drop_index(op.f("ix_youtube_videos_published_at"), table_name="youtube_videos")
+    op.drop_index("ix_youtube_videos_published_at_id", table_name="youtube_videos")
+    op.drop_index(op.f("ix_youtube_videos_fetched_at"), table_name="youtube_videos")
     op.drop_index(op.f("ix_youtube_videos_channel_id"), table_name="youtube_videos")
     op.drop_table("youtube_videos")
     op.drop_index(op.f("ix_user_channels_user_id"), table_name="user_channels")
