@@ -69,6 +69,7 @@
 | `FOOD_NUTRITION_API_KEY` | 선택 | 영양 계산기 구현 후 | 식약처 공공데이터포털(식품영양성분 DB) |
 | `YOUTUBE_API_KEY` | 선택 | 3단계 요리 채널 영상·유튜브 링크 가져오기(없으면 개발 모드는 예시 영상, 운영은 영상 칸 숨김). 설정은 아래 5-2 | Google Cloud Console(YouTube Data API v3) |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | 선택 | 장보기 메모 사진. **R2 연결은 아직 안 됨** — 지금 운영에서는 값이 있든 없든 사진 올리기·보기가 503(`DEV_MODE`가 아니면 로컬 디스크에 두지 않는다 — Render 디스크는 배포 때 지워진다). 연결할 때: 비공개 버킷, 네 값 설정, 오프라인 사진 보관을 위해 버킷 CORS에 앱 주소 GET 허용. 로컬 개발은 값 없이 `backend/uploads/`(gitignore) | Cloudflare 대시보드 R2 |
+| `DEMO_LOGIN` | 선택 | `1`이면 로그인 화면에 `로그인 없이 체험하기`(심사·둘러보기용). 누를 때마다 예시 재고가 든 새 계정을 만들고 24시간 뒤 지운다. 설정은 아래 5-3 | 직접 설정 |
 | `DEV_MODE` | 로컬 전용 | 로컬 개발 | 운영(Render)에는 **넣지 않는다** |
 
 키가 비어 있으면 개발 모드에서는 샘플 데이터로 동작(각 기능 구현 시 적용), 운영에서는 해당 기능을 숨긴다.
@@ -136,6 +137,17 @@
 4. Render 환경변수 `YOUTUBE_API_KEY`에 넣고 다시 배포
 5. 기본 채널이 확정되면 `backend/app/data/default_channels.json`에 `[{"channel_id": "UC…", "name": "메모용 이름"}]` 모양으로 적고 배포한 뒤 Render Shell에서 `flask seed-default-channels`(목록에서 뺀 채널은 기본 채널에서 꺼진다). **지금 파일은 사용자 확정 전이라 빈 목록(`[]`)이다.**
 6. 사용량: 무료 한도 하루 10,000 units. 채널 하나 새로 받기 3 units(channels·playlistItems·videos 각 1), 채널당 6시간마다·요청당 3채널까지, 채널 추가 3 units, 유튜브 링크 가져오기 1 unit. 앱이 사용자별 하루 새로 받기 20번·채널 추가 30번, 전체 24시간 추정 8,000 units로 막는다(`backend/app/videos.py`의 `DAILY_UNIT_BUDGET`). 전체 검색(search.list, 100 units)은 쓰지 않는다.
+
+## 5-3. 체험하기 계정 (`DEMO_LOGIN=1`)
+1. Render 웹 서비스 환경변수에 `DEMO_LOGIN` = `1`을 넣고 다시 배포한다. `DEV_MODE`와 상관없이 운영에서 켤 수 있다. 끄려면 변수를 지운다.
+2. 체험 계정은 `provider=demo`, 닉네임 `체험 사용자`로 만들어지고 예시 재고 10개(두부 D-1·대파 D-2 포함)·필수품 3개·레시피 2개·양념 비율 1개가 들어 있다.
+3. 막는 장치(`backend/app/demo.py`): 같은 IP에서 1시간에 10개, 24시간 안 체험 계정 전체 500개. IP는 저장하지 않고 `SECRET_KEY`로 서명한 해시 앞 16자만 계정 식별값에 붙인다. 체험 계정의 사진 인식·AI 레시피(링크 가져오기 포함) 하루 한도는 각각 3번이다.
+4. **지우기 Cron Job:** New → **Cron Job** → 같은 GitHub 저장소, Language **Docker**, Region Singapore
+   - Schedule: `0 * * * *` (한 시간마다)
+   - Command: `flask --app app purge-demo-users`
+   - Environment Variables: 웹 서비스와 같은 `SECRET_KEY`·`DATABASE_URL`(Environment Group으로 묶으면 편하다)
+   - 24시간 지난 체험 계정과 그 데이터(재고·레시피·AI 호출 기록 등, 모두 `ON DELETE CASCADE`)를 지운다. Cron Job이 없어도 체험하기를 누를 때마다 만료 계정을 50개씩 함께 지운다.
+5. IP 한도는 Render 프록시가 붙이는 `X-Forwarded-For`의 마지막 값(프록시 한 단계, `ProxyFix(x_for=1)`)을 본다. 배포 후 서로 다른 기기에서 눌렀는데 곧바로 `체험하기를 너무 많이 눌렀어요`가 나오면 프록시 단계 수가 다른 것이니 `backend/app/__init__.py`의 `x_for` 값을 확인한다.
 
 ## 6. 폰에 앱처럼 설치 (갤럭시)
 1. Chrome에서 `https://<도메인>` 열기

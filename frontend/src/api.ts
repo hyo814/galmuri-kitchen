@@ -50,8 +50,8 @@ export type ScanMode = "on" | "sample" | "off";
 export interface User {
   id: number;
   nickname: string;
-  /** 로그인한 방법(더보기 계정 묶음 표시용) */
-  provider: "kakao" | "naver" | "google" | "dev";
+  /** 로그인한 방법(더보기 계정 묶음 표시용). demo는 로그인 없이 체험하기로 만든 하루짜리 계정 */
+  provider: "kakao" | "naver" | "google" | "dev" | "demo";
   scan: ScanMode;
   scan_limit: number;
   recipe_limit: number;
@@ -83,6 +83,8 @@ export interface ScanResult {
 export interface AuthOptions {
   providers: string[];
   dev_login: boolean;
+  /** 로그인 화면의 '로그인 없이 체험하기' */
+  demo_login: boolean;
 }
 
 export interface IngredientInput {

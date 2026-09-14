@@ -79,6 +79,15 @@ def get_owned_or_404(model, obj_id):
     return obj
 
 
+DEMO_AI_DAILY_LIMIT = 3  # 체험 계정(demo.py)의 사진 인식·AI 레시피(링크 가져오기 포함) 하루 한도
+
+
+def ai_daily_limit(user, key):
+    """AI_DAILY_SCAN_LIMIT·AI_DAILY_RECIPE_LIMIT 설정값. 체험 계정은 DEMO_AI_DAILY_LIMIT보다 크지 않게."""
+    limit = current_app.config[key]
+    return min(limit, DEMO_AI_DAILY_LIMIT) if user.provider == "demo" else limit
+
+
 def user_json(user):
     """/api/me와 개발용 로그인이 같은 모양을 돌려준다. scan은 사진으로 추가·AI 레시피 입구 표시용(같은 키로 판단한다).
     ponytail: 이름이 scan이라 헷갈리면 ai로 바꾼다. videos는 영상 칸 표시용."""
@@ -86,10 +95,10 @@ def user_json(user):
     return jsonify(
         id=user.id,
         nickname=user.nickname,
-        provider=user.provider,  # 더보기 계정 묶음의 '카카오로 로그인했어요' 표시용 (스펙 27절)
+        provider=user.provider,  # 더보기 계정 묶음의 '카카오로 로그인했어요' 표시용 (스펙 27절). demo는 체험 계정
         scan=scan_mode(),
-        scan_limit=current_app.config["AI_DAILY_SCAN_LIMIT"],
-        recipe_limit=current_app.config["AI_DAILY_RECIPE_LIMIT"],
+        scan_limit=ai_daily_limit(user, "AI_DAILY_SCAN_LIMIT"),
+        recipe_limit=ai_daily_limit(user, "AI_DAILY_RECIPE_LIMIT"),
         videos=video_mode(),
         # 쇼핑몰 링크는 화면(storeLinks.ts)에서 만들므로 제휴 ID를 넘긴다. 값 있는 것만(스펙 16절)
         shop_affiliates={k: v for k, v in {"coupang": current_app.config["COUPANG_PARTNERS_ID"]}.items() if v},
@@ -114,6 +123,7 @@ def auth_options():
     return jsonify(
         providers=[name for name in PROVIDERS if registry.create_client(name)],
         dev_login=current_app.config["DEV_MODE"],
+        demo_login=current_app.config["DEMO_LOGIN"],
     )
 
 

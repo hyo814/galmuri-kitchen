@@ -6,7 +6,7 @@ from flask import Blueprint, abort, current_app, g, jsonify, request
 from sqlalchemy import text
 
 from . import ai
-from .auth import login_required
+from .auth import ai_daily_limit, login_required
 from .ingredients import SEOUL, seoul_today
 from .locations import KINDS
 from .models import AiCall, db, utcnow
@@ -162,7 +162,7 @@ def scan():
     if mode == "sample":
         return jsonify(**clean_result(kind, ai.sample_result(kind, today), today), sample=True)
 
-    check_ai_limits(g.user.id, SCAN_KINDS, current_app.config["AI_DAILY_SCAN_LIMIT"], "사진 인식은")
+    check_ai_limits(g.user.id, SCAN_KINDS, ai_daily_limit(g.user, "AI_DAILY_SCAN_LIMIT"), "사진 인식은")
     # 업로드 검증(kind·사진 유무·형식)에서 걸린 요청은 세지 않는다.
     call = start_ai_call(g.user.id, kind)
     try:
