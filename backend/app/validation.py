@@ -1,5 +1,5 @@
 import re
-from datetime import date
+from datetime import date, timezone
 
 from flask import abort
 from sqlalchemy.exc import IntegrityError
@@ -40,3 +40,8 @@ def iso_date(value):
         return date.fromisoformat(value)
     except ValueError:
         return None
+
+
+def iso_datetime(value):
+    """시간대가 붙은 ISO 문자열. SQLite는 tz 없이 돌려주므로 UTC로 본다."""
+    return (value if value.tzinfo else value.replace(tzinfo=timezone.utc)).isoformat()
