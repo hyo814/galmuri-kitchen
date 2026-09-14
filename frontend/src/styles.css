@@ -4049,3 +4049,22 @@ button.sh-offline svg:last-child {
 .provider-logo {
   flex: none;
 }
+
+/* 로그인 화면: 지난번에 쓴 소셜 로그인 버튼 위 말풍선(계정이 로그인 방법마다 따로라서) */
+.login-provider {
+  position: relative;
+}
+.login-last {
+  position: absolute;
+  top: -10px;
+  right: 16px;
+  z-index: 1;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--inverse-bg);
+  color: var(--inverse-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+  pointer-events: none;
+}

@@ -4,7 +4,7 @@ import Splash from "./components/Splash";
 import TabBar from "./components/TabBar";
 import ComingSoon from "./pages/ComingSoon";
 import Fridge from "./pages/Fridge";
-import Login from "./pages/Login";
+import Login, { rememberLoginProvider } from "./pages/Login";
 import More from "./pages/More";
 import RecipeAi, { RecipeAiDetail, resetAiRecipes } from "./pages/RecipeAi";
 import RecipeDetail from "./pages/RecipeDetail";
@@ -157,6 +157,7 @@ export default function App() {
 
   // 기기 데이터가 이 사용자 것인지 확인한 뒤에 화면을 연다(다른 사용자의 대기 변경을 보내지 않게)
   const signIn = useCallback((me: User) => {
+    rememberLoginProvider(me.provider);
     void rememberUser(me).then(() => {
       setUser(me);
       startShopping();
