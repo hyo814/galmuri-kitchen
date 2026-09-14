@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   defaultPlanName, weekStarts, weekDates, initialWeek, rangeText, dayHead, slotDateText, monthGrid,
   copyMaxWeeks, copyTarget, pickPlan, daysBetween, dateWithDow, planEnd, slotsOutside, weekOf,
-  emptySlotCount, kcalText, urgentChip,
+  emptySlotCount, kcalText, urgentChip, buyDayText, previewDetail,
 } from "../src/meals/plan.ts";
 
 // 식단 이름: 월요일 시작 주, 1일이 든 주가 첫째. 28일 이상은 "N월 식단"
@@ -88,5 +88,22 @@ assert.equal(urgentChip("두부", "2026-09-15", "2026-09-14"), "두부 D-1");
 assert.equal(urgentChip("대파", "2026-09-14", "2026-09-14"), "대파 D-0");
 assert.equal(urgentChip("우유", "2026-09-10", "2026-09-14"), "우유 D-0");
 assert.equal(urgentChip("양파", null, "2026-09-14"), "양파");
+
+// 장보기 미리보기 줄 설명·살 날 태그(Task 9, 시안 ShoppingPreview 문구 그대로)
+const R = (need, have, reason = null, need_extra = []) => ({
+  name: "", quantity: 1, unit: "개", planned_on: "2026-09-14", reason, need_extra,
+  need: need.map(([quantity, unit]) => ({ quantity, unit })), have: have.map(([quantity, unit]) => ({ quantity, unit })),
+});
+assert.equal(previewDetail(R([[2, "모"]], [[1, "모"]])), "2모 필요 · 1모 있어요"); // 두부
+assert.equal(previewDetail(R([[2, "개"]], [])), "2개 필요 · 없어요"); // 청양고추
+assert.equal(previewDetail(R([[2, "판"]], [[8, "개"]])), "있음 8개 · 필요 2판"); // 달걀(단위가 달라요)
+assert.equal(previewDetail(R([[4, "대"]], [[1, "단"]])), "있음 1단 · 필요 4대"); // 대파
+assert.equal(previewDetail(R([[0.5, "포기"]], [[1, "포기"]], "enough")), "½포기 필요 · 1포기 있어요"); // 김치
+assert.equal(previewDetail(R([[1, "개"]], [], "listed")), "장보기 목록에 이미 있어서 건너뛰어요"); // 양파
+assert.equal(previewDetail(R([], [], null, ["약간"])), "약간 필요 · 없어요"); // 소금(재고 없음)
+assert.equal(previewDetail(R([], [[1, "병"]], "enough", ["2큰술"])), "2큰술 필요 · 1병 있어요"); // 간장
+assert.equal(buyDayText("2026-09-14", "2026-09-14"), "오늘 사요");
+assert.equal(buyDayText("2026-09-13", "2026-09-14"), "오늘 사요");
+assert.equal(buyDayText("2026-09-16", "2026-09-14"), "16일(수)에 사요");
 
 console.log("check-meals: ok");

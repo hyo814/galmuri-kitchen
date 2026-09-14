@@ -383,6 +383,7 @@ export function sourceTag(item: { source: string; source_label: string | null })
     case "urgent": return { text: "곧 떨어져요", tone: "warn" };
     case "staple": return { text: "필수품", tone: "" };
     case "memo": return { text: "메모 사진", tone: "" };
-    default: return null; // ponytail: meal_plan 태그 문구는 4b 식단 시안에서 정한다
+    case "meal_plan": return { text: "식단", tone: "info" };
+    default: return null;
   }
 }

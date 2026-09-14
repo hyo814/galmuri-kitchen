@@ -4876,3 +4876,84 @@ button.sh-offline svg:last-child {
 .page:has(.ml-cta-error) {
   padding-bottom: calc(200px + var(--tabbar-h) + env(safe-area-inset-bottom));
 }
+
+/* 장보기 목록 만들기 (시안 ShoppingPreview). 체크 버튼·태그는 .sh-check·.sh-tag를 쓴다 */
+.sh-group.ml-pgroup {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ml-pgroup small {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.ml-prow {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 4px;
+  min-height: 72px;
+  padding: 8px 16px 8px 6px;
+  border-top: 1px solid var(--line);
+}
+
+.list > .ml-prow:first-child {
+  border-top: 0;
+}
+
+.ml-pline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ml-pline .ml-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ml-take {
+  flex-shrink: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent-strong);
+  white-space: nowrap;
+}
+
+.ml-prow .row-sub {
+  color: var(--text-2);
+  word-break: keep-all;
+}
+
+.ml-prow .sh-meta {
+  margin-top: 3px;
+}
+
+.ml-prow.off .ml-title {
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.ml-prow.off .ml-take,
+.ml-prow.skip .ml-take {
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+.ml-prow.skip {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 56px;
+  padding-left: 18px;
+}
+
+.ml-prow.skip .ml-title {
+  color: var(--text-2);
+  font-weight: 500;
+}
