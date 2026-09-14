@@ -79,5 +79,5 @@ export function useInfiniteList<T extends { id: number | string }>(
     loadPage(null, true, gen);
   }, [key, loadPage]);
 
-  return { items: state.items, loading, error, hasMore: state.hasMore, loadMore, reload };
+  return { items: state.items, loading, error, hasMore: state.hasMore, multiPage: state.multiPage, loadMore, reload };
 }

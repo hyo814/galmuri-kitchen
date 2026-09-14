@@ -8,9 +8,9 @@ import Login from "./pages/Login";
 import More from "./pages/More";
 import RecipeDetail from "./pages/RecipeDetail";
 import RecipeForm from "./pages/RecipeForm";
-import Recipes from "./pages/Recipes";
+import Recipes, { resetRecipesSegment } from "./pages/Recipes";
 import Tools from "./pages/Tools";
-import { useHashRoute, type Route, type RoutePattern } from "./useHashRoute";
+import { scrollTops, useHashRoute, type Route, type RoutePattern } from "./useHashRoute";
 import { forgetResources } from "./useResource";
 
 interface PageProps {
@@ -32,10 +32,6 @@ const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
   "/more": () => <More />,
   "/tools": () => <Tools />,
 };
-
-// 경로별 마지막 스크롤 위치: 상세에서 돌아오면 목록을 보던 자리로, 처음 여는 화면은 맨 위로
-const scrollTops = new Map<string, number>();
-history.scrollRestoration = "manual";
 
 export default function App() {
   // undefined: 확인 중, null: 비로그인
@@ -116,9 +112,11 @@ export default function App() {
     };
   }, [route.path]);
 
-  // 로그아웃·세션 만료: 다른 계정으로 들어와도 이전 사용자의 화면 캐시가 보이지 않게
+  // 로그아웃·세션 만료: 다른 계정으로 들어와도 이전 사용자의 화면 캐시·탭·스크롤이 보이지 않게 (M9)
   const signOut = useCallback(() => {
     forgetResources();
+    resetRecipesSegment();
+    scrollTops.clear();
     setUser(null);
   }, []);
 

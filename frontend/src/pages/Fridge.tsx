@@ -9,6 +9,7 @@ import ScanSheet from "../components/ScanSheet";
 import SettingsSheet, { type SettingsTarget } from "../components/SettingsSheet";
 import StaplesSheet from "../components/StaplesSheet";
 import { formatDate, formatQuantity, withJosa } from "../format";
+import { forgetRecipeCaches } from "../useResource";
 
 // 떨어진 필수품이 많아도 배너가 화면을 차지하지 않도록 앞의 몇 개만 이름을 보여 준다 (전체는 필수품 시트)
 const BANNER_NAMES = 3;
@@ -58,6 +59,13 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
     load();
   }, []);
 
+  // I1: 재고가 실제로 바뀐 뒤(저장·삭제·스캔·필수품/위치/규칙 변경)에만 추천·레시피 캐시를 지운다.
+  // 처음 화면을 열 때(load) 지우면 안 되므로 mount용 load()와 분리해 둔다.
+  const changed = () => {
+    forgetRecipeCaches();
+    return load();
+  };
+
   // 사진으로 넣은 뒤 안내는 잠깐만 보여 준다
   useEffect(() => {
     if (!notice) return;
@@ -70,14 +78,14 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
     if (editing === "new") await api("/api/ingredients", { method: "POST", body: input });
     else if (editing) await api(`/api/ingredients/${editing.id}`, { method: "PATCH", body: input });
     if (!keepOpen) setEditing(null);
-    await load();
+    await changed();
   };
 
   const remove = async () => {
     if (!editing || editing === "new" || !confirm(`${withJosa(editing.name, "을", "를")} 삭제할까요?`)) return;
     await api(`/api/ingredients/${editing.id}`, { method: "DELETE" });
     setEditing(null);
-    await load();
+    await changed();
   };
 
   const openNew = (name = "") => {
@@ -91,7 +99,7 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
   const scanned = async (count: number) => {
     setScanning(false);
     setNotice(`${count}개를 재고에 넣었어요`);
-    await load();
+    await changed();
   };
 
   const logout = async () => {
@@ -293,13 +301,13 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
       )}
       {panel === "settings" && <SettingsSheet onOpen={setPanel} onLogout={logout} onClose={() => setPanel(null)} />}
       {panel === "locations" && (
-        <LocationsSheet locations={locations} onChanged={load} onClose={() => setPanel(null)} />
+        <LocationsSheet locations={locations} onChanged={changed} onClose={() => setPanel(null)} />
       )}
       {panel === "staples" && (
         <StaplesSheet
           staples={staples}
           initialMissingOnly={staplesMissingOnly}
-          onChanged={load}
+          onChanged={changed}
           onAddIngredient={openNew}
           onClose={() => {
             setPanel(null);
@@ -307,7 +315,7 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
           }}
         />
       )}
-      {panel === "rules" && <RulesSheet rules={rules} onChanged={load} onClose={() => setPanel(null)} />}
+      {panel === "rules" && <RulesSheet rules={rules} onChanged={changed} onClose={() => setPanel(null)} />}
     </main>
   );
 }

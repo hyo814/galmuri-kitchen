@@ -7,7 +7,7 @@ import { navigate } from "../useHashRoute";
 import { useInfiniteList, type Page } from "../useInfiniteList";
 import { cache } from "../useResource";
 
-type Segment = "recommend" | "mine" | "video" | "seasoning";
+export type Segment = "recommend" | "mine" | "video" | "seasoning";
 
 const SEGMENTS: [Segment, string][] = [
   ["recommend", "추천"],
@@ -18,6 +18,16 @@ const SEGMENTS: [Segment, string][] = [
 
 // ponytail: 상세에서 돌아와도 보던 칸을 유지한다(모듈 변수, 새로고침하면 추천). 칸을 공유 링크로 열 일이 생기면 경로로 옮긴다.
 let lastSegment: Segment = "recommend";
+
+/** 로그아웃 때 다른 계정에서 이전 탭이 그대로 보이지 않게 (M9) */
+export function resetRecipesSegment() {
+  lastSegment = "recommend";
+}
+
+/** 레시피 삭제 뒤 뒤로가기하면 내 레시피 탭에 있게 (E1) */
+export function setRecipesSegment(segment: Segment) {
+  lastSegment = segment;
+}
 
 /** ["두부"] → "두부 마저 써요", ["두부", "대파"] → "두부·대파 마저 써요", 3개 이상 → "두부 외 2개 마저 써요" */
 export function urgentLabel(names: string[]): string {
@@ -80,8 +90,9 @@ function RecommendCardView({ card }: { card: RecommendationCard }) {
       {missing > 0 && (
         <span className="rc-missing">
           <span className="label">없는 재료</span>
-          {card.missing.slice(0, 3).map((name) => (
-            <span key={name} className="rc-chip">
+          {card.missing.slice(0, 3).map((name, index) => (
+            // M10: 이름이 겹칠 수 있어(같은 재료가 다른 레시피에도) index 기반 key
+            <span key={index} className="rc-chip">
               {name}
             </span>
           ))}
@@ -99,6 +110,7 @@ interface RecsMeta {
   mineTotal: number;
   sample: boolean;
   inventoryCount: number;
+  publicCount: number; // M11: 재고와 안 겹쳐도 세는 전체 공공 레시피 수
 }
 
 const RECS_META_KEY = "list:recs-meta"; // "list:" 접두사라 forgetResources("list:")로 함께 지워진다
@@ -115,6 +127,7 @@ function useRecommendations() {
         mineTotal: data.mine_total ?? 0,
         sample: data.sample,
         inventoryCount: data.inventory_count,
+        publicCount: data.public_count,
       };
       cache.set(RECS_META_KEY, next);
       setMeta(next);
@@ -127,7 +140,7 @@ function useRecommendations() {
 }
 
 function RecommendList({ onShowMine }: { onShowMine: () => void }) {
-  const { meta, items, loading, error, hasMore, loadMore, reload } = useRecommendations();
+  const { meta, items, loading, error, hasMore, multiPage, loadMore, reload } = useRecommendations();
 
   // C-L2: 첫 페이지가 실패하면(메타가 없음) 다시 불러오기 버튼을 보여 준다
   if (!meta)
@@ -160,7 +173,13 @@ function RecommendList({ onShowMine }: { onShowMine: () => void }) {
 
   const noneFound = meta.mine.length === 0 && items.length === 0 && !loading && !hasMore;
   if (noneFound)
-    return (
+    // M11: 카탈로그 자체가 비었을 때(재고와 안 겹치는 것까지 다 세도 공공 레시피가 0)는 "재료를 더 넣어보라"는
+    // 안내가 맞지 않는다 — 아직 채우는 중이라는 걸 알려준다.
+    return meta.inventoryCount > 0 && meta.publicCount === 0 ? (
+      <section className="empty">
+        <p>추천할 레시피가 아직 없어요. 곧 채워둘게요.</p>
+      </section>
+    ) : (
       <section className="empty">
         <p>지금 재고로 만들 수 있는 요리를 찾지 못했어요.</p>
         <p className="muted">재료를 더 넣거나 내 레시피를 추가해보세요.</p>
@@ -193,7 +212,8 @@ function RecommendList({ onShowMine }: { onShowMine: () => void }) {
           )}
         </section>
       )}
-      {(meta.mine.length > 0 || items.length > 0) && (
+      {/* M6: 공공 레시피가 하나도 없으면(내 레시피만 있을 때) 빈 섹션 자체를 그리지 않는다 */}
+      {items.length > 0 && (
         <section aria-label={meta.sample ? "예시 레시피" : "식약처 레시피"}>
           <h2 className="section-label rc-group">{meta.sample ? "예시 레시피" : "식약처 레시피"}</h2>
           <ul className="rc-cards">
@@ -203,7 +223,9 @@ function RecommendList({ onShowMine }: { onShowMine: () => void }) {
               </li>
             ))}
           </ul>
-          {items.length > 0 && <InfiniteSentinel onVisible={loadMore} hasMore={hasMore} loading={loading} error={error} onRetry={loadMore} />}
+          {items.length > 0 && (
+            <InfiniteSentinel onVisible={loadMore} hasMore={hasMore} multiPage={multiPage} loading={loading} error={error} onRetry={loadMore} />
+          )}
         </section>
       )}
     </>
@@ -221,7 +243,7 @@ function MyRecipeList() {
     const data = await api<RecipeListPage>(path);
     return { items: data.items, next: data.next_cursor };
   }, []);
-  const { items, loading, error, hasMore, loadMore, reload } = useInfiniteList<RecipeSummary>(fetchPage, ["my-recipes"]);
+  const { items, loading, error, hasMore, multiPage, loadMore, reload } = useInfiniteList<RecipeSummary>(fetchPage, ["my-recipes"]);
 
   return (
     <>
@@ -266,7 +288,7 @@ function MyRecipeList() {
               </li>
             ))}
           </ul>
-          <InfiniteSentinel onVisible={loadMore} hasMore={hasMore} loading={loading} error={error} onRetry={loadMore} />
+          <InfiniteSentinel onVisible={loadMore} hasMore={hasMore} multiPage={multiPage} loading={loading} error={error} onRetry={loadMore} />
         </>
       )}
       <div className="cta-bar">

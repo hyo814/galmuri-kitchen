@@ -12,7 +12,7 @@ from sqlalchemy.orm import joinedload
 
 from .auth import get_owned_or_404, login_required
 from .ingredients import seasoning_names, seoul_today, status_of, user_rules
-from .matching import match_prepared, names_match, normalize, prepare
+from .matching import match_prepared, prepare
 from .models import Ingredient, PublicRecipe, Recipe, db
 from .recipe_parse import ingredient_key
 from .validation import integer, text
@@ -36,16 +36,13 @@ def inventory(user_id):
     return sorted(stock, key=lambda row: not row[1])
 
 
-def match_key(key, stock):
-    """재료 키에 매칭되는 첫 재고 이름(없으면 None)과 있음 여부."""
-    matched = next((name for name, _ in stock if names_match(name, key)), None)
-    return matched, matched is not None or normalize(key) in ALWAYS_HAVE
-
-
 def annotate(ingredients, keys, stock):
+    """M7: 추천과 같은 준비된 재고 + 빠른 매칭(_prepared_stock/_match_key_fast)을 써서
+    상세 화면 하나 열 때마다 정규식을 다시 돌리지 않게 한다(재고가 커도 빠르게)."""
+    prepared_stock = _prepared_stock(stock)
     rows = []
     for item, key in zip(ingredients, keys):
-        matched, have = match_key(key, stock)
+        matched, have = _match_key_fast(prepare(key), prepared_stock)
         rows.append({"name": item["name"], "amount": item["amount"], "have": have, "matched_name": matched})
     return rows
 
@@ -176,7 +173,7 @@ def _prepared_stock(stock):
 
 
 def _match_key_fast(key_prepared, prepared_stock):
-    """재료 키(미리 준비함)에 매칭되는 첫 재고 이름(없으면 None)과 있음 여부. match_key와 같은 규칙."""
+    """재료 키(미리 준비함)에 매칭되는 첫 재고 이름(없으면 None)과 있음 여부. annotate·추천이 함께 쓴다."""
     for name, name_prepared in prepared_stock:
         if match_prepared(key_prepared, name_prepared):
             return name, True
@@ -220,7 +217,7 @@ def _rank(cards):
 # ponytail: 프로세스별 캐시다(gunicorn 워커마다 따로 가진다. 이 규모에선 충분하고, 여러 인스턴스로 늘면 Redis로 옮긴다).
 _RANK_CACHE = {}  # user_id -> {"signature", "created", "mine": [...]|None, "public": ([...], sample)|None}
 _RANK_CACHE_TTL = 120  # seconds (time.monotonic)
-_RANK_CACHE_MAX_USERS = 500
+_RANK_CACHE_MAX_USERS = 50
 _RANK_CACHE_LOCK = threading.Lock()  # gthread 워커의 여러 스레드가 같은 dict를 바꾸므로 교체·삭제를 잠근다
 
 
@@ -249,6 +246,9 @@ def _rank_cache_entry(user_id, signature):
     with _RANK_CACHE_LOCK:
         entry = _RANK_CACHE.get(user_id)
         if entry is None or entry["signature"] != signature or now - entry["created"] > _RANK_CACHE_TTL:
+            # I3: 새로 넣기 전에 이미 TTL이 지난 다른 사용자 항목도 같이 치운다(안 쓰는 계정이 메모리를 오래 잡지 않게).
+            for uid in [uid for uid, e in _RANK_CACHE.items() if now - e["created"] > _RANK_CACHE_TTL]:
+                del _RANK_CACHE[uid]
             entry = {"signature": signature, "created": now, "mine": None, "public": None}
             _RANK_CACHE[user_id] = entry
             while len(_RANK_CACHE) > _RANK_CACHE_MAX_USERS:
@@ -322,7 +322,17 @@ def recommendations():
     public_total = len(public_ranked)
     public_page = public_ranked[offset : offset + limit]
     next_offset = offset + limit if offset + limit < public_total else None
-    body = {"public": public_page, "public_total": public_total, "next_offset": next_offset, "sample": sample, "inventory_count": len(stock)}
+    # M11: public_total은 재고와 겹치는 것만 센다 — 카탈로그가 아예 비었는지(vs 그냥 안 겹치는지) 구분하려면
+    # 전체 개수가 따로 필요하다. 가벼운 COUNT라 캐시 없이 매번 구해도 된다.
+    public_count = db.session.query(func.count(PublicRecipe.id)).scalar()
+    body = {
+        "public": public_page,
+        "public_total": public_total,
+        "public_count": public_count,
+        "next_offset": next_offset,
+        "sample": sample,
+        "inventory_count": len(stock),
+    }
     if section == "all":
         body["mine"] = entry["mine"][:10]
         body["mine_total"] = len(entry["mine"])
@@ -337,9 +347,12 @@ def _decode_cursor(value):
     try:
         raw = base64.urlsafe_b64decode(value.encode()).decode()
         updated_iso, id_text = raw.rsplit("|", 1)
-        return datetime.fromisoformat(updated_iso), int(id_text)
+        updated_at, cursor_id = datetime.fromisoformat(updated_iso), int(id_text)
     except (ValueError, UnicodeDecodeError, binascii.Error):
         abort(400, "잘못된 요청이에요.")
+    if not 0 < cursor_id <= 2**31 - 1:  # M4: DB int 컬럼 범위 밖(Postgres에서 500 나던 값) → 400
+        abort(400, "잘못된 요청이에요.")
+    return updated_at, cursor_id
 
 
 @bp.get("/recipes")

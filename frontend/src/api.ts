@@ -172,6 +172,7 @@ export interface Recommendations {
   mine_total?: number;
   public: RecommendationCard[];
   public_total: number;
+  public_count: number; // 재고와 안 겹쳐도 세는 전체 공공 레시피 수(M11: 카탈로그가 아예 비었는지 구분용)
   next_offset: number | null;
   sample: boolean;
   inventory_count: number;
