@@ -3166,3 +3166,37 @@ button.row-btn > svg {
   font-weight: 700;
   white-space: nowrap;
 }
+
+/* 다른 화면에서 장보기에 담기(시안 RecipeEntry) */
+.sh-add {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sh-missing-cta {
+  margin-top: 12px;
+}
+
+.sh-add-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: 8px;
+  padding: 0 4px 0 14px;
+  border-radius: 12px;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-size: 15px;
+  line-height: 22px;
+  word-break: keep-all;
+}
+
+.sh-add-result > span {
+  padding: 11px 0;
+}
+
+.sh-add > [role="status"]:empty {
+  display: none;
+}

@@ -333,7 +333,7 @@ export function RecipeAiDetail({ index }: { index: number }) {
           {recipe.servings}인분{recipe.minutes ? ` · ${recipe.minutes}분` : ""} · AI가 만든 레시피
         </p>
       </header>
-      <RecipeBody servings={recipe.servings} ingredients={recipe.ingredients} steps={recipe.steps} />
+      <RecipeBody title={recipe.title} servings={recipe.servings} ingredients={recipe.ingredients} steps={recipe.steps} />
       <div className="cta-bar">
         <div className="r3-detail-save">
           <SaveButton recipe={recipe} />

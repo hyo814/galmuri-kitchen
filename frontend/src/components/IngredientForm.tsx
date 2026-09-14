@@ -3,6 +3,7 @@ import { localToday, type DeleteReason, type Ingredient, type IngredientInput, t
 import { addDays, withJosa } from "../format";
 import { useAsyncAction } from "../useAsyncAction";
 import Icon from "./Icon";
+import ShoppingAddButton from "./ShoppingAddButton";
 import Sheet from "./Sheet";
 
 const MAX_PRICE = 10_000_000;
@@ -311,6 +312,13 @@ export default function IngredientForm({
               {busy ? "저장 중…" : usedUp ? "다 먹었어요 (삭제)" : "저장"}
             </button>
           </div>
+          {initial && (
+            <ShoppingAddButton
+              source={initial.status === "urgent" || initial.status === "danger" ? "urgent" : "manual"}
+              items={[{ name: initial.name, quantity: initial.quantity > 0 ? initial.quantity : undefined, unit: initial.unit }]}
+              label="장보기에 담기"
+            />
+          )}
           {onDelete && (
             <button type="button" className="btn danger-text" disabled={busy} onClick={() => setDeleting({ reason: null })}>
               이 재료 삭제

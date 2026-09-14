@@ -3,6 +3,7 @@ import { api, type Staple } from "../api";
 import { withJosa } from "../format";
 import { useAsyncAction } from "../useAsyncAction";
 import Icon from "./Icon";
+import ShoppingAddButton from "./ShoppingAddButton";
 import Sheet from "./Sheet";
 
 const CATEGORIES = ["조미료", "야채", "기타"];
@@ -159,6 +160,14 @@ export default function StaplesSheet({ staples, initialMissingOnly = false, onCh
             </section>
           ))}
         </div>
+      )}
+
+      {!editMode && missingCount > 0 && (
+        <ShoppingAddButton
+          source="staple"
+          items={staples.filter((s) => !s.in_stock).map((s) => ({ name: s.name }))}
+          label={`떨어진 필수품 ${missingCount}개 장보기에 담기`}
+        />
       )}
     </Sheet>
   );

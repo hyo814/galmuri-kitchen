@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api, type MyRecipe, type RecipeDetail as Detail, type RecipeIngredientStatus } from "../api";
 import Icon from "../components/Icon";
+import ShoppingAddButton from "../components/ShoppingAddButton";
 import { SOURCE_LABEL, imageSrc, scaleAmount, withJosa } from "../format";
 import { useAsyncAction } from "../useAsyncAction";
 import { goBack, navigate } from "../useHashRoute";
@@ -24,12 +25,24 @@ export function BackLink({ to = "/recipes", label = "레시피" }: { to?: string
 }
 
 /** 재료(인분 조절·있음 표시)와 만드는 법. 내 레시피·공공 레시피·AI 레시피 상세가 같이 쓴다 */
-export function RecipeBody({ servings: rawBase, ingredients, steps }: { servings: number; ingredients: RecipeIngredientStatus[]; steps: string[] }) {
+export function RecipeBody({
+  title,
+  servings: rawBase,
+  ingredients,
+  steps,
+}: {
+  title: string;
+  servings: number;
+  ingredients: RecipeIngredientStatus[];
+  steps: string[];
+}) {
   const base = Math.max(1, rawBase || 1); // 인분이 0·빈 값이면 비율이 NaN이 되지 않게
   const [servings, setServings] = useState<number | null>(null); // null이면 레시피 기준 인분
   const shown = servings ?? base;
   const ratio = shown / base;
   const have = ingredients.filter((item) => item.have).length;
+  // ponytail: 레시피 양(1작은술)은 단위가 달라 담지 않고 이름만 담는다(1개) — 23절 D4 합산은 4b
+  const missing = ingredients.filter((item) => !item.have).map((item) => ({ name: item.name }));
   return (
     <>
       <section className="rc-sec" aria-labelledby="rc-ingredients">
@@ -80,6 +93,15 @@ export function RecipeBody({ servings: rawBase, ingredients, steps }: { servings
             </li>
           ))}
         </ul>
+        {missing.length > 0 && (
+          <ShoppingAddButton
+            className="sh-missing-cta"
+            source="recipe"
+            sourceLabel={title}
+            items={missing}
+            label={`없는 재료 ${missing.length}개 장보기에 담기`}
+          />
+        )}
       </section>
 
       {steps.length > 0 && (
@@ -184,7 +206,7 @@ export default function RecipeDetail({ kind, id }: { kind: "mine" | "public"; id
         </p>
       </header>
 
-      <RecipeBody servings={recipe.servings} ingredients={recipe.ingredients} steps={recipe.steps} />
+      <RecipeBody title={recipe.title} servings={recipe.servings} ingredients={recipe.ingredients} steps={recipe.steps} />
 
       {actionError && (
         <p className="error" role="alert">
