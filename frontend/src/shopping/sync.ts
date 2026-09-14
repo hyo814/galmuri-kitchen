@@ -1,7 +1,17 @@
-// 오프라인 장보기 순수 로직(스펙 19절, 4단계 계획 Task 6). 브라우저 API·Date.now()를 부르지 않는다 — 시각·id는 인자로 받는다.
+// 오프라인 장보기 순수 로직(스펙 19·28절, 4단계 계획 Task 6). 브라우저 API·Date.now()를 부르지 않는다 — 시각은 인자로 받는다(newClientId만 예외).
 // scripts/check-shopping-sync.mjs가 그냥 node로 읽으므로 값 import는 .ts 확장자를 붙인다.
 // ponytail: 대기열은 배열 통째로 다룬다(수백 개 이하). 느려지면 op별 키로 나눈다.
-import type { ShoppingItem, ShoppingNote, ShoppingSnapshot, ShoppingSource } from "../api";
+//
+// 보내는 쪽(Task 7) 약속 — 한 번에 하나, 항상 저장된 최신 대기열에서 qid로 찾는다(자리·객체로 찾지 않는다):
+//   1. op = queue[0]; queue = markAttempt(queue, op.qid)를 **저장한 뒤** 보낸다. 한 번이라도 보낸 op는 서버에 닿았을 수 있어서
+//      enqueue가 합치거나 지우지 않는다(뒤에 새 변경을 붙이고 remapRef가 참조를 고친다).
+//   2. result = classify(최신 op, status)
+//      - ok: snapshot = applyServerResult(snapshot, op, body) — 안 하면 방금 보낸 항목이 새로 받을 때까지 화면에서 사라진다.
+//            add·note_add·photo_add면 queue = remapRef(queue, op.client_id, body.id). 그다음 queue = removeOp(queue, op.qid).
+//      - drop: { queue, dropBlobs } = dropWithDependents(queue, op.qid) — 실패 목록에 op를 남겨 화면에 보여준다.
+//      - conflict(note_save 409·404): 기기에서 쓴 fields를 backups에 남기고, 409면 applyServerResult(snapshot, op, body.note), removeOp.
+//      - retry·auth: 멈춘다(보낸 횟수는 이미 셌다).
+import type { ShoppingItem, ShoppingNote, ShoppingNotePhoto, ShoppingSnapshot, ShoppingSource } from "../api";
 import { addDays } from "../format.ts";
 import { amountInputText, parseAmountInput } from "../seasoning.ts";
 
@@ -15,7 +25,8 @@ export interface ItemFields {
 export type EditFields = Partial<Omit<ItemFields, "source" | "source_label">>;
 export interface NoteFields { place: string | null; body: string }
 
-export type Op =
+/** qid: enqueue가 붙이는 대기열 안 번호(보내는 쪽이 이것으로 찾는다). attempts: 보낸 횟수(markAttempt) */
+export type Op = (
   | { op: "add"; client_id: string; fields: ItemFields; at: string }
   | { op: "edit"; ref: Ref; fields: EditFields; at: string }
   | { op: "check"; ref: Ref; done: boolean; at: string }
@@ -24,7 +35,8 @@ export type Op =
   | { op: "note_save"; ref: Ref; fields: NoteFields; edited_at: string }
   | { op: "note_delete"; ref: Ref; at: string }
   | { op: "photo_add"; note: Ref; client_id: string; blob_key: string; at: string }
-  | { op: "photo_delete"; note: Ref; photo: Ref; at: string };
+  | { op: "photo_delete"; note: Ref; photo: Ref; at: string }
+) & { qid?: number; attempts?: number };
 
 /** 아직 안 보낸 항목·메모·사진은 id가 없고 pending: true. 사진은 서버 것이면 url, 기기 것이면 blob_key */
 export type ViewItem = Omit<ShoppingItem, "id"> & { id?: number; pending: boolean };
@@ -32,65 +44,96 @@ export interface ViewPhoto { id?: number; client_id: string | null; url?: string
 export type ViewNote = Omit<ShoppingNote, "id" | "photos"> & { id?: number; photos: ViewPhoto[]; pending: boolean };
 export interface ShoppingView { items: ViewItem[]; stocked: ShoppingItem[]; notes: ViewNote[]; today: string }
 
+/** 5xx는 이만큼 보내도 안 되면 실패 목록으로(네트워크 없음은 끝없이 기다린다) */
+export const MAX_ATTEMPTS = 5;
+
 const sameRef = (a: Ref, b: Ref) => ("id" in a ? "id" in b && a.id === b.id : "client_id" in b && a.client_id === b.client_id);
 const isClient = (ref: Ref, clientId: string) => "client_id" in ref && ref.client_id === clientId;
 const matches = (x: { id?: number; client_id: string | null }, ref: Ref) => ("id" in ref ? x.id === ref.id : x.client_id === ref.client_id);
+const unsent = (o: Op) => !o.attempts;
+/** op 안의 참조(ref·note·photo) 중 하나라도 이 client_id를 가리키나 */
+const refersTo = (o: Op, clientId: string) =>
+  ("ref" in o && isClient(o.ref, clientId)) || ("note" in o && isClient(o.note, clientId)) || ("photo" in o && isClient(o.photo, clientId));
 
-/** 새 변경을 대기열에 넣으며 합친다(계획 합치기 규칙 1~7). dropBlobs: 더 이상 보낼 필요 없는 사진 blob 키(호출 측이 기기에서 지움) */
+/** 새 변경을 대기열에 넣으며 합친다(계획 합치기 규칙 1~7). **보낸 적 있는(attempts) op는 합치거나 바꾸거나 지우지 않는다.**
+ *  dropBlobs: 더 이상 보낼 필요 없는 사진 blob 키(호출 측이 기기에서 지움) */
 export function enqueue(queue: Op[], next: Op): { queue: Op[]; dropBlobs: string[] } {
   const q = [...queue];
   const dropBlobs: string[] = [];
-  const replaceAt = (i: number, op: Op) => { q[i] = op; return { queue: q, dropBlobs }; };
+  const incoming: Op = { ...next, qid: Math.max(0, ...queue.map((o) => o.qid ?? 0)) + 1 };
+  const done = (list: Op[]) => ({ queue: list, dropBlobs });
+  const replaceAt = (i: number, op: Op) => { q[i] = { ...op, qid: q[i].qid }; return done(q); };
   switch (next.op) {
     case "check": { // 1. 같은 대상 check는 마지막 것만(처음 자리)
-      const i = q.findIndex((o) => o.op === "check" && sameRef(o.ref, next.ref));
-      if (i >= 0) return replaceAt(i, next);
+      const i = q.findIndex((o) => unsent(o) && o.op === "check" && sameRef(o.ref, next.ref));
+      if (i >= 0) return replaceAt(i, incoming);
       break;
     }
-    case "edit": { // 2. 안 보낸 add에 합친다
-      const i = q.findIndex((o) => o.op === "add" && isClient(next.ref, o.client_id));
+    case "edit": { // 2. 안 보낸 add에 합친다(보낸 add는 서버가 client_id로 기존 항목만 돌려주고 fields를 무시하므로 따로 보낸다)
+      const i = q.findIndex((o) => unsent(o) && o.op === "add" && isClient(next.ref, o.client_id));
       const add = q[i];
       if (add?.op === "add") return replaceAt(i, { ...add, fields: { ...add.fields, ...next.fields } });
       break;
     }
-    case "delete": { // 3. 안 보낸 add면 흔적 없이 지운다 / 4. 서버 항목이면 앞의 변경을 지우고 delete를 넣는다
-      const unsent = q.some((o) => o.op === "add" && isClient(next.ref, o.client_id));
-      const kept = q.filter((o) => !(
+    case "delete": { // 3. 안 보낸 add면 흔적 없이 지운다 / 4. 아니면 앞의 안 보낸 변경을 지우고 delete를 넣는다
+      const addUnsent = q.some((o) => unsent(o) && o.op === "add" && isClient(next.ref, o.client_id));
+      const kept = q.filter((o) => !(unsent(o) && (
         (o.op === "add" && isClient(next.ref, o.client_id)) ||
         ((o.op === "edit" || o.op === "check" || o.op === "delete") && sameRef(o.ref, next.ref))
-      ));
-      return { queue: unsent ? kept : [...kept, next], dropBlobs };
+      )));
+      return done(addUnsent ? kept : [...kept, incoming]);
     }
-    case "note_save": { // 5. 안 보낸 note_add의 fields에, 아니면 앞의 note_save 자리에 마지막 것으로
-      const i = q.findIndex((o) => (o.op === "note_add" && isClient(next.ref, o.client_id)) || (o.op === "note_save" && sameRef(o.ref, next.ref)));
+    case "note_save": { // 5. 안 보낸 note_add의 fields에, 아니면 앞의 안 보낸 note_save 자리에 마지막 것으로
+      const i = q.findIndex((o) => unsent(o) && ((o.op === "note_add" && isClient(next.ref, o.client_id)) || (o.op === "note_save" && sameRef(o.ref, next.ref))));
       const prev = q[i];
-      if (prev?.op === "note_add") return replaceAt(i, { ...prev, fields: next.fields });
-      if (prev) return replaceAt(i, next);
+      if (prev?.op === "note_add") return replaceAt(i, { ...prev, fields: next.fields, at: next.edited_at });
+      if (prev) return replaceAt(i, incoming);
       break;
     }
-    case "note_delete": { // 3·4. 메모에 딸린 변경을 모두 지우고, 사진 blob은 dropBlobs로
-      const unsent = q.some((o) => o.op === "note_add" && isClient(next.ref, o.client_id));
+    case "note_delete": { // 3·4. 메모에 딸린 안 보낸 변경을 모두 지우고, 사진 blob은 dropBlobs로
+      const addUnsent = q.some((o) => unsent(o) && o.op === "note_add" && isClient(next.ref, o.client_id));
       const kept = q.filter((o) => {
-        const hit = (o.op === "note_add" && isClient(next.ref, o.client_id)) ||
+        const hit = unsent(o) && (
+          (o.op === "note_add" && isClient(next.ref, o.client_id)) ||
           ((o.op === "note_save" || o.op === "note_delete") && sameRef(o.ref, next.ref)) ||
-          ((o.op === "photo_add" || o.op === "photo_delete") && sameRef(o.note, next.ref));
+          ((o.op === "photo_add" || o.op === "photo_delete") && sameRef(o.note, next.ref)));
         if (hit && o.op === "photo_add") dropBlobs.push(o.blob_key);
         return !hit;
       });
-      return { queue: unsent ? kept : [...kept, next], dropBlobs };
+      return done(addUnsent ? kept : [...kept, incoming]);
     }
     case "photo_delete": { // 6. 안 보낸 photo_add면 둘 다 없앤다
       const kept = q.filter((o) => {
-        const hit = o.op === "photo_add" && isClient(next.photo, o.client_id);
+        const hit = unsent(o) && o.op === "photo_add" && isClient(next.photo, o.client_id) && sameRef(o.note, next.note);
         if (hit) dropBlobs.push(o.blob_key);
         return !hit;
       });
-      if (dropBlobs.length) return { queue: kept, dropBlobs };
+      if (dropBlobs.length) return done(kept);
       break;
     }
   }
-  q.push(next); // 7. 나머지는 들어온 순서대로
-  return { queue: q, dropBlobs };
+  q.push(incoming); // 7. 나머지는 들어온 순서대로
+  return done(q);
+}
+
+/** 보내기 직전에 부른다(저장한 뒤 보냄) */
+export const markAttempt = (queue: Op[], qid: number): Op[] =>
+  queue.map((o) => (o.qid === qid ? { ...o, attempts: (o.attempts ?? 0) + 1 } : o));
+
+/** 성공·충돌로 끝난 op를 뺀다 */
+export const removeOp = (queue: Op[], qid: number): Op[] => queue.filter((o) => o.qid !== qid);
+
+/** 실패로 버리는 op와, 그 op가 만들려던 항목·메모·사진(client_id)을 가리키는 변경을 함께 뺀다 */
+export function dropWithDependents(queue: Op[], qid: number): { queue: Op[]; dropBlobs: string[] } {
+  const target = queue.find((o) => o.qid === qid);
+  const clientId = target && (target.op === "add" || target.op === "note_add" || target.op === "photo_add") ? target.client_id : null;
+  const dropBlobs: string[] = [];
+  const kept = queue.filter((o) => {
+    const hit = o.qid === qid || (clientId !== null && refersTo(o, clientId));
+    if (hit && o.op === "photo_add") dropBlobs.push(o.blob_key);
+    return !hit;
+  });
+  return { queue: kept, dropBlobs };
 }
 
 /** 서버 스냅숏 위에 대기 변경을 얹은 화면용 목록. 스냅숏은 바꾸지 않는다 */
@@ -116,7 +159,7 @@ export function applyQueue(snapshot: ShoppingSnapshot, queue: Op[]): ShoppingVie
         Object.assign(item, op.fields, { pending: true });
         break;
       }
-      case "check": { // 다른 기기가 더 늦게 바꿨으면 서버가 무시하므로 화면도 서버 값(스펙 19절)
+      case "check": { // 다른 기기가 더 늦게 바꿨으면 서버가 무시하므로 화면도 서버 값(같은 시각이면 기기 것, 스펙 19절)
         const item = items.find((i) => matches(i, op.ref));
         if (!item || (item.done_changed_at && Date.parse(item.done_changed_at) > Date.parse(op.at))) break;
         Object.assign(item, { done_at: op.done ? op.at : null, done_changed_at: op.at, pending: true });
@@ -153,7 +196,33 @@ export function applyQueue(snapshot: ShoppingSnapshot, queue: Op[]): ShoppingVie
   return { items, stocked: snapshot.stocked, notes, today: snapshot.today };
 }
 
-/** add·note_add·photo_add 성공 후 뒤 변경들의 client_id 참조를 서버 id로 바꾼다(성공한 op 자신은 호출 측이 뺀다) */
+/** 2xx 응답을 스냅숏에 반영한다(새로 받기 전까지 보낸 변경이 화면에서 사라지지 않게). 스냅숏은 바꾸지 않고 새 객체를 돌려준다.
+ *  body: add·edit·check → 항목, note_add·note_save → 메모(409 충돌이면 body.note), photo_add → 사진, 지우기는 무시 */
+export function applyServerResult(snapshot: ShoppingSnapshot, op: Op, body: unknown): ShoppingSnapshot {
+  const upsert = <T extends { id: number; client_id: string | null }>(list: T[], value: T) => {
+    const i = list.findIndex((x) => x.id === value.id || (value.client_id !== null && x.client_id === value.client_id));
+    return i >= 0 ? list.map((x, j) => (j === i ? value : x)) : [...list, value];
+  };
+  switch (op.op) {
+    case "add": case "edit": case "check":
+      return { ...snapshot, items: upsert(snapshot.items, body as ShoppingItem) };
+    case "delete":
+      return { ...snapshot, items: snapshot.items.filter((i) => !matches(i, op.ref)) };
+    case "note_add": case "note_save": {
+      const notes = upsert(snapshot.notes, body as ShoppingNote).sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+      return { ...snapshot, notes };
+    }
+    case "note_delete":
+      return { ...snapshot, notes: snapshot.notes.filter((n) => !matches(n, op.ref)) };
+    case "photo_add": case "photo_delete": {
+      const change = (photos: ShoppingNotePhoto[]) =>
+        op.op === "photo_add" ? upsert(photos, body as ShoppingNotePhoto) : photos.filter((p) => !matches(p, op.photo));
+      return { ...snapshot, notes: snapshot.notes.map((n) => (matches(n, op.note) ? { ...n, photos: change(n.photos) } : n)) };
+    }
+  }
+}
+
+/** add·note_add·photo_add 성공 후 뒤 변경들의 client_id 참조를 서버 id로 바꾼다(성공한 op 자신은 removeOp로 뺀다) */
 export function remapRef(queue: Op[], client_id: string, id: number): Op[] {
   const swap = (ref: Ref): Ref => (isClient(ref, client_id) ? { id } : ref);
   return queue.map((o): Op => {
@@ -166,16 +235,28 @@ export function remapRef(queue: Op[], client_id: string, id: number): Op[] {
   });
 }
 
-/** 보낸 결과 분류: ok(빼고 다음) · retry(멈추고 나중에: 네트워크 0·5xx·408·429) · auth(멈춤: 401) ·
- *  drop(빼고 실패 목록에: 400·413·415, 사진 저장소가 꺼진 photo_add 503) · conflict(note_save 409). 지우기·체크의 404는 이미 없으니 ok */
+/** 보낸 결과 분류(op.attempts는 markAttempt로 이번 것까지 센 값):
+ *  ok(빼고 다음) · retry(멈추고 나중에: 네트워크 0·408·429는 끝없이, 5xx는 MAX_ATTEMPTS번 전까지) · auth(멈춤: 401) ·
+ *  drop(dropWithDependents 후 실패 목록에: 400·413·415, 사진 저장소가 꺼진 photo_add 503, 5xx가 MAX_ATTEMPTS번) ·
+ *  conflict(note_save 409 다른 기기가 먼저 고침·404 다른 기기가 지움 — 둘 다 기기 사본을 보관, 스펙 19절). 지우기·체크의 404는 이미 없으니 ok */
 export function classify(op: Op, status: number): "ok" | "retry" | "auth" | "drop" | "conflict" {
   if (status >= 200 && status < 300) return "ok";
   if (status === 401) return "auth";
-  if (status === 409 && op.op === "note_save") return "conflict";
+  if (op.op === "note_save" && (status === 409 || status === 404)) return "conflict";
   if (status === 404 && (op.op === "check" || op.op === "delete" || op.op === "note_delete" || op.op === "photo_delete")) return "ok";
   if (status === 503 && op.op === "photo_add") return "drop";
-  if (status === 0 || status === 408 || status === 429 || status >= 500) return "retry";
+  if (status === 0 || status === 408 || status === 429) return "retry";
+  if (status >= 500) return (op.attempts ?? 0) >= MAX_ATTEMPTS ? "drop" : "retry";
   return "drop";
+}
+
+/** 서버 client_id 형식([A-Za-z0-9-] 1~36자). randomUUID는 보안 컨텍스트(https·localhost)에만 있어 없으면 같은 모양으로 만든다 */
+export function newClientId(): string {
+  const c = globalThis.crypto;
+  if (typeof c?.randomUUID === "function") return c.randomUUID();
+  // ponytail: Math.random 대체 — client_id는 사용자 안에서만 겹치지 않으면 되고 보안 용도가 아니다.
+  const hex = (n: number) => Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+  return `${hex(8)}-${hex(4)}-4${hex(3)}-${hex(4)}-${hex(12)}`;
 }
 
 const GROUPS = [["today", "오늘"], ["week", "이번 주"], ["later", "나중에"], ["undated", "날짜 미정"]] as const;
