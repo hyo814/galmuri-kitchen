@@ -87,8 +87,8 @@ recipe-ai/
 | GET | `/api/recommendations?section=all\|public&offset=0&limit=20` | 점수 순(25절: `section=all` 기본은 내 레시피 상위 10개 + 공공 레시피 한 페이지, `section=public`은 공공 레시피만). `{mine:[...10개], mine_total, public:[...], public_total, next_offset, sample, inventory_count}`(`section=public`이면 `mine`·`mine_total` 없음). 카드 항목: kind, id, title, image_url, servings, match_rate, have_count, total_count, missing(최대 5, 화면 표시용 이름), urgent_used, urgent_names, score(= match_rate + 0.1 × urgent_used) |
 | POST | `/api/recommendations/ai` | AI 레시피 3개 생성(저장 안 함). 하루 한도는 `AI_DAILY_RECIPE_LIMIT`, 짧은 연속 호출은 사진 인식과 같은 `AI_SCAN_BURST_LIMIT`(60초)로 막는다. `{recipes:[{title, servings, minutes, ingredients:[{name, amount, have, matched_name}], steps, urgent_names, image_url}], urgent_first, sample}`. 저장은 화면이 `POST /api/recipes`(source `ai`, image_url)로 한다 (2026-09-14, 시안 승인) |
 | POST | `/api/recipes/import` | 링크·글 → 레시피 초안(저장 안 함, 17절). 저장은 확인 화면에서 `POST /api/recipes` |
-| GET | `/api/export/summary` | 내보낼 개수와 오늘(서울) 남은 횟수 `{ingredients, recipes, seasonings, limit: 5, remaining}`(27절) |
-| GET | `/api/export` | zip 내려받기(`Content-Disposition: attachment; filename="galmuri-kitchen-YYYYMMDD.zip"`, 서울 날짜). `ingredients.csv`·`recipes.csv`·`seasonings.csv`(UTF-8 BOM, 한국어 머리글). 하루 5회(`ai_calls.kind = export`), 넘으면 429 `오늘 내보내기는 5번까지 할 수 있어요. 내일 다시 해주세요.`(27절) |
+| GET | `/api/export/summary` | (`X-Requested-With: fetch` 필요) 내보낼 개수와 오늘(서울) 남은 횟수 `{ingredients, recipes, seasonings, limit: 5, remaining}`(27절) |
+| GET | `/api/export` | (`X-Requested-With: fetch` 필요) zip 내려받기(`Content-Disposition: attachment; filename="galmuri-kitchen-YYYYMMDD.zip"`, 서울 날짜). `ingredients.csv`·`recipes.csv`·`seasonings.csv`(UTF-8 BOM, 한국어 머리글). 하루 5회(`ai_calls.kind = export`), 넘으면 429 `오늘 내보내기는 5번까지 할 수 있어요. 내일 다시 해주세요.`(27절) |
 | GET | `/api/ai-usage` | 오늘(서울) `{scan:{used, limit}, recipe:{used, limit}}` — `오늘 N번 남음`·더보기 AI 사용량 |
 | GET/POST | `/api/seasonings` · GET/PUT/DELETE `/api/seasonings/<id>` | 내 양념 비율 목록·추가 / 상세·수정·삭제(22절) |
 | GET | `/api/videos`, `/api/videos/<id>` | 요리 채널 영상(17절) |
@@ -415,17 +415,8 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **재고 화면 톱니바퀴:** 우리 부엌 묶음으로 옮긴 뒤에는 재고 화면에서 `보관 위치`·`필수품` 바로가기만 남기고(자주 씀), 나머지는 더보기로 보낸다.
 - **AI 사용량:** `ai_calls`에서 오늘(서울 날짜) 묶음별 횟수와 한도를 보여준다. 원가(토큰)는 사용자에게 보여주지 않는다.
 - **화면 테마:** 기본은 시스템 설정을 따른다. 사용자가 고르면 기기에 저장(localStorage)하고 `<html data-theme>`로 적용한다. 서버 저장은 하지 않는다.
-- **데이터 내보내기:** 재고·내 레시피·먹은 기록·요리 기록을 CSV로 묶어 내려받는다(zip 하나). 사진은 포함하지 않고 파일 이름만 적는다. 하루 5회 제한.
+- **데이터 내보내기:** 재고·내 레시피·내 양념 비율을 CSV로 묶어 내려받는다(zip 하나). 먹은 기록·요리 기록은 기능이 생기면 추가한다. 사진은 넣지 않는다(올린 사진이 아직 없어 레시피 사진 주소만 적는다). 하루 5회 제한.
 
-### 정리 작업 결정 (추가: 2026-09-14, 시안 승인)
-- **아직 없는 기능은 만들 때 넣는다.** 표의 항목 중 기능이 없는 행(먹은 기록·요리 기록·리포트·알림 등)은 지금 더보기에 자리만 만들지 않는다.
-- **재고 화면 톱니바퀴:** `보관 위치`·`필수품`만 남긴다.
-- **재료 삭제 이유:** 삭제 확인에서 `다 먹었어요`/`버렸어요`를 고른 뒤 지운다(선택, 안 고르면 이유 없이 삭제). 서버는 `DELETE /api/ingredients/<id>?reason=eaten|discarded`로 받아 `ingredient_removals`(4절)에 이름·이유를 남긴다.
-- **내보내기 내용:** 지금은 재고·내 레시피·내 양념 비율. 먹은 기록·요리 기록은 기능이 생기면 CSV를 추가한다. `GET /api/export/summary`·`GET /api/export`(5절).
-  - `ingredients.csv`: 이름, 수량, 단위, 보관 위치, 구입일, 유통기한, 가격(원)
-  - `recipes.csv`(레시피 한 줄): 제목, 인분, 재료(`두부 1모; 대파 1/2대`), 만드는 법(칸 안 줄바꿈 `1. …`), 출처, 출처 링크, 사진 주소(주소만, 사진 파일은 넣지 않음)
-  - `seasonings.csv`: 이름, 기준, 기준 양, 기준 단위, 주재료, 양념(`고추장 2큰술; 설탕 0.5큰술`)
-  - 엑셀 수식 주입 방지: `=` `+` `-` `@` 탭·CR로 시작하는 칸은 앞에 `'`를 붙인다. 하루 5회는 `ai_calls.kind = export`로 세고(AI 사용량·원가에 안 셈), 한도에 걸린 요청은 기록하지 않는다.
 - **리포트(월간):** 이번 달 기록한 날, 요리한 횟수, 집밥/외식 비율(24절), **버린 재료 수**, **아낀 돈**. 버린 재료를 세려면 재료를 지울 때 이유(`다 먹었어요`/`버렸어요`)를 고를 수 있게 한다(선택, 기본은 이유 없음).
 - **아낀 돈(추가 2026-09-14, 사용자 제안·선택):** 요리 기록(5단계) 한 건마다 `사 먹으면 얼마 − 집밥 재료비 = 아낀 돈`을 계산해 리포트에서 합산한다. 예: "이번 달 집밥 12번으로 약 86,000원 아꼈어요 · 부대찌개 12,000원 − 재료비 4,300원 = 7,700원".
   - **사 먹으면 얼마(외식 가격) 우선순위:** ① 레시피에 사용자가 직접 입력한 값(`recipes.eat_out_price`, 원, 선택) → ② 한국소비자원 참가격 외식비(대표 외식 8품목 지역별 평균, 레시피 이름이 품목과 맞을 때, 월 1회 캐시) → ③ AI 추정(레시피 이름·인분으로 요즘 외식 가격 추정, 결과를 레시피에 저장해 다시 묻지 않음, AI 일일 한도 recipe 그룹). ②③은 화면에 `참가격 평균`/`추정` 표시. 배달앱 가격은 공개 API가 없어 쓰지 않는다. 참가격 API 이용 조건은 구현 시 확인.
@@ -437,3 +428,15 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **의견 보내기:** 짧은 글(≤1000자)과 선택 사진 1장, 앱 버전·기기 정보(브라우저 UA)를 함께 보낸다. 서버 `feedback` 테이블에 저장하고 하루 5회 제한.
 - **데이터 출처:** 식약처 조리식품 레시피 DB·식품영양성분 DB, 유튜브 등 사용하는 공공·외부 데이터의 이름과 이용 조건 링크를 표시한다(25절 유료화 전 확인 사항과 연결).
 - **회원 탈퇴:** 확인 문구 입력 후 계정과 모든 사용자 데이터(재고·레시피·기록·사진·AI 호출 기록)를 삭제한다. 소셜 로그인 연결 해제(카카오·네이버·구글 API)도 시도하고, 실패해도 우리 쪽 데이터는 지운다. 삭제는 되돌릴 수 없다고 명확히 안내한다(삭제 버튼 규칙: 연빨강 배경·테두리).
+
+### 정리 작업 결정 (추가: 2026-09-14, 시안 승인)
+- **아직 없는 기능은 만들 때 넣는다.** 표의 항목 중 기능이 없는 행(먹은 기록·요리 기록·리포트·알림 등)은 지금 더보기에 자리만 만들지 않는다.
+- **재고 화면 톱니바퀴:** `보관 위치`·`필수품`만 남긴다.
+- **재료 삭제 이유:** 삭제 확인에서 `다 먹었어요`/`버렸어요`를 고른 뒤 지운다(선택, 안 고르면 이유 없이 삭제). 서버는 `DELETE /api/ingredients/<id>?reason=eaten|discarded`로 받아 `ingredient_removals`(4절)에 이름·이유를 남긴다.
+- **내보내기 내용:** 지금은 재고·내 레시피·내 양념 비율. 먹은 기록·요리 기록은 기능이 생기면 CSV를 추가한다. `GET /api/export/summary`·`GET /api/export`(5절).
+  - `ingredients.csv`: 이름, 수량, 단위, 보관 위치, 구입일, 유통기한, 가격(원)
+  - `recipes.csv`(레시피 한 줄): 제목, 인분, 재료(`두부 1모; 대파 1/2대`), 만드는 법(칸 안 줄바꿈 `1. …`), 출처, 출처 링크, 사진 주소(주소만, 사진 파일은 넣지 않음)
+  - `seasonings.csv`: 이름, 기준, 기준 양, 기준 단위, 주재료, 양념(`고추장 2큰술; 설탕 0.5큰술`)
+  - 엑셀 수식 주입 방지: `=` `+` `-` `@` 탭·CR(전각 `＝＋－＠` 포함, 앞 공백은 건너뛰고 봄)로 시작하는 칸은 앞에 `'`를 붙인다. 숫자는 정수면 정수로, 아니면 반올림 없이 적는다.
+  - 하루 5회는 `ai_calls.kind = export`로 세고(AI 사용량·원가에 안 셈), 한도에 걸린 요청은 기록하지 않는다. 기록은 zip을 만들기 전에 하므로 만들다 실패해도 한 번으로 센다.
+  - 두 API 모두 GET이지만 한도를 쓰므로 `X-Requested-With: fetch`가 없으면 400(다른 사이트 링크로 한도를 쓰지 못하게). 응답은 `Cache-Control: no-store`·`X-Content-Type-Options: nosniff`.

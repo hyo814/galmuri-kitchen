@@ -247,9 +247,15 @@ def test_delete_with_reason_records_removal(client, login, app):
     assert client.delete(f"/api/ingredients/{egg['id']}?reason=").status_code == 204  # 비어 있으면 이유 없이 지운다
     assert client.get("/api/ingredients").get_json() == []
     assert removals(app) == [("우유", "eaten"), ("두부", "discarded")]
+    with app.app_context():
+        me = User.query.filter_by(provider_id="1").one()
+        assert {r.user_id for r in IngredientRemoval.query} == {me.id}
+        db.session.delete(me)  # 사용자를 지우면 삭제 기록도 함께 지워진다(ON DELETE CASCADE)
+        db.session.commit()
+        assert IngredientRemoval.query.count() == 0
 
 
-@pytest.mark.parametrize("reason", ["EATEN", "lost", "eaten "])
+@pytest.mark.parametrize("reason", ["EATEN", "lost", "eaten ", " "])
 def test_delete_with_invalid_reason_deletes_nothing(client, login, app, reason):
     login()
     item = create(client).get_json()
