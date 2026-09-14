@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import {
   enqueue, markAttempt, markServerError, removeOp, dropWithDependents, applyQueue, applyServerResult, remapRef, classify, newClientId, MAX_ATTEMPTS,
-  groupItems, plannedOnFor, parseQuantityText, quantityText, sourceTag,
+  groupItems, plannedOnFor, parseQuantityText, quantityText, sourceTag, retryDelay, opRequest, sameOwner, shouldRefresh,
 } from "../src/shopping/sync.ts";
 
 const T = (m) => `2026-09-14T01:${String(m).padStart(2, "0")}:00.000Z`;
@@ -574,5 +574,40 @@ for (let round = 0; round < 20; round++) {
     for (const note of view.notes) { noDupes(note.photos, "id", "사진"); noDupes(note.photos, "client_id", "사진"); }
   }
 }
+
+// opRequest: 서버 API 모양, 서버 id를 모르는 참조는 null
+assert.deepEqual(opRequest({ op: "add", client_id: "c1", fields: F, at: T(1) }), { method: "POST", path: "/api/shopping/items", body: { ...F, client_id: "c1" } });
+assert.deepEqual(opRequest({ op: "check", ref: { id: 3 }, done: true, at: T(2) }), { method: "PATCH", path: "/api/shopping/items/3", body: { done: true, changed_at: T(2) } });
+assert.deepEqual(opRequest({ op: "edit", ref: { id: 3 }, fields: { unit: "봉" }, at: T(2) }), { method: "PATCH", path: "/api/shopping/items/3", body: { unit: "봉" } });
+assert.deepEqual(opRequest({ op: "delete", ref: { id: 3 }, at: T(2) }), { method: "DELETE", path: "/api/shopping/items/3" });
+assert.equal(opRequest({ op: "check", ref: { client_id: "c1" }, done: true, at: T(2) }), null);
+const NF = { place: "이마트", body: "세일" };
+assert.deepEqual(opRequest({ op: "note_add", client_id: "n1", fields: NF, at: T(1) }), { method: "POST", path: "/api/shopping/notes", body: { ...NF, client_id: "n1", edited_at: T(1) } });
+assert.deepEqual(opRequest({ op: "note_save", ref: { id: 7 }, fields: NF, edited_at: T(3) }), { method: "PUT", path: "/api/shopping/notes/7", body: { ...NF, edited_at: T(3) } });
+assert.deepEqual(opRequest({ op: "note_delete", ref: { id: 7 }, at: T(3) }), { method: "DELETE", path: "/api/shopping/notes/7" });
+assert.deepEqual(opRequest({ op: "photo_add", note: { id: 7 }, client_id: "p1", blob_key: "local:p1", at: T(3) }), { method: "POST", path: "/api/shopping/notes/7/photos", body: { client_id: "p1" } });
+assert.equal(opRequest({ op: "photo_add", note: { client_id: "n1" }, client_id: "p1", blob_key: "local:p1", at: T(3) }), null);
+assert.deepEqual(opRequest({ op: "photo_delete", note: { id: 7 }, photo: { id: 9 }, at: T(3) }), { method: "DELETE", path: "/api/shopping/notes/7/photos/9" });
+assert.equal(opRequest({ op: "photo_delete", note: { id: 7 }, photo: { client_id: "p1" }, at: T(3) }), null);
+
+// sameOwner: 로그인 방법과 id가 모두 같아야 같은 사람
+assert.equal(sameOwner({ provider: "kakao", id: 1 }, { provider: "kakao", id: 1, nickname: "x" }), true);
+assert.equal(sameOwner({ provider: "kakao", id: 1 }, { provider: "naver", id: 1 }), false);
+assert.equal(sameOwner({ provider: "kakao", id: 1 }, { provider: "kakao", id: 2 }), false);
+assert.equal(sameOwner(undefined, { provider: "kakao", id: 1 }), false);
+assert.equal(sameOwner(null, null), false);
+
+// shouldRefresh: 60초에 한 번, 대기열이 있거나 장보기 화면이 열려 있으면 늘
+const NOW = 1_000_000;
+assert.equal(shouldRefresh(null, NOW, 0, false), true);
+assert.equal(shouldRefresh(NOW - 59_999, NOW, 0, false), false);
+assert.equal(shouldRefresh(NOW - 60_000, NOW, 0, false), true);
+assert.equal(shouldRefresh(NOW - 1000, NOW, 2, false), true);
+assert.equal(shouldRefresh(NOW - 1000, NOW, 0, true), true);
+
+// retryDelay: 2초부터 두 배, 5분에서 멈춤
+assert.deepEqual([0, 1, 2, 3].map(retryDelay), [2000, 4000, 8000, 16000]);
+assert.equal(retryDelay(20), 300000);
+assert.equal(retryDelay(-1), 2000);
 
 console.log("shopping sync ok");

@@ -17,6 +17,7 @@ import Channels from "./pages/Channels";
 import VideoPlayer from "./pages/VideoPlayer";
 import { scrollTops, useHashRoute, type Route, type RoutePattern } from "./useHashRoute";
 import { forgetResources } from "./useResource";
+import { clearShoppingDevice, pauseShopping, rememberUser, savedUser, startShopping } from "./shopping/useShopping";
 
 interface PageProps {
   route: Route;
@@ -126,7 +127,7 @@ export default function App() {
   }, [route.path]);
 
   // 로그아웃·세션 만료: 다른 계정으로 들어와도 이전 사용자의 화면 캐시·탭·스크롤이 보이지 않게 (M9)
-  const signOut = useCallback(() => {
+  const resetScreens = useCallback(() => {
     forgetResources();
     resetRecipesSegment();
     resetSeasoningDraft();
@@ -134,6 +135,24 @@ export default function App() {
     resetRecipeDraft();
     scrollTops.clear();
     setUser(null);
+  }, []);
+  // 401(세션 만료): 장보기 대기 변경은 남기고 보내기만 멈춘다 — 같은 사람이 다시 로그인하면 이어서 보낸다(다른 사람이면 rememberUser가 지운다)
+  const signOut = useCallback(() => {
+    pauseShopping();
+    resetScreens();
+  }, [resetScreens]);
+  // 직접 로그아웃(더보기에서 확인한 뒤): 같은 폰을 다른 사람이 써도 장보기 목록이 남지 않게 기기 데이터를 지운다
+  const logout = useCallback(() => {
+    void clearShoppingDevice();
+    resetScreens();
+  }, [resetScreens]);
+
+  // 기기 데이터가 이 사용자 것인지 확인한 뒤에 화면을 연다(다른 사용자의 대기 변경을 보내지 않게)
+  const signIn = useCallback((me: User) => {
+    void rememberUser(me).then(() => {
+      setUser(me);
+      startShopping();
+    });
   }, []);
 
   // 시작 화면은 로그인 확인이 끝나고 최소 0.8초가 지날 때까지 보여 준다(너무 빨리 깜빡이지 않게)
@@ -149,9 +168,15 @@ export default function App() {
   const checkMe = () => {
     setOffline(false);
     setUser(undefined);
-    api<User>("/api/me").then(setUser, (e: unknown) => {
-      if (e instanceof ApiError && e.status === 0) setOffline(true);
-      else if (!(e instanceof ApiError && e.status === 401)) setUser(null); // 401은 전역 핸들러가 처리
+    api<User>("/api/me").then(signIn, async (e: unknown) => {
+      if (e instanceof ApiError && (e.status === 0 || e.status >= 500)) {
+        // 인터넷이 없거나 서버가 잠시 안 되면 마지막으로 로그인한 사용자로 연다(마트 지하에서 장보기, 스펙 19절). 세션이 끝났으면 다음 요청의 401이 로그인으로 보낸다
+        const saved = await savedUser();
+        if (saved) {
+          setUser(saved);
+          startShopping();
+        } else setOffline(true);
+      } else if (!(e instanceof ApiError && e.status === 401)) setUser(null); // 401은 전역 핸들러가 처리
     });
   };
 
@@ -179,14 +204,14 @@ export default function App() {
     return (
       <>
         {splash}
-        <Login onLogin={setUser} />
+        <Login onLogin={signIn} />
       </>
     );
   return (
     <>
       {splash}
       {/* key: 경로가 바뀌면 화면을 새로 만든다(상세 3 → 상세 4에서 이전 데이터가 남지 않게) */}
-      <Fragment key={route.path}>{PAGES[route.pattern]({ route, user, onLogout: signOut })}</Fragment>
+      <Fragment key={route.path}>{PAGES[route.pattern]({ route, user, onLogout: logout })}</Fragment>
       <TabBar path={route.path} />
     </>
   );
