@@ -27,7 +27,9 @@ for (const s of STORES) {
   for (const t of Object.values(s.sorts)) assert.ok(t.includes("{q}"), s.id);
 }
 
-for (const word of ["대파", "두부 한 모", "A&B #1 100%"]) {
+assert.equal(Array.from(searchQuery("가".repeat(49) + "😀😀")).length, 50); // 이모지를 반으로 자르지 않는다
+assert.doesNotThrow(() => storeLinks("가".repeat(49) + "😀", {}));
+for (const word of ["대파", "두부 한 모", "A&B #1 100%", "a+b 1", "대파😀"]) {
   const result = storeLinks(word, {});
   assert.deepEqual(result.map((r) => r.store), ids, word);
   for (const r of result) {

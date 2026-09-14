@@ -36,7 +36,7 @@ export const STORES: readonly Store[] = [
     sorts: {
       price_asc: "https://www.coupang.com/np/search?q={q}&sorter=salePriceAsc",
       popular: "https://www.coupang.com/np/search?q={q}&sorter=saleCountDesc",
-      newest: "https://www.coupang.com/np/search?q={q}&sorter=latestAsc",
+      newest: "https://www.coupang.com/np/search?q={q}&sorter=latestAsc", // Asc가 오래된 순일 수 있음 — 폰 확인
     },
     verified: null,
   },
@@ -95,14 +95,16 @@ export const STORES: readonly Store[] = [
   },
 ];
 
-/** 제휴 링크 모양. 파트너스 가입 후 형식을 확인하고 채운다(그 전엔 빈 객체 → 광고 표시 없음, 스펙 25절) */
+/** 제휴 링크 모양. 파트너스 가입 후 형식을 확인하고 채운다(그 전엔 빈 객체 → 광고 표시 없음, 스펙 25절)
+ *  ponytail: 쿠팡 파트너스 딥링크는 비밀키 서명이 필요할 수 있다 → 그렇다면 서버 엔드포인트로 옮기고 비밀키는 /api/me에 절대 넣지 않는다 */
 export const AFFILIATE_FORMATS: Partial<Record<StoreId, (url: string, id: string) => string>> = {};
 
 export const LAST_STORE_KEY = "shopping-last-store"; // localStorage, 링크를 누를 때 저장(Task 9)
 
 /** 앞뒤 공백·괄호 내용 제거, 50자 */
 export function searchQuery(name: string): string {
-  return name.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim().slice(0, 50).trim();
+  const cleaned = name.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
+  return Array.from(cleaned).slice(0, 50).join("").trim(); // 글자 단위로 자른다(이모지 반쪽 → encodeURIComponent URIError 방지)
 }
 
 export interface StoreLink { sort: SortId | null; label: string; url: string }
@@ -114,7 +116,7 @@ export function storeLinks(
   affiliates: Partial<Record<StoreId, string>>,
   options: { lastUsed?: StoreId | null; onlyVerified?: boolean; formats?: typeof AFFILIATE_FORMATS } = {},
 ): { store: StoreId; name: string; ad: boolean; links: StoreLink[] }[] {
-  const q = name.trim();
+  const q = searchQuery(name); // 호출하는 쪽이 잊어도 같은 검색어가 되게 여기서 정리한다
   if (!q) return [];
   const { lastUsed = null, onlyVerified = false, formats = AFFILIATE_FORMATS } = options;
   const last = STORES.filter((s) => s.id === lastUsed);
