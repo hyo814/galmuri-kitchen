@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   ApiError,
   api,
@@ -84,6 +84,14 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
   const { busy, error, setError, run } = useAsyncAction();
   const [matched, setMatched] = useState<Matched | null>(null);
   const follow = useAsyncAction();
+  // 제안 시트는 어떻게 닫혀도(버튼·Esc·배경, 빼는 중·실패 뒤 포함) 한 번만 onAdded로 이어 간다
+  const finished = useRef(false);
+  const finish = (count: number) => {
+    if (finished.current) return;
+    finished.current = true;
+    setMatched(null);
+    return onAdded(count);
+  };
 
   const chosen = rows.filter((r) => r.checked);
   const update = (key: number, patch: Partial<Row>) =>
@@ -148,14 +156,14 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
     });
   };
 
-  const keep = () => matched && follow.run(() => onAdded(matched.count));
+  const keep = () => matched && finish(matched.count);
   const markStocked = () =>
     matched &&
     follow.run(async () => {
       const ids = matched.items.filter((i) => i.on).map((i) => i.id);
       await api("/api/shopping/items/mark-stocked", { method: "POST", body: { ids } });
       forgetResources("/api/shopping");
-      await onAdded(matched.count);
+      await finish(matched.count);
     });
 
   return (

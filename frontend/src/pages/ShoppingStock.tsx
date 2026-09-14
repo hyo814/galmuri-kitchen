@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError, api, type StorageLocation } from "../api";
 import Icon from "../components/Icon";
 import { formatDate, formatQuantity } from "../format";
@@ -6,9 +6,6 @@ import { useAsyncAction } from "../useAsyncAction";
 import { goBack, navigate, setLeaveGuard } from "../useHashRoute";
 import { forgetRecipeCaches, forgetResources } from "../useResource";
 
-// backend/app/shopping.py — 이 문구면 초안·보관 위치를 다시 받는다
-const LIST_CHANGED = "목록이 방금 바뀌었어요. 다시 불러와주세요.";
-const LOCATION_ERRORS = ["선택한 보관 위치가 방금 바뀌었어요. 다시 시도해주세요.", "보관 위치를 다시 선택해주세요."];
 const OFFLINE = "인터넷이 연결되면 넣을 수 있어요";
 const LEAVE_CONFIRM = "작성 중인 내용이 사라져요. 나갈까요?";
 
@@ -32,6 +29,11 @@ interface DraftItem {
 interface Draft {
   purchased_on: string;
   items: DraftItem[];
+}
+
+interface StockBody {
+  purchased_on: string;
+  items: { id: number; name: string; quantity: number; unit: string; location_id: number }[];
 }
 
 interface Row extends DraftItem {
@@ -65,6 +67,8 @@ export default function ShoppingStock() {
   const [loadError, setLoadError] = useState("");
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
   const { busy, error, setError, run } = useAsyncAction();
+  // 응답을 못 받은 채 끊긴 요청. 연결되면 같은 내용으로 다시 보낸다(이미 넣었으면 서버가 200 created 0)
+  const pending = useRef<StockBody | null>(null);
 
   // 다시 받을 때(목록이 바뀜·위치가 바뀜) 남아 있는 항목은 사용자가 고른 위치를 지킨다
   const load = async () => {
@@ -92,7 +96,7 @@ export default function ShoppingStock() {
 
   useEffect(() => {
     if (navigator.onLine) load();
-    const onOnline = () => load();
+    const onOnline = () => (pending.current ? send(pending.current) : load());
     window.addEventListener("online", onOnline);
     return () => window.removeEventListener("online", onOnline);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -128,23 +132,30 @@ export default function ShoppingStock() {
       setError("산 날은 오늘이나 그 전 날짜로 골라주세요.");
       return;
     }
+    send({
+      purchased_on: purchasedOn,
+      items: rows.map((r) => ({ id: r.id, name: r.name, quantity: r.quantity, unit: r.unit, location_id: Number(r.chosen) })),
+    });
+  };
+
+  // online 이벤트에서도 불리므로 상태(rows)가 아니라 보낸 body로 행을 찾는다
+  const send = (body: StockBody) =>
     run(async () => {
-      const items = rows.map((r) => ({ id: r.id, name: r.name, quantity: r.quantity, unit: r.unit, location_id: Number(r.chosen) }));
+      pending.current = null;
       try {
-        await api("/api/shopping/items/stock", { method: "POST", body: { purchased_on: purchasedOn, items } });
+        await api("/api/shopping/items/stock", { method: "POST", body });
       } catch (e) {
         if (!(e instanceof ApiError)) throw e;
-        if (e.status === 0) throw new Error(OFFLINE);
-        const first = e.errors?.[0];
-        const row = first && rows[first.index];
-        if (row) {
-          setRowErrors({ [row.id]: first.error });
-          document.getElementById(`stock-loc-${row.id}`)?.focus();
+        if (e.status === 0) {
+          pending.current = body;
+          throw new Error(OFFLINE);
         }
-        // 위치가 사라진 건 항목별 오류(`N번째 재료: 보관 위치를 다시 선택해주세요.`)로도 온다
-        if ([e.message, first?.error].some((m) => m === LIST_CHANGED || LOCATION_ERRORS.includes(m ?? ""))) {
-          await load();
-          throw new Error("목록이 바뀌어서 다시 불러왔어요. 확인하고 다시 넣어주세요.");
+        if (e.status === 400) {
+          const errors = Object.fromEntries((e.errors ?? []).map((x) => [body.items[x.index]?.id, x.error]));
+          setRowErrors(errors);
+          await load(); // 목록·위치가 바뀌었을 수 있다. 고른 위치는 load가 지킨다
+          const first = Object.keys(errors)[0];
+          if (first) document.getElementById(`stock-loc-${first}`)?.focus();
         }
         throw e;
       }
@@ -153,7 +164,6 @@ export default function ShoppingStock() {
       forgetRecipeCaches(); // 재고가 바뀌었으니 추천·보유 표시도 새로
       navigate("/shopping", { replace: true });
     });
-  };
 
   if (offline && !draft)
     return (
@@ -262,7 +272,7 @@ export default function ShoppingStock() {
                     >
                       {row.chosen === "" && (
                         <option value="" disabled>
-                          보관 위치를 골라주세요
+                          골라주세요
                         </option>
                       )}
                       {locations.map((l) => (
@@ -274,7 +284,7 @@ export default function ShoppingStock() {
                     <Icon name="chevron" size={16} />
                   </span>
                   {err && (
-                    <p className="rc-err" id={`stock-err-${row.id}`} role="alert">
+                    <p className="rc-err" id={`stock-err-${row.id}`}>
                       <Icon name="alert" size={16} />
                       {err}
                     </p>
@@ -283,6 +293,20 @@ export default function ShoppingStock() {
             );
           })}
         </section>
+
+        {locations.length === 0 && (
+          <a
+            className="btn secondary sh-in-make"
+            href="#/more"
+            onClick={(e) => {
+              e.preventDefault();
+              if (canLeave()) navigate("/more"); // 더보기 → 보관 위치
+            }}
+          >
+            <Icon name="plus" />
+            보관 위치 만들기
+          </a>
+        )}
 
         <p className="mo-note sh-in-note">
           <Icon name="info" size={16} />
@@ -297,7 +321,7 @@ export default function ShoppingStock() {
 
         <div className="cta-bar">
           <div className="actions">
-            <button type="button" className="btn outline" onClick={leave}>
+            <button type="button" className="btn outline" disabled={busy} aria-disabled={busy} onClick={leave}>
               취소
             </button>
             <button className="btn primary" disabled={busy}>

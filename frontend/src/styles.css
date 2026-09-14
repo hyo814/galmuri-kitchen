@@ -3330,7 +3330,7 @@ button.row-btn > svg {
 .sh-in-sel .input {
   height: 48px;
   padding: 0 30px 0 12px;
-  font-size: 15px;
+  font-size: 16px;
   appearance: none;
   text-overflow: ellipsis;
 }
@@ -3350,6 +3350,7 @@ button.row-btn > svg {
 }
 
 .sh-in-note,
+.sh-in-make,
 .sh-in-error {
   margin: 16px 20px 0;
 }
@@ -3389,4 +3390,8 @@ button.row-btn > svg {
   font-size: 16px;
   font-weight: 600;
   text-align: left;
+}
+
+.sh-in-make {
+  width: auto;
 }
