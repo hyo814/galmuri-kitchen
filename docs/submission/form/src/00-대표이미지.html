@@ -1,0 +1,28 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>대표 이미지</title><link rel="stylesheet" href="slide.css">
+<style>
+  /* 1200×630 크롭(가운데 1920×1008) 안에 핵심 요소가 들어가도록 위아래 36px 여백 비움 */
+  body { background: var(--accent); }
+  .slide { padding: 0 0 0 132px; gap: 0; }
+  .copy { flex: 0 0 780px; color: #fff; }
+  .logo { width: 128px; height: 128px; display: block; margin-bottom: 36px; }
+  .name { font-size: 132px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.1; }
+  .tag { font-size: 58px; font-weight: 700; letter-spacing: -0.03em; margin-top: 22px; }
+  .flow { display: inline-block; margin-top: 48px; font-size: 34px; font-weight: 600; background: #086a41; color: #e7f6ef; padding: 16px 30px; border-radius: 999px; }
+  .fan { position: relative; flex: 1; height: 100%; }
+  .fan .phone { position: absolute; top: 50%; left: 50%; box-shadow: 0 50px 90px -30px rgb(0 0 0 / 0.5); }
+  .fan .p1 { --h: 700px; transform: translate(-50%, -50%) translate(-270px, 60px) rotate(-9deg); }
+  .fan .p3 { --h: 700px; transform: translate(-50%, -50%) translate(270px, 60px) rotate(9deg); }
+  .fan .p2 { --h: 800px; transform: translate(-50%, -50%) translate(0, -10px); z-index: 1; }
+</style></head><body><div class="slide">
+<div class="copy">
+  <img class="logo" src="../../../../frontend/public/mark.svg" alt="">
+  <div class="name">갈무리부엌</div>
+  <div class="tag">사둔 재료, 남김없이 챙겨요</div>
+  <div class="flow">재고 · 레시피 · 장보기를 한 흐름으로</div>
+</div>
+<div class="fan">
+  <figure class="phone p1"><div class="screen"><img src="../../screenshots/02-fridge.png" alt=""></div></figure>
+  <figure class="phone p3"><div class="screen"><img src="../../screenshots/10-shopping-list.png" alt=""></div></figure>
+  <figure class="phone p2"><div class="screen"><img src="../../screenshots/05-ai-recipes.png" alt=""></div></figure>
+</div>
+</div></body></html>

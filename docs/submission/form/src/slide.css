@@ -1,0 +1,36 @@
+/* 갈무리부엌 제출 슬라이드 공통 스타일 — 앱 styles.css 토큰과 같은 값 */
+:root {
+  --bg: #f3f4f6; --surface: #ffffff; --text: #17191c; --sub: #4e5560; --muted: #8a9099;
+  --line: #e1e4e8; --accent: #0b7a4c; --accent-tint: #e7f6ef; --bezel: #17191c; --yellow: #ffc94a;
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  word-break: keep-all; -webkit-font-smoothing: antialiased;
+}
+.slide { position: relative; width: 1920px; height: 1080px; display: flex; align-items: center; padding: 0 96px 0 120px; gap: 64px; }
+
+/* 왼쪽 글 */
+.copy { flex: 0 0 560px; }
+.brand { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 700; color: var(--sub); margin-bottom: 44px; }
+.brand img { width: 40px; height: 40px; }
+.eyebrow { display: inline-block; font-size: 24px; font-weight: 700; color: var(--accent); background: var(--accent-tint); padding: 8px 16px; border-radius: 999px; margin-bottom: 24px; }
+h1 { font-size: 56px; line-height: 1.3; font-weight: 800; letter-spacing: -0.03em; }
+.points { list-style: none; padding: 0; margin-top: 52px; display: grid; gap: 16px; }
+.points li { display: flex; gap: 20px; align-items: flex-start; background: var(--surface); border-radius: 24px; padding: 24px 28px; }
+.points b { display: block; font-size: 27px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.35; }
+.points div span { display: block; font-size: 21px; color: var(--sub); line-height: 1.45; margin-top: 4px; }
+.n, .phone .n { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 22px; font-weight: 700; display: grid; place-items: center; margin-top: 1px; }
+
+/* 오른쪽 폰 */
+.stage { flex: 1; display: flex; justify-content: center; align-items: center; gap: 32px; }
+.phone { --h: 680px; position: relative; padding: 10px; border-radius: 50px; background: var(--bezel); box-shadow: 0 40px 80px -30px rgb(23 25 28 / 0.35); }
+.phone .screen { position: relative; height: var(--h); aspect-ratio: 384 / 832; border-radius: 40px; overflow: hidden; background: var(--bg); }
+.phone .screen img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.phone .screen img.fit { object-fit: contain; } /* 긴 화면은 전체를 줄여서 보여줌 */
+.phone .n { position: absolute; top: -18px; left: -18px; width: 52px; height: 52px; font-size: 26px; border: 5px solid var(--bg); margin: 0; }
+/* 화면 속 강조 테두리 — 좌표는 384×832 화면 기준 % */
+.ring { position: absolute; border: 4px solid var(--accent); border-radius: 18px; box-shadow: 0 0 0 8px rgb(11 122 76 / 0.18); }
+.phone .n { width: auto; min-width: 52px; padding: 0 14px; border-radius: 999px; }
