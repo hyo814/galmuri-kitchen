@@ -2,7 +2,7 @@
 
 - 유튜브·인스타그램: 사용자가 보낸 주소를 요청하지 않고 영상 ID·게시물 코드로 고정 호스트 주소를 다시 만든다(fetch_fixed).
 - 블로그 같은 일반 주소: https·443 포트·공인 IP만(DNS 결과 전부 + 검사한 IP 하나에만 연결 + 연결된 소켓의 상대 주소),
-  리다이렉트는 매번 다시 검사해 최대 3번, text/html·1MB(fetch_public_page).
+  리다이렉트는 매번 다시 검사해 최대 3번, text/html·3MB(fetch_public_page).
 - 둘 다 프록시 환경변수를 쓰지 않고, 리다이렉트까지 합쳐 8초가 지나면 감시 타이머가 소켓을 끊는다.
 예외 메시지에는 주소·키를 넣지 않는다(FetchError는 예외·이유 이름만 담는다).
 예외: 3a의 식약처 공공 레시피 동기화 CLI(`flask sync-public-recipes`, public_recipes.py)는 고정 호스트 하나를 운영자가 직접 부르는 명령이라 이 파일을 거치지 않는다.
@@ -24,7 +24,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.connection import HTTPSConnection
 from urllib3.connectionpool import HTTPSConnectionPool
 
-MAX_BYTES = 1_000_000
+MAX_BYTES = 3_000_000  # 만개의레시피 한 페이지가 1.2MB쯤이다. 조금씩 읽으며 세고(_read) 전체 시간도 TOTAL_SECONDS로 막는다
 CONNECT_SECONDS = 3.05
 TOTAL_SECONDS = 8
 MAX_REDIRECTS = 3
