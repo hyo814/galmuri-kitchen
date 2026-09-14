@@ -27,6 +27,8 @@ services:
           property: connectionString
       - key: DEMO_LOGIN
         value: "1"
+      - key: DEMO_AI_GLOBAL_DAILY  # 체험 계정 전체 AI 호출 24시간 예산(코드 기본 300). 심사 기간 Claude 월 한도($15)에 맞춰 줄임
+        value: "50"
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: YOUTUBE_API_KEY
