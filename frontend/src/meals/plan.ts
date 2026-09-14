@@ -1,0 +1,73 @@
+// 식단 날짜 계산(스펙 20절). 브라우저 API·Date.now()를 부르지 않고 오늘은 인자로 받는다 — scripts/check-meals.mjs가 node로 읽는다.
+import type { MealKind, MealPlanSummary } from "../api";
+import { addDays } from "../format.ts";
+
+export const MEALS: [MealKind, string][] = [["breakfast", "아침"], ["lunch", "점심"], ["dinner", "저녁"], ["snack", "간식"]];
+export const mealLabel = (meal: MealKind) => MEALS.find(([k]) => k === meal)![1];
+export const PERIODS: [string, number | null][] = [["1주", 7], ["2주", 14], ["1달", 30], ["직접", null]];
+const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+const ORDINALS = ["첫째", "둘째", "셋째", "넷째", "다섯째", "여섯째"];
+const parts = (iso: string) => iso.split("-").map(Number) as [number, number, number];
+const weekday = (iso: string) => new Date(`${iso}T00:00:00`).getDay(); // 0=일
+export const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
+
+/** "2026-09-14" → "9월 셋째 주"(월요일 시작 주, 1일이 든 주가 첫째). 28일 이상이면 "9월 식단" */
+export function defaultPlanName(start: string, days: number): string {
+  const [, month, day] = parts(start);
+  if (days >= 28) return `${month}월 식단`;
+  const firstOffset = (weekday(`${start.slice(0, 8)}01`) + 6) % 7; // 월=0
+  return `${month}월 ${ORDINALS[Math.floor((day - 1 + firstOffset) / 7)]} 주`;
+}
+export const planEnd = (start: string, days: number) => addDays(start, days - 1);
+/** 주 보기 페이지: 시작일부터 7일씩 */
+export const weekStarts = (plan: Pick<MealPlanSummary, "start_on" | "days">) =>
+  Array.from({ length: Math.ceil(plan.days / 7) }, (_, i) => addDays(plan.start_on, i * 7));
+/** 한 주 페이지의 날짜(식단 끝을 넘지 않게) */
+export const weekDates = (weekStart: string, plan: Pick<MealPlanSummary, "start_on" | "days">) =>
+  Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).filter((d) => d <= planEnd(plan.start_on, plan.days));
+/** 오늘이 든 주, 없으면 첫 주(오늘이 끝 뒤면 마지막 주) */
+export function initialWeek(plan: Pick<MealPlanSummary, "start_on" | "days">, today: string): string {
+  const weeks = weekStarts(plan);
+  if (today < plan.start_on) return weeks[0];
+  // tsconfig lib가 ES2022라 findLast 대신 filter
+  return weeks.filter((w) => w <= today).at(-1) ?? weeks[0];
+}
+/** "9월 14일–20일", 달이 바뀌면 "9월 28일–10월 4일" */
+export function rangeText(start: string, end: string): string {
+  const [, m1, d1] = parts(start);
+  const [, m2, d2] = parts(end);
+  return m1 === m2 ? `${m1}월 ${d1}일–${d2}일` : `${m1}월 ${d1}일–${m2}월 ${d2}일`;
+}
+/** "9월 14일 (월)" */
+export const dateWithDow = (iso: string) => `${parts(iso)[1]}월 ${parts(iso)[2]}일 (${DOW[weekday(iso)]})`;
+/** 하루 카드 머리 {day: "14일", dow: "월요일"} */
+export const dayHead = (iso: string) => ({ day: `${parts(iso)[2]}일`, dow: `${DOW[weekday(iso)]}요일` });
+/** 시트 설명 "9월 14일 월요일 · 오늘" / "9월 14일 월요일 · 저녁" */
+export function slotDateText(iso: string, today: string, meal?: MealKind): string {
+  const base = `${parts(iso)[1]}월 ${parts(iso)[2]}일 ${DOW[weekday(iso)]}요일`;
+  return meal ? `${base} · ${mealLabel(meal)}` : iso === today ? `${base} · 오늘` : base;
+}
+/** 월 보기 격자(월요일 시작, 그 달 1일이 든 주부터 말일이 든 주까지). 칸은 ISO 날짜 */
+export function monthGrid(year: number, month: number): string[][] {
+  const first = `${year}-${String(month).padStart(2, "0")}-01`;
+  const start = addDays(first, -((weekday(first) + 6) % 7));
+  const last = addDays(`${month === 12 ? year + 1 : year}-${String((month % 12) + 1).padStart(2, "0")}-01`, -1);
+  const rows: string[][] = [];
+  for (let w = start; w <= last; w = addDays(w, 7)) rows.push(Array.from({ length: 7 }, (_, i) => addDays(w, i)));
+  return rows;
+}
+/** 복사할 수 있는 최대 주(1~4, 31일 상한). 0이면 복사 못 함 — 서버 copy-week와 같은 계산 */
+export function copyMaxWeeks(plan: Pick<MealPlanSummary, "start_on">, weekStart: string): number {
+  return Math.max(0, Math.min(4, Math.floor(daysBetween(addDays(weekStart, 6), addDays(plan.start_on, 30)) / 7)));
+}
+/** 복사로 들어갈 날(다음 주 시작 ~ 마지막 주 끝)과 늘어난 기간(늘지 않으면 null) */
+export function copyTarget(plan: Pick<MealPlanSummary, "start_on" | "days">, weekStart: string, weeks: number) {
+  const start = addDays(weekStart, 7);
+  const end = addDays(weekStart, 7 * (weeks + 1) - 1);
+  const days = daysBetween(plan.start_on, end) + 1;
+  return { start, end, extendedDays: days > plan.days ? days : null };
+}
+/** 처음 보여줄 식단: 오늘이 기간 안인 것 중 시작일이 늦은 것 → 목록 첫 번째(시작일 내림차순) */
+export function pickPlan(items: MealPlanSummary[], today: string): MealPlanSummary | undefined {
+  return items.find((p) => p.start_on <= today && today <= p.end_on) ?? items[0];
+}

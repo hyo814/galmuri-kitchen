@@ -8,12 +8,12 @@ interface Tab {
   match: (path: string) => boolean;
 }
 
-// 탭 순서(사용자 결정 2026-09-13): 재고 · 레시피 · 장보기 · 식단 · 더보기. 아직 없는 기능 탭은 '준비 중' 화면을 보여 준다(사용자 결정).
+// 탭 순서(사용자 결정 2026-09-13): 재고 · 레시피 · 장보기 · 식단 · 더보기.
 export const TABS: Tab[] = [
   { path: "/", label: "재고", icon: "fridge", match: (r) => r === "/" },
   { path: "/recipes", label: "레시피", icon: "book", match: (r) => r === "/recipes" || r.startsWith("/recipes/") },
   { path: "/shopping", label: "장보기", icon: "cart", match: (r) => r === "/shopping" || r.startsWith("/shopping/") },
-  { path: "/meals", label: "식단", icon: "calendar", match: (r) => r === "/meals" },
+  { path: "/meals", label: "식단", icon: "calendar", match: (r) => r === "/meals" || r.startsWith("/meals/") },
   { path: "/more", label: "더보기", icon: "menu", match: (r) => r === "/more" || r === "/tools" },
 ];
 
