@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { api, localToday, type AiUsage, type Ingredient, type MealDraft, type MealKind, type MealPlan, type User } from "../api";
 import Icon from "../components/Icon";
 import Mascot from "../components/Mascot";
@@ -21,12 +21,72 @@ interface DraftStore {
   checked: Record<string, boolean>;
 }
 
-// ponytail: 확인 화면은 모듈 변수(뒤로가기·탭 이동 뒤에도 그대로, 새로고침하면 사라짐). 다른 식단을 열면 버린다.
+// ponytail: 만드는 중·확인·오류는 모듈 변수(뒤로가기·탭 이동 뒤에도 그대로, 새로고침하면 사라짐). 다른 식단의 확인 화면은 버린다.
+// 만드는 중에 화면을 떠나도 요청은 끊지 않는다(서버가 이미 횟수를 셌다) — `취소`만 끊는다. RecipeAi와 같은 방식.
 let draftStore: DraftStore | null = null;
+let running: { planId: number; weekStart: string; meals: MealKind[]; ctrl: AbortController } | null = null;
+let draftError: { planId: number; message: string } | null = null;
+let generation = 0; // 로그아웃 뒤에 도착한 옛 응답을 버리는 번호
+let version = 0;
+const listeners = new Set<() => void>();
+const emit = () => {
+  version++;
+  listeners.forEach((listener) => listener());
+};
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+};
 
-/** 로그아웃 때 resetMealsView가 부른다 */
+/** 로그아웃·넣기 뒤: 모두 버린다(resetMealsView가 부른다) */
 export function forgetMealDraft() {
+  generation++;
+  running?.ctrl.abort();
+  running = null;
   draftStore = null;
+  draftError = null;
+  emit();
+}
+
+/** 만들기·다시 만들기. 이전 초안은 새 초안이 올 때까지 둔다(다시 만들기를 취소하면 그대로 돌아간다) */
+function startDraft(planId: number, weekStart: string, meals: MealKind[], body: object) {
+  running?.ctrl.abort();
+  const ctrl = new AbortController();
+  const id = generation;
+  running = { planId, weekStart, meals, ctrl };
+  draftError = null;
+  emit();
+  api<MealDraft>(`/api/meal-plans/${planId}/ai-draft`, { method: "POST", body, signal: ctrl.signal }).then(
+    (draft) => {
+      if (id !== generation || running?.ctrl !== ctrl) return;
+      running = null;
+      draftStore = {
+        planId,
+        weekStart,
+        meals,
+        draft,
+        choice: Object.fromEntries(draft.slots.map((s) => [keyOf(s), s.options[0]])),
+        checked: Object.fromEntries(draft.slots.map((s) => [keyOf(s), true])),
+      };
+      forgetResources("/api/meal-plans"); // 목표 두 칸은 서버가 식단에 저장했다
+      emit();
+    },
+    (e: unknown) => {
+      if (id !== generation || running?.ctrl !== ctrl) return;
+      running = null;
+      draftError = { planId, message: (e as Error).message };
+      forgetResources("/api/meal-plans");
+      emit();
+    },
+  );
+}
+
+function cancelDraft() {
+  running?.ctrl.abort();
+  running = null;
+  emit();
 }
 
 const keyOf = (s: { date: string; meal: MealKind }) => `${s.date}|${s.meal}`;
@@ -65,27 +125,24 @@ export default function MealAiDraft({ id, user }: { id: string; user: User }) {
 
 function Draft({ plan }: { plan: MealPlan }) {
   const today = localToday();
-  const [store, setStore] = useState(() => (draftStore?.planId === plan.id ? draftStore : null));
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  useSyncExternalStore(subscribe, () => version);
+  const store = draftStore?.planId === plan.id ? draftStore : null;
+  const loading = running?.planId === plan.id ? running : null;
+  const error = draftError?.planId === plan.id ? draftError.message : "";
   const viewed = currentWeekOf(plan.id);
-  const week = store?.weekStart ?? (viewed && weekStarts(plan).includes(viewed) ? viewed : initialWeek(plan, today));
+  const week = loading?.weekStart ?? store?.weekStart ?? (viewed && weekStarts(plan).includes(viewed) ? viewed : initialWeek(plan, today));
   const dates = weekDates(week, plan);
-  const [meals, setMeals] = useState<MealKind[]>(store?.meals ?? ["lunch", "dinner"]);
+  const [meals, setMeals] = useState<MealKind[]>(loading?.meals ?? store?.meals ?? ["lunch", "dinner"]);
   const [kcal, setKcal] = useState(plan.goal_kcal?.toString() ?? "");
   const [note, setNote] = useState(plan.goal_note ?? "");
   const usage = useResource<AiUsage>("/api/ai-usage");
   const stock = useResource<Ingredient[]>("/api/ingredients");
-  const abort = useRef<AbortController | null>(null);
   const ids = { meals: useId(), kcal: useId(), kcalErr: useId() };
 
   // 다른 식단의 초안은 버린다
   useEffect(() => {
     if (draftStore && draftStore.planId !== plan.id) draftStore = null;
   }, [plan.id]);
-  // 화면을 떠나면 만드는 중인 요청을 끊는다(서버가 이미 센 횟수는 돌아오지 않는다)
-  useEffect(() => () => abort.current?.abort(), []);
-
   const phase = loading ? "loading" : store ? "review" : "input";
   // 단계가 바뀌면 누른 버튼이 사라져 포커스를 잃는다 → 맨 위 제목으로
   const shownPhase = useRef(phase);
@@ -98,6 +155,11 @@ function Draft({ plan }: { plan: MealPlan }) {
     h1.tabIndex = -1;
     h1.focus({ preventScroll: true });
   }, [phase]);
+  // 만들기가 끝나거나 취소하면 남은 횟수를 다시 받는다
+  const reloadUsage = usage.reload;
+  useEffect(() => {
+    if (phase !== "loading") void reloadUsage();
+  }, [phase, reloadUsage]);
 
   // 곧 먹어야 할 재료: 임박·지남, 유통기한 빠른 순 4개(같은 이름은 하나)
   const urgent: Ingredient[] = [];
@@ -111,45 +173,8 @@ function Draft({ plan }: { plan: MealPlan }) {
   const kcalBad = kcal !== "" && (kcalNum < 500 || kcalNum > 5000);
   const usedUp = !!usage.data && usage.data.recipe.used >= usage.data.recipe.limit;
 
-  const generate = async () => {
-    setError("");
-    setLoading(true);
-    setStore(null);
-    draftStore = null;
-    const ctrl = new AbortController();
-    abort.current = ctrl;
-    try {
-      const draft = await api<MealDraft>(`/api/meal-plans/${plan.id}/ai-draft`, {
-        method: "POST",
-        body: { start_on: dates[0], days: dates.length, meals, goal_kcal: kcal ? kcalNum : null, goal_note: note.trim() || null },
-        signal: ctrl.signal,
-      });
-      draftStore = {
-        planId: plan.id,
-        weekStart: week,
-        meals,
-        draft,
-        choice: Object.fromEntries(draft.slots.map((s) => [keyOf(s), s.options[0]])),
-        checked: Object.fromEntries(draft.slots.map((s) => [keyOf(s), true])),
-      };
-      setStore(draftStore);
-    } catch (e) {
-      if (ctrl.signal.aborted) return;
-      setError((e as Error).message);
-    } finally {
-      if (!ctrl.signal.aborted) {
-        setLoading(false);
-        forgetResources("/api/meal-plans"); // 목표 두 칸은 서버가 식단에 저장했다
-        void usage.reload();
-      }
-    }
-  };
-
-  const cancel = () => {
-    abort.current?.abort();
-    setLoading(false);
-    void usage.reload();
-  };
+  const generate = () =>
+    startDraft(plan.id, week, meals, { start_on: dates[0], days: dates.length, meals, goal_kcal: kcal ? kcalNum : null, goal_note: note.trim() || null });
 
   if (phase === "loading")
     return (
@@ -157,7 +182,7 @@ function Draft({ plan }: { plan: MealPlan }) {
         <header className="topbar">
           <h1>{TITLE}</h1>
         </header>
-        <Loading urgent={urgent.map((i) => i.name)} onCancel={cancel} />
+        <Loading urgent={urgent.map((i) => i.name)} onCancel={cancelDraft} />
       </>
     );
 
@@ -167,9 +192,10 @@ function Draft({ plan }: { plan: MealPlan }) {
         plan={plan}
         today={today}
         store={store}
+        regenerateError={error}
         onChange={(next) => {
           draftStore = next;
-          setStore(next);
+          emit();
         }}
         onRegenerate={generate}
       />
@@ -309,7 +335,9 @@ function Loading({ urgent, onCancel }: { urgent: string[]; onCancel: () => void 
               <br />
             </>
           )}
-          20초쯤 걸려요.
+          1분쯤 걸려요.
+          <br />
+          다른 화면에 다녀와도 계속 만들어요.
         </p>
         <div className="r3-dots" aria-hidden="true">
           <i />
@@ -328,11 +356,13 @@ interface ReviewProps {
   plan: MealPlan;
   today: string;
   store: DraftStore;
+  /** 다시 만들기 실패: 이전 초안은 그대로 두고 CTA 위에 알린다 */
+  regenerateError: string;
   onChange: (next: DraftStore) => void;
   onRegenerate: () => void;
 }
 
-function Review({ plan, today, store, onChange, onRegenerate }: ReviewProps) {
+function Review({ plan, today, store, regenerateError, onChange, onRegenerate }: ReviewProps) {
   const { draft, choice, checked } = store;
   const [swapped, setSwapped] = useState("");
   const { busy, error, run } = useAsyncAction();
@@ -370,11 +400,11 @@ function Review({ plan, today, store, onChange, onRegenerate }: ReviewProps) {
       });
       forgetRecipeCaches();
       forgetResources("/api/meal-plans");
-      forgetMealDraft();
       const kept = res.kept ? `그사이 채운 ${res.kept}칸은 그대로 뒀어요` : "";
       const created = res.created_recipes ? `새 레시피 ${res.created_recipes}개를 내 레시피에 저장했어요` : "";
       showMealsNotice(plan.id, [res.filled ? `${res.filled}칸을 넣었어요` : "", kept, created].filter(Boolean).join(" · "));
       navigate("/meals", { replace: true });
+      forgetMealDraft(); // 화면을 옮긴 뒤에 비워야 입력 화면이 잠깐 보이지 않는다
     });
 
   return (
@@ -402,11 +432,17 @@ function Review({ plan, today, store, onChange, onRegenerate }: ReviewProps) {
         const head = dayHead(date);
         const sum = kcalText(draft.slots.filter((s) => s.date === date && checked[keyOf(s)]).map((s) => draft.dishes[choice[keyOf(s)]].est_kcal));
         return (
-          <section key={date} aria-label={`${head.day} ${head.dow}`}>
+          <div key={date}>
             <h2 className="ml-daygroup">
               {head.day} {head.dow}
               {date === today && " · 오늘"}
-              {sum && <span>1인분 {sum}</span>}
+              {sum && (
+                <>
+                  {/* 스크린리더가 `오늘1인분`처럼 붙여 읽지 않게 */}
+                  <span className="sr-only">, </span>
+                  <span>1인분 {sum}</span>
+                </>
+              )}
             </h2>
             <div className="list">
               {MEALS.map(([meal, label]) => {
@@ -461,7 +497,7 @@ function Review({ plan, today, store, onChange, onRegenerate }: ReviewProps) {
                       <button
                         type="button"
                         className="btn outline ml-swap"
-                        aria-label={`${head.day} ${label} 다른 요리로 바꾸기`}
+                        aria-label={`${head.day} ${label} 다른 걸로`}
                         onClick={() => {
                           const next = slot.options[(slot.options.indexOf(choice[k]) + 1) % slot.options.length];
                           onChange({ ...store, choice: { ...choice, [k]: next } });
@@ -476,13 +512,13 @@ function Review({ plan, today, store, onChange, onRegenerate }: ReviewProps) {
                 );
               })}
             </div>
-          </section>
+          </div>
         );
       })}
       <div className="cta-bar">
-        {error && (
+        {(error || regenerateError) && (
           <p className="error ml-cta-error" role="alert">
-            {error}
+            {error || regenerateError}
           </p>
         )}
         <div className="actions">
