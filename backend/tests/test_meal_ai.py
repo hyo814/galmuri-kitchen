@@ -353,3 +353,36 @@ def test_apply_recipe_cap_counts_new_dishes(client, login, app):
     one = {"dishes": two["dishes"], "slots": two["slots"][:1]}
     assert apply(client, plan["id"], one).status_code == 201
     assert counts(app) == (1000, 1)
+
+
+def test_same_new_dish_twice_merged_so_apply_creates_one_recipe(client, login, app, monkeypatch):
+    login()
+    app.config["ANTHROPIC_API_KEY"] = "k"
+    plan = make_plan(client).get_json()
+    raw = {
+        "dishes": [
+            new_dish("두부조림", mine_id=None, kcal_per_serving=300),
+            "망가진 줄",
+            new_dish("된장국", mine_id=None, kcal_per_serving=100),
+            new_dish("두부 조림", mine_id=None, kcal_per_serving=320),  # 같은 요리(normalize 같음)
+        ],
+        "slots": [
+            {"date": "2026-09-14", "meal": "lunch", "dishes": [3, 0, 1, 2]},  # 3과 0은 같은 요리 → 한 번만, 1은 못 씀
+            {"date": "2026-09-14", "meal": "dinner", "dishes": [3]},
+        ],
+    }
+    monkeypatch.setattr("app.ai.draft_meals", lambda *args: (raw, FAKE_USAGE))
+    res = draft(client, plan["id"], days=1, meals=["lunch", "dinner"])
+    body = res.get_json()
+    assert [d["title"] for d in body["dishes"]] == ["두부조림", "된장국"]
+    assert body["slots"] == [
+        {"date": "2026-09-14", "meal": "lunch", "options": [0, 1]},
+        {"date": "2026-09-14", "meal": "dinner", "options": [0]},
+    ]
+
+    slots = [{"date": s["date"], "meal": s["meal"], "dish": s["options"][0]} for s in body["slots"]]
+    dishes = [{k: d[k] for k in ("title", "servings", "ingredients", "steps")} for d in body["dishes"]]  # 화면이 보내는 모양
+    res = apply(client, plan["id"], {"dishes": dishes, "slots": slots})
+    assert (res.status_code, res.get_json()["created_recipes"]) == (201, 1)
+    with app.app_context():
+        assert [r.title for r in Recipe.query.all()] == ["두부조림"]

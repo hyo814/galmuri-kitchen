@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
-import { api, localToday, type AiUsage, type Ingredient, type MealDraft, type MealKind, type MealPlan, type User } from "../api";
+import { ApiError, api, localToday, type AiUsage, type Ingredient, type MealDraft, type MealKind, type MealPlan, type User } from "../api";
 import Icon from "../components/Icon";
 import Mascot from "../components/Mascot";
 import { namesLabel, remainingText, withJosa } from "../format";
@@ -40,13 +40,28 @@ const subscribe = (listener: () => void) => {
   };
 };
 
-/** 로그아웃: 모든 식단의 초안·요청을 버린다(resetMealsView가 부른다) */
-export function forgetMealDraft() {
+/** 로그아웃(resetMealsView): 모든 식단의 초안·요청을 버린다. planId를 주면(식단 지우기) 그 식단 것만 */
+export function forgetMealDraft(planId?: number) {
+  if (planId !== undefined) {
+    running.get(planId)?.ctrl.abort();
+    running.delete(planId);
+    drafts.delete(planId);
+    errors.delete(planId);
+    return emit();
+  }
   generation++;
   running.forEach(({ ctrl }) => ctrl.abort());
   running.clear();
   drafts.clear();
   errors.clear();
+  emit();
+}
+
+/** 초안을 버리고 입력 화면으로. message가 있으면 입력 화면 오류 자리에 보여준다 */
+function discardDraft(planId: number, message = "") {
+  drafts.delete(planId);
+  if (message) errors.set(planId, message);
+  else errors.delete(planId);
   emit();
 }
 
@@ -105,7 +120,7 @@ export default function MealAiDraft({ id, user }: { id: string; user: User }) {
     <main className="page">
       <BackLink to="/meals" label="식단" />
       {plan ? (
-        <Draft key={plan.id} plan={plan} />
+        <Draft key={plan.id} plan={plan} reloadPlan={reload} />
       ) : (
         <>
           <header className="topbar">
@@ -124,14 +139,24 @@ export default function MealAiDraft({ id, user }: { id: string; user: User }) {
   );
 }
 
-function Draft({ plan }: { plan: MealPlan }) {
+function Draft({ plan, reloadPlan }: { plan: MealPlan; reloadPlan: () => Promise<void> }) {
   const today = localToday();
   useSyncExternalStore(subscribe, () => version);
+  const viewed = currentWeekOf(plan.id);
+  const viewedWeek = viewed && weekStarts(plan).includes(viewed) ? viewed : initialWeek(plan, today);
+  // 들어올 때 한 번: 다 만든 초안이 식단에서 보고 있던 주와 다르면 옛 초안이라 버리고 그 주 입력을 보여준다.
+  // 만드는 중인 요청은 횟수를 이미 썼으니 주가 달라도 그대로 기다린다. 읽기 전에 지워 emit 없이 이번 렌더에 반영된다(두 번 불려도 같다)
+  useState(() => {
+    const stale = drafts.get(plan.id);
+    if (stale && !running.has(plan.id) && stale.weekStart !== viewedWeek) {
+      drafts.delete(plan.id);
+      errors.delete(plan.id);
+    }
+  });
   const store = drafts.get(plan.id) ?? null;
   const loading = running.get(plan.id);
   const error = errors.get(plan.id) ?? "";
-  const viewed = currentWeekOf(plan.id);
-  const week = loading?.weekStart ?? store?.weekStart ?? (viewed && weekStarts(plan).includes(viewed) ? viewed : initialWeek(plan, today));
+  const week = loading?.weekStart ?? store?.weekStart ?? viewedWeek;
   const dates = weekDates(week, plan);
   const [meals, setMeals] = useState<MealKind[]>(loading?.meals ?? store?.meals ?? ["lunch", "dinner"]);
   const [kcal, setKcal] = useState(plan.goal_kcal?.toString() ?? "");
@@ -192,6 +217,10 @@ function Draft({ plan }: { plan: MealPlan }) {
           emit();
         }}
         onRegenerate={generate}
+        onDiscard={(message) => {
+          discardDraft(plan.id, message);
+          if (message) void reloadPlan(); // 넣기 4xx: 기간·칸이 바뀌었을 수 있다
+        }}
       />
     );
 
@@ -354,9 +383,11 @@ interface ReviewProps {
   regenerateError: string;
   onChange: (next: DraftStore) => void;
   onRegenerate: () => void;
+  /** 초안 버리기·넣기 4xx: 입력 화면으로(message는 입력 화면 오류 자리에) */
+  onDiscard: (message?: string) => void;
 }
 
-function Review({ plan, today, store, regenerateError, onChange, onRegenerate }: ReviewProps) {
+function Review({ plan, today, store, regenerateError, onChange, onRegenerate, onDiscard }: ReviewProps) {
   const { draft, choice, checked } = store;
   const [swapped, setSwapped] = useState("");
   const { busy, error, run } = useAsyncAction();
@@ -388,10 +419,17 @@ function Review({ plan, today, store, regenerateError, onChange, onRegenerate }:
           }
           return { date: s.date, meal: s.meal, dish: index.get(n), est_kcal: dish.est_kcal };
         });
-      const res = await api<{ filled: number; kept: number; created_recipes: number }>(`/api/meal-plans/${plan.id}/ai-draft/apply`, {
-        method: "POST",
-        body: { dishes, slots },
-      });
+      let res: { filled: number; kept: number; created_recipes: number };
+      try {
+        res = await api(`/api/meal-plans/${plan.id}/ai-draft/apply`, { method: "POST", body: { dishes, slots } });
+      } catch (e) {
+        // 레시피가 바뀌었거나 식단 기간이 줄었으면 같은 초안으로는 넣을 수 없다 → 버리고 입력 화면에서 다시 만들게
+        if (e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 401) {
+          forgetResources("/api/meal-plans");
+          return onDiscard(e.message);
+        }
+        throw e;
+      }
       forgetRecipeCaches();
       forgetResources("/api/meal-plans");
       const kept = res.kept ? `그사이 채운 ${res.kept}칸은 그대로 뒀어요` : "";
@@ -511,6 +549,18 @@ function Review({ plan, today, store, regenerateError, onChange, onRegenerate }:
           </div>
         );
       })}
+      <div className="ml-discard">
+        <button
+          type="button"
+          className="btn outline inline"
+          disabled={busy}
+          onClick={() => {
+            if (confirm("초안을 버릴까요? 다시 만들면 AI 사용 횟수를 한 번 더 써요.")) onDiscard();
+          }}
+        >
+          초안 버리기
+        </button>
+      </div>
       <div className="cta-bar">
         {(error || regenerateError) && (
           <p className="error ml-cta-error" role="alert">

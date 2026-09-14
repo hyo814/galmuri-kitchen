@@ -4872,6 +4872,13 @@ button.sh-offline svg:last-child {
   white-space: nowrap;
 }
 
+/* 초안 버리기: 요리 목록 끝, CTA에 가리지 않게 page 아래 여백 안에 둔다 */
+.ml-discard {
+  display: flex;
+  justify-content: center;
+  margin: 24px 20px 0;
+}
+
 /* 넣기 실패 문구가 CTA 위에 붙어 높아지면 마지막 줄이 가리지 않게 */
 .page:has(.ml-cta-error) {
   padding-bottom: calc(200px + var(--tabbar-h) + env(safe-area-inset-bottom));
@@ -4900,6 +4907,10 @@ button.sh-offline svg:last-child {
   min-height: 72px;
   padding: 8px 16px 8px 6px;
   border-top: 1px solid var(--line);
+}
+
+.ml-prow:not(.skip) {
+  cursor: pointer;
 }
 
 .list > .ml-prow:first-child {

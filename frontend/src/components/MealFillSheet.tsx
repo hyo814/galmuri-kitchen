@@ -99,6 +99,8 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
   const videosOn = user.videos !== "off";
   const tabs: [Tab, string][] = [["recipe", "내 레시피"], ...(videosOn ? [["video", "영상"] as [Tab, string]] : []), ["text", "직접 쓰기"]];
   const [tab, setTab] = useState<Tab>("recipe");
+  // 영상 목록은 영상 탭을 처음 열 때 받는다(검색 없는 첫 페이지는 서버가 오래된 채널을 새로 받아 몇 초 걸릴 수 있다)
+  const [videoOpened, setVideoOpened] = useState(false);
   const [servings, setServings] = useState(current?.servings ?? plan.default_servings);
   // 칸을 오가도 고른 것·입력은 그대로(칸마다 따로 둔다)
   const [recipeInput, setRecipeInput] = useState("");
@@ -113,7 +115,7 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
   const rootRef = useRef<HTMLDivElement>(null);
   const { data: usage, reload: reloadUsage } = useResource<AiUsage>("/api/ai-usage");
   const recipes = useSearch<RecipeChoice>("/api/recipes/choices", recipeInput);
-  const videos = useSearch<Video>("/api/videos?limit=20", videoInput, videosOn);
+  const videos = useSearch<Video>("/api/videos?limit=20", videoInput, videosOn && videoOpened);
   const radioName = useId();
   const servingsLabel = useId();
   const titleId = useId();
@@ -212,6 +214,7 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
               disabled={importing}
               onClick={() => {
                 setTab(key);
+                if (key === "video") setVideoOpened(true);
                 setError("");
               }}
             >
@@ -238,9 +241,11 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
                     <span className="row-main">
                       {recipe.urgent_names.length > 0 && <span className="sh-tag warn">{urgentLabel(recipe.urgent_names)}</span>}
                       <span className="row-title">{recipe.title}</span>
-                      <span className="rc-match">
-                        재료 {recipe.total_count}개 중 <b>{recipe.have_count}개</b> 있어요
-                      </span>
+                      {recipe.total_count > 0 && (
+                        <span className="rc-match">
+                          재료 {recipe.total_count}개 중 <b>{recipe.have_count}개</b> 있어요
+                        </span>
+                      )}
                     </span>
                   </label>
                 ))}

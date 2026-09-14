@@ -612,6 +612,7 @@ function PlanMenuSheet({ plan, onCopy, onEdit, onDeleted, onClose }: PlanMenuPro
     if (!confirm(`${withJosa(plan.name, "을", "를")} 지울까요? 채운 칸도 함께 지워져요.`)) return;
     void run(async () => {
       await api(`/api/meal-plans/${plan.id}`, { method: "DELETE" });
+      forgetMealDraft(plan.id);
       await onDeleted();
     });
   };

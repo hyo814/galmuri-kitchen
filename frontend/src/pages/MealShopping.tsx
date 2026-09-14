@@ -2,13 +2,14 @@ import { useState, type ReactNode } from "react";
 import { ApiError, localToday, type MealPlan, type MealShoppingPreview, type MealShoppingRow } from "../api";
 import Icon from "../components/Icon";
 import Mascot from "../components/Mascot";
-import { cut } from "../components/ShoppingAddButton";
+import { addedText, cut } from "../components/ShoppingAddButton";
 import { buyDayText, previewDetail, rangeText } from "../meals/plan";
 import { quantityText } from "../shopping/sync";
 import { addMany } from "../shopping/useShopping";
 import { goBack, navigate } from "../useHashRoute";
 import { forgetResources, useResource } from "../useResource";
 import { LoadError } from "./Meals";
+import { showShoppingNotice } from "./Shopping";
 import { BackLink } from "./RecipeDetail";
 
 const TITLE = "장보기 목록 만들기";
@@ -78,6 +79,7 @@ function Preview({ data, url, planName }: { data: MealShoppingPreview; url: stri
     setBusy(true);
     setError("");
     let created = 0;
+    const skipped: string[] = [];
     try {
       for (let i = 0; i < picked.length; i += BULK_MAX) {
         const res = await addMany(
@@ -86,8 +88,11 @@ function Preview({ data, url, planName }: { data: MealShoppingPreview; url: stri
           planName ? cut(planName, 60) : undefined,
         );
         created += res.created;
+        skipped.push(...res.skipped);
       }
       forgetResources(url); // 다시 열면 담은 것이 `목록에 있어요`로
+      const skippedText = addedText(0, skipped); // 뺀 것만
+      showShoppingNotice(created ? `식단에서 ${created}개를 담았어요${skippedText ? ` · ${skippedText}` : ""}` : skippedText);
       navigate("/shopping", { replace: true });
     } catch (e) {
       const text = e instanceof ApiError && e.status === 0 ? OFFLINE : (e as Error).message;
@@ -112,16 +117,10 @@ function Preview({ data, url, planName }: { data: MealShoppingPreview; url: stri
   const checkRow = (bucket: "buy" | "manual") => (row: MealShoppingRow) => {
     const on = isOn(row, bucket);
     const amount = quantityText(row.quantity, row.unit);
+    // 행 어디를 눌러도 체크가 바뀐다(체크 버튼 클릭도 여기로 올라온다). 스크린리더·키보드는 체크 버튼 하나로 다룬다
     return (
-      <div key={row.name} className={on ? "ml-prow" : "ml-prow off"}>
-        <button
-          type="button"
-          className="sh-check"
-          role="checkbox"
-          aria-checked={on}
-          aria-label={`${row.name} ${amount} 담기`}
-          onClick={() => setToggled({ ...toggled, [`${bucket}:${row.name}`]: !on })}
-        >
+      <div key={row.name} className={on ? "ml-prow" : "ml-prow off"} onClick={() => setToggled({ ...toggled, [`${bucket}:${row.name}`]: !on })}>
+        <button type="button" className="sh-check" role="checkbox" aria-checked={on} aria-label={`${row.name} ${amount} 담기`}>
           <i>{on && <Icon name="check" size={18} />}</i>
         </button>
         <span className="row-main">

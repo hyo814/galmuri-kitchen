@@ -34,7 +34,7 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [photoNote, setPhotoNote] = useState<{ count: number; trimmed: boolean }>({ count: 0, trimmed: false });
-  const { data: usage } = useResource<AiUsage>("/api/ai-usage");
+  const { data: usage, reload: reloadUsage } = useResource<AiUsage>("/api/ai-usage");
   const abortRef = useRef<AbortController | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
@@ -95,7 +95,9 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
     try {
       const body = await makeBody();
       controller.signal.throwIfAborted();
-      const draft = await api<RecipeDraft>("/api/recipes/import", { method: "POST", body, signal: controller.signal });
+      const draft = await api<RecipeDraft>("/api/recipes/import", { method: "POST", body, signal: controller.signal }).finally(
+        () => void reloadUsage(), // 성공·실패 모두 AI 횟수를 셌을 수 있다
+      );
       if (controller.signal.aborted) return;
       openDraft(draft);
     } catch (err) {
