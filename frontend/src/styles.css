@@ -379,6 +379,18 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
   padding: 24px 20px calc(32px + env(safe-area-inset-bottom));
 }
 
+.legal-links {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text-2);
+  text-align: center;
+}
+.legal-links a {
+  display: inline-block;
+  padding: 12px 4px;
+  color: inherit;
+}
 .login-note {
   margin: -4px 0 0;
   font-size: 14px;
