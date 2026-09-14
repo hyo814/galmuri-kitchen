@@ -8,6 +8,8 @@ import Login from "./pages/Login";
 import More from "./pages/More";
 import RecipeDetail from "./pages/RecipeDetail";
 import RecipeForm from "./pages/RecipeForm";
+import SeasoningCalc from "./pages/SeasoningCalc";
+import SeasoningForm, { resetSeasoningDraft } from "./pages/SeasoningForm";
 import Recipes, { resetRecipesSegment } from "./pages/Recipes";
 import Tools from "./pages/Tools";
 import { scrollTops, useHashRoute, type Route, type RoutePattern } from "./useHashRoute";
@@ -27,6 +29,10 @@ const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
   "/recipes/mine/:id": ({ route }) => <RecipeDetail kind="mine" id={route.params.id} />,
   "/recipes/mine/:id/edit": ({ route }) => <RecipeForm id={route.params.id} />,
   "/recipes/public/:id": ({ route }) => <RecipeDetail kind="public" id={route.params.id} />,
+  "/recipes/seasonings/new": () => <SeasoningForm />,
+  "/recipes/seasonings/preset/:id": ({ route }) => <SeasoningCalc kind="preset" id={route.params.id} />,
+  "/recipes/seasonings/:id": ({ route }) => <SeasoningCalc kind="mine" id={route.params.id} />,
+  "/recipes/seasonings/:id/edit": ({ route }) => <SeasoningForm id={route.params.id} />,
   "/shopping": () => <ComingSoon route="/shopping" />,
   "/meals": () => <ComingSoon route="/meals" />,
   "/more": () => <More />,
@@ -116,6 +122,7 @@ export default function App() {
   const signOut = useCallback(() => {
     forgetResources();
     resetRecipesSegment();
+    resetSeasoningDraft();
     scrollTops.clear();
     setUser(null);
   }, []);

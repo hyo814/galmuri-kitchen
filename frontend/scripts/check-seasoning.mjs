@@ -1,6 +1,6 @@
 // 양념 비율 순수 함수 검사 (3c 계획 태스크 1). `npm run check` — Node 24가 .ts를 바로 읽는다.
 import assert from "node:assert/strict";
-import { snapSpoon, scaleItem, scaleFactor, basisLabel, ratioLabel, parseAmountInput, RICE_SPOON_ML } from "../src/seasoning.ts";
+import { snapSpoon, scaleItem, scaleFactor, basisLabel, ratioLabel, parseAmountInput, amountInputText, RICE_SPOON_ML } from "../src/seasoning.ts";
 import { SEASONING_PRESETS } from "../src/data/seasoningPresets.ts";
 assert.equal(snapSpoon(0.33), "⅓"); assert.equal(snapSpoon(3.5), "3½"); assert.equal(snapSpoon(0.9), "1"); assert.equal(snapSpoon(12.4), "12");
 const item = (name, amount, unit, factor) => scaleItem({ name, amount, unit }, factor);
@@ -66,5 +66,19 @@ assert.equal(scaleFactor({ basis_amount: 0, basis_unit: "g" }, 600, "g"), null);
 // 양 입력
 assert.equal(parseAmountInput("2/4"), 0.5); assert.equal(parseAmountInput(" ½ "), 0.5);
 assert.equal(parseAmountInput("10000"), 10000); assert.equal(parseAmountInput("10001"), null);
+assert.equal(parseAmountInput("0.01"), 0.01); assert.equal(parseAmountInput("0.009"), null); // 서버 최소 0.01과 같다
+// 폼에 채우는 양: 분수로 바꿔도 값이 거의 같을 때만 분수
+for (const [value, text] of [[0.5, "½"], [2 / 3, "⅔"], [1.5, "1½"], [3, "3"], [600, "600"], [12.5, "12.5"], [0.03, "0.03"], [0.35, "0.35"], [0.33, "0.33"], [1 / 3, "⅓"], [0.255, "0.255"], [0.1 + 0.2, "0.3"], [15 / 7, "2.1429"]]) assert.equal(amountInputText(value), text, String(value));
 
 console.log("seasoning ok");
+
+// 양념 비율 경로 (3c 계획 태스크 3). useHashRoute.ts는 불러올 때 history를 건드려서 빈 객체를 먼저 둔다.
+globalThis.history ??= {};
+const { matchRoute } = await import("../src/useHashRoute.ts");
+assert.deepEqual(matchRoute("/recipes/seasonings/preset/3"), { path: "/recipes/seasonings/preset/3", pattern: "/recipes/seasonings/preset/:id", params: { id: "3" } });
+assert.equal(matchRoute("/recipes/seasonings/7").pattern, "/recipes/seasonings/:id");
+assert.deepEqual(matchRoute("/recipes/seasonings/7/edit").params, { id: "7" });
+assert.equal(matchRoute("/recipes/seasonings/new").pattern, "/recipes/seasonings/new");
+assert.equal(matchRoute("/recipes/seasonings/preset/abc"), null);
+for (const path of ["/", "/recipes", "/recipes/new", "/recipes/mine/3", "/recipes/mine/3/edit", "/recipes/public/9", "/tools"]) assert.equal(matchRoute(path)?.path, path, path);
+console.log("matchRoute ok");

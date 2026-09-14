@@ -6,6 +6,7 @@ import { imageSrc } from "../format";
 import { navigate } from "../useHashRoute";
 import { useInfiniteList, type Page } from "../useInfiniteList";
 import { cache } from "../useResource";
+import Seasonings from "./Seasonings";
 
 export type Segment = "recommend" | "mine" | "video" | "seasoning";
 
@@ -312,25 +313,6 @@ function VideoSoon() {
   );
 }
 
-// 3c단계(양념 비율 계산기) 전까지 자리만 잡는다
-function SeasoningSoon() {
-  return (
-    <section className="empty">
-      <Icon name="book" size={32} color="var(--accent-strong)" />
-      <p className="soon-title">준비 중이에요</p>
-      <p className="muted">곧 이런 걸 할 수 있어요.</p>
-      <ul className="soon-list">
-        {["불고기·제육볶음 같은 기본 양념 비율", "고기 양·인분에 맞춰 숟가락 단위로 계산", "내 입맛에 맞춘 비율 저장"].map((item) => (
-          <li key={item}>
-            <Icon name="check" size={16} color="var(--accent-strong)" />
-            {item}
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 export default function Recipes() {
   const [segment, setSegment] = useState<Segment>(lastSegment);
   const choose = useCallback((next: Segment) => {
@@ -353,7 +335,7 @@ export default function Recipes() {
       {segment === "recommend" && <RecommendList onShowMine={() => choose("mine")} />}
       {segment === "mine" && <MyRecipeList />}
       {segment === "video" && <VideoSoon />}
-      {segment === "seasoning" && <SeasoningSoon />}
+      {segment === "seasoning" && <Seasonings />}
     </main>
   );
 }
