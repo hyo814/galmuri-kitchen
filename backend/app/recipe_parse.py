@@ -25,6 +25,7 @@ _ATTACHED = re.compile(r"^(.*[가-힣])([\d½⅓⅔¼¾⅛][\d./]*[^\s\d(]*(?:\(
 _STEP_NO = re.compile(r"^\d+[.)](?!\d)\s*")  # "1. " (1.5컵은 그대로)
 _STEP_MARK = re.compile(r"(?<=[.!?])\s*[a-zA-Z]$")  # 원문 단계 끝의 "a", "b"
 _SERVINGS = re.compile(r"(\d+)\s*인분")
+_LETTER = re.compile(r"[가-힣A-Za-z]")
 
 
 def _split_items(line):
@@ -39,6 +40,8 @@ def _split_items(line):
             items.append(line[start:index])
             start = index + 1
     items.append(line[start:])
+    if depth:  # 닫히지 않은 괄호("바지락(모시조개( 200g")가 줄 끝까지 삼키면 괄호를 무시하고 쉼표마다 나눈다
+        return re.split(r"[,，]", line)
     return items
 
 
@@ -59,6 +62,12 @@ def _name_amount(item):
         # 정규식을 건너뛰고 기존 "확신 없으면 통째로 이름" 규칙만 적용한다.
         return item[:MAX_NAME], ""
     match = _SPACED.match(item) or _ATTACHED.match(item)
+    if match and match.group(1).rstrip().endswith("("):  # "바지락(모시조개( 200g": 닫는 괄호를 여는 괄호로 잘못 쓴 원문
+        name = match.group(1).rstrip(" (")
+        amount = match.group(2).strip()
+        if amount.count(")") > amount.count("("):  # "소금( 0.2g)" → 소금 / 0.2g
+            amount = amount[:-1].rstrip() if amount.endswith(")") else amount
+        return name + ")" * max(name.count("(") - name.count(")"), 0), amount
     if not match or match.group(1).count("(") != match.group(1).count(")"):  # 괄호 안에서 자르지 않는다
         return item, ""
     return match.group(1).strip(), match.group(2).strip()
@@ -71,7 +80,7 @@ def parse_ingredients(text, title=""):
     for line in (text or "").splitlines():
         for raw in _split_items(line):
             item = _clean_item(raw)
-            if not item:
+            if not _LETTER.search(item):  # 빈 칸, "." 같은 글자 없는 조각
                 continue
             name, amount = _name_amount(item)
             key = normalize(name)
