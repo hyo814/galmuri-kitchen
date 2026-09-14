@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type Ingredient, type IngredientInput, type ItemRule, type Staple, type StorageLocation, type User } from "../api";
+import { api, type DeleteReason, type Ingredient, type IngredientInput, type Staple, type StorageLocation, type User } from "../api";
 import Icon from "../components/Icon";
 import InfiniteSentinel from "../components/InfiniteSentinel";
 import IngredientForm from "../components/IngredientForm";
 import LocationsSheet from "../components/LocationsSheet";
-import RulesSheet from "../components/RulesSheet";
 import ScanSheet from "../components/ScanSheet";
 import SettingsSheet, { type SettingsTarget } from "../components/SettingsSheet";
 import StaplesSheet from "../components/StaplesSheet";
@@ -22,11 +21,10 @@ function badge(item: Ingredient): string | null {
   return null;
 }
 
-export default function Fridge({ user, onLogout }: { user: User; onLogout: () => void }) {
+export default function Fridge({ user }: { user: User }) {
   const [items, setItems] = useState<Ingredient[] | null>(null);
   const [locations, setLocations] = useState<StorageLocation[]>([]);
   const [staples, setStaples] = useState<Staple[]>([]);
-  const [rules, setRules] = useState<ItemRule[]>([]);
   const [filter, setFilter] = useState<number | "all">("all");
   const [editing, setEditing] = useState<Ingredient | "new" | null>(null);
   const [prefillName, setPrefillName] = useState("");
@@ -51,7 +49,6 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
       api<Ingredient[]>("/api/ingredients").then(setItems),
       api<StorageLocation[]>("/api/locations").then(setLocations),
       api<Staple[]>("/api/staples").then(setStaples),
-      api<ItemRule[]>("/api/item-rules").then(setRules),
     ]).catch((e: Error) => setError(e.message));
   };
 
@@ -81,9 +78,10 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
     await changed();
   };
 
-  const remove = async () => {
-    if (!editing || editing === "new" || !confirm(`${withJosa(editing.name, "을", "를")} 삭제할까요?`)) return;
-    await api(`/api/ingredients/${editing.id}`, { method: "DELETE" });
+  // 지우는 이유(선택)는 IngredientForm의 삭제 확인 시트에서 고른다 — 월간 리포트의 버린 재료 수 (스펙 27절)
+  const remove = async (reason: DeleteReason | null) => {
+    if (!editing || editing === "new") return;
+    await api(`/api/ingredients/${editing.id}${reason ? `?reason=${reason}` : ""}`, { method: "DELETE" });
     setEditing(null);
     await changed();
   };
@@ -100,11 +98,6 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
     setScanning(false);
     setNotice(`${count}개를 재고에 넣었어요`);
     await changed();
-  };
-
-  const logout = async () => {
-    await api("/api/logout", { method: "POST" }).catch(() => {});
-    onLogout();
   };
 
   const activeFilter = filter !== "all" && locations.some((l) => l.id === filter) ? filter : "all";
@@ -299,7 +292,7 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
           onLocationsStale={load}
         />
       )}
-      {panel === "settings" && <SettingsSheet onOpen={setPanel} onLogout={logout} onClose={() => setPanel(null)} />}
+      {panel === "settings" && <SettingsSheet onOpen={setPanel} onClose={() => setPanel(null)} />}
       {panel === "locations" && (
         <LocationsSheet locations={locations} onChanged={changed} onClose={() => setPanel(null)} />
       )}
@@ -315,7 +308,6 @@ export default function Fridge({ user, onLogout }: { user: User; onLogout: () =>
           }}
         />
       )}
-      {panel === "rules" && <RulesSheet rules={rules} onChanged={changed} onClose={() => setPanel(null)} />}
     </main>
   );
 }

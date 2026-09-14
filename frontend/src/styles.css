@@ -27,8 +27,13 @@
   color-scheme: light dark;
 }
 
+/* 화면 테마(스펙 27절): 기본은 시스템 설정, 더보기에서 고르면 <html data-theme="light|dark">가 시스템보다 앞선다 */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #0e0f11;
     --surface: #1a1c20;
     --field: #24272c;
@@ -55,6 +60,35 @@
     /* #767c86 vs --surface #1a1c20 = 4.06:1, vs --bg #0e0f11 = 4.56:1 (both ≥3:1) */
     --control-line: #767c86;
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0e0f11;
+  --surface: #1a1c20;
+  --field: #24272c;
+  --text: #f1f2f4;
+  --text-2: #a6acb5;
+  --text-3: #8a9099;
+  --placeholder: #8a9099;
+  --line: #2a2d32;
+  --chip-text: #d3d7dc;
+  --handle: #3a3d43;
+  --accent: #2fc07f;
+  --accent-strong: #5bd39c;
+  --accent-tint: #173a2a;
+  --on-accent: #07140d;
+  --inverse-bg: #f1f2f4;
+  --inverse-text: #0e0f11;
+  --danger: #ff6b6f;
+  --danger-tint: #3b1c1f;
+  --danger-line: #6b2b30;
+  --warn: #f2b04a;
+  --warn-tint: #3a2c12;
+  --neutral-tint: #2a2d32;
+  --scrim: rgb(0 0 0 / 0.6);
+  /* #767c86 vs --surface #1a1c20 = 4.06:1, vs --bg #0e0f11 = 4.56:1 (both ≥3:1) */
+  --control-line: #767c86;
 }
 
 * {
@@ -415,6 +449,7 @@ button {
   font-size: 15px;
   line-height: 22px;
   color: var(--text-2);
+  word-break: keep-all;
   text-wrap: pretty;
 }
 
@@ -701,11 +736,6 @@ button {
 
 .menu-row svg {
   color: var(--text-3);
-}
-
-.menu-row.logout {
-  color: var(--text-3);
-  font-size: 16px;
 }
 
 .banner > svg {
@@ -1429,10 +1459,15 @@ button.row-btn > svg {
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --seg-track: var(--surface);
     --seg-on: var(--handle);
   }
+}
+
+:root[data-theme="dark"] {
+  --seg-track: var(--surface);
+  --seg-on: var(--handle);
 }
 
 /* 페이지 배경(--bg) 위 세그먼트: --field 트랙이 배경에 묻히므로 트랙·선택 색을 따로 둔다.
@@ -2400,9 +2435,13 @@ button.row-btn > svg {
 }
 
 @media (prefers-color-scheme: dark) {
-  .r3-source-thumb {
+  :root:not([data-theme="light"]) .r3-source-thumb {
     background: var(--field);
   }
+}
+
+:root[data-theme="dark"] .r3-source-thumb {
+  background: var(--field);
 }
 
 .r3-source-thumb img {
@@ -2853,4 +2892,254 @@ button.row-btn > svg {
   .r3-toggle::after {
     transition: none;
   }
+}
+
+/* ---- 더보기 정리 (시안 docs/design/more-cleanup, mo- 접두사) ---- */
+.mo-group {
+  margin: 24px 20px 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.mo-group + .list {
+  margin-top: 8px;
+}
+
+.mo-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 20px;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+
+.mo-row .row-title {
+  font-size: 16px;
+  line-height: 23px;
+}
+
+.mo-row .row-sub {
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.mo-row > svg {
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+
+.mo-ico {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: var(--neutral-tint);
+  color: var(--text-2);
+}
+
+.mo-val {
+  font-size: 14px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.mo-logout .row-title {
+  color: var(--danger);
+}
+
+.mo-logout .mo-ico {
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+/* 로그인 방법 표시: 로그인 버튼과 같은 브랜드 색 */
+.mo-provider {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.mo-provider.kakao {
+  background: #fee500;
+  color: #191600;
+}
+
+.mo-provider.naver {
+  background: #03c75a;
+  color: #ffffff;
+}
+
+.mo-provider.google {
+  background: #ffffff;
+  color: #1f1f1f;
+  box-shadow: inset 0 0 0 1px #dadce0;
+}
+
+.mo-radios {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mo-radio {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--field);
+  color: var(--text);
+  text-align: left;
+}
+
+.mo-radio[aria-checked="true"] {
+  background: var(--accent-tint);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.mo-radio .row-title {
+  font-size: 16px;
+}
+
+.mo-radio .row-sub {
+  font-size: 13px;
+}
+
+.mo-dot {
+  position: relative;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  box-shadow: inset 0 0 0 2px var(--control-line);
+}
+
+.mo-radio[aria-checked="true"] .mo-dot {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.mo-radio[aria-checked="true"] .mo-dot::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 6px;
+  background: var(--accent);
+}
+
+.mo-inc {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 4px 16px;
+  list-style: none;
+  border-radius: 16px;
+  background: var(--field);
+}
+
+.mo-inc li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  border-top: 1px solid var(--line);
+  font-size: 16px;
+}
+
+.mo-inc li:first-child {
+  border-top: 0;
+}
+
+.mo-inc b {
+  font-weight: 600;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.mo-note {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 21px;
+  color: var(--text-2);
+  word-break: keep-all;
+}
+
+.mo-note svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--text-3);
+}
+
+.mo-chips {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.mo-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 52px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--field);
+  color: var(--chip-text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.mo-chip[aria-checked="true"] {
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+/* 삭제 확인 시트의 삭제: 삭제 버튼 규칙(연빨강 배경·테두리), 크기는 옆 취소 버튼과 같게 */
+.btn.danger-fill {
+  border: 1px solid var(--danger-line);
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+.mo-menu li + li {
+  border-top: 1px solid var(--line);
+}
+
+.mo-more-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--field);
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 20px;
+  text-align: left;
+  word-break: keep-all;
+}
+
+.mo-more-link b {
+  color: var(--accent-strong);
+  font-weight: 700;
+  white-space: nowrap;
 }

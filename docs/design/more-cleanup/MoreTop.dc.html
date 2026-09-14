@@ -1,0 +1,186 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&amp;display=swap">
+  <style>
+    body { margin: 0; background: #f3f4f6; }
+
+.app{--bg:#f3f4f6;--surface:#ffffff;--field:#f3f4f6;--text:#17191c;--text-2:#5b616b;--text-3:#63697a;--placeholder:#63697a;--line:#eef0f2;--chip-text:#3a3f46;--handle:#e1e4e8;--accent:#0b7a4c;--accent-strong:#086a41;--accent-tint:#e7f6ef;--on-accent:#ffffff;--inverse-bg:#17191c;--inverse-text:#ffffff;--danger:#c4262e;--danger-tint:#fdeded;--danger-line:#f5c2c4;--warn:#8f5500;--warn-tint:#fff3dc;--neutral-tint:#eef0f2;--scrim:rgb(15 17 20 / 0.48);--control-line:#7a7f87;color-scheme:light;--seg-track:var(--handle);--seg-on:var(--surface);position:relative;width:384px;overflow:hidden;background:var(--bg);color:var(--text);font:16px/1.5 "IBM Plex Sans KR","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;text-align:left}
+.app.dark{--bg:#0e0f11;--surface:#1a1c20;--field:#24272c;--text:#f1f2f4;--text-2:#a6acb5;--text-3:#8a9099;--placeholder:#8a9099;--line:#2a2d32;--chip-text:#d3d7dc;--handle:#3a3d43;--accent:#2fc07f;--accent-strong:#5bd39c;--accent-tint:#173a2a;--on-accent:#07140d;--inverse-bg:#f1f2f4;--inverse-text:#0e0f11;--danger:#ff6b6f;--danger-tint:#3b1c1f;--danger-line:#6b2b30;--warn:#f2b04a;--warn-tint:#3a2c12;--neutral-tint:#2a2d32;--scrim:rgb(0 0 0 / 0.6);--control-line:#767c86;color-scheme:dark;--seg-track:var(--surface);--seg-on:var(--handle)}
+.app *{box-sizing:border-box}
+.app svg{display:block;flex-shrink:0}
+.app h1,.app h2,.app p,.app ol,.app ul{margin:0}
+.app ol,.app ul{padding:0;list-style:none}
+.topbar{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:28px 20px 0}
+.topbar h1{font-size:26px;line-height:34px;font-weight:700;letter-spacing:-.5px}
+.summary{margin-top:4px!important;font-size:15px;line-height:22px;color:var(--text-2)}
+.muted{color:var(--text-2)}
+.icon-btn{display:inline-flex;flex-shrink:0;align-items:center;justify-content:center;width:44px;height:44px;border-radius:22px;color:var(--text-3)}
+.list{margin:16px 20px 0;padding:6px 0;background:var(--surface);border-radius:20px}
+.row-btn{display:flex;align-items:center;gap:12px;min-height:72px;padding:12px 20px}
+.row-btn > svg{color:var(--text-3)}
+.row-main{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.row-title{font-size:17px;line-height:25px;font-weight:600}
+.row-sub{font-size:14px;line-height:20px;color:var(--text-3)}
+.badge{display:inline-flex;flex-shrink:0;align-items:center;gap:4px;height:28px;padding:0 10px;border-radius:8px;background:var(--neutral-tint);color:var(--text-2);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.badge.info{background:var(--accent-tint);color:var(--accent-strong)}
+.empty{margin:16px 20px 0;padding:48px 20px;background:var(--surface);border-radius:20px;text-align:center}
+.empty p{margin:4px 0!important}
+.empty .soon-title{margin-top:12px!important;font-size:18px;font-weight:700}
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:56px;padding:0 20px;border-radius:16px;font-size:17px;font-weight:600;white-space:nowrap}
+.btn.inline{width:auto}
+.btn.primary{background:var(--accent);color:var(--on-accent)}
+.btn.secondary{background:var(--neutral-tint);color:var(--chip-text)}
+.btn.outline{background:var(--surface);color:var(--text);box-shadow:inset 0 0 0 1.5px var(--control-line)}
+.btn.outline svg{color:var(--accent-strong)}
+.btn.danger-text{min-height:52px;border:1px solid var(--danger-line);background:var(--danger-tint);color:var(--danger);font-size:16px}
+.cta-bar{position:absolute;right:0;bottom:64px;left:0;padding:32px 20px 16px;background:linear-gradient(to bottom,transparent,var(--bg) 36%)}
+.tabbar{position:absolute;right:0;bottom:0;left:0;display:flex;height:64px;border-top:1px solid var(--line);background:var(--surface)}
+.tab{display:flex;flex:1;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--text-3);font-size:12px;font-weight:600;line-height:18px}
+.tab.on{color:var(--accent-strong);font-weight:700}
+.back-link{display:inline-flex;align-items:center;gap:2px;min-height:44px;margin:12px 0 -16px 12px;padding:0 8px;color:var(--text-2);font-size:15px}
+.field{display:flex;flex-direction:column;gap:8px;min-width:0}
+.field-label{font-size:14px;line-height:20px;font-weight:500;color:var(--text-2)}
+.input{display:flex;align-items:center;width:100%;height:56px;padding:0 16px;border-radius:14px;background:var(--field);color:var(--text);font-size:17px;white-space:nowrap;overflow:hidden}
+.input.ph{color:var(--placeholder)}
+.actions{display:grid;grid-template-columns:1fr 2fr;gap:8px}
+.hint{font-size:13px;line-height:19px;color:var(--text-3)}
+.segmented{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:4px;border-radius:14px;background:var(--field)}
+.segmented span{display:flex;align-items:center;justify-content:center;height:44px;border-radius:10px;color:var(--text-2);font-size:15px;font-weight:500}
+.segmented span.on{background:var(--surface);color:var(--text);font-weight:600;box-shadow:0 1px 3px rgb(15 17 20 / .12)}
+.stepper{display:grid;grid-template-columns:56px minmax(0,1fr) 56px;gap:8px}
+.stepper .icon-btn{width:56px;height:56px;border-radius:14px;background:var(--field);color:var(--text)}
+.stepper .input{justify-content:center;font-variant-numeric:tabular-nums}
+.plain-row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:48px}
+.staple-name{font-size:17px;font-weight:500}
+.stock-ok{display:inline-flex;align-items:center;gap:4px;min-width:0;color:var(--text-3);font-size:14px;text-align:right}
+
+/* ---- new for recipes (3a): rc- prefix ---- */
+/* segmented on page --bg: field track disappears on --bg, so track/selected get their own pair */
+.rc-seg{margin:16px 20px 0;background:var(--seg-track)}
+.rc-seg span.on{background:var(--seg-on)}
+.rc-sample{display:flex;align-items:center;gap:6px;margin:12px 20px 0!important;color:var(--text-3);font-size:14px;line-height:20px}
+.rc-cards{display:flex;flex-direction:column;gap:12px;margin:12px 20px 0}
+/* recommended: compact card = 72px thumb + title/match, missing chips on a full-width row */
+.rc-card{display:grid;grid-template-columns:72px minmax(0,1fr);column-gap:14px;row-gap:12px;padding:16px;border-radius:20px;background:var(--surface)}
+.rc-thumb{width:72px;height:72px;border-radius:14px;overflow:hidden}
+.rc-ph{display:flex;align-items:center;justify-content:center;background:var(--neutral-tint);color:var(--text-3)}
+.rc-thumb:not(.rc-ph) svg,.rc-img:not(.rc-ph) svg,.rc-hero svg{width:100%;height:100%}
+.rc-body{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;justify-content:center}
+.rc-body .badge{height:26px;padding:0 8px;margin-bottom:4px}
+.rc-match{width:100%;font-size:14px;line-height:20px;color:var(--text-2)}
+.rc-match b{color:var(--accent-strong);font-weight:700}
+.rc-match .done{display:flex;align-items:center;gap:4px;color:var(--accent-strong);font-weight:600}
+.rc-bar{display:block;width:100%;height:6px;margin-top:8px;border-radius:3px;background:var(--neutral-tint);overflow:hidden}
+.rc-bar i{display:block;height:100%;border-radius:3px;background:var(--accent)}
+.rc-missing{grid-column:1 / 3;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding-top:12px;border-top:1px solid var(--line)}
+.rc-missing .label{margin-right:2px;font-size:13px;color:var(--text-3)}
+.rc-chip{display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:7px;background:var(--field);color:var(--chip-text);font-size:13px;font-weight:500;white-space:nowrap}
+.rc-chip.more{color:var(--text-3)}
+/* alternative: big cards */
+.rc-big{padding:0;overflow:hidden;display:block}
+.rc-big .rc-img{height:180px}
+.rc-big .rc-inner{display:flex;flex-direction:column;gap:12px;padding:16px}
+.rc-big .rc-missing{padding-top:0;border-top:0}
+/* empty */
+.rc-empty-mark{width:64px;height:64px;margin:0 auto;border-radius:19px;overflow:hidden}
+.rc-empty-mark svg{width:64px;height:64px}
+.rc-empty .btn{margin:20px auto 0}
+.rc-empty .muted{word-break:keep-all}
+/* detail */
+.rc-hero{height:188px;margin:20px 20px 0;border-radius:20px;overflow:hidden}
+.rc-head{padding:20px 20px 0}
+.rc-head h1{font-size:26px;line-height:34px;font-weight:700;letter-spacing:-.5px}
+.rc-sec{margin:16px 20px 0;padding:20px;border-radius:20px;background:var(--surface)}
+.rc-sec-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.rc-sec h2{font-size:20px;line-height:28px;font-weight:700;letter-spacing:-.3px}
+.rc-serv{display:flex;align-items:center;gap:4px}
+.rc-serv .icon-btn{border-radius:12px;background:var(--field);color:var(--text)}
+.rc-serv b{min-width:60px;text-align:center;font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.rc-have{margin-top:12px}
+.rc-ings{margin-top:8px!important}
+.rc-ings li{min-height:52px;border-top:1px solid var(--line)}
+.rc-ings li:first-child{border-top:0}
+.rc-amt{margin-left:6px;color:var(--text-2);font-size:15px;font-weight:400}
+.rc-ings .stock-ok svg{color:var(--accent-strong)}
+.rc-steps{display:flex;flex-direction:column;gap:14px;margin-top:14px!important}
+.rc-steps li{display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;align-items:start}
+.rc-num{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:14px;background:var(--accent-tint);color:var(--accent-strong);font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+.rc-steps p{font-size:16px;line-height:24px;padding-top:2px;word-break:keep-all}
+.rc-actions{display:flex;flex-direction:column;gap:8px;margin:24px 20px 0}
+.rc-scrolled{position:absolute;right:0;bottom:64px;left:0}
+/* form */
+.rc-form{display:flex;flex-direction:column;gap:20px}
+.rc-rows{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.rc-ing-row{display:grid;grid-template-columns:minmax(0,1fr) 104px 44px;gap:8px;align-items:center}
+.rc-ing-row .input{height:52px}
+.rc-ing-row .icon-btn,.rc-step-row .icon-btn{color:var(--text-3)}
+.input.invalid{box-shadow:inset 0 0 0 1.5px var(--danger)}
+.rc-err{display:flex;align-items:center;gap:4px;margin:-2px 0 2px!important;color:var(--danger);font-size:14px;line-height:20px;font-weight:600}
+.rc-step-row{display:grid;grid-template-columns:28px minmax(0,1fr) 44px;gap:8px;align-items:start}
+.rc-step-row .rc-num{margin-top:12px}
+.rc-area{height:auto;min-height:80px;align-items:flex-start;padding:13px 16px;white-space:normal;line-height:26px;word-break:keep-all}
+.rc-add{min-height:52px;margin-top:14px;font-size:16px}
+.rc-scrolled .rc-pad{height:120px}
+
+.badge.old{background:var(--warn-tint);color:var(--warn);font-weight:700}
+.mo-group{margin:24px 20px 0;font-size:14px;line-height:20px;font-weight:600;color:var(--text-3)}
+.mo-group + .list{margin-top:8px}
+.mo-row{display:flex;align-items:center;gap:14px;min-height:64px;padding:10px 20px}
+.mo-ico{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:11px;background:var(--neutral-tint);color:var(--text-2)}
+.mo-row .row-title{font-size:16px;line-height:23px}
+.mo-row .row-sub{font-size:13px;line-height:19px}
+.mo-row > svg{color:var(--text-3)}
+.mo-val{font-size:14px;color:var(--text-2);white-space:nowrap}
+.mo-logout .row-title{color:var(--danger)}
+.mo-logout .mo-ico{background:var(--danger-tint);color:var(--danger)}
+.mo-kakao{background:#fee500!important;color:#191600!important;font-size:14px;font-weight:800}
+.r3-scrim{position:absolute;inset:0;background:var(--scrim)}
+.r3-sheet{position:absolute;right:0;bottom:0;left:0;border-radius:24px 24px 0 0;background:var(--surface)}
+.sheet-body{display:flex;flex-direction:column;gap:20px;padding:12px 20px 24px}
+.sheet-handle{align-self:center;width:40px;height:4px;border-radius:2px;background:var(--handle)}
+.sheet-header h2{font-size:22px;line-height:30px;font-weight:700;letter-spacing:-.4px}
+.sheet-desc{margin:4px 0 0!important;font-size:15px;line-height:22px;color:var(--text-2);word-break:keep-all}
+.mo-radios{display:flex;flex-direction:column;gap:8px}
+.mo-radio{display:flex;align-items:center;gap:14px;min-height:64px;padding:10px 16px;border-radius:16px;background:var(--field)}
+.mo-radio.on{background:var(--accent-tint);box-shadow:inset 0 0 0 1.5px var(--accent)}
+.mo-dot{position:relative;width:22px;height:22px;border-radius:11px;box-shadow:inset 0 0 0 2px var(--control-line);flex-shrink:0}
+.mo-radio.on .mo-dot{box-shadow:inset 0 0 0 2px var(--accent)}
+.mo-radio.on .mo-dot::after{content:"";position:absolute;inset:5px;border-radius:6px;background:var(--accent)}
+.mo-radio .row-title{font-size:16px}
+.mo-radio .row-sub{font-size:13px}
+.mo-inc{display:flex;flex-direction:column;border-radius:16px;background:var(--field);padding:4px 16px!important}
+.mo-inc li{display:flex;align-items:center;justify-content:space-between;min-height:48px;border-top:1px solid var(--line);font-size:16px}
+.mo-inc li:first-child{border-top:0}
+.mo-inc b{font-weight:600;color:var(--text-2);font-variant-numeric:tabular-nums}
+.mo-note{display:flex;gap:8px;font-size:14px;line-height:21px;color:var(--text-2);word-break:keep-all}
+.mo-note svg{margin-top:2px;color:var(--text-3)}
+.actions{display:grid;grid-template-columns:1fr 2fr;gap:8px}
+.mo-chips{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mo-chip{display:flex;align-items:center;justify-content:center;gap:6px;min-height:52px;border-radius:14px;background:var(--field);color:var(--chip-text);font-size:16px;font-weight:600}
+.mo-chip.on{background:var(--accent-tint);color:var(--accent-strong);box-shadow:inset 0 0 0 1.5px var(--accent)}
+.btn.danger-fill{border:1px solid var(--danger-line);background:var(--danger-tint);color:var(--danger)}
+.mo-sub-label{font-size:14px;font-weight:600;color:var(--text-2);margin-bottom:-12px!important}
+/* fridge */
+.fr-top{display:flex;align-items:flex-end;justify-content:space-between;padding:28px 20px 0}
+.fr-top h1{font-size:26px;line-height:34px;font-weight:700;letter-spacing:-.5px}
+.fr-actions{display:flex;gap:4px}
+.fr-summary{margin:4px 20px 0!important;font-size:15px;color:var(--text-2)}
+.fr-list .row-btn{min-height:64px}
+.menu-row{display:flex;align-items:center;justify-content:space-between;min-height:56px;font-size:17px;font-weight:600;border-top:1px solid var(--line)}
+.menu-row:first-child{border-top:0}
+.menu-row svg{color:var(--text-3)}
+.mo-more-link{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:56px;padding:0 14px;border-radius:14px;background:var(--field);font-size:14px;line-height:20px;color:var(--text-2);word-break:keep-all}
+.mo-more-link b{color:var(--accent-strong);font-weight:700;white-space:nowrap}
+
+  </style>
+</helmet>
+<div class="app" style="height:832px"><div style="position:absolute;left:0;right:0;top:0px"><header class="topbar"><h1>더보기</h1></header><div class="mo-group">우리 부엌</div><div class="list"><div class="mo-row "><span class="mo-ico "><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/></svg></span><span class="row-main"><span class="row-title">보관 위치</span><span class="row-sub">냉장·냉동·실온 칸 이름과 순서</span></span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div><div class="mo-row "><span class="mo-ico "><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l2.4 5 5.4.6-4 3.7 1.1 5.3L12 16l-4.9 2.6 1.1-5.3-4-3.7 5.4-.6z"/></svg></span><span class="row-main"><span class="row-title">필수품</span><span class="row-sub">떨어지면 알려줄 재료 5개</span></span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div><div class="mo-row "><span class="mo-ico "><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5h4"/></svg></span><span class="row-main"><span class="row-title">품목별 경고</span><span class="row-sub">계란 30일처럼 품목마다 기준</span></span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div><div class="mo-row "><span class="mo-ico "><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="12" r="6.5"/><path d="M16.5 12H22"/></svg></span><span class="row-main"><span class="row-title">주방 도구</span><span class="row-sub">프라이팬 코팅 점검</span></span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div></div><div class="mo-group">나</div><div class="list"><div class="mo-row "><span class="mo-ico "><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1-5.1-1.9 5.1-1.9z"/></svg></span><span class="row-main"><span class="row-title">AI 사용량</span><span class="row-sub">오늘 사진 인식 2/10회 · AI 레시피 1/10회</span></span></div></div><div class="mo-group">앱</div><div class="list"><div class="mo-row "><span class="mo-ico "><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></svg></span><span class="row-main"><span class="row-title">홈 화면에 앱 설치</span><span class="row-sub">앱처럼 바로 열 수 있어요</span></span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div><div class="mo-row "><span class="mo-ico "><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/></svg></span><span class="row-main"><span class="row-title">화면 테마</span></span><span class="mo-val">시스템 설정</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div><div class="mo-row "><span class="mo-ico "><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4M9 13h6M9 16.5h6"/></svg></span><span class="row-main"><span class="row-title">데이터 내보내기</span><span class="row-sub">재고·레시피를 파일로 받아요</span></span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div></div><div style="height:96px"></div></div><nav class="tabbar"><span class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M5 10h14M9 5.5v2M9 13v3"/></svg><span>재고</span></span><span class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3M9 7h6"/></svg><span>레시피</span></span><span class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2.5l2.2 10.5h10.1L20 7.5H6.5"/><circle cx="9.5" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></svg><span>장보기</span></span><span class="tab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2.5"/><path d="M4 10h16M8.5 3v4M15.5 3v4"/></svg><span>식단</span></span><span class="tab on"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>더보기</span></span></nav></div>
+</x-dc>
+</body>
+</html>

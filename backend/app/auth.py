@@ -86,6 +86,7 @@ def user_json(user):
     return jsonify(
         id=user.id,
         nickname=user.nickname,
+        provider=user.provider,  # 더보기 계정 묶음의 '카카오로 로그인했어요' 표시용 (스펙 27절)
         scan=scan_mode(),
         scan_limit=current_app.config["AI_DAILY_SCAN_LIMIT"],
         recipe_limit=current_app.config["AI_DAILY_RECIPE_LIMIT"],

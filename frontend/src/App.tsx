@@ -26,7 +26,7 @@ interface PageProps {
 
 // 경로 → 화면. 새 화면은 useHashRoute의 ROUTES와 여기에 한 줄씩 추가한다.
 const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
-  "/": ({ user, onLogout }) => <Fridge user={user} onLogout={onLogout} />,
+  "/": ({ user }) => <Fridge user={user} />,
   "/recipes": ({ user }) => <Recipes user={user} />,
   "/recipes/new": () => <RecipeForm />,
   "/recipes/mine/:id": ({ route }) => <RecipeDetail kind="mine" id={route.params.id} />,
@@ -42,7 +42,7 @@ const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
   "/recipes/seasonings/:id/edit": ({ route }) => <SeasoningForm id={route.params.id} />,
   "/shopping": () => <ComingSoon route="/shopping" />,
   "/meals": () => <ComingSoon route="/meals" />,
-  "/more": ({ user }) => <More user={user} />,
+  "/more": ({ user, onLogout }) => <More user={user} onLogout={onLogout} />,
   "/tools": () => <Tools />,
 };
 
