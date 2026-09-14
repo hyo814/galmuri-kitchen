@@ -16,26 +16,25 @@ const CHOICES: { step: AddStep | "manual"; icon: IconName; title: string; hint: 
 ];
 
 interface Props {
-  /** 영상 보기처럼 링크·글 붙여넣기 단계부터 열 때 */
+  /** 영상 보기처럼 글 붙여넣기 단계부터 열 때 */
   initialStep?: AddStep;
   initialWarning?: string;
-  /** 링크 칸에 미리 채울 주소(영상 보기의 레시피로 가져오기) */
-  initialUrl?: string;
   onClose: () => void;
 }
 
 /** 레시피 추가: 방법 고르기 → 링크 / 글 붙여넣기(링크를 못 읽으면 경고 상자와 함께 이 단계로) → 가져온 레시피 확인 폼 */
-export default function AddRecipeSheet({ initialStep = "pick", initialWarning = "", initialUrl = "", onClose }: Props) {
+export default function AddRecipeSheet({ initialStep = "pick", initialWarning = "", onClose }: Props) {
   const [step, setStep] = useState<AddStep>(initialStep);
   const [warning, setWarning] = useState(initialWarning);
-  const [url, setUrl] = useState(initialUrl);
+  const [url, setUrl] = useState("");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const { data: usage } = useResource<AiUsage>("/api/ai-usage");
   const abortRef = useRef<AbortController | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
-  const prevStep = useRef(step);
+  // 경고와 함께 열었으면(영상 보기에서 링크를 못 읽음) 처음 열 때도 아래 effect가 제목으로 포커스하게 null로 시작
+  const prevStep = useRef<AddStep | null>(initialWarning ? null : step);
 
   // 시트를 닫으면(뒤로가기·배경 탭 포함) 진행 중인 요청도 멈춘다
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -60,7 +59,7 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
     setStep(next);
   };
 
-  // 영상 보기에서 바로 링크·글 단계로 열었으면 취소는 시트를 닫는다. dialog.close()로 닫아야 여는 버튼으로 포커스가 돌아간다(close 이벤트가 onClose를 부른다)
+  // 영상 보기에서 바로 글 단계로 열었으면 취소는 시트를 닫는다. dialog.close()로 닫아야 여는 버튼으로 포커스가 돌아간다(close 이벤트가 onClose를 부른다)
   const cancel = () => {
     if (initialStep === "pick") return go("pick");
     abortRef.current?.abort();

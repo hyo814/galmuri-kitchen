@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ChannelList, type Video, type VideoPage } from "../api";
 import Icon from "../components/Icon";
 import InfiniteSentinel from "../components/InfiniteSentinel";
@@ -34,6 +34,7 @@ export default function Videos({ sample }: { sample: boolean }) {
   const [input, setInput] = useState(lastFilter.q);
   const [q, setQ] = useState(lastFilter.q);
   const [selected, setSelected] = useState(lastFilter.channel);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { data: channels } = useResource<ChannelList>("/api/channels");
   const chips = channels?.items.filter((c) => !c.hidden && !c.unavailable) ?? [];
   // 뺀·숨긴 채널을 고른 채였으면 전체로
@@ -65,7 +66,7 @@ export default function Videos({ sample }: { sample: boolean }) {
 
   const noMatch = `제목에 「${q}」${withJosa(q, "이", "가").slice(q.length)} 들어간 영상이 없어요.`;
   let status = "";
-  if (q && settled) status = items.length ? `영상 ${items.length}개를 찾았어요` : noMatch;
+  if (q && !loading && !error) status = items.length ? "영상을 찾았어요" : noMatch;
 
   return (
     <>
@@ -76,15 +77,39 @@ export default function Videos({ sample }: { sample: boolean }) {
           setQ(input.trim());
         }}
       >
-        <label className="r3-search">
-          <Icon name="search" size={20} />
-          <span className="sr-only">영상 제목에서 찾기</span>
-          <input type="search" placeholder="영상 제목에서 찾기" maxLength={50} enterKeyHint="search" value={input} onChange={(e) => setInput(e.target.value)} />
-        </label>
+        <div className="r3-search">
+          <label>
+            <Icon name="search" size={20} />
+            <span className="sr-only">영상 제목에서 찾기</span>
+            <input
+              ref={inputRef}
+              type="search"
+              placeholder="영상 제목에서 찾기"
+              maxLength={50}
+              enterKeyHint="search"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+            />
+          </label>
+          {input && (
+            <button
+              type="button"
+              className="r3-search-clear"
+              aria-label="검색어 지우기"
+              onClick={() => {
+                setInput("");
+                setQ("");
+                inputRef.current?.focus();
+              }}
+            >
+              <Icon name="close" size={18} />
+            </button>
+          )}
+        </div>
       </form>
 
       <div className="r3-chips" role="group" aria-label="채널로 거르기">
-        <button type="button" className="r3-fchip icon" onClick={() => navigate("/recipes/channels")}>
+        <button type="button" className="r3-fchip icon" aria-label="요리 채널 관리" onClick={() => navigate("/recipes/channels")}>
           <Icon name="sliders" size={16} />
           채널
         </button>

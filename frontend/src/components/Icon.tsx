@@ -5,6 +5,7 @@ const PATHS = {
       <path d="M19 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" />
     </>
   ),
+  close: <path d="M6 6l12 12M18 6L6 18" />,
   play: <path d="M8 5.5v13l10.5-6.5z" fill="currentColor" />,
   external: (
     <>

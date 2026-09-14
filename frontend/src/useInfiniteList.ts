@@ -57,7 +57,10 @@ export function useInfiniteList<T extends { id: number | string }>(
     loadingRef.current = false;
     const cached = cache.get(key) as ListState<T> | undefined;
     if (cached) {
+      // 이전 키의 요청이 아직 진행 중이었어도(응답은 gen이 달라 무시된다) 불러오는 중·오류 표시가 남지 않게
       setState(cached);
+      setLoading(false);
+      setError("");
     } else {
       setState(emptyState<T>());
       loadPage(null, true, gen);

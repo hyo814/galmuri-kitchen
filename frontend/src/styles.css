@@ -2464,8 +2464,34 @@ button.row-btn > svg {
 .r3-search:focus-within {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
+.r3-search label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 100%;
+}
 .r3-search svg {
   flex-shrink: 0;
+}
+.r3-search input::-webkit-search-cancel-button {
+  display: none;
+  appearance: none;
+}
+.r3-search-clear {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-right: -12px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--text-3);
 }
 .r3-search input {
   flex: 1;
@@ -2741,6 +2767,13 @@ button.row-btn > svg {
 }
 .r3-add-error {
   margin: 8px 20px 0;
+}
+.r3-row-error {
+  padding: 0 16px 10px 20px;
+}
+.r3-cta-note {
+  margin-top: 8px;
+  text-align: center;
 }
 .r3-crow {
   display: flex;

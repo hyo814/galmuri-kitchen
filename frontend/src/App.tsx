@@ -35,7 +35,7 @@ const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
   "/recipes/ai": () => <RecipeAi />,
   "/recipes/ai/:n": ({ route }) => <RecipeAiDetail index={Number(route.params.n)} />,
   "/recipes/videos/:id": ({ route, user }) => <VideoPlayer id={route.params.id} user={user} />,
-  "/recipes/channels": () => <Channels />,
+  "/recipes/channels": ({ user }) => <Channels user={user} />,
   "/recipes/seasonings/new": () => <SeasoningForm />,
   "/recipes/seasonings/preset/:id": ({ route }) => <SeasoningCalc kind="preset" id={route.params.id} />,
   "/recipes/seasonings/:id": ({ route }) => <SeasoningCalc kind="mine" id={route.params.id} />,
