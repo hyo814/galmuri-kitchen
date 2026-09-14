@@ -5,7 +5,7 @@ from datetime import datetime, time, timedelta, timezone
 
 import app.export as export_module
 from app.ingredients import SEOUL, seoul_today
-from app.models import AiCall, PublicRecipe, User, db, utcnow
+from app.models import AiCall, PublicRecipe, ShoppingItem, ShoppingNote, ShoppingNotePhoto, User, db, utcnow
 
 RECIPE = {
     "title": "두부조림",
@@ -24,6 +24,8 @@ SEASONING = {
 INGREDIENT_HEADER = ["이름", "수량", "단위", "보관 위치", "구입일", "유통기한", "가격(원)"]
 RECIPE_HEADER = ["제목", "인분", "재료", "만드는 법", "출처", "출처 링크", "사진 주소"]
 SEASONING_HEADER = ["이름", "기준", "기준 양", "기준 단위", "주재료", "양념"]
+SHOPPING_HEADER = ["이름", "수량", "단위", "살 날", "넣을 위치", "체크", "산 날(재고에 넣은 날)", "출처", "출처 이름", "담은 날"]
+MEMO_HEADER = ["장소", "메모", "사진 수", "사진 파일 이름", "고친 시각"]
 
 
 def read_zip(res):
@@ -56,6 +58,11 @@ def day(delta=0):
     return (seoul_today() - timedelta(days=delta)).isoformat()
 
 
+def seoul_noon(delta=0):
+    """서울 낮 12시(자정 근처 시간대 변환으로 날짜가 밀리지 않게) → UTC."""
+    return datetime.combine(seoul_today() - timedelta(days=delta), time(12), tzinfo=SEOUL).astimezone(timezone.utc)
+
+
 def test_requires_login(client):
     assert client.get("/api/export").status_code == 401
     assert client.get("/api/export/summary").status_code == 401
@@ -75,15 +82,22 @@ def test_summary_counts_only_my_data(client, login):
     client.post("/api/recipes", json=RECIPE)
     client.post("/api/ingredients", json={"name": "남의 두부", "purchased_on": day()})
     client.post("/api/seasonings", json=SEASONING)
+    client.post("/api/shopping/items", json={"name": "남의 우유"})
+    client.post("/api/shopping/notes", json={"body": "남의 메모"})
     login()
     client.post("/api/ingredients", json={"name": "두부", "purchased_on": day()})
     client.post("/api/recipes", json=RECIPE)
     client.post("/api/recipes", json={**RECIPE, "title": "계란말이"})
     client.post("/api/seasonings", json=SEASONING)
+    client.post("/api/shopping/items", json={"name": "두부"})
+    client.post("/api/shopping/items", json={"name": "대파"})
+    client.post("/api/shopping/notes", json={"body": "메모"})
     assert client.get("/api/export/summary").get_json() == {
         "ingredients": 1,
         "recipes": 2,
         "seasonings": 1,
+        "shopping": 2,
+        "memos": 1,
         "limit": 5,
         "remaining": 5,
     }
@@ -97,6 +111,8 @@ def test_export_empty_data_has_header_only_csvs(client, login):
         "ingredients.csv": [INGREDIENT_HEADER],
         "recipes.csv": [RECIPE_HEADER],
         "seasonings.csv": [SEASONING_HEADER],
+        "shopping.csv": [SHOPPING_HEADER],
+        "shopping_memos.csv": [MEMO_HEADER],
     }
 
 
@@ -105,6 +121,8 @@ def test_export_zip_contents(client, login, app):
     client.post("/api/recipes", json={**RECIPE, "title": "남의 레시피"})
     client.post("/api/ingredients", json={"name": "남의 우유", "purchased_on": day()})
     client.post("/api/seasonings", json={**SEASONING, "name": "남의 양념"})
+    client.post("/api/shopping/items", json={"name": "남의 우유"})
+    client.post("/api/shopping/notes", json={"body": "남의 메모"})
     login()
     kimchi = client.post("/api/locations", json={"name": "김치냉장고", "kind": "fridge"}).get_json()
     client.post("/api/ingredients", json={"name": "두부", "purchased_on": day(1)})
@@ -128,6 +146,21 @@ def test_export_zip_contents(client, login, app):
         json={"name": " 간장조림", "basis": "servings", "basis_amount": 2, "basis_unit": "인분", "items": [{"name": "간장", "amount": 3, "unit": "큰술"}]},
     )
 
+    client.post("/api/shopping/items", json={"name": "두부"})
+    daepa = client.post(
+        "/api/shopping/items",
+        json={"name": "-대파", "quantity": 3, "unit": "단", "planned_on": day(1), "location_id": kimchi["id"], "source": "staple"},
+    ).get_json()
+    client.patch(f"/api/shopping/items/{daepa['id']}", json={"done": True, "changed_at": datetime.now(timezone.utc).isoformat()})
+    note = client.post("/api/shopping/notes", json={"place": "이마트", "body": "=SUM(A1)"}).get_json()
+    with app.app_context():
+        me = user_id(app)
+        db.session.add(ShoppingItem(user_id=me, name="계란", quantity=1, unit="판", source="recipe", source_label="계란말이", stocked_at=seoul_noon(3), created_at=seoul_noon(3)))
+        db.session.add(ShoppingItem(user_id=me, name="오래된 양파", stocked_at=seoul_noon(10), created_at=seoul_noon(10)))  # 7일 지나 안 담긴다
+        db.session.add(ShoppingNotePhoto(note_id=note["id"], photo_key="shopping/1/abc.jpg", size=10))
+        db.session.add(ShoppingNotePhoto(note_id=note["id"], photo_key="shopping/1/def.png", size=20))
+        db.session.commit()
+
     res = client.get("/api/export")
     assert res.status_code == 200
     assert res.mimetype == "application/zip"
@@ -135,7 +168,7 @@ def test_export_zip_contents(client, login, app):
     assert res.headers["Cache-Control"] == "no-store"
     assert res.headers["X-Content-Type-Options"] == "nosniff"
     files = read_zip(res)
-    assert set(files) == {"ingredients.csv", "recipes.csv", "seasonings.csv"}
+    assert set(files) == {"ingredients.csv", "recipes.csv", "seasonings.csv", "shopping.csv", "shopping_memos.csv"}
 
     assert files["ingredients.csv"] == [  # 구입일, id 순
         INGREDIENT_HEADER,
@@ -156,6 +189,16 @@ def test_export_zip_contents(client, login, app):
         SEASONING_HEADER,
         ["'=제육 양념", "주재료 무게", "600", "g", "돼지고기", "고추장 2큰술; 설탕 0.125큰술"],
         ["간장조림", "인분", "2", "인분", "", "간장 3큰술"],
+    ]
+    assert files["shopping.csv"] == [  # created_at 순: 3일 전 만든 계란이 먼저, 10일 전 산 양파는 7일이 지나 빠진다
+        SHOPPING_HEADER,
+        ["계란", "1", "판", "", "", "", day(3), "레시피", "계란말이", day(3)],
+        ["두부", "1", "개", "", "", "", "", "직접 담음", "", day()],
+        ["'-대파", "3", "단", day(1), "김치냉장고", "예", "", "필수품", "", day()],
+    ]
+    assert files["shopping_memos.csv"] == [
+        MEMO_HEADER,
+        ["이마트", "'=SUM(A1)", "2", "abc.jpg; def.png", note["updated_at"]],
     ]
 
     with app.app_context():

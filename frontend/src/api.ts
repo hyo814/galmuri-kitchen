@@ -168,6 +168,8 @@ export interface ExportSummary {
   ingredients: number;
   recipes: number;
   seasonings: number;
+  shopping: number;
+  memos: number;
   limit: number;
   remaining: number;
 }
