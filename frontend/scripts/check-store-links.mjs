@@ -3,10 +3,21 @@
 import assert from "node:assert/strict";
 import { SORTS, STORES, searchQuery, storeLinks } from "../src/storeLinks.ts";
 
+const PHONE_WORDS = ["대파", "두부 한 모", "참기름"];
 if (process.argv.includes("--print")) {
-  for (const word of ["대파", "두부 한 모", "참기름"]) {
+  for (const word of PHONE_WORDS) {
     console.log(`\n# ${word}`);
     for (const s of storeLinks(word, {})) for (const l of s.links) console.log(`${s.name} · ${l.label}\t${l.url}`);
+  }
+  process.exit(0);
+}
+// `--checklist` — 같은 링크를 폰 확인표(Markdown 표)로 출력한다(docs/superpowers/store-links-phone-check.md)
+if (process.argv.includes("--checklist")) {
+  for (const word of PHONE_WORDS) {
+    console.log(`\n## ${word}\n\n| 쇼핑몰 · 정렬 | 주소 | 검색어 유지 | 정렬 적용 | 앱에서도 유지 | 메모 |\n|---|---|---|---|---|---|`);
+    for (const s of storeLinks(word, {})) {
+      for (const l of s.links) console.log(`| ${s.name} · ${l.label} | [열기](${l.url}) | ☐ | ${l.sort ? "☐" : "정렬 후보 없음"} | ☐ |  |`);
+    }
   }
   process.exit(0);
 }

@@ -3194,3 +3194,70 @@ button.row-btn > svg {
 .sh-add-result > span {
   padding-top: 11px;
 }
+
+/* 쇼핑몰에서 찾기 시트(시안 StoreSheet) */
+.sh-stores {
+  display: flex;
+  flex-direction: column;
+}
+
+.sh-store {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.sh-store-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.sh-ad {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px var(--control-line);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.sh-sorts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.sh-sorts a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 44px;
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--chip-text);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.sh-sorts a.first {
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+}
+
+.sh-stores-empty {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text-2);
+}
