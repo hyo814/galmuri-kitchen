@@ -3848,6 +3848,20 @@ button.sh-offline svg:last-child {
   margin: 0;
 }
 
+.sh-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sh-compare .field-label {
+  margin: 0;
+}
+
+.sh-compare .sh-backup + .field-label {
+  margin-top: 8px;
+}
+
 .sh-backup-actions {
   margin: 0;
 }

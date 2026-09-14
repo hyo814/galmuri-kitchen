@@ -297,6 +297,17 @@ const dismissFailed = () =>
     await persist();
   }).then(changed);
 
+/** 기기 사본을 보내지 않고 보관만 한다(메모를 쓰는 중에 다른 기기에서 고친 메모가 들어왔을 때, 스펙 19절) */
+const keepBackup = (note_ref: Ref, fields: NoteFields) =>
+  load()
+    .then(() =>
+      withQueue(async () => {
+        backups = [...backups, { note_ref, fields, saved_at: new Date().toISOString() }];
+        await persist();
+      }),
+    )
+    .then(changed);
+
 const dismissBackup = (index: number) =>
   void withQueue(async () => {
     backups = backups.filter((_, i) => i !== index);
@@ -403,5 +414,6 @@ export function useShopping() {
     refresh,
     dismissFailed,
     dismissBackup,
+    keepBackup,
   };
 }

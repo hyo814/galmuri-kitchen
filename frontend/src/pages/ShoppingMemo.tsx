@@ -13,8 +13,9 @@ import { goBack, navigate } from "../useHashRoute";
 const MAX_PHOTOS = 10;
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024; // 서버 한 장 상한
 const SAVE_DELAY_MS = 1000;
-/** 서버 503(사진 저장소 꺼짐) 문구. ponytail: 실패 목록에 상태 코드가 없어 문구로 알아본다 */
-const STORAGE_OFF_ERROR = "사진을 지금은 올릴 수 없어요.";
+/** 서버 503(사진 저장소 꺼짐) 문구의 바뀌지 않는 부분(backend/app/shopping.py `사진을 지금은 올릴 수 없어요.`).
+ *  ponytail: 실패 목록(FailedOp)에 상태 코드가 없어 문구로 알아본다 — 문구를 바꾸면 여기도, 늘어나면 FailedOp에 status를 넣는다 */
+const STORAGE_OFF_TEXT = "지금은 올릴 수 없어요";
 
 function BackLink() {
   return (
@@ -93,7 +94,7 @@ export function NewShoppingMemo() {
 /** `#/shopping/memos/:id`(서버 메모) · `#/shopping/memos/local`(sessionStorage의 메모 — 기기에서 막 만든 메모도) */
 export default function ShoppingMemo({ id }: { id?: string }) {
   const shopping = useShopping();
-  const { view, act, addPhoto, photoBlob, failed, offline } = shopping;
+  const { view, act, addPhoto, photoBlob, failed, offline, keepBackup } = shopping;
   const [ref] = useState<Ref | null>(() => (id ? { id: Number(id) } : savedMemoRef()));
   const note = ref ? view?.notes.find((n) => matchesRef(n, ref)) : undefined;
 
@@ -119,6 +120,8 @@ export default function ShoppingMemo({ id }: { id?: string }) {
   const synced = useRef<string | null>(null);
   /** 한 번 쓰기(입력칸에 들어와 나갈 때까지)에 `저장했어요`는 한 번만 읽어 준다 */
   const announced = useRef(false);
+  /** 마지막으로 따로 보관한 기기 글(같은 글을 두 번 보관하지 않게) */
+  const kept = useRef("");
   const busy = useRef(0);
   const deleted = useRef(false);
   const latest = useRef({ note, place, body, offline, dirty, held });
@@ -149,6 +152,17 @@ export default function ShoppingMemo({ id }: { id?: string }) {
     return () => clearTimeout(timer);
   }, [!!note]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** 이 기기에서 쓰던 글을 보내지 않고 따로 보관한다(서버 메모와 같거나 이미 보관한 글이면 건너뛴다) */
+  function keepDeviceCopy() {
+    const { note, place, body } = latest.current;
+    if (!note || ((note.place ?? "").trim() === place.trim() && note.body === body)) return;
+    const fields = { place: place.trim() || null, body };
+    const key = JSON.stringify(fields);
+    if (kept.current === key) return;
+    kept.current = key;
+    void keepBackup(refOf(note), fields);
+  }
+
   function save() {
     clearTimeout(saveTimer.current);
     saveTimer.current = undefined;
@@ -156,11 +170,11 @@ export default function ShoppingMemo({ id }: { id?: string }) {
     if (!note || deleted.current || !dirty) return;
     latest.current.dirty = false;
     setDirty(false);
+    // 받아들이지 않은 다른 기기 메모가 있으면 보내지 않고(대기열에 넣지 않고) 따로 보관만 한다
+    if (held) return keepDeviceCopy();
     if ((note.place ?? "").trim() === place.trim() && note.body === body) return;
-    let edited_at = editedAfter(synced.current ?? note.updated_at);
-    // 받아들이지 않은 다른 기기 메모가 있으면 그보다 이른 시각으로 보내 겹침(409)이 되게 한다 — 이 글은 따로 보관된다
-    if (held) edited_at = new Date(Math.min(Date.parse(edited_at), Date.parse(note.updated_at) - 1)).toISOString();
-    else synced.current = edited_at;
+    const edited_at = editedAfter(synced.current ?? note.updated_at);
+    synced.current = edited_at;
     void act({ op: "note_save", ref: refOf(note), fields: { place: place.trim() || null, body }, edited_at });
     const text = offline ? "연결되면 저장돼요" : "저장했어요";
     setStatus(text);
@@ -177,7 +191,7 @@ export default function ShoppingMemo({ id }: { id?: string }) {
     latest.current.dirty = true;
     setDirty(true);
     clearTimeout(saveTimer.current);
-    // 다른 기기 메모를 어떻게 할지 고르기 전에는 자동 저장하지 않는다(나갈 때 저장해 따로 보관된다)
+    // 다른 기기 메모를 어떻게 할지 고르기 전에는 자동 저장하지 않는다(앱을 숨기거나 나갈 때 따로 보관된다)
     saveTimer.current = latest.current.held ? undefined : setTimeout(save, SAVE_DELAY_MS);
   }
 
@@ -252,7 +266,7 @@ export default function ShoppingMemo({ id }: { id?: string }) {
   const photos = note.photos;
   const newFailures = failed.filter((f) => f.op.op === "photo_add" && !seenFailed.has(f.op.client_id) && matchesRef(note, f.op.note));
   const photoErrors = newFailures.length
-    ? ["사진은 저장되지 않았어요.", ...new Set(newFailures.map((f) => (f.error === STORAGE_OFF_ERROR ? "사진 저장은 지금 쓸 수 없어요." : f.error)))]
+    ? ["사진은 저장되지 않았어요.", ...new Set(newFailures.map((f) => (f.error.includes(STORAGE_OFF_TEXT) ? "사진 저장은 지금 쓸 수 없어요." : f.error)))]
     : [];
   const shown = viewing === null ? undefined : photos[viewing];
 
@@ -302,7 +316,7 @@ export default function ShoppingMemo({ id }: { id?: string }) {
             onBlur={blur}
           />
           <p className="hint" aria-hidden="true">
-            {dirty ? (held ? "" : "저장 중…") : status}
+            {held ? "" : dirty ? "저장 중…" : status}
           </p>
           <p className="sr-only" role="status">
             {announce}
@@ -373,35 +387,49 @@ export default function ShoppingMemo({ id }: { id?: string }) {
       </div>
 
       {heldOpen && (
-        <Sheet title="다른 기기에서 고친 메모" description="이 내용으로 바꾸면 지금 쓰던 글은 따로 보관돼요." onClose={() => setHeldOpen(false)}>
-          <div className="sh-backup">
-            {note.place && <p className="sh-memo-title">{note.place}</p>}
-            <p>{note.body || "내용이 없어요"}</p>
+        <Sheet title="어느 글로 둘까요?" description="이 기기에서 쓰는 동안 다른 기기에서 먼저 고친 메모가 있어요." onClose={() => setHeldOpen(false)}>
+          <div className="sh-compare">
+            <p className="field-label">다른 기기에서 고친 메모</p>
+            <div className="sh-backup">
+              {note.place && <p className="sh-memo-title">{note.place}</p>}
+              <p>{note.body || "내용이 없어요"}</p>
+            </div>
+            <p className="field-label">이 기기에서 쓰던 글</p>
+            <div className="sh-backup">
+              {place.trim() && <p className="sh-memo-title">{place.trim()}</p>}
+              <p>{body || "내용이 없어요"}</p>
+            </div>
           </div>
           <div className="rc-actions sh-backup-actions">
             <button
               type="button"
               className="btn primary"
               onClick={() => {
-                save(); // 겹침으로 보내져 쓰던 글이 따로 보관된다
-                adopt(note);
+                keepDeviceCopy(); // 쓰던 글은 따로 보관(메모 위 알림에서 다시 볼 수 있다)
+                clearTimeout(saveTimer.current);
+                saveTimer.current = undefined;
+                latest.current.dirty = false;
+                setDirty(false);
+                adopt(note); // 이후 쓰는 글은 이 버전을 바탕으로 저장된다
                 setHeldOpen(false);
               }}
             >
-              이 내용으로 바꾸기
+              다른 기기 글로 바꾸기
             </button>
             <button
               type="button"
               className="btn outline"
               onClick={() => {
-                synced.current = note.updated_at; // 본 버전 위에 쓰던 글을 저장한다
+                if (!confirm("다른 기기에서 고친 내용이 사라지고 이 기기에서 쓰던 글로 바뀌어요. 덮어쓸까요?")) return;
+                synced.current = note.updated_at; // 본 버전보다 늦은 시각으로 쓰던 글을 저장한다
                 latest.current.held = false;
+                latest.current.dirty = true;
                 setHeld(false);
                 setHeldOpen(false);
                 save();
               }}
             >
-              쓰던 글 그대로 두기
+              쓰던 글로 덮어쓰기
             </button>
           </div>
         </Sheet>

@@ -85,6 +85,12 @@ for (const path of ["/", "/recipes", "/recipes/new", "/recipes/mine/3", "/recipe
 assert.equal(matchRoute("/recipes/ai").pattern, "/recipes/ai");
 assert.equal(matchRoute("/recipes/ai/2").params.n, "2");
 assert.equal(matchRoute("/recipes/ai/x"), null);
+// 장보기 메모 경로 (4단계 계획 Task 10)
+assert.equal(matchRoute("/shopping/memos").pattern, "/shopping/memos");
+assert.equal(matchRoute("/shopping/memos/new").pattern, "/shopping/memos/new");
+assert.equal(matchRoute("/shopping/memos/local").pattern, "/shopping/memos/local");
+assert.deepEqual(matchRoute("/shopping/memos/123").params, { id: "123" });
+assert.equal(matchRoute("/shopping/memos/abc"), null);
 console.log("matchRoute ok");
 
 // AI 레시피 문구 (3b 계획 태스크 4)
