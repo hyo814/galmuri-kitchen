@@ -1,19 +1,23 @@
-"""데이터 내보내기(스펙 27절): 재고·내 레시피·내 양념 비율을 CSV 세 개로 묶은 zip. 하루(서울) 5번까지."""
+"""데이터 내보내기(스펙 27절): 재고·내 레시피·내 양념 비율·장보기를 CSV로 묶은 zip. 하루(서울) 5번까지."""
 
 import csv
 import io
+import os
 import tempfile
 import zipfile
 import zlib
+from datetime import timedelta, timezone
 
 from flask import Blueprint, abort, g, jsonify, request, send_file
-from sqlalchemy import text
-from sqlalchemy.orm import joinedload
+from sqlalchemy import or_, text
+from sqlalchemy.orm import joinedload, selectinload
 
 from . import scan
 from .auth import login_required
-from .ingredients import seoul_today
-from .models import AiCall, Ingredient, Recipe, Seasoning, db
+from .ingredients import SEOUL, seoul_today
+from .models import AiCall, Ingredient, Recipe, Seasoning, ShoppingItem, ShoppingNote, db
+from .shopping import STOCKED_KEEP_DAYS
+from .validation import iso_datetime
 
 bp = Blueprint("export", __name__, url_prefix="/api/export")
 
@@ -30,8 +34,25 @@ SOURCE_LABELS = {  # 화면 format.ts의 SOURCE_LABEL과 같게(화면은 mine�
     "text": "붙여넣은 글에서 가져옴",
 }
 BASIS_LABELS = {"main_weight": "주재료 무게", "servings": "인분", "yield": "완성량"}
+SHOPPING_SOURCE_LABELS = {  # 화면 sync.ts의 sourceTag와 같게(직접 담은 것도 CSV는 칸이 비지 않게 이름을 붙인다)
+    "manual": "직접 담음",
+    "recipe": "레시피",
+    "staple": "필수품",
+    "urgent": "곧 떨어져요",
+    "meal_plan": "식단",
+    "memo": "메모 사진",
+}
 SPOOL_BYTES = 5_000_000  # 이보다 크면 메모리 대신 임시 파일에 zip을 만든다
 BATCH = 200
+
+
+def seoul_date(value):
+    """UTC(또는 tz 없는 SQLite) datetime → 서울 날짜. 없으면 빈 칸."""
+    if value is None:
+        return ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(SEOUL).date()
 
 
 @bp.before_request
@@ -76,6 +97,8 @@ def summary():
         ingredients=owned(Ingredient).count(),
         recipes=owned(Recipe).count(),
         seasonings=owned(Seasoning).count(),
+        shopping=owned(ShoppingItem).filter(ShoppingItem.stocked_at.is_(None)).count(),
+        memos=owned(ShoppingNote).count(),
         limit=DAILY_LIMIT,
         remaining=remaining(),
     )
@@ -104,6 +127,20 @@ def export():
     )
     recipes = owned(Recipe).order_by(Recipe.updated_at.desc(), Recipe.id.desc()).yield_per(BATCH)
     seasonings = owned(Seasoning).order_by(Seasoning.id).yield_per(BATCH)
+    stocked_cutoff = scan.utcnow() - timedelta(days=STOCKED_KEEP_DAYS)
+    shopping_items = (
+        owned(ShoppingItem)
+        .options(joinedload(ShoppingItem.location))
+        .filter(or_(ShoppingItem.stocked_at.is_(None), ShoppingItem.stocked_at >= stocked_cutoff))
+        .order_by(ShoppingItem.created_at, ShoppingItem.id)
+        .yield_per(BATCH)
+    )
+    shopping_notes = (
+        owned(ShoppingNote)
+        .options(selectinload(ShoppingNote.photos))
+        .order_by(ShoppingNote.updated_at.desc(), ShoppingNote.id.desc())
+        .yield_per(BATCH)
+    )
     spool = tempfile.SpooledTemporaryFile(max_size=SPOOL_BYTES)
     with zipfile.ZipFile(spool, "w", zipfile.ZIP_DEFLATED) as archive:
         write_csv(
@@ -146,6 +183,41 @@ def export():
                     "; ".join(f"{x['name']} {number(x['amount'])}{x['unit']}" for x in s.items),
                 ]
                 for s in seasonings
+            ),
+        )
+        write_csv(
+            archive,
+            "shopping.csv",
+            ["이름", "수량", "단위", "살 날", "넣을 위치", "체크", "산 날(재고에 넣은 날)", "출처", "출처 이름", "담은 날"],
+            (
+                [
+                    i.name,
+                    number(i.quantity),
+                    i.unit,
+                    i.planned_on or "",
+                    i.location.name if i.location_id else "",
+                    "예" if i.done_at else "",
+                    seoul_date(i.stocked_at),
+                    SHOPPING_SOURCE_LABELS.get(i.source, i.source),
+                    i.source_label or "",
+                    seoul_date(i.created_at),
+                ]
+                for i in shopping_items
+            ),
+        )
+        write_csv(
+            archive,
+            "shopping_memos.csv",
+            ["장소", "메모", "사진 수", "사진 파일 이름", "고친 시각"],
+            (
+                [
+                    n.place or "",
+                    n.body,
+                    len(n.photos),
+                    "; ".join(os.path.basename(p.photo_key) for p in n.photos),
+                    iso_datetime(n.updated_at),
+                ]
+                for n in shopping_notes
             ),
         )
     spool.seek(0)

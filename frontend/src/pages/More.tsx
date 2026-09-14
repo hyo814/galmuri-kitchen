@@ -189,6 +189,14 @@ function ExportSheet({ onClose }: { onClose: () => void }) {
           <span>내 양념 비율</span>
           <b>{count(data?.seasonings)}</b>
         </li>
+        <li>
+          <span>장보기</span>
+          <b>{count(data?.shopping)}</b>
+        </li>
+        <li>
+          <span>장보기 메모</span>
+          <b>{count(data?.memos)}</b>
+        </li>
       </ul>
       <p className="mo-note">
         <Icon name="info" size={16} />
