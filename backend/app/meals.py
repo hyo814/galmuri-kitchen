@@ -5,10 +5,13 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import selectinload
 
 from . import ai, scan
+from .amounts import is_spoon, parse_amount
 from .auth import ai_daily_limit, get_owned_or_404, login_required
-from .models import MealPlan, MealSlot, Recipe, db
+from .ingredients import seoul_today
+from .matching import match_prepared, normalize, prepare
+from .models import Ingredient, MealPlan, MealSlot, Recipe, ShoppingItem, db
 from .recipe_ai import _int_in, clean_draft, public_image_candidates, similar_public_image
-from .recipes import _prepared_stock, check_recipe_cap, inventory, match_summary, parse_recipe, stock_context
+from .recipes import ALWAYS_HAVE, _prepared_stock, check_recipe_cap, inventory, match_summary, parse_recipe, stock_context
 from .validation import commit_or_duplicate, integer, iso_date, text
 
 # 식단·칸(스펙 20절, 4b-1). 셀프 배치·주 복사·AI 초안.
@@ -504,3 +507,111 @@ def apply_meal_draft(plan_id):
         ))
     commit_or_duplicate(SLOT_TAKEN)
     return jsonify(filled=len(slots) - kept, kept=kept, created_recipes=len(to_create)), 201
+
+
+def shopping_rows(needs, stock, listed, today):
+    """식단 장보기 미리보기 분류(스펙 23절 D4, 20절 구현 세부). 순수 함수, DB 없이 테스트한다.
+    needs=[(이름, 양 글자, 인분 배율, 끼니 날짜)], stock=[(이름, 수량, 단위)], listed=[장보기 목록(stocked_at NULL) 이름]."""
+    listed_norm = {normalize(name) for name in listed}
+    stock_prepared = [(prepare(name), quantity, unit) for name, quantity, unit in stock]
+
+    order = []
+    groups = {}
+    for name, amount, ratio, on in needs:
+        if normalize(name) in ALWAYS_HAVE:
+            continue
+        key = normalize(name) or name
+        group = groups.get(key)
+        if group is None:
+            group = groups[key] = {"name": name, "dates": [], "need": {}, "need_extra": [], "_seen": set()}
+            order.append(key)
+        group["dates"].append(on)
+        parsed = parse_amount(amount)
+        if parsed and not is_spoon(parsed[1]):
+            value, unit = parsed
+            group["need"][unit] = group["need"].get(unit, 0) + value * ratio
+        else:
+            piece = (amount or "").strip()
+            if piece and piece not in group["_seen"]:
+                group["_seen"].add(piece)
+                group["need_extra"].append(piece)
+
+    buckets = {"buy": [], "manual": [], "skip": []}
+    for index, key in enumerate(order):
+        group = groups[key]
+        name = group["name"]
+        planned_on = max(today, min(group["dates"]) - timedelta(days=1))
+        prepared_name = prepare(name)
+        matched = [(quantity, unit) for prepared, quantity, unit in stock_prepared if match_prepared(prepared_name, prepared)]
+        has_stock = bool(matched)
+        have = {}
+        for quantity, unit in matched:
+            parsed = parse_amount(f"{quantity:g}{unit}")
+            if parsed:
+                value, u = parsed
+                have[u] = have.get(u, 0) + value
+
+        need = group["need"]
+        row = {
+            "name": name,
+            "planned_on": planned_on.isoformat(),
+            "need": [{"quantity": round(value, 2), "unit": unit} for unit, value in need.items()],
+            "need_extra": group["need_extra"],
+            "have": [{"quantity": round(value, 2), "unit": unit} for unit, value in have.items()],
+        }
+
+        def add(bucket, quantity, unit, reason):
+            row["quantity"], row["unit"], row["reason"] = quantity, unit, reason
+            buckets[bucket].append((planned_on.isoformat(), index, row))
+
+        if normalize(name) in listed_norm:
+            add("skip", None, None, "listed")
+        elif not need:
+            add("skip", None, None, "enough") if has_stock else add("manual", 1, "개", None)
+        elif len(need) >= 2:
+            first_unit = next(iter(need))
+            add("manual", round(need[first_unit], 2), first_unit, None)
+        else:
+            (unit, amount_needed), = need.items()
+            if unit not in have and have:
+                add("manual", round(amount_needed, 2), unit, None)
+            else:
+                short = amount_needed - have.get(unit, 0)
+                add("buy", round(short, 2), unit, None) if short > 0.001 else add("skip", None, None, "enough")
+
+    return {
+        bucket: [entry_row for _, _, entry_row in sorted(entries, key=lambda entry: (entry[0], entry[1]))]
+        for bucket, entries in buckets.items()
+    }
+
+
+@bp.get("/meal-plans/<int:plan_id>/shopping-preview")
+@login_required
+def meal_plan_shopping_preview(plan_id):
+    """결정 2: 오늘 이후(오늘 포함) 레시피 칸만 계산한다. 담기는 여기서 하지 않는다(화면이 bulk로)."""
+    plan = _owned_plan_with_slots(plan_id)
+    today = seoul_today()
+    start_on = max(today, plan.start_on)
+    end_on = _end_on(plan)
+
+    needs, recipe_slot_count = [], 0
+    for slot in plan.slots:
+        if slot.date < start_on or slot.recipe_id is None:
+            continue
+        recipe_slot_count += 1
+        ratio = slot.servings / max(slot.recipe.servings, 1)  # 방어: servings는 0 이하일 수 없지만 혹시나
+        for ingredient in slot.recipe.ingredients:
+            needs.append((ingredient["name"], ingredient["amount"], ratio, slot.date))
+
+    user_id = g.user.id
+    stock = [(i.name, i.quantity, i.unit) for i in Ingredient.query.filter_by(user_id=user_id).all()]
+    listed = [
+        name for (name,) in db.session.query(ShoppingItem.name)
+        .filter(ShoppingItem.user_id == user_id, ShoppingItem.stocked_at.is_(None))
+        .all()
+    ]
+
+    rows = shopping_rows(needs, stock, listed, today)
+    return jsonify(
+        start_on=start_on.isoformat(), end_on=end_on.isoformat(), recipe_slot_count=recipe_slot_count, **rows
+    )
