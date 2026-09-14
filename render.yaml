@@ -1,0 +1,68 @@
+# Render Blueprint — 대시보드 New → Blueprint에서 이 저장소를 고르면 웹·DB·지우기 Cron을 한 번에 만든다(docs/deploy.md 1-B).
+# sync: false 값은 처음 만들 때만 입력 칸이 뜬다. 소셜 로그인 키는 배포 주소가 나온 뒤 대시보드에서 추가한다.
+envVarGroups:
+  - name: galmuri-shared
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+
+databases:
+  - name: galmuri-db
+    plan: 0.1c-256mb
+    region: singapore
+    postgresMajorVersion: "17"
+
+services:
+  - name: galmuri-kitchen
+    type: web
+    runtime: docker
+    plan: 0.5c-512mb
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - fromGroup: galmuri-shared
+      - key: DATABASE_URL
+        fromDatabase:
+          name: galmuri-db
+          property: connectionString
+      - key: DEMO_LOGIN
+        value: "1"
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: FOODSAFETY_API_KEY
+        sync: false
+      - key: COUPANG_PARTNERS_ID
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+
+  - name: galmuri-purge-demo
+    type: cron
+    runtime: docker
+    plan: 0.5c-512mb
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    schedule: "0 * * * *"
+    dockerCommand: flask --app app purge-demo-users
+    envVars:
+      - fromGroup: galmuri-shared
+      - key: DATABASE_URL
+        fromDatabase:
+          name: galmuri-db
+          property: connectionString
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false

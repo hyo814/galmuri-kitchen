@@ -90,6 +90,14 @@
 1. GitHub에서 **비공개** 저장소 생성
 2. `git remote add origin <주소> && git push -u origin main`
 
+## 1-B. Blueprint로 한 번에 만들기 (2·3·5-3 Cron 대신)
+저장소 루트의 `render.yaml`이 웹(`0.5c-512mb`, 잠들지 않음)·Postgres(`0.1c-256mb`, 만료 없음)·체험 계정 지우기 Cron을 Singapore에 만든다.
+1. https://dashboard.render.com → New → **Blueprint** → GitHub 저장소 선택
+2. 입력 칸이 뜨는 키(`ANTHROPIC_API_KEY`·`YOUTUBE_API_KEY`·`FOODSAFETY_API_KEY`·`COUPANG_PARTNERS_ID`·`R2_*`)를 채운다. R2 네 값은 웹과 Cron에 두 번 넣는다. `SECRET_KEY`는 자동 생성돼 둘이 같이 쓴다.
+3. 배포가 끝나면 웹 서비스 → **Shell**에서 한 번 `flask --app app sync-public-recipes`
+4. 주소가 나오면 4번 카카오 로그인을 등록하고 `KAKAO_CLIENT_ID`/`KAKAO_CLIENT_SECRET`를 웹 서비스 Environment에 추가한다.
+5. 5-3의 5번(IP 한도 확인)을 한 번 한다.
+
 ## 2. Render 데이터베이스
 1. https://dashboard.render.com → New → **PostgreSQL**
 2. Region: **Singapore**(한국과 가장 가까움)
