@@ -51,6 +51,8 @@ export interface User {
   scan: ScanMode;
   scan_limit: number;
   recipe_limit: number;
+  /** on: 요리 채널 영상 / sample: 키 없는 개발 모드의 예시 영상 / off: 영상 칸 숨김 */
+  videos: ScanMode;
 }
 
 export type ScanKind = "fridge" | "receipt" | "order";
@@ -214,6 +216,47 @@ export interface Recommendations {
   next_offset: number | null;
   sample: boolean;
   inventory_count: number;
+}
+
+/** GET /api/videos 목록 한 줄. 썸네일은 유튜브 주소(예시 모드는 null) */
+export interface Video {
+  id: number;
+  video_id: string;
+  title: string;
+  thumbnail_url: string | null;
+  duration_seconds: number | null;
+  published_at: string;
+  channel_id: number;
+  channel_title: string;
+}
+
+export interface VideoDetail extends Video {
+  description: string | null;
+  channel_thumbnail_url: string | null;
+}
+
+export interface VideoPage {
+  items: Video[];
+  next_cursor: string | null;
+  sample: boolean;
+}
+
+/** 요리 채널. is_default면 기본 채널(숨기기만), 아니면 내 채널(빼기). unavailable: 삭제·비공개된 채널 */
+export interface Channel {
+  id: number;
+  title: string;
+  thumbnail_url: string | null;
+  video_count: number | null;
+  is_default: boolean;
+  hidden: boolean;
+  unavailable: boolean;
+}
+
+export interface ChannelList {
+  items: Channel[];
+  mine_count: number;
+  mine_limit: number;
+  sample: boolean;
 }
 
 export class ApiError extends Error {

@@ -9,6 +9,7 @@ import { useInfiniteList, type Page } from "../useInfiniteList";
 import { cache, useResource } from "../useResource";
 import { hasAiResults, startAiRecipes } from "./RecipeAi";
 import Seasonings from "./Seasonings";
+import Videos, { resetVideoFilter } from "./Videos";
 
 export type Segment = "recommend" | "mine" | "video" | "seasoning";
 
@@ -25,6 +26,7 @@ let lastSegment: Segment = "recommend";
 /** 로그아웃 때 다른 계정에서 이전 탭이 그대로 보이지 않게 (M9) */
 export function resetRecipesSegment() {
   lastSegment = "recommend";
+  resetVideoFilter();
 }
 
 /** 레시피 삭제 뒤 뒤로가기하면 내 레시피 탭에 있게 (E1) */
@@ -344,19 +346,10 @@ function MyRecipeList({ canImport }: { canImport: boolean }) {
   );
 }
 
-// addendum: 요리 채널 영상 가져오기는 3b에서 한다
-function VideoSoon() {
-  return (
-    <section className="empty">
-      <Icon name="camera" size={32} color="var(--accent-strong)" />
-      <p className="soon-title">요리 채널 영상은 준비 중이에요.</p>
-      <p className="muted">고른 요리 채널의 새 영상을 보고 바로 레시피로 가져올 수 있게 할게요.</p>
-    </section>
-  );
-}
-
 export default function Recipes({ user }: { user: User }) {
-  const [segment, setSegment] = useState<Segment>(lastSegment);
+  // 영상을 쓸 수 없으면(운영에서 키 없음) 영상 칸을 숨긴다
+  const segments = user.videos === "off" ? SEGMENTS.filter(([key]) => key !== "video") : SEGMENTS;
+  const [segment, setSegment] = useState<Segment>(segments.some(([key]) => key === lastSegment) ? lastSegment : "recommend");
   const choose = useCallback((next: Segment) => {
     lastSegment = next;
     setSegment(next);
@@ -367,8 +360,8 @@ export default function Recipes({ user }: { user: User }) {
       <header className="topbar">
         <h1>레시피</h1>
       </header>
-      <div className="segmented rc-seg" role="group" aria-label="레시피 보기">
-        {SEGMENTS.map(([key, label]) => (
+      <div className="segmented rc-seg" role="group" aria-label="레시피 보기" style={{ gridTemplateColumns: `repeat(${segments.length}, minmax(0, 1fr))` }}>
+        {segments.map(([key, label]) => (
           <button key={key} aria-pressed={segment === key} onClick={() => choose(key)}>
             {label}
           </button>
@@ -376,7 +369,7 @@ export default function Recipes({ user }: { user: User }) {
       </div>
       {segment === "recommend" && <RecommendList onShowMine={() => choose("mine")} showAi={user.scan !== "off"} />}
       {segment === "mine" && <MyRecipeList canImport={user.scan !== "off"} />}
-      {segment === "video" && <VideoSoon />}
+      {segment === "video" && <Videos sample={user.videos === "sample"} />}
       {segment === "seasoning" && <Seasonings />}
     </main>
   );

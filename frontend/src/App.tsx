@@ -13,6 +13,8 @@ import SeasoningCalc from "./pages/SeasoningCalc";
 import SeasoningForm, { resetSeasoningDraft } from "./pages/SeasoningForm";
 import Recipes, { resetRecipesSegment } from "./pages/Recipes";
 import Tools from "./pages/Tools";
+import Channels from "./pages/Channels";
+import VideoPlayer from "./pages/VideoPlayer";
 import { scrollTops, useHashRoute, type Route, type RoutePattern } from "./useHashRoute";
 import { forgetResources } from "./useResource";
 
@@ -32,6 +34,8 @@ const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
   "/recipes/public/:id": ({ route }) => <RecipeDetail kind="public" id={route.params.id} />,
   "/recipes/ai": () => <RecipeAi />,
   "/recipes/ai/:n": ({ route }) => <RecipeAiDetail index={Number(route.params.n)} />,
+  "/recipes/videos/:id": ({ route, user }) => <VideoPlayer id={route.params.id} user={user} />,
+  "/recipes/channels": ({ user }) => <Channels user={user} />,
   "/recipes/seasonings/new": () => <SeasoningForm />,
   "/recipes/seasonings/preset/:id": ({ route }) => <SeasoningCalc kind="preset" id={route.params.id} />,
   "/recipes/seasonings/:id": ({ route }) => <SeasoningCalc kind="mine" id={route.params.id} />,

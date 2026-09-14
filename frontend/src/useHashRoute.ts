@@ -11,6 +11,8 @@ export const ROUTES = [
   "/recipes/public/:id",
   "/recipes/ai",
   "/recipes/ai/:n",
+  "/recipes/videos/:id",
+  "/recipes/channels",
   "/recipes/seasonings/new",
   "/recipes/seasonings/preset/:id",
   "/recipes/seasonings/:id",

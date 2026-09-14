@@ -33,7 +33,8 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
   const abortRef = useRef<AbortController | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
-  const prevStep = useRef(step);
+  // 경고와 함께 열었으면(영상 보기에서 링크를 못 읽음) 처음 열 때도 아래 effect가 제목으로 포커스하게 null로 시작
+  const prevStep = useRef<AddStep | null>(initialWarning ? null : step);
 
   // 시트를 닫으면(뒤로가기·배경 탭 포함) 진행 중인 요청도 멈춘다
   useEffect(() => () => abortRef.current?.abort(), []);
