@@ -3,6 +3,7 @@ import socket
 
 import anthropic
 import pytest
+import requests
 
 from app import create_app, database_url
 from app.defaults import seed_user_defaults
@@ -34,7 +35,12 @@ def block_network(monkeypatch):
             raise AssertionError("테스트에서 네트워크를 부르면 안 돼요")
         return real_getaddrinfo(host, *args, **kwargs)
 
-    monkeypatch.setattr(socket, "getaddrinfo", guarded)
+    def blocked(*args, **kwargs):
+        raise AssertionError("테스트에서 네트워크를 부르면 안 돼요")
+
+    monkeypatch.setattr(socket, "getaddrinfo", guarded)  # app.outbound.socket.getaddrinfo도 이것이다
+    monkeypatch.setattr(requests, "get", blocked)  # app.outbound.requests.get
+    monkeypatch.setattr(requests.Session, "send", blocked)  # 공개 웹 페이지 요청(세션)
 
 
 @pytest.fixture

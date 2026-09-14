@@ -49,6 +49,7 @@ def create_app(test_config=None):
         AI_SCAN_BURST_LIMIT=int(os.environ.get("AI_SCAN_BURST_LIMIT") or 3),
         AI_DAILY_RECIPE_LIMIT=int(os.environ.get("AI_DAILY_RECIPE_LIMIT") or 10),
         FOODSAFETY_API_KEY=os.environ.get("FOODSAFETY_API_KEY") or None,
+        YOUTUBE_API_KEY=os.environ.get("YOUTUBE_API_KEY") or None,
     )
     if test_config:
         app.config.update(test_config)
