@@ -5,7 +5,8 @@ import { formatDate, formatQuantity } from "../format";
 import { stockButtonText, stockSummaryText } from "../shopping/sync";
 import { useAsyncAction } from "../useAsyncAction";
 import { goBack, navigate, setLeaveGuard } from "../useHashRoute";
-import { forgetRecipeCaches, forgetResources } from "../useResource";
+import { forgetRecipeCaches } from "../useResource";
+import { refresh } from "../shopping/useShopping";
 
 const OFFLINE = "인터넷이 연결되면 넣을 수 있어요";
 const LEAVE_CONFIRM = "작성 중인 내용이 사라져요. 나갈까요?";
@@ -170,7 +171,7 @@ export default function ShoppingStock() {
         throw e;
       }
       setLeaveGuard(null);
-      forgetResources("/api/shopping");
+      void refresh(); // 장보기 목록은 useShopping 기기 상태라 새로 받는다
       forgetRecipeCaches(); // 재고가 바뀌었으니 추천·보유 표시도 새로
       navigate("/shopping", { replace: true });
     });
@@ -350,6 +351,12 @@ export default function ShoppingStock() {
         )}
 
         <div className="cta-bar">
+          {skipCount > 0 && stockCount > 0 && (
+            <p className="sh-in-hint">
+              {rows.every((r) => r.stock || r.household) ? "생활용품 " : ""}
+              {skipCount}개는 재고에 넣지 않고 산 것으로만 옮겨요
+            </p>
+          )}
           <div className="actions">
             <button type="button" className="btn outline" disabled={busy} aria-disabled={busy} onClick={leave}>
               취소

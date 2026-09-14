@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { formatDate, withJosa } from "../format";
-import { plannedOnFor, parseQuantityText, quantityText, type EditFields, type ViewItem } from "../shopping/sync";
+import { nameKey, plannedOnFor, parseQuantityText, quantityText, type EditFields, type ViewItem } from "../shopping/sync";
 import { setLeaveGuard } from "../useHashRoute";
 import Icon from "./Icon";
 import Sheet from "./Sheet";
@@ -16,6 +16,8 @@ interface Props {
   today: string;
   /** 추가: 모든 칸 / 고치기: 바뀐 칸만 */
   onSave: (fields: ItemInput | EditFields, keepOpen: boolean) => void;
+  /** 추가: 지금 목록 이름들(같은 이름이면 한 번 알리고 `그래도 담기`로 담는다) */
+  listedNames?: string[];
   onDelete?: () => void;
   onClose: () => void;
 }
@@ -28,7 +30,7 @@ function whenOf(plannedOn: string | null, today: string): { when: When; date: st
 }
 
 /** 시안 AddSheet: 살 것 추가·고치기. 저장은 useShopping.act라 인터넷이 없어도 된다 */
-export default function ShoppingItemSheet({ item, today, onSave, onDelete, onClose }: Props) {
+export default function ShoppingItemSheet({ item, today, onSave, listedNames = [], onDelete, onClose }: Props) {
   const initial = item ? whenOf(item.planned_on, today) : { when: "today" as When, date: "" };
   const startQuantity = item ? quantityText(item.quantity, item.unit) : "";
   const [name, setName] = useState(item?.name ?? "");
@@ -36,6 +38,8 @@ export default function ShoppingItemSheet({ item, today, onSave, onDelete, onClo
   const [when, setWhen] = useState<When>(initial.when);
   const [date, setDate] = useState(initial.date);
   const [added, setAdded] = useState("");
+  /** 목록에 이미 있는 이름으로 추가하려 할 때 알림(이름을 바꾸면 사라진다) */
+  const [dup, setDup] = useState<{ name: string; keepOpen: boolean } | null>(null);
   /** 수량 칸을 떠났거나 저장을 눌렀을 때만 틀렸다고 보여준다 */
   const [touched, setTouched] = useState(false);
   /** showPicker가 없는 브라우저: 날짜 칸을 보이게 해서 직접 고르게 한다 */
@@ -69,13 +73,18 @@ export default function ShoppingItemSheet({ item, today, onSave, onDelete, onClo
     if (dateVisible) dateRef.current?.focus();
   }, [dateVisible]);
 
-  const save = (keepOpen: boolean) => {
+  const save = (keepOpen: boolean, anyway = false) => {
     if (!canSave || !parsed) {
       setTouched(true);
       return;
     }
     const fields: ItemInput = { name: name.trim(), ...parsed, planned_on: plannedOn() };
     if (!item) {
+      if (!anyway && listedNames.some((n) => nameKey(n) === nameKey(fields.name))) {
+        setDup({ name: fields.name, keepOpen });
+        return;
+      }
+      setDup(null);
       onSave(fields, keepOpen);
       if (!keepOpen) return;
       // 이름·수량만 비우고 언제 살까요는 그대로
@@ -122,7 +131,10 @@ export default function ShoppingItemSheet({ item, today, onSave, onDelete, onClo
               ref={nameRef}
               className="input"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                setDup(null);
+              }}
               maxLength={50}
               enterKeyHint="done"
               autoFocus={!item}
@@ -142,6 +154,14 @@ export default function ShoppingItemSheet({ item, today, onSave, onDelete, onClo
             />
           </label>
         </div>
+        {dup && (
+          <p className="notice sh-dup" role="status">
+            <span>{withJosa(dup.name, "은", "는")} 이미 목록에 있어요</span>
+            <button type="button" className="r3-link" onClick={() => save(dup.keepOpen, true)}>
+              그래도 담기
+            </button>
+          </p>
+        )}
         {showQuantityError && (
           <p id={quantityError} className="rc-err">
             수량을 1모, 30구처럼 입력해주세요

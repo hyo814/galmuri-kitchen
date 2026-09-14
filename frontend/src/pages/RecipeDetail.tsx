@@ -3,6 +3,7 @@ import { api, type MyRecipe, type RecipeDetail as Detail, type RecipeIngredientS
 import Icon from "../components/Icon";
 import ShoppingAddButton from "../components/ShoppingAddButton";
 import { SOURCE_LABEL, imageSrc, scaleAmount, withJosa } from "../format";
+import { recipeQuantity } from "../shopping/sync";
 import { useAsyncAction } from "../useAsyncAction";
 import { goBack, navigate } from "../useHashRoute";
 import { forgetRecipeCaches, useResource } from "../useResource";
@@ -41,8 +42,10 @@ export function RecipeBody({
   const shown = servings ?? base;
   const ratio = shown / base;
   const have = ingredients.filter((item) => item.have).length;
-  // ponytail: 레시피 양(1작은술)은 단위가 달라 담지 않고 이름만 담는다(1개) — 23절 D4 합산은 4b
-  const missing = ingredients.filter((item) => !item.have).map((item) => ({ name: item.name }));
+  // 보이는 양(인분 조절 반영)을 수량·단위로 읽어 담는다. 못 읽는 양("약간")은 1 약간 — 23절 D4 합산은 4b
+  const missing = ingredients
+    .filter((item) => !item.have)
+    .map((item) => ({ name: item.name, ...recipeQuantity(scaleAmount(item.amount, ratio)) }));
   return (
     <>
       <section className="rc-sec" aria-labelledby="rc-ingredients">

@@ -10,7 +10,7 @@ import {
 } from "../api";
 import { formatQuantity, formatWon, namesLabel } from "../format";
 import { useAsyncAction } from "../useAsyncAction";
-import { forgetResources } from "../useResource";
+import { refresh } from "../shopping/useShopping";
 import Icon from "./Icon";
 import Sheet from "./Sheet";
 
@@ -162,7 +162,7 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
     follow.run(async () => {
       const ids = matched.items.filter((i) => i.on).map((i) => i.id);
       await api("/api/shopping/items/mark-stocked", { method: "POST", body: { ids } });
-      forgetResources("/api/shopping");
+      void refresh(); // 장보기 목록은 useShopping 기기 상태라 새로 받는다
       await finish(matched.count);
     });
 

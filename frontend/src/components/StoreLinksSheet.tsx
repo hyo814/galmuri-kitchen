@@ -38,7 +38,7 @@ export default function StoreLinksSheet({ name, affiliates, onClose }: Props) {
     };
   }, []);
 
-  // 폰에서 확인하기 전 주소는 운영 화면에 내보내지 않는다(개발 서버에서만 후보를 모두 보여준다)
+  // 폰에서 확인하기 전 쇼핑몰은 운영 화면에서 정렬 칩 없이 검색 결과만(개발 서버에서는 후보를 모두 보여준다)
   const stores = storeLinks(name, affiliates, { lastUsed, onlyVerified: !import.meta.env.DEV });
   const itemName = name.trim();
   const description = !online

@@ -68,6 +68,7 @@ export function ShoppingMemos() {
           ))}
         </ul>
       )}
+      {view && notes.length === 0 && <p className="center muted">아직 쓴 메모가 없어요</p>}
       <div className="rc-actions">
         <button type="button" className="btn outline" disabled={full} onClick={() => navigate("/shopping/memos/new")}>
           <Icon name="plus" />
