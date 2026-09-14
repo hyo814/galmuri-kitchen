@@ -68,7 +68,7 @@ assert.equal(parseAmountInput("2/4"), 0.5); assert.equal(parseAmountInput(" ½ "
 assert.equal(parseAmountInput("10000"), 10000); assert.equal(parseAmountInput("10001"), null);
 assert.equal(parseAmountInput("0.01"), 0.01); assert.equal(parseAmountInput("0.009"), null); // 서버 최소 0.01과 같다
 // 폼에 채우는 양: 분수로 바꿔도 값이 거의 같을 때만 분수
-for (const [value, text] of [[0.5, "½"], [2 / 3, "⅔"], [1.5, "1½"], [3, "3"], [600, "600"], [12.5, "12.5"], [0.03, "0.03"], [0.35, "0.35"]]) assert.equal(amountInputText(value), text, String(value));
+for (const [value, text] of [[0.5, "½"], [2 / 3, "⅔"], [1.5, "1½"], [3, "3"], [600, "600"], [12.5, "12.5"], [0.03, "0.03"], [0.35, "0.35"], [0.33, "0.33"], [1 / 3, "⅓"], [0.255, "0.255"], [0.1 + 0.2, "0.3"], [15 / 7, "2.1429"]]) assert.equal(amountInputText(value), text, String(value));
 
 console.log("seasoning ok");
 

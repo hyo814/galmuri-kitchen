@@ -9,7 +9,7 @@ import More from "./pages/More";
 import RecipeDetail from "./pages/RecipeDetail";
 import RecipeForm from "./pages/RecipeForm";
 import SeasoningCalc from "./pages/SeasoningCalc";
-import SeasoningForm from "./pages/SeasoningForm";
+import SeasoningForm, { resetSeasoningDraft } from "./pages/SeasoningForm";
 import Recipes, { resetRecipesSegment } from "./pages/Recipes";
 import Tools from "./pages/Tools";
 import { scrollTops, useHashRoute, type Route, type RoutePattern } from "./useHashRoute";
@@ -122,6 +122,7 @@ export default function App() {
   const signOut = useCallback(() => {
     forgetResources();
     resetRecipesSegment();
+    resetSeasoningDraft();
     scrollTops.clear();
     setUser(null);
   }, []);

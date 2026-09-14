@@ -49,6 +49,8 @@ export default function Seasonings() {
           </button>
         </div>
       )}
+      {/* 내 비율이 뒤늦게 위에 끼어들어 기본 양념이 밀리지 않게, 처음 받을 때는 기다린다(다음부터는 캐시로 바로) */}
+      {!data && !error && <p className="center muted">불러오는 중…</p>}
       {mine.length > 0 && (
         <section aria-labelledby="seasonings-mine">
           <h2 className="r3-sechead" id="seasonings-mine">
@@ -57,12 +59,14 @@ export default function Seasonings() {
           <SeasoningRows items={mine} pathOf={(s) => `/recipes/seasonings/${s.id}`} />
         </section>
       )}
-      <section aria-labelledby="seasonings-default">
-        <h2 className="r3-sechead" id="seasonings-default">
-          기본 양념
-        </h2>
-        <SeasoningRows items={SEASONING_PRESETS} pathOf={(s) => `/recipes/seasonings/preset/${s.id}`} />
-      </section>
+      {(data || error) && (
+        <section aria-labelledby="seasonings-default">
+          <h2 className="r3-sechead" id="seasonings-default">
+            기본 양념
+          </h2>
+          <SeasoningRows items={SEASONING_PRESETS} pathOf={(s) => `/recipes/seasonings/preset/${s.id}`} />
+        </section>
+      )}
       <div className="cta-bar">
         <button className="btn primary" onClick={() => navigate("/recipes/seasonings/new")}>
           <Icon name="plus" />내 비율 만들기

@@ -2081,3 +2081,7 @@ button.row-btn > svg {
 .r3-unit-row .icon-btn {
   color: var(--text-3);
 }
+
+.r3-items-err {
+  margin-top: 10px;
+}

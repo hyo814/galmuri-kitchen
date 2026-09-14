@@ -22,7 +22,7 @@ const BASES: [Basis, string][] = [
   ["yield", "완성량"],
 ];
 const LEAVE_CONFIRM = "작성 중인 내용이 사라져요. 나갈까요?";
-const AMOUNT_ERROR = "양을 숫자나 ½처럼 입력해주세요";
+const AMOUNT_ERROR = "양을 숫자로 입력해주세요(예: 1.5)."; // ½·1½도 받는다(기본 양념에서 복사한 양)
 
 interface ItemRow {
   key: number;
@@ -32,10 +32,15 @@ interface ItemRow {
 }
 
 type RowField = "name" | "amount" | "unit";
+interface RowError {
+  field: RowField;
+  message: string;
+}
 interface Errors {
   name?: string;
   basis?: string;
-  row?: { key: number; field: RowField; message: string };
+  items?: string;
+  rows?: Record<number, RowError>; // 줄 key → 그 줄의 오류
 }
 
 let lastKey = 0;
@@ -44,6 +49,11 @@ const newKey = () => ++lastKey;
 // 기본 양념의 `이 비율 고쳐서 내 비율로`: 폼으로 넘길 내용. 폼이 열리면 비운다(새로 만들기가 옛 내용으로 열리지 않게).
 // ponytail: 모듈 변수라 새로고침하면 빈 폼. 링크로 공유할 일이 생기면 경로(#/recipes/seasonings/new?preset=1)로 옮긴다.
 let draft: Seasoning | null = null;
+
+/** 로그아웃 때 다른 계정이 이전 사용자의 복사 내용으로 폼을 열지 않게 */
+export function resetSeasoningDraft() {
+  draft = null;
+}
 
 export function openSeasoningDraft(seasoning: Seasoning) {
   draft = seasoning;
@@ -69,7 +79,7 @@ function BackLink({ onClick }: { onClick: () => void }) {
 function focusField(id: string) {
   const el = document.getElementById(id);
   el?.scrollIntoView({ block: "center" });
-  el?.focus();
+  (el as HTMLElement | null)?.focus({ preventScroll: true });
 }
 
 function SeasoningEditor({ initial, editId }: { initial: Seasoning | null; editId: number | null }) {
@@ -90,7 +100,15 @@ function SeasoningEditor({ initial, editId }: { initial: Seasoning | null; editI
   const [focusKey, setFocusKey] = useState<number | null>(null);
   const { busy, error, setError, run } = useAsyncAction();
 
-  const snapshot = JSON.stringify([name, basis, mainIngredient, basisText, basisUnit, rows.map(({ key: _, ...row }) => row)]);
+  // 빈 줄은 비교에서 뺀다(빈 줄을 빼기만 해도 나가기 확인이 뜨지 않게)
+  const snapshot = JSON.stringify([
+    name,
+    basis,
+    mainIngredient,
+    basisText,
+    basisUnit,
+    rows.filter((row) => row.name.trim() || row.amount.trim()).map(({ name, amount, unit }) => [name, amount, unit]),
+  ]);
   const [start] = useState(snapshot);
   const dirty = snapshot !== start;
 
@@ -100,40 +118,67 @@ function SeasoningEditor({ initial, editId }: { initial: Seasoning | null; editI
     goBack(editId ? `/recipes/seasonings/${editId}` : "/recipes");
   };
 
+  const clearError = (field: "name" | "basis" | "items") => setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
+
+  const setRowError = (key: number, value: RowError | undefined) =>
+    setErrors((prev) => {
+      if (!value && !prev.rows?.[key]) return prev;
+      const rows = { ...prev.rows };
+      if (value) rows[key] = value;
+      else delete rows[key];
+      return { ...prev, rows };
+    });
+
   const updateRow = (key: number, patch: Partial<ItemRow>) => {
     setRows((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)));
-    if (errors.row?.key === key) setErrors({ ...errors, row: undefined });
+    setRowError(key, undefined);
+    clearError("items");
   };
 
   const addRow = () => {
     const key = newKey();
     setRows((prev) => [...prev, { key, name: "", amount: "", unit: "큰술" }]);
     setFocusKey(key);
+    clearError("items");
   };
 
   const chooseBasis = (next: Basis) => {
     setBasis(next);
     setBasisUnit(BASIS_UNITS[next][0]);
-    setErrors({ ...errors, basis: undefined });
+    clearError("basis");
   };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     setError("");
     const filled = rows.filter((row) => row.name.trim() || row.amount.trim());
-    const bad = filled.find((row) => !row.name.trim() || parseAmountInput(row.amount) === null);
+    const rowErrors: Record<number, RowError> = {};
+    for (const row of filled) {
+      if (!row.name.trim()) rowErrors[row.key] = { field: "name", message: "양념 이름을 입력해주세요." };
+      else if (parseAmountInput(row.amount) === null) rowErrors[row.key] = { field: "amount", message: AMOUNT_ERROR };
+    }
     const basisAmount = parseAmountInput(basisText);
-    const next: Errors = {};
+    const next: Errors = { rows: rowErrors };
+    if (!name.trim()) next.name = "이름을 입력해주세요.";
     if (basisAmount === null || (basis === "servings" && !(Number.isInteger(basisAmount) && basisAmount <= 20)))
       next.basis = "기준 양을 다시 확인해주세요.";
-    if (bad)
-      next.row = bad.name.trim()
-        ? { key: bad.key, field: "amount", message: AMOUNT_ERROR }
-        : { key: bad.key, field: "name", message: "양념 이름을 입력해주세요" };
+    if (filled.length === 0) next.items = "양념 재료를 하나 이상 입력해주세요.";
     setErrors(next);
+    // 위에서부터 첫 오류 칸으로 커서를 옮긴다
+    if (next.name) return focusField("seasoning-name");
     if (next.basis) return focusField("seasoning-basis-amount");
-    if (next.row) return focusField(`seasoning-${next.row.field}-${next.row.key}`);
-    if (filled.length === 0) return setError("양념 재료를 하나 이상 입력해주세요.");
+    const firstBad = filled.find((row) => rowErrors[row.key]);
+    if (firstBad) return focusField(`seasoning-${rowErrors[firstBad.key].field}-${firstBad.key}`);
+    if (next.items) {
+      // 문구가 재료 칸 바로 아래에 있어서 첫 줄로 가면 함께 보인다. 줄이 없으면 하나 만들어 커서를 둔다
+      if (rows.length > 0) focusField(`seasoning-name-${rows[0].key}`);
+      else {
+        const key = newKey(); // addRow는 이 문구를 지우므로 직접 넣는다
+        setRows([{ key, name: "", amount: "", unit: "큰술" }]);
+        setFocusKey(key);
+      }
+      return;
+    }
 
     run(async () => {
       const body = {
@@ -160,7 +205,7 @@ function SeasoningEditor({ initial, editId }: { initial: Seasoning | null; editI
         const row = rowMatch && filled[Number(rowMatch[1]) - 1];
         if (row) {
           const field: RowField = rowMatch[2] === "이름" ? "name" : rowMatch[2] === "양" ? "amount" : "unit";
-          setErrors({ row: { key: row.key, field, message } });
+          setErrors({ rows: { [row.key]: { field, message } } });
           focusField(`seasoning-${field}-${row.key}`);
         } else if (message.startsWith("이름") || message.startsWith("같은 이름")) {
           setErrors({ name: message });
@@ -181,12 +226,12 @@ function SeasoningEditor({ initial, editId }: { initial: Seasoning | null; editI
       aria-label={`기준 양 (${basisUnit})`}
       aria-invalid={!!errors.basis}
       aria-describedby={errors.basis ? "seasoning-basis-error" : undefined}
-      placeholder={basis === "main_weight" ? "600" : basis === "servings" ? "2" : "½"}
+      placeholder={basis === "main_weight" ? "600" : basis === "servings" ? "2" : "0.5"}
       maxLength={8}
       value={basisText}
       onChange={(e) => {
         setBasisText(e.target.value);
-        if (errors.basis) setErrors({ ...errors, basis: undefined });
+        clearError("basis");
       }}
     />
   );
@@ -198,7 +243,7 @@ function SeasoningEditor({ initial, editId }: { initial: Seasoning | null; editI
         <h1>{editId ? "내 비율 고치기" : "내 비율 만들기"}</h1>
       </header>
 
-      <form className="rc-page-form" onSubmit={submit}>
+      <form className="rc-page-form" onSubmit={submit} noValidate>
         <section className="rc-sec rc-form">
           <div className="field">
             <label className="field-label" htmlFor="seasoning-name">
@@ -210,7 +255,7 @@ function SeasoningEditor({ initial, editId }: { initial: Seasoning | null; editI
               value={name}
               onChange={(e) => {
                 setName(e.target.value);
-                if (errors.name) setErrors({ ...errors, name: undefined });
+                clearError("name");
               }}
               required
               maxLength={30}
@@ -294,7 +339,7 @@ function SeasoningEditor({ initial, editId }: { initial: Seasoning | null; editI
           </div>
           <div className="rc-rows">
             {rows.map((row, index) => {
-              const rowError = errors.row?.key === row.key ? errors.row : null;
+              const rowError = errors.rows?.[row.key];
               const errorId = `seasoning-row-error-${row.key}`;
               const invalid = (field: RowField) => ({
                 className: rowError?.field === field ? "input invalid" : "input",
@@ -318,13 +363,14 @@ function SeasoningEditor({ initial, editId }: { initial: Seasoning | null; editI
                       id={`seasoning-amount-${row.key}`}
                       {...invalid("amount")}
                       aria-label={`${index + 1}번째 양념 양`}
-                      placeholder="양"
+                      inputMode="decimal"
+                      placeholder="1.5"
                       maxLength={8}
                       value={row.amount}
                       onChange={(e) => updateRow(row.key, { amount: e.target.value })}
                       onBlur={() => {
                         if (row.amount.trim() && parseAmountInput(row.amount) === null)
-                          setErrors({ ...errors, row: { key: row.key, field: "amount", message: AMOUNT_ERROR } });
+                          setRowError(row.key, { field: "amount", message: AMOUNT_ERROR });
                       }}
                     />
                     <span className="r3-sel">
@@ -347,7 +393,7 @@ function SeasoningEditor({ initial, editId }: { initial: Seasoning | null; editI
                       aria-label={`${row.name.trim() || "빈 양념"} 빼기`}
                       onClick={() => {
                         setRows((prev) => prev.filter((r) => r.key !== row.key));
-                        if (rowError) setErrors({ ...errors, row: undefined });
+                        setRowError(row.key, undefined);
                       }}
                     >
                       <Icon name="trash" />
@@ -363,6 +409,12 @@ function SeasoningEditor({ initial, editId }: { initial: Seasoning | null; editI
               );
             })}
           </div>
+          {errors.items && (
+            <p className="rc-err r3-items-err" role="alert">
+              <Icon name="alert" size={16} />
+              {errors.items}
+            </p>
+          )}
           <button type="button" className="btn secondary rc-add" disabled={rows.length >= MAX_ITEMS} onClick={addRow}>
             <Icon name="plus" />
             재료 추가
@@ -400,7 +452,7 @@ function NewSeasoning() {
 
 function EditSeasoning({ id }: { id: string }) {
   const { data, error, status, reload } = useResource<Seasoning>(`/api/seasonings/${id}`);
-  if (data) return <SeasoningEditor initial={data} editId={data.id} />;
+  if (data) return <SeasoningEditor key={data.updated_at} initial={data} editId={data.id} />; // 새로 받은 내용이 다르면 폼을 다시 채운다
   return (
     <main className="page">
       <BackLink onClick={() => goBack(`/recipes/seasonings/${id}`)} />

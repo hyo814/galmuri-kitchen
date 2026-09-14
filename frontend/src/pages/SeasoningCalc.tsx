@@ -180,7 +180,7 @@ function Calculator({ seasoning: s }: { seasoning: Seasoning }) {
 
 function MineCalc({ id }: { id: string }) {
   const { data, error, status, reload } = useResource<Seasoning>(`/api/seasonings/${id}`);
-  if (data) return <Calculator seasoning={data} />;
+  if (data) return <Calculator key={data.updated_at} seasoning={data} />; // 새로 받은 내용이 다르면 기준량부터 다시
   return (
     <main className="page">
       <BackLink />

@@ -10,6 +10,7 @@ export interface Seasoning {
   id: number; name: string; basis: Basis; basis_amount: number; basis_unit: BasisUnit;
   main_ingredient: string | null; items: SeasoningItem[];
   source: "default" | "user"; source_note: string | null;
+  updated_at?: string; // 내 비율(서버)만 있다. 기본 양념은 화면 데이터라 없음
 }
 
 /** 계량 기준(스펙 22절): 1큰술 15ml, 1작은술 5ml, 1컵 200ml */
@@ -84,9 +85,9 @@ export function parseAmountInput(text: string): number | null {
   return value >= 0.01 && value <= 10000 ? value : null;
 }
 
-/** 입력칸에 채울 양: 분수로 적어도 값이 거의 그대로면 분수(0.5 → "½", ⅔ → "⅔"), 아니면 숫자 그대로(12.5 → "12.5", 0.03 → "0.03") */
+/** 입력칸에 채울 양: 분수로 적어도 값이 그대로면 분수(0.5 → "½", ⅔ → "⅔"), 아니면 소수 넷째 자리까지(0.33 → "0.33", 15/7 → "2.1429") */
 export function amountInputText(value: number): string {
   const text = formatAmountNumber(value);
   const back = parseAmountInput(text);
-  return back !== null && Math.abs(back - value) < 0.01 ? text : String(value);
+  return back !== null && Math.abs(back - value) < 1e-9 ? text : String(Number(value.toFixed(4)));
 }
