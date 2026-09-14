@@ -175,3 +175,49 @@ class Seasoning(db.Model):
     items = db.Column(db.JSON, nullable=False, default=list)  # [{name, amount, unit}], 순서 = 표시 순서
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class YoutubeChannel(db.Model):
+    """요리 채널(스펙 17절). 여러 사용자가 같이 쓰는 캐시라 사용자 소유가 아니다. 기본 채널은 is_default."""
+
+    __tablename__ = "youtube_channels"
+
+    id = db.Column(db.Integer, primary_key=True)
+    channel_id = db.Column(db.String(30), nullable=False, unique=True)  # UC…
+    title = db.Column(db.String(100), nullable=False, default="")
+    thumbnail_url = db.Column(db.String(500))
+    uploads_playlist_id = db.Column(db.String(40))
+    video_count = db.Column(db.Integer)
+    is_default = db.Column(db.Boolean, nullable=False, default=False)
+    fetched_at = db.Column(db.DateTime(timezone=True))  # 마지막으로 새로 받은 때(실패 포함). NULL이면 아직 안 받음
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class UserChannel(db.Model):
+    """hidden=false 행은 내가 추가한 채널, hidden=true 행은 숨긴 기본 채널."""
+
+    __tablename__ = "user_channels"
+    __table_args__ = (db.UniqueConstraint("user_id", "channel_id"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    channel_id = db.Column(db.Integer, db.ForeignKey("youtube_channels.id", ondelete="CASCADE"), nullable=False)
+    hidden = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class YoutubeVideo(db.Model):
+    """채널 최근 영상 캐시. 새로 받을 때 채널 영상을 통째로 바꾸고, 30일 넘게 새로 받지 못한 행은 지운다(유튜브 약관)."""
+
+    __tablename__ = "youtube_videos"
+    __table_args__ = (db.Index("ix_youtube_videos_published_at_id", "published_at", "id"),)  # 최신순 커서 페이지
+
+    id = db.Column(db.Integer, primary_key=True)
+    video_id = db.Column(db.String(20), nullable=False, unique=True)
+    channel_id = db.Column(db.Integer, db.ForeignKey("youtube_channels.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False, default="")
+    thumbnail_url = db.Column(db.String(500))
+    duration_seconds = db.Column(db.Integer)
+    description = db.Column(db.String(500))
+    published_at = db.Column(db.DateTime(timezone=True), nullable=False)
+    fetched_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)

@@ -1,6 +1,5 @@
 import time
 from datetime import datetime, timezone
-from types import SimpleNamespace
 
 import pytest
 
@@ -8,6 +7,7 @@ import app.recipes as recipes_module
 from app.ingredients import seoul_today
 from app.models import Ingredient, PublicRecipe, Recipe, StorageLocation, User, db
 from app.recipe_parse import ingredient_key
+from app.validation import encode_cursor
 
 BODY = {
     "title": "대파 계란볶음밥",
@@ -465,8 +465,8 @@ def test_recipe_list_pagination_never_leaks_other_users_recipes(client, login, a
 def test_recipe_list_cursor_id_out_of_range_is_400(client, login):
     # M4: 커서 안의 id가 DB int 컬럼 범위를 넘으면(Postgres에서 500이 나던 값) 조회 없이 400
     login()
-    huge = recipes_module._encode_cursor(SimpleNamespace(id=2**31, updated_at=datetime(2026, 1, 1, tzinfo=timezone.utc)))
-    zero = recipes_module._encode_cursor(SimpleNamespace(id=0, updated_at=datetime(2026, 1, 1, tzinfo=timezone.utc)))
+    huge = encode_cursor(datetime(2026, 1, 1, tzinfo=timezone.utc), 2**31)
+    zero = encode_cursor(datetime(2026, 1, 1, tzinfo=timezone.utc), 0)
     for cursor in (huge, zero):
         res = client.get(f"/api/recipes?cursor={cursor}")
         assert (res.status_code, res.get_json()) == (400, {"error": "잘못된 요청이에요."})

@@ -1,5 +1,7 @@
+import base64
+import binascii
 import re
-from datetime import date, timezone
+from datetime import date, datetime, timezone
 
 from flask import abort
 from sqlalchemy.exc import IntegrityError
@@ -45,3 +47,21 @@ def iso_date(value):
 def iso_datetime(value):
     """시간대가 붙은 ISO 문자열. SQLite는 tz 없이 돌려주므로 UTC로 본다."""
     return (value if value.tzinfo else value.replace(tzinfo=timezone.utc)).isoformat()
+
+
+def encode_cursor(when, row_id):
+    """목록 커서(불투명 문자열): 시각|id. 시각·id 내림차순 페이지에서 마지막 행으로 만든다."""
+    return base64.urlsafe_b64encode(f"{iso_datetime(when)}|{row_id}".encode()).decode()
+
+
+def decode_cursor(value):
+    """(시각, id). 모양이 틀리거나 id가 DB int 범위 밖이면 400."""
+    try:
+        raw = base64.urlsafe_b64decode(value.encode()).decode()
+        when_iso, id_text = raw.rsplit("|", 1)
+        when, row_id = datetime.fromisoformat(when_iso), int(id_text)
+    except (ValueError, UnicodeDecodeError, binascii.Error):
+        abort(400, "잘못된 요청이에요.")
+    if not 0 < row_id <= 2**31 - 1:  # M4: DB int 컬럼 범위 밖(Postgres에서 500 나던 값) → 400
+        abort(400, "잘못된 요청이에요.")
+    return when, row_id

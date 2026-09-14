@@ -13,6 +13,7 @@ import re
 import socket
 import threading
 import time
+from datetime import datetime
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, urljoin, urlsplit
 
@@ -34,9 +35,18 @@ FIXED_HOSTS = {"www.googleapis.com", "www.youtube.com", "www.instagram.com"}
 REDIRECT_CODES = {301, 302, 303, 307, 308}
 YOUTUBE_HOSTS = {"youtube.com", "music.youtube.com", "youtube-nocookie.com"}
 YOUTUBE_ID = re.compile(r"[A-Za-z0-9_-]{11}")
+CHANNEL_ID = re.compile(r"UC[A-Za-z0-9_-]{22}")
+PLAYLIST_ID = re.compile(r"[A-Za-z0-9_-]{2,40}")
 INSTAGRAM_CODE = re.compile(r"[A-Za-z0-9_-]{5,40}")
 NAVER_BLOG_PATH = re.compile(r"/([A-Za-z0-9_-]+)/(\d+)/?")
 VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
+CHANNELS_URL = "https://www.googleapis.com/youtube/v3/channels"
+PLAYLIST_ITEMS_URL = "https://www.googleapis.com/youtube/v3/playlistItems"
+PLAYLIST_SIZE = 30
+THUMBNAIL_HOSTS = {"i.ytimg.com", "yt3.ggpht.com", "yt3.googleusercontent.com"}
+MAX_CHANNEL_TITLE = 100
+MAX_DESCRIPTION = 500  # 영상 보기 화면 설명 미리보기
+ISO_DURATION = re.compile(r"P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?")
 # is_global이어도 안에 IPv4를 담아 사설 주소로 이어질 수 있는 IPv6 대역(NAT64·IPv4 호환·IPv4 변환·사이트 로컬·6to4)
 IPV6_WRAPPERS = [
     ipaddress.ip_network(n) for n in ("64:ff9b::/96", "64:ff9b:1::/48", "::/96", "::ffff:0:0:0/96", "fec0::/10", "2002::/16")
@@ -317,6 +327,121 @@ def video_snippet(video_id, key):
         "channel_title": _label(snippet.get("channelTitle")),
         "thumbnail_url": thumbnail,
     }
+
+
+def _thumbnail_url(value):
+    """유튜브 이미지 호스트의 https 주소만(DB 칸 500자). 아니면 None."""
+    if not isinstance(value, str) or len(value) > 500:
+        return None
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return None
+    return value if parts.scheme == "https" and parts.netloc in THUMBNAIL_HOSTS else None
+
+
+def _thumbnail(snippet, sizes):
+    thumbnails = snippet.get("thumbnails") if isinstance(snippet.get("thumbnails"), dict) else {}
+    found = (thumbnails.get(size) for size in sizes)
+    return next((t["url"] for t in found if isinstance(t, dict) and _thumbnail_url(t.get("url"))), None)
+
+
+def _youtube_items(url, params):
+    """유튜브 Data API 목록 응답의 items(1 unit). 모양이 틀리면 FetchError."""
+    body, _ = fetch_fixed(url, params)
+    try:
+        items = json.loads(body)["items"]
+    except (ValueError, KeyError, TypeError):
+        raise FetchError("BadResponse") from None
+    if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+        raise FetchError("BadResponse")
+    return items
+
+
+def iso_duration(value):
+    """"PT12M4S" → 724초. 0초(P0D, 생방송)·틀린 모양(P1W 등)·int 범위 밖 → None."""
+    match = ISO_DURATION.fullmatch(value) if isinstance(value, str) else None
+    if not match:
+        return None
+    days, hours, minutes, seconds = (int(part or 0) for part in match.groups())
+    total = ((days * 24 + hours) * 60 + minutes) * 60 + seconds
+    return total if 0 < total <= 2**31 - 1 else None  # DB int 칸
+
+
+def channel_info(key, *, channel_id=None, handle=None, username=None):
+    """채널 이름·썸네일·업로드 재생목록·영상 수(channels.list, 1 unit). 셋 중 하나로 찾는다. 없는 채널이면 None."""
+    lookup = {"id": channel_id} if channel_id else {"forHandle": handle} if handle else {"forUsername": username}
+    items = _youtube_items(CHANNELS_URL, {"part": "snippet,contentDetails,statistics", **lookup, "key": key})
+    if not items:
+        return None
+    item = items[0]
+    try:
+        snippet = item.get("snippet") or {}
+        uploads = item["contentDetails"]["relatedPlaylists"]["uploads"]
+        count = (item.get("statistics") or {}).get("videoCount")
+        found_id = item["id"]
+    except (KeyError, TypeError, AttributeError):
+        raise FetchError("BadResponse") from None
+    if not (isinstance(found_id, str) and CHANNEL_ID.fullmatch(found_id) and isinstance(uploads, str) and PLAYLIST_ID.fullmatch(uploads)):
+        raise FetchError("BadResponse")
+    return {
+        "channel_id": found_id,
+        "title": _label(snippet.get("title"))[:MAX_CHANNEL_TITLE],
+        "thumbnail_url": _thumbnail(snippet, ("default", "medium", "high")),
+        "uploads_playlist_id": uploads,
+        "video_count": int(count) if isinstance(count, str) and count.isdigit() and len(count) < 10 else None,
+    }
+
+
+def playlist_videos(key, playlist_id):
+    """재생목록 최근 영상 30개(playlistItems.list, 1 unit). 비공개·삭제 영상(공개 날짜 없음)은 뺀다. 재생목록이 없으면 None."""
+    params = {"part": "snippet,contentDetails", "playlistId": playlist_id, "maxResults": PLAYLIST_SIZE, "key": key}
+    try:
+        items = _youtube_items(PLAYLIST_ITEMS_URL, params)
+    except FetchError as e:
+        if str(e) == "HTTP404":  # playlistNotFound: 채널이 없어졌거나 비공개
+            return None
+        raise
+    videos = []
+    for item in items:
+        snippet = item.get("snippet") if isinstance(item.get("snippet"), dict) else {}
+        details = item.get("contentDetails") if isinstance(item.get("contentDetails"), dict) else {}
+        video_id, published = details.get("videoId"), details.get("videoPublishedAt")
+        if not (isinstance(video_id, str) and YOUTUBE_ID.fullmatch(video_id) and isinstance(published, str)):
+            continue
+        try:
+            published_at = datetime.fromisoformat(published)
+        except ValueError:
+            continue
+        if published_at.tzinfo is None:
+            continue
+        videos.append(
+            {
+                "video_id": video_id,
+                "title": _label(snippet.get("title")),
+                "thumbnail_url": _thumbnail(snippet, ("medium", "high", "default")),  # 목록 썸네일 128×72
+                "published_at": published_at,
+            }
+        )
+    return videos
+
+
+def video_details(key, video_ids):
+    """영상 길이(초)·설명 앞 500자(videos.list, 최대 50개, 1 unit). {video_id: {duration_seconds, description}}."""
+    if not video_ids:
+        return {}
+    items = _youtube_items(VIDEOS_URL, {"part": "contentDetails,snippet", "id": ",".join(video_ids[:50]), "key": key})
+    details = {}
+    for item in items:
+        snippet = item.get("snippet") if isinstance(item.get("snippet"), dict) else {}
+        content = item.get("contentDetails") if isinstance(item.get("contentDetails"), dict) else {}
+        description = snippet.get("description")
+        if isinstance(item.get("id"), str):
+            details[item["id"]] = {
+                "duration_seconds": iso_duration(content.get("duration")),
+                "description": (description.strip()[:MAX_DESCRIPTION] or None) if isinstance(description, str) else None,
+            }
+    return details
 
 
 class _Page(HTMLParser):

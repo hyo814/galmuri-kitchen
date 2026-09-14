@@ -541,3 +541,94 @@ def test_web_page_cells_breaks_and_unclosed_tags(monkeypatch):
     assert (unclosed["title"], unclosed["text"]) == ("제육볶음", "재료: 돼지고기")
     assert outbound.web_page(PAGE)["text"] == "재료: 두부"
     assert outbound.web_page(PAGE)["text"] == "본문\n꼬리 글"
+
+
+# --- 요리 채널: channel_info · playlist_videos · video_details ---
+
+CHANNEL_ID = "UCabcdefghijklmnopqrstuv"
+JSON_TYPE = {"Content-Type": "application/json; charset=UTF-8"}
+
+
+def json_response(body, status=200):
+    return response(status, json.dumps(body).encode(), JSON_TYPE)
+
+
+def test_channel_info_by_handle_and_empty(monkeypatch):
+    item = {
+        "id": CHANNEL_ID,
+        "snippet": {"title": "집밥 연구소", "thumbnails": {"default": {"url": "https://yt3.ggpht.com/a=s88"}}},
+        "contentDetails": {"relatedPlaylists": {"uploads": "UUabcdefghijklmnopqrstuv"}},
+        "statistics": {"videoCount": "248"},
+    }
+    sent = fake_send(
+        monkeypatch,
+        [
+            json_response({"items": [item]}),
+            json_response({"items": []}),
+            json_response({"items": [{**item, "statistics": {}, "id": "not-a-channel"}]}),
+            json_response({"items": [{"id": CHANNEL_ID}]}),
+        ],
+    )
+    assert outbound.channel_info("k", handle="@집밥") == {
+        "channel_id": CHANNEL_ID,
+        "title": "집밥 연구소",
+        "thumbnail_url": "https://yt3.ggpht.com/a=s88",
+        "uploads_playlist_id": "UUabcdefghijklmnopqrstuv",
+        "video_count": 248,
+    }
+    assert sent[0][0].startswith("https://www.googleapis.com/youtube/v3/channels?part=snippet%2CcontentDetails%2Cstatistics&forHandle=%40")
+    assert sent[0][0].endswith("&key=k") and sent[0][1]["allow_redirects"] is False
+    assert outbound.channel_info("k", channel_id=CHANNEL_ID) is None
+    assert f"id={CHANNEL_ID}" in sent[1][0]
+    with pytest.raises(FetchError):
+        outbound.channel_info("k", username="maangchi")  # 모양이 틀린 채널 ID
+    assert "forUsername=maangchi" in sent[2][0]
+    with pytest.raises(FetchError):
+        outbound.channel_info("k", channel_id=CHANNEL_ID)  # contentDetails 없음
+
+
+def test_playlist_videos_skips_private_and_404_is_none(monkeypatch):
+    items = [
+        {
+            "snippet": {"title": "제육볶음", "thumbnails": {"medium": {"url": "https://i.ytimg.com/vi/a/mq.jpg"}}},
+            "contentDetails": {"videoId": VIDEO_ID, "videoPublishedAt": "2026-09-11T09:00:00Z"},
+        },
+        {"snippet": {"title": "Private video"}, "contentDetails": {"videoId": "abcdefghijk"}},  # 비공개: 공개 날짜 없음
+        {"snippet": {"title": "이상한 ID"}, "contentDetails": {"videoId": "bad", "videoPublishedAt": "2026-09-11T09:00:00Z"}},
+        {"snippet": {"title": "날짜 틀림"}, "contentDetails": {"videoId": "abcdefghij2", "videoPublishedAt": "어제"}},
+    ]
+    sent = fake_send(monkeypatch, [json_response({"items": items}), response(404, b"{}", JSON_TYPE), response(500, b"{}", JSON_TYPE)])
+    videos = outbound.playlist_videos("k", "UUabc")
+    assert [(v["video_id"], v["title"], v["thumbnail_url"]) for v in videos] == [(VIDEO_ID, "제육볶음", "https://i.ytimg.com/vi/a/mq.jpg")]
+    assert videos[0]["published_at"].isoformat() == "2026-09-11T09:00:00+00:00"
+    assert sent[0][0] == "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet%2CcontentDetails&playlistId=UUabc&maxResults=30&key=k"
+    assert outbound.playlist_videos("k", "UUgone") is None
+    with pytest.raises(FetchError):
+        outbound.playlist_videos("k", "UUabc")
+
+
+def test_video_details_and_iso_duration(monkeypatch):
+    good = {"PT12M4S": 724, "PT1H2S": 3602, "PT1H2M3S": 3723, "P1DT1S": 86401}
+    assert {v: outbound.iso_duration(v) for v in good} == good
+    for bad in ("P0D", "PT", "P", "P1W", "12:04", None, "PT1.5S", "P99999999D", f"PT{2**31}S"):
+        assert outbound.iso_duration(bad) is None, bad
+    assert outbound.iso_duration(f"PT{2**31 - 1}S") == 2**31 - 1
+    items = [
+        {"id": VIDEO_ID, "contentDetails": {"duration": "PT12M4S"}, "snippet": {"description": "  재료 " + "가" * 600}},
+        {"id": "abcdefghijk", "contentDetails": {"duration": "P0D"}, "snippet": {"description": ""}},
+    ]
+    sent = fake_send(monkeypatch, [json_response({"items": items})])
+    details = outbound.video_details("k", [VIDEO_ID, "abcdefghijk"])
+    assert details[VIDEO_ID]["duration_seconds"] == 724 and len(details[VIDEO_ID]["description"]) == 500
+    assert details[VIDEO_ID]["description"].startswith("재료 가")
+    assert details["abcdefghijk"] == {"duration_seconds": None, "description": None}
+    assert sent[0][0] == f"https://www.googleapis.com/youtube/v3/videos?part=contentDetails%2Csnippet&id={VIDEO_ID}%2Cabcdefghijk&key=k"
+    assert outbound.video_details("k", []) == {}  # 요청 없음
+
+
+def test_youtube_thumbnails_only_from_youtube_image_hosts():
+    snippet = lambda url: {"thumbnails": {"default": {"url": url}}}  # noqa: E731
+    for url in ("https://i.ytimg.com/vi/a/mq.jpg", "https://yt3.ggpht.com/a=s88", "https://yt3.googleusercontent.com/a"):
+        assert outbound._thumbnail(snippet(url), ("default",)) == url
+    for url in ("http://i.ytimg.com/a.jpg", "https://evil.example/a.jpg", "https://i.ytimg.com.evil.example/a.jpg", "https://u@i.ytimg.com/a", "https://i.ytimg.com/" + "a" * 500):
+        assert outbound._thumbnail(snippet(url), ("default",)) is None

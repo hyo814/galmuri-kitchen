@@ -81,13 +81,15 @@ def get_owned_or_404(model, obj_id):
 
 def user_json(user):
     """/api/me와 개발용 로그인이 같은 모양을 돌려준다. scan은 사진으로 추가·AI 레시피 입구 표시용(같은 키로 판단한다).
-    ponytail: 이름이 scan이라 헷갈리면 ai로 바꾼다."""
+    ponytail: 이름이 scan이라 헷갈리면 ai로 바꾼다. videos는 영상 칸 표시용."""
+    from .videos import video_mode  # videos.py가 auth.login_required를 쓰므로 여기서 불러온다
     return jsonify(
         id=user.id,
         nickname=user.nickname,
         scan=scan_mode(),
         scan_limit=current_app.config["AI_DAILY_SCAN_LIMIT"],
         recipe_limit=current_app.config["AI_DAILY_RECIPE_LIMIT"],
+        videos=video_mode(),
     )
 
 
