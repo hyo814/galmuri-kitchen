@@ -1,11 +1,11 @@
-"""AI 레시피 제안(스펙 7절)과 AI 사용량. AI 호출 한도·기록 흐름은 scan.py의 함수를 같이 쓴다."""
+"""AI 레시피 제안(스펙 7절), 링크·글로 레시피 가져오기(스펙 17절), AI 사용량. AI 호출 한도·기록 흐름은 scan.py의 함수를 같이 쓴다."""
 
-from flask import Blueprint, abort, current_app, g, jsonify
+from flask import Blueprint, abort, current_app, g, jsonify, request
 
-from . import ai, scan
+from . import ai, outbound, scan
 from .auth import login_required
 from .matching import normalize, tokens
-from .models import PublicRecipe, db
+from .models import AiCall, PublicRecipe, db
 from .recipe_parse import MAX_AMOUNT, MAX_NAME, MAX_STEP, ingredient_key
 from .recipes import MAX_INGREDIENTS, MAX_STEPS, annotate, inventory
 
@@ -130,6 +130,108 @@ def ai_recipes():
     used = {name for recipe in recipes for name in recipe["urgent_names"]}
     urgent_first = list(dict.fromkeys(name for name, _ in stock if name in used))  # 재고 임박 순
     return jsonify(recipes=recipes, urgent_first=urgent_first, sample=mode == "sample")
+
+
+MIN_IMPORT_TEXT = 10
+FETCH_BURST_LIMIT = 5  # 링크 가져오기 외부 요청: 60초에 5번
+FETCH_DAILY_LIMIT = 50  # 하루(서울 날짜) 50번. AI 한도에 걸리지 않는 실패 요청으로 외부 요청을 남용하지 못하게 한다
+NEED_TEXT = {
+    "youtube": "유튜브 링크에서는 레시피를 읽지 못했어요. 영상 설명을 복사한 뒤 아래에 붙여 넣어주세요.",
+    "instagram": "인스타그램 링크에서는 레시피를 읽지 못했어요. 게시물 설명을 길게 눌러 복사한 뒤 아래에 붙여 넣어주세요.",
+    "blog": "이 링크에서는 레시피를 읽지 못했어요. 글을 복사한 뒤 아래에 붙여 넣어주세요.",
+    "text": "레시피를 찾지 못했어요. 재료와 만드는 법이 담긴 글을 붙여 넣어주세요.",
+}
+
+
+def need_text(source):
+    """링크를 못 읽었거나 레시피가 없을 때. 화면은 글 붙여넣기로 바꿔 이 문구를 보여준다."""
+    return jsonify(error=NEED_TEXT[source], need_text=True), 422
+
+
+@bp.post("/recipes/import")
+@login_required
+def import_recipe():
+    """링크(유튜브 설명란·인스타그램 캡션·블로그 글)나 붙여 넣은 글을 AI로 정리한 초안. 저장하지 않는다(화면이 POST /api/recipes)."""
+    data = request.get_json(silent=True)
+    data = data if isinstance(data, dict) else {}
+    url, text = data.get("url"), data.get("text")
+    no_url = url is None or (isinstance(url, str) and not url.strip())
+    if no_url == (text is None or (isinstance(text, str) and not text.strip())):
+        abort(400, "링크나 글을 입력해주세요.")
+    source_card = None
+    if no_url:
+        if not isinstance(text, str) or not MIN_IMPORT_TEXT <= len(text.strip()) <= ai.MAX_IMPORT_TEXT:
+            abort(400, "글은 10~10,000자로 붙여 넣어주세요.")
+        source, source_url, link = "text", None, None
+    else:
+        link = outbound.parse_link(url)
+        if link is None:
+            abort(400, "링크를 다시 확인해주세요. https로 시작하는 주소를 붙여 넣어주세요.")
+        kind, value = link
+        source, source_url = {
+            "youtube": ("youtube", f"https://www.youtube.com/watch?v={value}"),
+            "instagram": ("instagram", f"https://www.instagram.com/p/{value}/"),
+            "web": ("blog", value),
+        }[kind]
+
+    mode = ai.scan_mode()
+    if mode == "off":
+        abort(503, "레시피 가져오기를 지금은 쓸 수 없어요.")
+    if mode == "sample":
+        card = ai.SAMPLE_SOURCE_CARD if link else None
+        return jsonify(**clean_draft(ai.SAMPLE_IMPORT), source=source, source_url=source_url, source_card=card, sample=True)
+
+    user_id, limit = g.user.id, current_app.config["AI_DAILY_RECIPE_LIMIT"]
+    youtube_key = current_app.config["YOUTUBE_API_KEY"]
+    # 한도에 걸린 요청은 외부 요청도 기록도 하지 않는다. 외부 요청은 따로 기록하고 따로 센다(link_fetch, AI 한도·사용량에는 안 셈).
+    # 외부 요청을 기다리는 동안 DB 잠금·연결을 잡지 않게 커밋해 두고, AI를 부르기 직전에 다시 잠그고 세어 같은 트랜잭션에서 기록한다.
+    scan.check_ai_limits(user_id, scan.RECIPE_KINDS, limit, "AI 레시피는")
+    if link is not None and not (kind == "youtube" and not youtube_key):
+        scan.check_ai_limits(user_id, scan.FETCH_KINDS, FETCH_DAILY_LIMIT, "링크 가져오기는", burst=FETCH_BURST_LIMIT)
+        db.session.add(AiCall(user_id=user_id, kind="link_fetch", model=None, created_at=scan.utcnow()))
+    db.session.commit()
+
+    if link is None:
+        body = text.strip()
+    else:
+        # 외부 요청 실패는 AI 한도에 세지 않는다. 사설 주소 같은 이유는 구분해 알려주지 않는다.
+        try:
+            if kind == "youtube":
+                if not youtube_key:  # 자막은 가져오지 않는다(스펙 17절)
+                    return need_text(source)
+                video = outbound.video_snippet(value, youtube_key)
+                if video is None:
+                    abort(404, "영상을 찾을 수 없어요. 링크를 다시 확인해주세요.")
+                body = f"{video['title']}\n\n{video['description']}"
+                source_card = {"title": video["title"], "author": video["channel_title"], "thumbnail_url": video["thumbnail_url"]}
+            elif kind == "instagram":
+                post = outbound.instagram_post(value)
+                if post is None:
+                    return need_text(source)
+                body = post["caption"]
+                source_card = {"title": post["title"], "author": None, "thumbnail_url": post["thumbnail_url"]}
+            else:
+                page = outbound.web_page(value)
+                body = f"{page['title']}\n\n{page['text']}"
+                source_url = page["url"] if len(page["url"]) <= outbound.MAX_LINK else value  # 저장 폼은 500자까지 받는다
+                source_card = {"title": page["title"], "author": page["site_name"], "thumbnail_url": None}
+        except outbound.FetchError as e:
+            current_app.logger.warning("import fetch failed: %s", e)  # 예외·이유 이름만(주소·키 없음)
+            return need_text(source)
+        if len(body.strip()) < MIN_IMPORT_TEXT:
+            return need_text(source)
+
+    scan.check_ai_limits(user_id, scan.RECIPE_KINDS, limit, "AI 레시피는")
+    call = scan.start_ai_call(user_id, "link")
+    try:
+        raw, usage = ai.extract_recipe(body)
+    except ai.AiError:
+        abort(502, "레시피를 정리하지 못했어요. 잠시 후 다시 시도해주세요.")
+    scan.finish_ai_call(call, usage)
+    draft = clean_draft(raw.get("recipe")) if isinstance(raw, dict) and raw.get("found") is True else None
+    if draft is None:
+        return need_text(source)
+    return jsonify(**draft, source=source, source_url=source_url, source_card=source_card, sample=False)
 
 
 @bp.get("/ai-usage")

@@ -17,6 +17,7 @@ bp = Blueprint("scan", __name__, url_prefix="/api/scan")
 UPLOAD_KINDS = ("fridge", "receipt", "order")
 SCAN_KINDS = ("fridge", "receipt", "order", "memo")  # 일일 한도를 함께 세는 kind (memo는 4단계 장보기 메모 사진)
 RECIPE_KINDS = ("recipe", "link")  # AI 레시피 제안 + 링크·글 가져오기
+FETCH_KINDS = ("link_fetch",)  # 링크 가져오기의 외부 요청(AI 호출 아님, 토큰 없음). AI 한도·사용량에는 세지 않는다
 MAX_ITEMS = 50
 MAX_QUANTITY = 9999
 MAX_PRICE = 10_000_000
@@ -55,8 +56,8 @@ def calls_recent(user_id, kinds):
     ).count()
 
 
-def check_ai_limits(user_id, kinds, limit, what):
-    """연속 호출·하루 한도를 넘으면 429. what은 문구 주어(예: "사진 인식은").
+def check_ai_limits(user_id, kinds, limit, what, burst=None):
+    """연속 호출(burst, 없으면 AI_SCAN_BURST_LIMIT)·하루 한도를 넘으면 429. what은 문구 주어(예: "사진 인식은").
     바로 뒤에 start_ai_call을 불러 같은 트랜잭션에서 기록해야 한다(그 사이에 커밋하지 않는다).
     PostgreSQL은 사용자·kind 묶음별 트랜잭션 잠금을 잡아, 동시에 온 요청이 같은 개수를 보고 함께 통과하지 못하게 한다(커밋·롤백 때 풀린다)."""
     if db.session.get_bind().dialect.name == "postgresql":
@@ -65,7 +66,7 @@ def check_ai_limits(user_id, kinds, limit, what):
             {"group_key": zlib.crc32(",".join(kinds).encode()) & 0x7FFFFFFF, "user_id": user_id},
         )
     # ponytail: SQLite(개발용)는 잠그지 않는다 — 동시에 보내면 한도를 조금 넘을 수 있다. 운영은 PostgreSQL이다.
-    if calls_recent(user_id, kinds) >= current_app.config["AI_SCAN_BURST_LIMIT"]:
+    if calls_recent(user_id, kinds) >= (burst or current_app.config["AI_SCAN_BURST_LIMIT"]):
         abort(429, "잠시 후 다시 시도해주세요.")
     if calls_today(user_id, kinds) >= limit:
         abort(429, f"오늘 {what} {limit}번까지 쓸 수 있어요. 내일 다시 써주세요.")
