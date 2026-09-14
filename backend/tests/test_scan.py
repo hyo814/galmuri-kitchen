@@ -197,7 +197,7 @@ def test_requires_login(client):
 
 def test_rejects_bad_kind_missing_image_and_non_image(client, login):
     login()
-    res = upload(client, kind="memo")
+    res = upload(client, kind="recipe")
     assert (res.status_code, res.get_json()) == (400, {"error": "스캔 종류가 올바르지 않아요."})
     res = client.post("/api/scan?kind=fridge")
     assert (res.status_code, res.get_json()) == (400, {"error": "사진을 올려주세요."})
@@ -354,3 +354,95 @@ def test_burst_limit_ignores_calls_older_than_a_minute(client, login, app, monke
 def test_scan_requires_fetch_header(raw_client):
     res = raw_client.post("/api/scan?kind=fridge")
     assert (res.status_code, res.get_json()) == (400, {"error": "잘못된 요청이에요."})
+
+
+# --- kind=memo (장보기 메모 사진) ---
+
+
+def test_scan_unknown_kind_still_400(client, login):
+    login()
+    for kind in ("", "link", "MEMO", "memo2"):
+        res = upload(client, kind=kind)
+        assert (res.status_code, res.get_json()) == (400, {"error": "스캔 종류가 올바르지 않아요."})
+
+
+def test_clean_result_memo_drops_price_and_date():
+    raw = {
+        "items": [{"name": "대파", "quantity": 1, "unit": "단", "location_kind": "fridge", "price": 3000}],
+        "purchased_on": "2026-09-12",
+    }
+    assert clean_result("memo", raw, TODAY) == {
+        "items": [{"name": "대파", "quantity": 1, "unit": "단", "location_kind": "fridge", "price": None}],
+        "purchased_on": None,
+    }
+
+
+def test_scan_memo_sample_mode(client, login, app, monkeypatch):
+    login()
+    monkeypatch.setattr(ai, "extract", fail_if_called)
+    res = upload(client, kind="memo")
+    assert res.status_code == 200
+    body = res.get_json()
+    assert (body["sample"], body["purchased_on"]) == (True, None)
+    assert [(i["name"], i["quantity"], i["unit"], i["location_kind"], i["price"]) for i in body["items"]] == [
+        ("대파", 1, "단", "fridge", None),
+        ("두부", 1, "모", "fridge", None),
+        ("계란", 1, "판", "fridge", None),
+        ("참기름", 1, "병", "room", None),
+        ("양파", 3, "개", "room", None),
+    ]
+    assert ai_calls(app) == []
+
+
+def test_extract_memo_uses_memo_prompt(app, fake_anthropic):
+    parsed = ai.ScanResult(items=[], purchased_on=None)
+    usage = SimpleNamespace(input_tokens=1, output_tokens=1)
+    calls = fake_anthropic(response=SimpleNamespace(stop_reason="end_turn", parsed_output=parsed, usage=usage, model="m"))
+    app.config["ANTHROPIC_API_KEY"] = "test-key"
+    with app.app_context():
+        ai.extract("memo", b"\xff\xd8jpeg", "image/jpeg")
+    assert calls["parse"]["messages"][0]["content"][1] == {"type": "text", "text": ai.PROMPTS["memo"]}
+    assert ai.PROMPTS["memo"].endswith(ai._COMMON)
+
+
+def test_scan_memo_calls_ai_and_counts_in_scan_group(client, login, app, monkeypatch):
+    user = login()
+    app.config.update(ANTHROPIC_API_KEY="test-key", AI_DAILY_SCAN_LIMIT=10)
+    seen = []
+
+    def fake_extract(kind, image_bytes, media_type):
+        seen.append(kind)
+        raw = {
+            "items": [{"name": "두부", "quantity": 2, "unit": "모", "location_kind": "fridge", "price": 3000}],
+            "purchased_on": "2026-09-12",
+        }
+        return raw, USAGE
+
+    monkeypatch.setattr(ai, "extract", fake_extract)
+    fixed_today = date(2026, 9, 13)
+    start = datetime.combine(fixed_today, time.min, tzinfo=SEOUL).astimezone(timezone.utc)
+    fixed_now = start + timedelta(hours=12)
+    monkeypatch.setattr(scan, "seoul_today", lambda: fixed_today)
+    monkeypatch.setattr(scan, "utcnow", lambda: fixed_now)
+    with app.app_context():
+        # 오늘 오전에 냉장고 사진 8번(연속 호출 창과 겹치지 않게 1시간 전 이전)
+        db.session.add_all(
+            [AiCall(user_id=user.id, kind="fridge", created_at=start + timedelta(hours=1, minutes=i)) for i in range(8)]
+        )
+        db.session.commit()
+
+    res = upload(client, kind="memo")
+    assert res.status_code == 200
+    assert res.get_json() == {
+        "items": [{"name": "두부", "quantity": 2, "unit": "모", "location_kind": "fridge", "price": None}],
+        "purchased_on": None,
+        "sample": False,
+    }
+    assert seen == ["memo"]
+    assert ai_calls(app)[-1] == (user.id, "memo")
+
+    # fridge 9번째 → 오늘 fridge 9 + memo 1 = 10
+    assert upload(client, kind="fridge").status_code == 200
+    res = upload(client, kind="memo")
+    assert (res.status_code, res.get_json()) == (429, {"error": "오늘 사진 인식은 10번까지 쓸 수 있어요. 내일 다시 써주세요."})
+    assert seen == ["memo", "fridge"]

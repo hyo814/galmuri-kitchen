@@ -14,8 +14,8 @@ from .validation import iso_date
 
 bp = Blueprint("scan", __name__, url_prefix="/api/scan")
 
-UPLOAD_KINDS = ("fridge", "receipt", "order")
-SCAN_KINDS = ("fridge", "receipt", "order", "memo")  # 일일 한도를 함께 세는 kind (memo는 4단계 장보기 메모 사진)
+UPLOAD_KINDS = ("fridge", "receipt", "order", "memo")
+SCAN_KINDS = ("fridge", "receipt", "order", "memo")  # 일일 한도를 함께 세는 kind (memo는 장보기 메모 사진)
 RECIPE_KINDS = ("recipe", "link")  # AI 레시피 제안 + 링크·글 가져오기
 FETCH_KINDS = ("link_fetch",)  # 링크 가져오기의 외부 요청(AI 호출 아님, 토큰 없음). AI 한도·사용량에는 세지 않는다
 MAX_ITEMS = 50
@@ -132,10 +132,10 @@ def clean_result(kind, raw, today):
                 "quantity": _quantity(row.get("quantity")),
                 "unit": unit or "개",
                 "location_kind": location_kind if location_kind in KINDS else "fridge",
-                "price": None if kind == "fridge" else _price(row.get("price")),
+                "price": None if kind in ai.NO_PRICE_KINDS else _price(row.get("price")),
             }
         )
-    purchased_on = None if kind == "fridge" else _purchased_on(raw.get("purchased_on"), today)
+    purchased_on = None if kind in ai.NO_PRICE_KINDS else _purchased_on(raw.get("purchased_on"), today)
     return {"items": items, "purchased_on": purchased_on}
 
 
