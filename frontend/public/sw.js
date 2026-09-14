@@ -29,20 +29,25 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-/** 네트워크에서 받아 글꼴 캐시에 넣는다. crossorigin 없이 불린 opaque 응답(status 0)도 넣는다 */
-function fetchFont(event) {
-  const response = fetch(event.request);
-  const store = response.then(async (res) => {
-    if (!res.ok && res.type !== "opaque") return;
-    const copy = res.clone(); // 화면이 본문을 읽기 전에 복사한다(await 뒤에는 이미 읽혀 clone이 실패한다)
-    const cache = await caches.open(FONTS);
-    await cache.put(event.request, copy);
-    const keys = await cache.keys();
-    await Promise.all(keys.slice(0, Math.max(0, keys.length - FONTS_MAX)).map((key) => cache.delete(key)));
-  });
-  event.waitUntil(store.catch(() => {}));
-  return response;
+/** 네트워크에서 받아 글꼴 캐시에 넣는다. crossorigin 없이 불린 opaque 응답(status 0)도 넣는다.
+ *  stored: 캐시에 다 넣었을 때 끝나는 약속(waitUntil용, 실패해도 조용히 끝남) */
+function fetchFont(request) {
+  const response = fetch(request);
+  const stored = response
+    .then(async (res) => {
+      if (!res.ok && res.type !== "opaque") return;
+      const copy = res.clone(); // 화면이 본문을 읽기 전에 복사한다(await 뒤에는 이미 읽혀 clone이 실패한다)
+      const cache = await caches.open(FONTS);
+      await cache.put(request, copy);
+      const keys = await cache.keys();
+      await Promise.all(keys.slice(0, Math.max(0, keys.length - FONTS_MAX)).map((key) => cache.delete(key)));
+    })
+    .catch(() => {});
+  return { response, stored };
 }
+
+/** 화면 이동을 이만큼 기다려도 응답이 없으면 캐시한 화면을 준다(마트 지하처럼 연결이 거의 끊긴 곳) */
+const NAVIGATE_TIMEOUT_MS = 3000;
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
@@ -53,8 +58,16 @@ self.addEventListener("fetch", (event) => {
     // /api·/auth(로그인 리다이렉트)는 가로채지 않는다
     if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth/")) return;
     if (request.mode === "navigate") {
-      // 화면 이동은 네트워크 우선, 안 되면 캐시한 index.html(해시 파일과 같은 버전)
-      event.respondWith(fetch(request).catch(() => caches.match("/", { cacheName: SHELL }).then((cached) => cached || Response.error())));
+      // 네트워크 우선, 실패하거나 3초 안에 안 오면 캐시한 index.html(해시 파일과 같은 버전). 캐시도 없으면 네트워크를 끝까지 기다린다
+      const network = fetch(request);
+      network.catch(() => {});
+      const timeout = new Promise((resolve) => setTimeout(resolve, NAVIGATE_TIMEOUT_MS));
+      event.respondWith(
+        Promise.race([network, timeout])
+          .catch(() => undefined)
+          .then((res) => res || caches.match("/", { cacheName: SHELL }).then((cached) => cached || network))
+          .catch(() => Response.error()),
+      );
     } else if (PRECACHE.includes(url.pathname)) {
       event.respondWith(caches.match(url.pathname, { cacheName: SHELL }).then((cached) => cached || fetch(request)));
     }
@@ -64,16 +77,14 @@ self.addEventListener("fetch", (event) => {
   const cached = () => caches.match(request, { cacheName: FONTS });
   if (url.origin === "https://fonts.googleapis.com") {
     // CSS: 캐시가 있으면 바로 주고 뒤에서 새로 받는다(stale-while-revalidate)
-    event.respondWith(
-      cached().then((hit) => {
-        const network = fetchFont(event);
-        if (!hit) return network;
-        network.catch(() => {});
-        return hit;
-      }),
-    );
+    const { response, stored } = fetchFont(request);
+    response.catch(() => {});
+    event.waitUntil(stored);
+    event.respondWith(cached().then((hit) => hit || response));
   } else if (url.origin === "https://fonts.gstatic.com") {
-    // 글꼴 파일: 주소에 버전이 있어 바뀌지 않으니 캐시 우선
-    event.respondWith(cached().then((hit) => hit || fetchFont(event)));
+    // 글꼴 파일: 주소에 버전이 있어 바뀌지 않으니 캐시 우선. waitUntil은 이벤트 안에서 바로 걸고, 받았으면 캐시에 넣을 때까지 기다린다
+    const result = cached().then((hit) => (hit ? { response: hit, stored: null } : fetchFont(request)));
+    event.waitUntil(result.then((r) => r.stored).catch(() => {}));
+    event.respondWith(result.then((r) => r.response));
   }
 });

@@ -9,6 +9,7 @@ import { useInstallPrompt } from "../install";
 import { useAsyncAction } from "../useAsyncAction";
 import { navigate } from "../useHashRoute";
 import { forgetRecipeCaches, forgetResources, useResource } from "../useResource";
+import { pendingShoppingChanges } from "../shopping/useShopping";
 
 type Theme = "system" | "light" | "dark";
 
@@ -281,7 +282,8 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
   };
 
   const logout = async () => {
-    if (!confirm("로그아웃할까요?")) return;
+    const pending = await pendingShoppingChanges();
+    if (!confirm(pending ? `보내지 않은 변경 ${pending}개가 사라져요. 로그아웃할까요?` : "로그아웃할까요?")) return;
     await api("/api/logout", { method: "POST" }).catch(() => {});
     onLogout();
   };

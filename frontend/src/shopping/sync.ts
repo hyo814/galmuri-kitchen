@@ -210,7 +210,7 @@ export function applyServerResult(snapshot: ShoppingSnapshot, op: Op, body: unkn
   const hasId = typeof (body as { id?: unknown } | null)?.id === "number";
   switch (op.op) {
     case "add": case "edit": case "check":
-      // 체크·고치기의 404(이미 없음)도 ok로 오므로, 항목이 아닌 body면 그 항목을 스냅숏에서 뺀다
+      // 체크의 404(이미 없음)는 ok로 오므로, 항목이 아닌 body면 그 항목을 스냅숏에서 뺀다(고치기의 404는 classify가 drop)
       if (!hasId) return op.op === "add" ? snapshot : { ...snapshot, items: snapshot.items.filter((i) => !matches(i, op.ref)) };
       return { ...snapshot, items: upsert(snapshot.items, body as ShoppingItem) };
     case "delete":
@@ -245,7 +245,7 @@ export function remapRef(queue: Op[], client_id: string, id: number): Op[] {
 /** 보낸 결과 분류(op.serverErrors는 이전까지 받은 5xx 횟수):
  *  ok(빼고 다음) · retry(멈추고 나중에: 네트워크 0·408·429는 끝없이, 5xx는 MAX_ATTEMPTS번 전까지) · auth(멈춤: 401) ·
  *  drop(dropWithDependents 후 실패 목록에: 400·413·415, 사진 저장소가 꺼진 photo_add 503, 5xx가 MAX_ATTEMPTS번) ·
- *  conflict(note_save 409 다른 기기가 먼저 고침·404 다른 기기가 지움 — 둘 다 기기 사본을 보관, 스펙 19절). 지우기·체크의 404는 이미 없으니 ok */
+ *  conflict(note_save 409 다른 기기가 먼저 고침·404 다른 기기가 지움 — 둘 다 기기 사본을 보관, 스펙 19절). 지우기·체크의 404는 이미 없으니 ok, 고치기의 404는 drop */
 export function classify(op: Op, status: number): "ok" | "retry" | "auth" | "drop" | "conflict" {
   if (status >= 200 && status < 300) return "ok";
   if (status === 401) return "auth";
@@ -265,7 +265,8 @@ export function opRequest(op: Op): { method: "POST" | "PATCH" | "PUT" | "DELETE"
   const notes = "/api/shopping/notes";
   switch (op.op) {
     case "add": return { method: "POST", path: items, body: { ...op.fields, client_id: op.client_id } };
-    case "note_add": return { method: "POST", path: notes, body: { ...op.fields, client_id: op.client_id } };
+    // edited_at: 오프라인에서 만든 시각 — 그 뒤 기기에서 고친 PUT이 409가 나지 않게(서버 기본값은 받은 시각)
+    case "note_add": return { method: "POST", path: notes, body: { ...op.fields, client_id: op.client_id, edited_at: op.at } };
   }
   const target = idOf("ref" in op ? op.ref : op.note);
   if (target === null) return null;
@@ -282,6 +283,15 @@ export function opRequest(op: Op): { method: "POST" | "PATCH" | "PUT" | "DELETE"
     }
   }
 }
+
+/** 기기 장보기 데이터의 주인 비교(로그인 방법 + id). 둘 중 하나라도 없으면 다른 사람으로 본다 */
+export const sameOwner = (a: { provider: string; id: number } | null | undefined, b: { provider: string; id: number } | null | undefined) =>
+  !!a && !!b && a.provider === b.provider && a.id === b.id;
+
+/** 앱 열기·다시 보일 때 GET /api/shopping을 할지: 대기열이 있거나 장보기 화면이 열려 있으면 늘, 아니면 마지막으로 받은 뒤 60초가 지났을 때만 */
+export const REFRESH_EVERY_MS = 60_000;
+export const shouldRefresh = (lastFetchedAt: number | null, now: number, pending: number, shoppingOpen: boolean) =>
+  pending > 0 || shoppingOpen || lastFetchedAt === null || now - lastFetchedAt >= REFRESH_EVERY_MS;
 
 /** 다시 보내기 대기 시간(ms): 2초부터 두 배씩, 5분까지. step은 연달아 실패한 횟수(0부터) */
 export const retryDelay = (step: number) => Math.min(2000 * 2 ** Math.max(0, step), 5 * 60_000);
