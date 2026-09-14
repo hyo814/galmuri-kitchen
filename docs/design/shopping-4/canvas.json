@@ -1,0 +1,71 @@
+{
+  "artboards": [
+    {
+      "file": "ShoppingList.dc.html",
+      "title": "1 · 장보기",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "ShoppingOffline.dc.html",
+      "title": "1-오프라인 · 마트 지하에서",
+      "x": 464,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "ShoppingDark.dc.html",
+      "title": "1-다크",
+      "x": 928,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "AddSheet.dc.html",
+      "title": "2 · 살 것 추가",
+      "x": 0,
+      "y": 1000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "StoreSheet.dc.html",
+      "title": "3 · 쇼핑몰에서 찾기",
+      "x": 464,
+      "y": 1000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "RecipeEntry.dc.html",
+      "title": "4 · 레시피에서 담기",
+      "x": 928,
+      "y": 1000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "MemoPage.dc.html",
+      "title": "5 · 장보기 메모",
+      "x": 0,
+      "y": 2000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "StockIn.dc.html",
+      "title": "6 · 재고에 넣기",
+      "x": 464,
+      "y": 2000,
+      "w": 384,
+      "h": 832
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}
