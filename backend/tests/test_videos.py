@@ -492,10 +492,14 @@ def test_seed_default_channels_cli(make_app, monkeypatch, tmp_path, no_youtube):
     assert result.exit_code != 0 and "모양이어야 해요" in result.output
 
 
-def test_shipped_default_channels_file_is_empty():
+def test_shipped_default_channels_file_is_valid():
+    """사용자가 확정한 기본 채널 목록(2026-09-14): seed-default-channels가 받는 모양이고 채널이 겹치지 않는다."""
     import json
 
-    assert json.loads(videos.DEFAULT_CHANNELS_FILE.read_text(encoding="utf-8")) == []  # 사용자 확정 전
+    entries = json.loads(videos.DEFAULT_CHANNELS_FILE.read_text(encoding="utf-8"))
+    ids = [e["channel_id"] for e in entries]
+    assert entries and all(outbound.CHANNEL_ID.fullmatch(i) and e["name"].strip() for i, e in zip(ids, entries))
+    assert len(set(ids)) == len(ids)
 
 
 # --- 리뷰 반영: 쿼터 예산·첫 페이지만 새로 받기·페이지 경계 ---

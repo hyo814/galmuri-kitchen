@@ -23,6 +23,7 @@ export const SOURCE_LABEL: Record<RecipeSource, string> = {
   instagram: "인스타그램에서 가져옴",
   blog: "블로그에서 가져옴",
   text: "붙여넣은 글에서 가져옴",
+  photo: "사진에서 가져옴",
 };
 
 /** AI 레시피 남은 횟수 꼬리말: " · 오늘 8번 남음" / " · 오늘은 다 썼어요" / 아직 모르면 "" */

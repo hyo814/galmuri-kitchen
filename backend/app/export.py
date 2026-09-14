@@ -31,6 +31,7 @@ SOURCE_LABELS = {  # 화면 format.ts의 SOURCE_LABEL과 같게(화면은 mine�
     "instagram": "인스타그램에서 가져옴",
     "blog": "블로그에서 가져옴",
     "text": "붙여넣은 글에서 가져옴",
+    "photo": "사진에서 가져옴",
 }
 BASIS_LABELS = {"main_weight": "주재료 무게", "servings": "인분", "yield": "완성량"}
 SHOPPING_SOURCE_LABELS = {  # 화면 sync.ts의 sourceTag와 같게(직접 담은 것도 CSV는 칸이 비지 않게 이름을 붙인다)

@@ -126,7 +126,7 @@ export interface RecipeInput {
   steps: string[];
 }
 
-export type RecipeSource = "mine" | "public" | "ai" | "youtube" | "instagram" | "blog" | "text";
+export type RecipeSource = "mine" | "public" | "ai" | "youtube" | "instagram" | "blog" | "text" | "photo";
 
 /** POST /api/recommendations/ai 의 레시피 한 개(저장 전). image_url은 이름이 비슷한 공공 레시피 사진 */
 export interface AiRecipe {
@@ -154,7 +154,7 @@ export interface SourceCard {
 
 /** POST /api/recipes/import 결과(저장 전 초안) */
 export interface RecipeDraft extends RecipeInput {
-  source: "youtube" | "instagram" | "blog" | "text";
+  source: "youtube" | "instagram" | "blog" | "text" | "photo";
   source_url: string | null;
   source_card?: SourceCard | null;
   sample?: boolean;
