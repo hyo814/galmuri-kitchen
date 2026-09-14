@@ -96,3 +96,27 @@ export function scaleAmount(amount: string, ratio: number): string {
   }
   return formatAmountNumber(value * ratio) + rest;
 }
+
+/** 724 → "12:04", 3723 → "1:02:03", null → "" (영상 길이 배지) */
+export function formatDuration(seconds: number | null | undefined): string {
+  if (seconds == null || !(seconds >= 0)) return "";
+  const s = Math.floor(seconds);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const [h, m, sec] = [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60];
+  return h ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+}
+
+const seoulDay = (ms: number) => Date.parse(new Date(ms).toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" })) / 86_400_000;
+
+/** 영상 올린 때: 1시간 안 "방금", 같은 날 "N시간 전", 서울 날짜로 1~6일 "N일 전", 7~29일 "N주 전", 그 뒤 "N달 전"·"N년 전" */
+export function timeAgo(iso: string, now = Date.now()): string {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return "";
+  const days = seoulDay(now) - seoulDay(then);
+  if (now - then < 3_600_000 || days < 0) return "방금";
+  if (days === 0) return `${Math.floor((now - then) / 3_600_000)}시간 전`;
+  if (days < 7) return `${days}일 전`;
+  if (days < 30) return `${Math.floor(days / 7)}주 전`;
+  if (days < 365) return `${Math.floor(days / 30)}달 전`;
+  return `${Math.floor(days / 365)}년 전`;
+}

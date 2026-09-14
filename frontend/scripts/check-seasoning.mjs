@@ -96,3 +96,28 @@ assert.equal(remainingText(undefined), "");
 assert.equal(remainingText({ scan: { used: 0, limit: 10 }, recipe: { used: 2, limit: 10 } }), " · 오늘 8번 남음");
 assert.equal(remainingText({ scan: { used: 0, limit: 10 }, recipe: { used: 10, limit: 10 } }), " · 오늘은 다 썼어요");
 console.log("ai copy ok");
+
+// 영상 경로·길이·올린 때 (3b 계획 태스크 5)
+assert.equal(matchRoute("/recipes/videos/12").params.id, "12");
+assert.equal(matchRoute("/recipes/videos/abc"), null);
+assert.equal(matchRoute("/recipes/channels").pattern, "/recipes/channels");
+const { formatDuration, timeAgo } = await import("../src/format.ts");
+assert.equal(formatDuration(724), "12:04");
+assert.equal(formatDuration(3602), "1:00:02");
+assert.equal(formatDuration(3723), "1:02:03");
+assert.equal(formatDuration(62), "1:02");
+assert.equal(formatDuration(0), "0:00");
+assert.equal(formatDuration(null), "");
+const NOW = Date.parse("2026-09-14T01:00:00Z"); // 서울 10:00
+const ago = (iso) => timeAgo(iso, NOW);
+assert.equal(ago("2026-09-11T01:00:00Z"), "3일 전");
+assert.equal(ago("2026-09-06T01:00:00Z"), "1주 전");
+assert.equal(ago("2026-08-30T01:00:00Z"), "2주 전");
+assert.equal(ago("2026-09-14T00:30:00Z"), "방금");
+assert.equal(ago("2026-09-13T22:00:00Z"), "3시간 전");      // 서울 07:00, 같은 날
+assert.equal(ago("2026-09-13T14:30:00Z"), "1일 전");        // 서울 전날 23:30 (UTC로는 같은 날)
+assert.equal(ago("2026-09-13T15:30:00Z"), "9시간 전");      // 서울 00:30, 같은 날 (UTC로는 전날)
+assert.equal(ago("2026-07-01T01:00:00Z"), "2달 전");
+assert.equal(ago("2026-09-15T01:00:00Z"), "방금");          // 기기 시계가 늦어도 음수가 되지 않게
+assert.equal(ago("nope"), "");
+console.log("video format ok");
