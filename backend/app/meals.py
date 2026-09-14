@@ -236,6 +236,56 @@ def put_meal_slot(plan_id):
     return jsonify(slot_json(slot, prepared_stock, urgent))
 
 
+@bp.post("/meal-plans/<int:plan_id>/copy-week")
+@login_required
+def copy_meal_week(plan_id):
+    plan = get_owned_or_404(MealPlan, plan_id)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        abort(400, "잘못된 요청이에요.")
+    from_on = iso_date(data.get("from_on"))
+    end_on = _end_on(plan)
+    if from_on is None or not plan.start_on <= from_on <= end_on or (from_on - plan.start_on).days % 7 != 0:
+        abort(400, "잘못된 요청이에요.")
+    weeks = integer(data.get("weeks"), "복사할 주는", 1, 4)
+
+    week_end = from_on + timedelta(days=6)
+    originals = [s for s in plan.slots if from_on <= s.date <= week_end]
+    if not originals:
+        abort(400, "이번 주에 채운 칸이 없어요.")
+
+    need_end = from_on + timedelta(days=7 * (weeks + 1) - 1)
+    if (need_end - plan.start_on).days + 1 > MAX_DAYS:
+        possible_weeks = (plan.start_on + timedelta(days=30) - week_end).days // 7
+        if possible_weeks <= 0:
+            abort(400, "이 주는 더 복사할 수 없어요.")
+        abort(400, f"식단은 31일까지라 {possible_weeks}주까지 복사할 수 있어요.")
+
+    if need_end > end_on:
+        plan.days = (need_end - plan.start_on).days + 1  # 결정(2026-09-14): 기간을 넘으면 자동으로 늘린다
+
+    existing = {(s.date, s.meal) for s in plan.slots}
+    copied = kept = 0
+    for slot in originals:
+        for k in range(1, weeks + 1):
+            key = (slot.date + timedelta(days=7 * k), slot.meal)
+            if key in existing:
+                kept += 1
+                continue
+            db.session.add(MealSlot(
+                plan_id=plan.id, date=key[0], meal=slot.meal,
+                recipe_id=slot.recipe_id, title=slot.title, servings=slot.servings, est_kcal=slot.est_kcal,
+            ))
+            existing.add(key)
+            copied += 1
+
+    commit_or_duplicate(SLOT_TAKEN)
+    prepared_stock, urgent = stock_context(g.user.id)
+    return jsonify(
+        plan=plan_json(_owned_plan_with_slots(plan.id), prepared_stock, urgent), copied=copied, kept=kept
+    )
+
+
 @bp.patch("/meal-slots/<int:slot_id>")
 @login_required
 def update_meal_slot(slot_id):

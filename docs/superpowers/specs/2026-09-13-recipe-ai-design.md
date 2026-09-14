@@ -91,6 +91,7 @@ recipe-ai/
 | GET/POST | `/api/meal-plans` | 목록(`start_on`·id 내림차순, 50개 상한, 페이지 없음) `{items:[plan_summary…], default_servings}` / 만들기 201(20절) |
 | GET/PATCH/DELETE | `/api/meal-plans/<id>` | 상세(`plan_summary` + `goal_kcal`·`goal_note`·`slots`) / 보낸 칸만 고치기(기간이 줄면 밖의 칸은 같은 커밋에서 삭제) / 삭제(칸은 CASCADE) |
 | PUT | `/api/meal-plans/<id>/slots` | 칸 채우기·바꾸기(`{date, meal, recipe_id?, title?, servings?}` → 200, 없던 칸이면 만들고 있으면 덮어씀) |
+| POST | `/api/meal-plans/<id>/copy-week` | 이번 주 복사(`{from_on, weeks}` → 200 `{plan: plan_json, copied, kept}`, 20절) |
 | PATCH/DELETE | `/api/meal-slots/<id>` | 인분 고치기(`{servings}`, `SlotDetail` −/+ 바로 저장) / 칸 비우기 |
 | GET | `/api/export/summary` | (`X-Requested-With: fetch` 필요) 내보낼 개수와 오늘(서울) 남은 횟수 `{ingredients, recipes, seasonings, shopping, memos, limit: 5, remaining}`(27절) |
 | GET | `/api/export` | (`X-Requested-With: fetch` 필요) zip 내려받기(`Content-Disposition: attachment; filename="galmuri-kitchen-YYYYMMDD.zip"`, 서울 날짜). `ingredients.csv`·`recipes.csv`·`seasonings.csv`·`shopping.csv`·`shopping_memos.csv`(UTF-8 BOM, 한국어 머리글). 하루 5회(`ai_calls.kind = export`), 넘으면 429 `오늘 내보내기는 5번까지 할 수 있어요. 내일 다시 해주세요.`(27절) |
@@ -351,6 +352,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
   - `DELETE /api/meal-plans/<id>` → 204(칸은 CASCADE).
   - `PUT /api/meal-plans/<id>/slots` `{date, meal, recipe_id?, title?, servings?}` → 200 `slot_json`(없던 칸이면 만들고, 있으면 덮어쓴다). 검증 순서: 기간 밖 날짜 → 400 `식단 기간 밖의 날짜예요.`, meal 목록 밖 → 400, servings 없으면 `plan.default_servings`, `recipe_id` 있으면 `get_owned_or_404`로 확인하고 `title`은 레시피 제목으로 덮어쓴다(보낸 title 무시), 없으면 `text(title, "무엇을 먹을지는", 60)`. 덮어쓸 때 `est_kcal`은 비운다. 동시에 같은 칸을 처음 채워 UNIQUE 충돌 시 400 `방금 채운 칸이에요. 다시 불러와주세요.`
   - `PATCH /api/meal-slots/<id>` `{servings}` → 200 `slot_json`. `DELETE /api/meal-slots/<id>` → 204(칸 비우기). 칸 → 식단 → `user_id` 확인, 아니면 404.
+  - `POST /api/meal-plans/<id>/copy-week` `{from_on, weeks}` → 200 `{plan: plan_json, copied, kept}`(결정 2026-09-14). `from_on`은 `iso_date`이고 `start_on ≤ from_on ≤ end_on`이며 `(from_on - start_on).days % 7 == 0`(주 보기는 시작일부터 7일씩 나눈다) — 아니면 400 `잘못된 요청이에요.`. `weeks`는 `integer(weeks, "복사할 주는", 1, 4)`. 원본은 `from_on ~ from_on+6` 사이의 칸, 없으면 400 `이번 주에 채운 칸이 없어요.`. 필요한 끝 날짜 `need_end = from_on + 7 × (weeks + 1) - 1`. `(need_end - start_on).days + 1 > 31`이면 400 `식단은 31일까지라 {가능한 주}주까지 복사할 수 있어요.`(가능한 주 = `(start_on + 30 - (from_on+6)).days // 7`, 0 이하면 `이 주는 더 복사할 수 없어요.`). `need_end > end_on`이면 `plan.days`를 늘린다. 원본 칸마다 `k = 1..weeks`로 `date + 7k`, 같은 `meal`에 칸이 없을 때만 `recipe_id`·`title`·`servings`·`est_kcal`을 복사(`copied` 증가), 있으면 그대로 두고 `kept` 증가. 한 커밋, 동시 요청으로 UNIQUE에 걸리면 `commit_or_duplicate(SLOT_TAKEN)`.
   - 칸 저장마다 `plan_json` 전체가 아니라 칸 하나만 돌려준다(ponytail) — 화면은 받은 칸을 자기 목록에 바꿔 끼운다.
 - **계획하며 정한 것 (스펙·시안에 없던 빈틈, 사용자 확인 대상):**
   1. 기간을 줄이거나 시작일을 옮기면 새 기간 밖의 칸은 지운다. 화면은 저장 전에 `기간 밖에 채운 칸 N개는 지워져요.`를 보여준다(채운 칸이 있을 때만).
