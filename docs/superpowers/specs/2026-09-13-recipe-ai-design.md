@@ -299,7 +299,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **사진 → AI 목록 변환**: `/api/scan?kind=memo`(손메모·전단지) → 품목 추출 → 확인 화면 → `shopping_items` 일괄 추가(source `memo`, 이미 목록에 있는 이름은 건너뜀). AI 일일 한도 scan 그룹. 입구는 메모 화면의 `사진에서 살 것 뽑기`(2026-09-14, 시안 승인).
 - **인터넷 없이 보기·체크**(마트 지하 등):
   - 서비스 워커로 앱 화면(정적 파일) 캐시, 장보기 목록·메모는 마지막으로 받은 내용을 IndexedDB에 저장해 오프라인에서도 열린다.
-    (2026-09-14) 지금 `sw.js`는 `/`만 캐시해 오프라인으로 열면 JS·CSS가 없다 → 같은 오리진 `/assets/*`(해시 파일·글꼴 조각)도 캐시한다. `/api`는 서비스 워커가 다루지 않고 화면이 IndexedDB로 보관한다. 글꼴(IBM Plex Sans KR)은 자체 호스팅해 오프라인에서도 같게 보인다. 네트워크가 없을 때 마지막 로그인 사용자를 기기에 기억해 앱을 열고, 로그아웃하면 기기 데이터를 지운다.
+    (2026-09-14) 지금 `sw.js`는 `/`만 캐시해 오프라인으로 열면 JS·CSS가 없다 → 같은 오리진 `/assets/*`(해시 파일·글꼴 조각)도 캐시한다. `/api`는 서비스 워커가 다루지 않고 화면이 IndexedDB로 보관한다. ~~글꼴(IBM Plex Sans KR)은 자체 호스팅해 오프라인에서도 같게 보인다.~~ **(2026-09-14 Task 7, 리드 결정)** 글꼴 파일을 내려받아 넣지 않고(새 의존성·네트워크 내려받기 없음) 서비스 워커가 Google Fonts 응답을 기기에 보관한다 — 한 번 온라인으로 연 뒤부터 오프라인에서도 같은 글꼴, 그 전에는 시스템 글꼴(`Apple SD Gothic Neo`·`Noto Sans KR`)로 보인다. 네트워크가 없을 때 마지막 로그인 사용자를 기기에 기억해 앱을 열고, 로그아웃하면 기기 데이터를 지운다.
   - 오프라인 중 체크·항목 추가·메모 수정·사진 촬영은 기기 대기열에 쌓고, 연결되면 순서대로 서버에 반영(화면 안에서 `online`·앱 열기·변경 직후에 보냄, 다시 보내도 `client_id`로 한 번만 생김).
   - 충돌 규칙: 항목 체크는 ~~`done_at` 타임스탬프 기준~~ **체크·해제한 기기 시각(`done_changed_at`) 기준** 마지막 변경 우선(2026-09-14 — 해제는 done_at이 비어 비교할 수 없음), 메모 본문은 ~~`updated_at` 기준~~ **기기가 보낸 저장 시각(`edited_at`)과 서버 `updated_at`을 비교해** 마지막 저장 우선(서버가 더 늦으면 409, 받아들이면 `updated_at = edited_at`이라 다시 보내도 같다)(덮어쓰기 전 기기 쪽 사본 보관 — `다른 기기에서 고친 메모가 있어서 이 기기에서 쓴 내용을 따로 보관했어요`). 기기 시계가 크게 틀리면 순서가 틀릴 수 있다(허용).
   - 화면에 `오프라인 · 연결되면 저장돼요` 표시, 대기 중 건수 표시(시안 `ShoppingOffline`: `기다리는 중 N건`, 장보기 탭).
@@ -482,6 +482,15 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
   - 고치기 `{name?, quantity?, unit?, planned_on?, location_id?}` — 보낸 칸만, 도착 순서대로 덮어쓴다. `planned_on`·`location_id`는 null로 비운다.
   - 체크 `{done: bool, changed_at: 시간대가 붙은 ISO 시각(`Z` 가능)}` — 행을 잠그고(PostgreSQL `FOR UPDATE`) 비교한다. `changed_at`이 저장된 `done_changed_at`보다 이르거나 항목을 만든 시각보다 하루 넘게 이르면(틀린 기기 시계) 바꾸지 않고 현재 항목을 200. 같은 시각이면 나중에 도착한 것을 따른다. 아니면 `done_at = done ? changed_at : null`, `done_changed_at = changed_at`. 서버 시각보다 10분 넘게 미래면 서버 시각으로 자른다(그래서 잘린 체크가 그 뒤 몇 분 안의 더 이른 기기 시각 변경을 이길 수 있다). 기기 시계 차이만큼 순서가 틀릴 수 있다(허용, 문제되면 서버 수신 순서로).
 - `DELETE /api/shopping/items/<id>` → 204. 남의 것·없는 것은 PATCH·DELETE 모두 404. 산 것(`stocked_at` 있음)은 PATCH 404(`다시 담기`는 새로 추가).
+
+### 서비스 워커·기기 저장소 (Task 7, `frontend/public/sw.js`, `src/shopping/idb.ts`·`useShopping.ts`)
+- **화면 파일 미리 받기:** 빌드 끝에 `vite.config.ts` 플러그인(`scripts/sw-precache.mjs`, 검사 `check-sw-precache.mjs`)이 `dist` 파일 전체(`index.html`은 `/`, `sw.js`·소스맵 제외) 목록과 이름·내용 해시를 `dist/sw.js`의 `VERSION`·`PRECACHE`에 넣는다. 캐시 이름 `galmuri-shell-<해시>` — 화면 파일이 하나라도 바뀌면 새 캐시(sw.js만 바뀌면 이름 그대로), activate 때 옛 `galmuri-shell-*`를 지워 배포마다 쌓이지 않는다. 개발 서버에서는 목록이 비어 `/`만 캐시한다.
+- **가로채기:** 화면 이동은 네트워크 우선 → 실패하면 캐시한 `/`. 미리 받은 같은 오리진 파일은 캐시 우선. `/api`·`/auth`·GET 아닌 요청은 가로채지 않는다(데이터는 IndexedDB).
+- **글꼴:** `fonts.googleapis.com` CSS는 stale-while-revalidate, `fonts.gstatic.com` 파일은 캐시 우선, `galmuri-fonts-v1`(배포와 무관하게 유지, 200개 넘으면 먼저 넣은 것부터 삭제). CSS 링크에 `crossorigin`을 붙여 CORS 응답으로 받는다(opaque 응답은 크롬 저장 용량 계산에서 크게 부풀려져 IndexedDB까지 밀어낼 수 있다 — opaque도 받아는 준다). 첫 방문 페이지는 서비스 워커가 아직 없어 그다음 방문부터 보관된다.
+- **새 버전:** 설치 때 `skipWaiting`하지 않는다. 화면이 숨겨질 때(앱을 떠날 때) `SKIP_WAITING` 메시지로 바꾸고, 다음에 열면 새 화면.
+- **기기 저장소 `idb.ts`:** DB `galmuri` v1, `kv`(`me`·`snapshot`·`queue`·`failed`·`backups`)·`blobs`(사진, 기기에서 찍은 것 `local:<client_id>` → 올린 뒤 `photo:<서버 id>`). 못 열거나 쓰기 실패하면 메모리로 대신(앱을 닫으면 사라짐).
+- **`useShopping`:** 모듈 상태 + 구독. 보내기는 위 약속 그대로 한 번에 하나(`markAttempt` 저장 뒤 보냄 → `classify` → ok면 `applyServerResult`·`remapRef`·`removeOp`, drop이면 `dropWithDependents` + 실패 목록, 409·404 메모 충돌이면 기기 내용을 `backups`에, 5xx면 `markServerError`, 401이면 멈춤). 요청 모양은 `opRequest`(순수, 검사 있음). 트리거: 로그인 확인 뒤 앱 시작, `online`, 화면이 다시 보일 때, 변경 직후, 다시 시도(`retryDelay` 2초부터 두 배·5분까지). `navigator.onLine`이 false면 보내지 않는다(보낸 횟수가 붙으면 뒤 변경과 합칠 수 없어서). 대기열이 비면 새로 받고, 받는 사이 서버에 반영된 변경이 있으면 받은 것은 버린다.
+- **오프라인으로 열기(App):** `/api/me` 성공 → 기기에 기억(저장된 사용자와 id가 다르면 기기 장보기 데이터를 먼저 지움). 네트워크 0이고 기억한 사용자가 있으면 그 사용자로 연다(없을 때만 `서버에 연결할 수 없어요.`). 401은 그대로 로그인, 로그아웃·401에서 기기 데이터 전부 삭제.
 
 ### 오프라인 장보기 순수 로직 (`frontend/src/shopping/sync.ts`, 검사 `scripts/check-shopping-sync.mjs`)
 - 브라우저 API·현재 시각을 부르지 않는 순수 함수만 둔다(시각·client_id는 인자). IndexedDB·보내기(Task 7)가 이 위에 얹힌다.

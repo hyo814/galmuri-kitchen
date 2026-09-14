@@ -257,6 +257,35 @@ export function classify(op: Op, status: number): "ok" | "retry" | "auth" | "dro
   return "drop";
 }
 
+/** op → 보낼 요청(스펙 28절 API). photo_add는 호출 측이 body에 사진(image)을 붙여 multipart로 보낸다.
+ *  대상이 아직 client_id뿐이면(서버 id를 모름 — 추가가 실패로 빠진 경우 등) null: 실패 목록으로 */
+export function opRequest(op: Op): { method: "POST" | "PATCH" | "PUT" | "DELETE"; path: string; body?: Record<string, unknown> } | null {
+  const idOf = (ref: Ref) => ("id" in ref ? ref.id : null);
+  const items = "/api/shopping/items";
+  const notes = "/api/shopping/notes";
+  switch (op.op) {
+    case "add": return { method: "POST", path: items, body: { ...op.fields, client_id: op.client_id } };
+    case "note_add": return { method: "POST", path: notes, body: { ...op.fields, client_id: op.client_id } };
+  }
+  const target = idOf("ref" in op ? op.ref : op.note);
+  if (target === null) return null;
+  switch (op.op) {
+    case "edit": return { method: "PATCH", path: `${items}/${target}`, body: op.fields };
+    case "check": return { method: "PATCH", path: `${items}/${target}`, body: { done: op.done, changed_at: op.at } };
+    case "delete": return { method: "DELETE", path: `${items}/${target}` };
+    case "note_save": return { method: "PUT", path: `${notes}/${target}`, body: { ...op.fields, edited_at: op.edited_at } };
+    case "note_delete": return { method: "DELETE", path: `${notes}/${target}` };
+    case "photo_add": return { method: "POST", path: `${notes}/${target}/photos`, body: { client_id: op.client_id } };
+    case "photo_delete": {
+      const photo = idOf(op.photo);
+      return photo === null ? null : { method: "DELETE", path: `${notes}/${target}/photos/${photo}` };
+    }
+  }
+}
+
+/** 다시 보내기 대기 시간(ms): 2초부터 두 배씩, 5분까지. step은 연달아 실패한 횟수(0부터) */
+export const retryDelay = (step: number) => Math.min(2000 * 2 ** Math.max(0, step), 5 * 60_000);
+
 /** 서버 client_id 형식([A-Za-z0-9-] 1~36자). randomUUID는 보안 컨텍스트(https·localhost)에만 있어 없으면 같은 모양으로 만든다 */
 export function newClientId(): string {
   const c = globalThis.crypto;

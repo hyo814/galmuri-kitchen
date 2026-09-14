@@ -410,6 +410,7 @@ frontend/
     - 체크 op의 `at`·메모 `edited_at`은 `new Date().toISOString()`, client_id는 `crypto.randomUUID()`(보안 컨텍스트에서만 있음 — 없으면 `Math.random` 기반 대체).
     - 사진: 올리기 성공 시 blob을 지우지 않고 `photo:<server id>` 키로 남겨 오프라인에서도 보이게(메모 20개 × 10장 상한 안에서 전부). 서버 사진은 처음 보일 때 `photoBlob`이 받아 저장. 메모·사진 삭제 시 blob도 삭제.
   - **`App.tsx` 오프라인으로 열기:** `/api/me` 성공 시 `idb.set("kv", "me", user)`. `ApiError(0)`이고 저장된 `me`가 있으면 **그 사용자로 앱을 열고** 오프라인 표시(지금의 `서버에 연결할 수 없어요.` 화면은 저장된 사용자가 없을 때만). 로그아웃·401(`signOut`)에서 `clearShoppingDevice()` — 같은 폰을 다른 사람이 쓸 때 목록이 남지 않게.
+- **구현 때 바뀐 것(2026-09-14, 리드 결정):** 글꼴 자체 호스팅(`@fontsource` 설치·woff2 내려받기)은 하지 않는다 — 새 의존성·네트워크 내려받기 없이 `sw.js`가 Google Fonts 응답을 캐시한다(CSS stale-while-revalidate, gstatic 캐시 우선, opaque 허용, 200개 상한, `index.html` 링크에 `crossorigin`). `ponytail:` 첫 온라인 방문 뒤부터 오프라인 글꼴, 그 전엔 시스템 글꼴. 외부 글꼴 요청(개인정보)이 문제되면 그때 자체 호스팅. 미리 받을 목록은 HTML 정규식 대신 빌드 끝 플러그인이 `dist` 전체 목록·해시로 넣는다(캐시 이름이 해시라 옛 파일이 쌓이지 않음). 브랜치는 `feature/offline-shell`. 스펙 §19·§28.
 - [ ] **Step 0: 브랜치** — main(1·3·6 병합)에서 `feature/shopping-offline-shell`. `npm view @fontsource/ibm-plex-sans-kr version`(네트워크 필요)으로 확인 후 `npm install`로 고정.
 - [ ] **Step 1: 확인 가능한 것 먼저** — `npm run check && npm run build`. `dist/index.html`에 `fonts.googleapis.com`이 없고 `dist/assets`에 woff2가 있는지 `grep`/`ls`로.
 - [ ] **Step 2: 데스크톱 크롬 확인(`localhost`는 보안 컨텍스트)** — 공용 개발 서버는 끄거나 새로 띄우지 않는다. **자기 포트(예: 5191)로 `vite preview`를 따로 띄워** 셸만 확인하고 자기 PID만 끈다: DevTools Application에 `galmuri-shell-v2`와 `/assets/*` → Network `Offline` → 새로고침해도 화면이 뜬다. `useShopping` 동작은 Task 8 화면에서 확인한다.
