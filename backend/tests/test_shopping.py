@@ -457,7 +457,7 @@ def test_stock_draft_only_checked_unstocked_with_location_reason(client, login, 
     login("other")
     checked(client, "남의 우유")
     with client.session_transaction() as s:
-        s["user_id"] = user.id
+        s["user_id"], s["pid"] = user.id, user.provider_id
 
     res = client.get("/api/shopping/stock-draft")
     assert res.status_code == 200
@@ -684,7 +684,7 @@ def test_match_returns_listed_items_only(client, login, app):
     login("other")
     add(client, name="양파")
     with client.session_transaction() as s:
-        s["user_id"] = user.id
+        s["user_id"], s["pid"] = user.id, user.provider_id
 
     res = client.post("/api/shopping/items/match", json={"names": ["서울우유 1L", "양파(국산)", "대파 1단", "간장", ""]})
     assert res.status_code == 200
@@ -713,7 +713,7 @@ def test_mark_stocked_ignores_missing_and_others(client, login, app):
     login("other")
     theirs = add(client, name="남의 우유").get_json()
     with client.session_transaction() as s:
-        s["user_id"] = user.id
+        s["user_id"], s["pid"] = user.id, user.provider_id
 
     res = client.post("/api/shopping/items/mark-stocked", json={"ids": [milk["id"], onion["id"], already_id, theirs["id"], 2147483647]})
     assert res.status_code == 204

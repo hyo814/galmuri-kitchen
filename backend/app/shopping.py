@@ -473,6 +473,8 @@ def delete_photo(note_id, photo_id):
     db.session.delete(photo)
     db.session.commit()
     storage.delete([key])
+    return "", 204
+
 
 @bp.get("/stock-draft")
 @login_required
