@@ -11,7 +11,8 @@ interface Props {
   staples: Staple[];
   initialMissingOnly?: boolean;
   onChanged: () => Promise<unknown>;
-  onAddIngredient: (name: string) => void;
+  /** 없으면(더보기에서 연 경우) 떨어진 필수품을 눌러 재료를 추가하지 않고 표시만 한다 */
+  onAddIngredient?: (name: string) => void;
   onClose: () => void;
 }
 
@@ -132,6 +133,11 @@ export default function StaplesSheet({ staples, initialMissingOnly = false, onCh
                           있음
                           {staple.matched_name && staple.matched_name !== staple.name && ` · ${staple.matched_name}`}
                         </span>
+                      </div>
+                    ) : !onAddIngredient ? (
+                      <div className="plain-row">
+                        <span className="staple-name">{staple.name}</span>
+                        <span className="badge danger">떨어짐</span>
                       </div>
                     ) : (
                       // 떨어진 필수품을 누르면 이름이 채워진 재료 추가가 열린다 (사용성 점검 C6)

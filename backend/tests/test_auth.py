@@ -14,7 +14,9 @@ def test_me_requires_login(client):
 
 def test_dev_login_then_me(client):
     assert client.post("/api/dev-login").status_code == 200
-    assert client.get("/api/me").get_json()["nickname"] == "개발자"
+    me = client.get("/api/me").get_json()
+    assert me["nickname"] == "개발자"
+    assert me["provider"] == "dev"
 
 
 def test_dev_login_reuses_same_user(client, app):

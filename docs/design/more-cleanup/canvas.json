@@ -1,0 +1,71 @@
+{
+  "artboards": [
+    {
+      "file": "MoreTop.dc.html",
+      "title": "1 · 더보기 (위)",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "MoreBottom.dc.html",
+      "title": "1-아래 · 더보기 (맨 아래)",
+      "x": 464,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "MoreDark.dc.html",
+      "title": "1-다크",
+      "x": 928,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "ThemeSheet.dc.html",
+      "title": "2 · 화면 테마",
+      "x": 0,
+      "y": 1000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "ExportSheet.dc.html",
+      "title": "3 · 데이터 내보내기",
+      "x": 464,
+      "y": 1000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "FridgeGear.dc.html",
+      "title": "4 · 재고 톱니바퀴",
+      "x": 0,
+      "y": 2000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "DeleteReason.dc.html",
+      "title": "5 · 재료 삭제할 때 이유(선택)",
+      "x": 464,
+      "y": 2000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "DeleteReasonDark.dc.html",
+      "title": "5-다크",
+      "x": 928,
+      "y": 2000,
+      "w": 384,
+      "h": 832
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

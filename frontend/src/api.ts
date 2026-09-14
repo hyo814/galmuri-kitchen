@@ -48,12 +48,17 @@ export type ScanMode = "on" | "sample" | "off";
 export interface User {
   id: number;
   nickname: string;
+  /** 로그인한 방법(더보기 계정 묶음 표시용) */
+  provider: "kakao" | "naver" | "google" | "dev";
   scan: ScanMode;
   scan_limit: number;
   recipe_limit: number;
   /** on: 요리 채널 영상 / sample: 키 없는 개발 모드의 예시 영상 / off: 영상 칸 숨김 */
   videos: ScanMode;
 }
+
+/** 재료를 지우는 이유(선택): 다 먹었어요 / 버렸어요 */
+export type DeleteReason = "eaten" | "discarded";
 
 export type ScanKind = "fridge" | "receipt" | "order";
 
@@ -150,6 +155,15 @@ export interface RecipeDraft extends RecipeInput {
 export interface AiUsage {
   scan: { used: number; limit: number };
   recipe: { used: number; limit: number };
+}
+
+/** GET /api/export/summary: 내보낼 항목 수와 오늘 남은 횟수 */
+export interface ExportSummary {
+  ingredients: number;
+  recipes: number;
+  seasonings: number;
+  limit: number;
+  remaining: number;
 }
 
 export interface RecipeSummary {
@@ -280,7 +294,8 @@ export function onUnauthorized(handler: () => void) {
 
 export async function api<T>(
   path: string,
-  options: { method?: string; body?: unknown; signal?: AbortSignal } = {},
+  /** raw: 성공하면 본문을 읽지 않고 Response를 그대로 돌려준다(파일 내려받기). 오류 처리는 같다 */
+  options: { method?: string; body?: unknown; signal?: AbortSignal; raw?: boolean } = {},
 ): Promise<T> {
   const { body } = options;
   // FormData(사진 업로드)는 브라우저가 multipart 경계를 넣은 Content-Type을 직접 붙인다
@@ -298,6 +313,7 @@ export async function api<T>(
     if (options.signal?.aborted) throw e; // 사용자가 취소한 요청은 호출한 쪽이 처리한다
     throw new ApiError(0, "네트워크에 연결할 수 없어요. 연결을 확인해주세요.");
   }
+  if (options.raw && res.ok) return res as T;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401) unauthorizedHandler?.();
