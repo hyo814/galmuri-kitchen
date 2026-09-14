@@ -48,7 +48,7 @@ def test_snapshot_splits_items_and_recent_stocked_and_purges_old(client, login, 
     login("other")
     add(client, name="남의 두부")
     with client.session_transaction() as s:
-        s["user_id"] = user.id
+        s["user_id"], s["pid"] = user.id, user.provider_id
 
     body = snapshot(client)
     assert [i["id"] for i in body["items"]] == [first["id"], second["id"]]

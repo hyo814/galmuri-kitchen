@@ -58,6 +58,8 @@ def create_app(test_config=None):
         R2_BUCKET=os.environ.get("R2_BUCKET") or None,
         COUPANG_PARTNERS_ID=os.environ.get("COUPANG_PARTNERS_ID") or None,  # 제휴 링크(스펙 16·25절), 없으면 일반 검색 링크
         DEMO_LOGIN=os.environ.get("DEMO_LOGIN") == "1",  # 로그인 화면 '로그인 없이 체험하기'(demo.py)
+        DEMO_AI_GLOBAL_DAILY=int(os.environ.get("DEMO_AI_GLOBAL_DAILY") or 300),  # 체험 계정 전체 AI 호출 24시간 예산, 넘으면 예시 결과
+        TRUSTED_PROXY_HOPS=int(os.environ.get("TRUSTED_PROXY_HOPS") or 1),  # X-Forwarded-For를 붙이는 앞단 프록시 수(docs/deploy.md 5-3)
     )
     if test_config:
         app.config.update(test_config)
@@ -67,8 +69,8 @@ def create_app(test_config=None):
         raise RuntimeError("운영(Render)에서는 DEV_MODE를 켤 수 없습니다.")
 
     # Render 프록시 뒤에서 OAuth 콜백 URL이 https://<도메인> 으로 만들어지도록.
-    # x_for: 체험 계정 IP별 한도(demo.py)가 프록시 주소가 아니라 접속한 사람 주소를 보게 한다(프록시 한 단계 가정)
-    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+    # x_for: 체험 계정 IP별 한도(demo.py)가 프록시 주소가 아니라 접속한 사람 주소를 보게 한다(TRUSTED_PROXY_HOPS, 기본 1)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=app.config["TRUSTED_PROXY_HOPS"], x_proto=1, x_host=1)
 
     db.init_app(app)
     Migrate(app, db, render_as_batch=True)

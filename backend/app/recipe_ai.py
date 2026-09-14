@@ -93,7 +93,7 @@ def ai_recipes():
     stock = inventory(g.user.id)
     if not stock:
         abort(400, "재고에 재료를 먼저 추가해주세요.")
-    mode = ai.scan_mode()
+    mode = ai.scan_mode(g.user)
     if mode == "off":
         abort(503, "AI 레시피를 지금은 쓸 수 없어요.")
     if mode == "sample":
@@ -174,7 +174,7 @@ def import_recipe():
             "web": ("blog", value),
         }[kind]
 
-    mode = ai.scan_mode()
+    mode = ai.scan_mode(g.user)
     if mode == "off":
         abort(503, "레시피 가져오기를 지금은 쓸 수 없어요.")
     if mode == "sample":

@@ -77,7 +77,8 @@ def start_ai_call(user_id, kind):
     커밋하면 check_ai_limits가 잡은 잠금이 풀린다.
     created_at을 명시적으로 넣는다: 모델 기본값(utcnow) 대신 이 모듈의 utcnow를 써서
     calls_today/calls_recent와 같은 시계를 보게 한다(테스트에서 시계를 고정하기 쉽다)."""
-    call = AiCall(user_id=user_id, kind=kind, model=current_app.config["CLAUDE_MODEL"], created_at=utcnow())
+    demo = g.user.provider == "demo"  # 사용자가 지워져도 전체 체험 AI 예산에 세도록 남긴다
+    call = AiCall(user_id=user_id, kind=kind, demo=demo, model=current_app.config["CLAUDE_MODEL"], created_at=utcnow())
     db.session.add(call)
     db.session.commit()
     return call
@@ -156,7 +157,7 @@ def scan():
         abort(415, "사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요.")
 
     today = seoul_today()
-    mode = ai.scan_mode()
+    mode = ai.scan_mode(g.user)
     if mode == "off":
         abort(503, "사진 인식을 지금은 쓸 수 없어요.")
     if mode == "sample":

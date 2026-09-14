@@ -130,7 +130,7 @@ def login(client, app):
             db.session.commit()
             user_id = user.id
         with client.session_transaction() as s:
-            s["user_id"] = user_id
+            s["user_id"], s["pid"] = user_id, provider_id
         return user
 
     return _login

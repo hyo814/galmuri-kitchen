@@ -55,6 +55,7 @@ def oauth_client(provider):
 def login_user(user):
     session.clear()
     session["user_id"] = user.id
+    session["pid"] = user.provider_id  # 지운 사용자 id가 다시 쓰여도(SQLite) 옛 세션이 새 사용자로 이어지지 않게
     session.permanent = True
 
 
@@ -63,7 +64,7 @@ def login_required(view):
     def wrapper(*args, **kwargs):
         user_id = session.get("user_id")
         g.user = db.session.get(User, user_id) if user_id else None
-        if g.user is None:
+        if g.user is None or session.get("pid") != g.user.provider_id:
             abort(401, "로그인이 필요해요.")
         return view(*args, **kwargs)
 
@@ -96,10 +97,10 @@ def user_json(user):
         id=user.id,
         nickname=user.nickname,
         provider=user.provider,  # 더보기 계정 묶음의 '카카오로 로그인했어요' 표시용 (스펙 27절). demo는 체험 계정
-        scan=scan_mode(),
+        scan=scan_mode(user),
         scan_limit=ai_daily_limit(user, "AI_DAILY_SCAN_LIMIT"),
         recipe_limit=ai_daily_limit(user, "AI_DAILY_RECIPE_LIMIT"),
-        videos=video_mode(),
+        videos=video_mode(user),
         # 쇼핑몰 링크는 화면(storeLinks.ts)에서 만들므로 제휴 ID를 넘긴다. 값 있는 것만(스펙 16절)
         shop_affiliates={k: v for k, v in {"coupang": current_app.config["COUPANG_PARTNERS_ID"]}.items() if v},
     )
