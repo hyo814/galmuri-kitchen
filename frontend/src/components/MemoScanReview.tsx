@@ -58,7 +58,7 @@ export default function MemoScanReview({ image, sourceLabel, listed, today, onSc
 
   const sheetProps =
     step.name === "review"
-      ? { title: `찾은 재료 ${step.result.items.length}개`, description: "담을 것만 체크해주세요", className: "scan-tall" }
+      ? { title: `찾은 살 것 ${step.result.items.length}개`, description: "담을 것만 체크해주세요", className: "scan-tall" }
       : { title: step.name === "loading" ? "살 것을 찾는 중" : "인식 실패", hideHeader: true };
 
   return (
