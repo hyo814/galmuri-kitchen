@@ -23,6 +23,16 @@ MAX_DAYS = 31
 NOT_FOUND = "찾을 수 없어요."
 OUT_OF_RANGE = "식단 기간 밖의 날짜예요."
 SLOT_TAKEN = "방금 채운 칸이에요. 다시 불러와주세요."
+FIRST_DAY, LAST_DAY = iso_date("2000-01-01"), iso_date("2100-12-31")
+
+
+def meal_date(value):
+    """식단 API로 들어오는 날짜. 모양이 틀리면 None, 2000~2100년 밖이면 400.
+    먼 미래 시작일은 끝 날짜 계산(timedelta)이 넘쳐 목록이 계속 500이 났다."""
+    day = iso_date(value)
+    if day is not None and not FIRST_DAY <= day <= LAST_DAY:
+        abort(400, "날짜를 다시 확인해주세요.")
+    return day
 
 
 def _end_on(plan):
@@ -141,7 +151,7 @@ def create_meal_plan():
     if not isinstance(data, dict):
         abort(400, "잘못된 요청이에요.")
     name = text(data.get("name"), "식단 이름은", 30)
-    start_on = iso_date(data.get("start_on"))
+    start_on = meal_date(data.get("start_on"))
     if start_on is None:
         abort(400, "시작일을 골라주세요.")
     days = integer(data.get("days"), "기간은", 1, MAX_DAYS)
@@ -174,7 +184,7 @@ def update_meal_plan(plan_id):
         plan.name = text(data["name"], "식단 이름은", 30)
     range_changed = "start_on" in data or "days" in data
     if "start_on" in data:
-        start_on = iso_date(data["start_on"])
+        start_on = meal_date(data["start_on"])
         if start_on is None:
             abort(400, "시작일을 골라주세요.")
         plan.start_on = start_on
@@ -209,7 +219,7 @@ def put_meal_slot(plan_id):
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         abort(400, "잘못된 요청이에요.")
-    date = iso_date(data.get("date"))
+    date = meal_date(data.get("date"))
     if date is None or not plan.start_on <= date <= _end_on(plan):
         abort(400, OUT_OF_RANGE)
     meal = data.get("meal")
@@ -246,7 +256,7 @@ def copy_meal_week(plan_id):
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         abort(400, "잘못된 요청이에요.")
-    from_on = iso_date(data.get("from_on"))
+    from_on = meal_date(data.get("from_on"))
     end_on = _end_on(plan)
     if from_on is None or not plan.start_on <= from_on <= end_on or (from_on - plan.start_on).days % 7 != 0:
         abort(400, "잘못된 요청이에요.")
@@ -322,14 +332,18 @@ def clean_meal_draft(raw, empty_keys, mine_by_id, prepared_stock, urgent, candid
     empty_keys: {(날짜 iso, 끼니)} 빈 칸, mine_by_id: 이번 요청에 보낸 내 레시피 {id: {title, servings, ingredients, image_url}}."""
     raw = raw if isinstance(raw, dict) else {}
     dishes = []  # 원래 번호 그대로, 못 쓰는 번호는 None
+    first = {}  # 요리 키 → 처음 나온 번호. 같은 요리가 또 오면 처음 것으로 합친다(넣을 때 같은 레시피를 두 번 만들지 않게)
+    canon = []  # 원래 번호 → 합친 번호(못 쓰면 None)
     for row in raw.get("dishes")[:MAX_DRAFT_DISHES] if isinstance(raw.get("dishes"), list) else []:
         if not isinstance(row, dict):
             dishes.append(None)
+            canon.append(None)
             continue
         est_kcal = _int_in(row.get("kcal_per_serving"), 1, 3000)
         mine_id = row.get("mine_id")
         recipe = mine_by_id.get(mine_id) if isinstance(mine_id, int) and not isinstance(mine_id, bool) else None
         if recipe is not None:
+            canon.append(first.setdefault(("mine", mine_id), len(dishes)))
             dishes.append({
                 "recipe_id": mine_id, "title": recipe["title"], "servings": recipe["servings"], "est_kcal": est_kcal,
                 "ingredients": [], "steps": [],
@@ -338,6 +352,7 @@ def clean_meal_draft(raw, empty_keys, mine_by_id, prepared_stock, urgent, candid
             })
             continue
         draft = clean_draft(row)
+        canon.append(draft and first.setdefault(("new", normalize(draft["title"])), len(dishes)))
         dishes.append(draft and {
             "recipe_id": None, "title": draft["title"], "servings": draft["servings"], "est_kcal": est_kcal,
             "ingredients": draft["ingredients"], "steps": draft["steps"],
@@ -355,7 +370,8 @@ def clean_meal_draft(raw, empty_keys, mine_by_id, prepared_stock, urgent, candid
         seen.add(key)
         options = []
         for index in row.get("dishes") if isinstance(row.get("dishes"), list) else []:
-            if _int_in(index, 0, len(dishes) - 1) is not None and dishes[index] and index not in options:
+            index = canon[index] if _int_in(index, 0, len(dishes) - 1) is not None else None
+            if index is not None and index not in options:
                 options.append(index)
                 if len(options) == 3:
                     break
@@ -383,7 +399,7 @@ def draft_meal_plan(plan_id):
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         abort(400, "잘못된 요청이에요.")
-    start_on = iso_date(data.get("start_on"))
+    start_on = meal_date(data.get("start_on"))
     days = integer(data.get("days"), "기간은", 1, MAX_DRAFT_DAYS)
     if start_on is None or start_on < plan.start_on or start_on + timedelta(days=days - 1) > _end_on(plan):
         abort(400, OUT_OF_RANGE)
@@ -457,7 +473,7 @@ def apply_meal_draft(plan_id):
     end_on, slots, seen = _end_on(plan), [], set()
     for row in rows:
         row = row if isinstance(row, dict) else {}
-        date, meal, dish = iso_date(row.get("date")), row.get("meal"), _int_in(row.get("dish"), 0, len(dishes) - 1)
+        date, meal, dish = meal_date(row.get("date")), row.get("meal"), _int_in(row.get("dish"), 0, len(dishes) - 1)
         est_kcal = row.get("est_kcal")
         if (
             date is None or not plan.start_on <= date <= end_on or meal not in MEALS or dish is None

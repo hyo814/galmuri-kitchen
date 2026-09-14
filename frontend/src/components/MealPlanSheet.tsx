@@ -55,6 +55,8 @@ export default function MealPlanSheet({ today, defaultServings, plan, onSaved, o
             <Icon name="calendar" />
             <input
               type="date"
+              min="2000-01-01"
+              max="2100-12-31"
               value={start}
               required
               onClick={(e) => e.currentTarget.showPicker?.()}

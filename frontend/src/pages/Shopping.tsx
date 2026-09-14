@@ -11,6 +11,7 @@ import { formatDate, withJosa } from "../format";
 import { groupItems, nameKey, newClientId, quantityText, sourceTag, type EditFields, type Op, type Ref, type ViewItem } from "../shopping/sync";
 import { useShopping } from "../shopping/useShopping";
 import { navigate } from "../useHashRoute";
+import { forgetResources } from "../useResource";
 
 const refOf = (item: ViewItem): Ref => (item.id !== undefined ? { id: item.id } : { client_id: item.client_id! });
 /** 행 key: 기기에서 만든 항목은 보낸 뒤에도 client_id가 같아 자리·포커스가 유지된다 */
@@ -295,7 +296,7 @@ export default function Shopping({ user }: { user: User }) {
         sourceLabel="장보기 메모"
         listed={items.map((i) => i.name)}
         today={today}
-        onScanned={() => {}}
+        onScanned={() => forgetResources("/api/ai-usage")} // 다른 화면이 남은 AI 횟수를 옛 값으로 먼저 보이지 않게
         onDone={(text) => {
           setScan(null);
           setNotice({ text, near: "stock" });

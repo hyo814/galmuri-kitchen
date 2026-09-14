@@ -321,3 +321,39 @@ def test_user_delete_cascades(client, login, app):
         db.session.commit()
         assert MealPlan.query.count() == 0
         assert MealSlot.query.count() == 0
+
+
+BAD_DATE = "날짜를 다시 확인해주세요."
+
+
+@pytest.mark.parametrize("value", ["9999-12-25", "1999-12-31", "2101-01-01"])
+def test_dates_outside_2000_2100_rejected_before_writing(client, login, value):
+    """먼 미래 시작일은 끝 날짜 계산이 넘쳐 목록이 계속 500이 났다. 쓰기 전에 400."""
+    login()
+    res = make_plan(client, start_on=value)
+    assert (res.status_code, res.get_json()["error"]) == (400, BAD_DATE)
+    assert client.get("/api/meal-plans").get_json()["items"] == []
+
+    plan = make_plan(client).get_json()
+    res = client.patch(f"/api/meal-plans/{plan['id']}", json={"start_on": value, "name": "바뀌면 안 됨"})
+    assert (res.status_code, res.get_json()["error"]) == (400, BAD_DATE)
+    for path, body in [
+        (f"/api/meal-plans/{plan['id']}/slots", {"date": value, "meal": "lunch", "title": "점심"}),
+        (f"/api/meal-plans/{plan['id']}/copy-week", {"from_on": value, "weeks": 1}),
+        (f"/api/meal-plans/{plan['id']}/ai-draft", {"start_on": value, "days": 7, "meals": ["lunch"]}),
+    ]:
+        res = client.post(path, json=body) if not path.endswith("/slots") else client.put(path, json=body)
+        assert (res.status_code, res.get_json()["error"]) == (400, BAD_DATE)
+    res = client.get("/api/meal-plans")
+    assert res.status_code == 200
+    assert [(p["name"], p["start_on"]) for p in res.get_json()["items"]] == [("9월 셋째 주", "2026-09-14")]
+
+
+def test_boundary_dates_list_fine(client, login):
+    login()
+    assert make_plan(client, start_on="2000-01-01", days=1).status_code == 201
+    res = make_plan(client, start_on="2100-12-31", days=31)
+    assert (res.status_code, res.get_json()["end_on"]) == (201, "2101-01-30")
+    res = client.get("/api/meal-plans")
+    assert res.status_code == 200
+    assert [p["end_on"] for p in res.get_json()["items"]] == ["2101-01-30", "2000-01-01"]
