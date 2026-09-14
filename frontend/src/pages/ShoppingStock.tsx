@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError, api, type StorageLocation } from "../api";
 import Icon from "../components/Icon";
 import { formatDate, formatQuantity } from "../format";
-import { stockButtonText } from "../shopping/sync";
+import { stockButtonText, stockSummaryText } from "../shopping/sync";
 import { useAsyncAction } from "../useAsyncAction";
 import { goBack, navigate, setLeaveGuard } from "../useHashRoute";
 import { forgetRecipeCaches, forgetResources } from "../useResource";
@@ -224,13 +224,15 @@ export default function ShoppingStock() {
       </main>
     );
 
+  const stockCount = rows.filter((r) => r.stock).length;
+  const skipCount = rows.length - stockCount;
   return (
     <main className="page">
       <BackLink onClick={leave} />
       <header className="topbar">
         <div>
           <h1>재고에 넣기</h1>
-          <p className="summary">체크한 {rows.length}개를 재고로 옮겨요</p>
+          <p className="summary">{stockSummaryText(stockCount, skipCount)}</p>
         </div>
       </header>
 
@@ -252,7 +254,7 @@ export default function ShoppingStock() {
           </label>
         </section>
 
-        <section className="rc-sec sh-in-list" aria-label="넣을 재료">
+        <section className="rc-sec sh-in-list" aria-label={`체크한 항목 · 재고로 ${stockCount}개 · 산 것으로만 ${skipCount}개`}>
           {rows.map((row) => {
             const err = rowErrors[row.id];
             const prefilled = row.chosen !== "" && row.chosen === String(row.location_id ?? "");
@@ -353,7 +355,7 @@ export default function ShoppingStock() {
               취소
             </button>
             <button className="btn primary sh-in-submit" disabled={busy}>
-              {busy ? "넣는 중…" : stockButtonText(rows.filter((r) => r.stock).length, rows.filter((r) => !r.stock).length)}
+              {busy ? "넣는 중…" : stockButtonText(stockCount, skipCount)}
             </button>
           </div>
         </div>

@@ -344,6 +344,13 @@ export function stockButtonText(stock: number, skip: number): string {
   return stock ? `${stock}개 넣기 · ${skip}개는 산 것으로만` : `${skip}개 산 것으로 옮기기`;
 }
 
+/** 재고에 넣기 요약 줄: 재료로 넣을 개수와 산 것으로만 옮길 개수를 따로 */
+export function stockSummaryText(stock: number, skip: number): string {
+  const total = stock + skip;
+  if (!skip) return `체크한 ${total}개를 재고로 옮겨요`;
+  return stock ? `체크한 ${total}개 중 ${stock}개는 재고로, ${skip}개는 산 것으로만 옮겨요` : `체크한 ${total}개를 산 것으로 옮겨요`;
+}
+
 /** 시안 ShoppingList 태그(.sh-tag + tone 클래스). 직접 담은 항목은 태그 없음 */
 export function sourceTag(item: { source: string; source_label: string | null }): { text: string; tone: "" | "info" | "warn" } | null {
   switch (item.source) {

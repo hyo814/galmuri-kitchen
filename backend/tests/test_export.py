@@ -24,7 +24,7 @@ SEASONING = {
 INGREDIENT_HEADER = ["이름", "수량", "단위", "보관 위치", "구입일", "유통기한", "가격(원)"]
 RECIPE_HEADER = ["제목", "인분", "재료", "만드는 법", "출처", "출처 링크", "사진 주소"]
 SEASONING_HEADER = ["이름", "기준", "기준 양", "기준 단위", "주재료", "양념"]
-SHOPPING_HEADER = ["이름", "수량", "단위", "살 날", "넣을 위치", "체크", "산 날(재고에 넣은 날)", "출처", "출처 이름", "담은 날"]
+SHOPPING_HEADER = ["이름", "수량", "단위", "생활용품", "살 날", "넣을 위치", "체크", "산 날(재고에 넣은 날)", "출처", "출처 이름", "담은 날"]
 MEMO_HEADER = ["장소", "메모", "사진 수", "사진 파일 이름", "고친 시각"]
 
 
@@ -152,6 +152,7 @@ def test_export_zip_contents(client, login, app):
         json={"name": "-대파", "quantity": 3, "unit": "단", "planned_on": day(1), "location_id": kimchi["id"], "source": "staple"},
     ).get_json()
     client.patch(f"/api/shopping/items/{daepa['id']}", json={"done": True, "changed_at": datetime.now(timezone.utc).isoformat()})
+    client.post("/api/shopping/items", json={"name": "휴지", "unit": "롤"})
     note = client.post("/api/shopping/notes", json={"place": "이마트", "body": "=SUM(A1)"}).get_json()
     with app.app_context():
         me = user_id(app)
@@ -192,9 +193,10 @@ def test_export_zip_contents(client, login, app):
     ]
     assert files["shopping.csv"] == [  # created_at 순: 3일 전 만든 계란이 먼저, 10일 전 산 양파는 7일이 지나 빠진다
         SHOPPING_HEADER,
-        ["계란", "1", "판", "", "", "", day(3), "레시피", "계란말이", day(3)],
-        ["두부", "1", "개", "", "", "", "", "직접 담음", "", day()],
-        ["'-대파", "3", "단", day(1), "김치냉장고", "예", "", "필수품", "", day()],
+        ["계란", "1", "판", "", "", "", "", day(3), "레시피", "계란말이", day(3)],
+        ["두부", "1", "개", "", "", "", "", "", "직접 담음", "", day()],
+        ["'-대파", "3", "단", "", day(1), "김치냉장고", "예", "", "필수품", "", day()],
+        ["휴지", "1", "롤", "예", "", "", "", "", "직접 담음", "", day()],
     ]
     assert files["shopping_memos.csv"] == [
         MEMO_HEADER,

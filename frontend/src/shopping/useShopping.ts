@@ -368,7 +368,7 @@ export function clearShoppingDevice(): Promise<void> {
 /** 다른 화면에서 한 번에 담기(Task 11·13). 온라인 전용 */
 export async function addMany(
   source: ShoppingSource,
-  items: { name: string; quantity?: number; unit?: string; planned_on?: string | null; location_id?: number }[],
+  items: { name: string; quantity?: number; unit?: string; planned_on?: string | null; location_id?: number; household?: boolean }[],
   sourceLabel?: string,
 ): Promise<{ created: number; skipped: string[] }> {
   const res = await api<{ created: ShoppingItem[]; skipped: string[] }>("/api/shopping/items/bulk", {

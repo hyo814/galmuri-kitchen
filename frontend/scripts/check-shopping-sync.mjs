@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import {
   enqueue, markAttempt, markServerError, removeOp, dropWithDependents, applyQueue, applyServerResult, remapRef, classify, newClientId, MAX_ATTEMPTS,
-  groupItems, plannedOnFor, parseQuantityText, quantityText, sourceTag, stockButtonText, retryDelay, opRequest, sameOwner, shouldRefresh,
+  groupItems, plannedOnFor, parseQuantityText, quantityText, sourceTag, stockButtonText, stockSummaryText, retryDelay, opRequest, sameOwner, shouldRefresh,
 } from "../src/shopping/sync.ts";
 
 const T = (m) => `2026-09-14T01:${String(m).padStart(2, "0")}:00.000Z`;
@@ -528,6 +528,9 @@ assert.equal(sourceTag({ source: "manual", source_label: null }), null);
 assert.equal(stockButtonText(3, 0), "3개 넣기");
 assert.equal(stockButtonText(2, 1), "2개 넣기 · 1개는 산 것으로만");
 assert.equal(stockButtonText(0, 2), "2개 산 것으로 옮기기");
+assert.equal(stockSummaryText(3, 0), "체크한 3개를 재고로 옮겨요");
+assert.equal(stockSummaryText(2, 1), "체크한 3개 중 2개는 재고로, 1개는 산 것으로만 옮겨요");
+assert.equal(stockSummaryText(0, 2), "체크한 2개를 산 것으로 옮겨요");
 
 // ---- 속성 검사: 합친 대기열로 만든 화면 == 합치지 않은 변경 전부로 만든 화면 ----
 // 고정 시드 LCG. client_id는 늘 새것, 참조는 서버에 있거나 앞에서 추가한 대상만, 시각은 늘어나기만 한다.
