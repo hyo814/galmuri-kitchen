@@ -21,6 +21,11 @@ TEST_CONFIG = {
     "CLAUDE_MODEL": "claude-sonnet-5",  # 셸의 CLAUDE_MODEL이 ai_calls.model 확인을 흔들지 않게 고정한다
     "FOODSAFETY_API_KEY": None,  # 셸에 키가 있어도 동기화 테스트는 키 없음으로 시작한다
     "YOUTUBE_API_KEY": None,
+    # 셸에 R2 값이 있어도 테스트는 로컬 저장소로 시작한다. UPLOAD_DIR은 make_app이 테스트마다 tmp_path로 둔다.
+    "R2_ACCOUNT_ID": None,
+    "R2_ACCESS_KEY_ID": None,
+    "R2_SECRET_ACCESS_KEY": None,
+    "R2_BUCKET": None,
 }
 
 
@@ -68,11 +73,12 @@ def fake_anthropic(monkeypatch):
 
 
 @pytest.fixture
-def make_app():
+def make_app(tmp_path):
     apps = []
 
     def _make(**overrides):
-        app = create_app({**TEST_CONFIG, **overrides})
+        # 사진은 진짜 backend/uploads가 아니라 테스트마다 새 임시 폴더에 쓴다
+        app = create_app({**TEST_CONFIG, "UPLOAD_DIR": str(tmp_path / "uploads"), **overrides})
         with app.app_context():
             # Postgres DB is shared across the whole run (unlike sqlite://,
             # a fresh in-memory DB per app) — reset it so tests stay isolated.

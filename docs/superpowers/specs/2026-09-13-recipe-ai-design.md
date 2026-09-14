@@ -92,6 +92,8 @@ recipe-ai/
 | GET | `/api/ai-usage` | 오늘(서울) `{scan:{used, limit}, recipe:{used, limit}}` — `오늘 N번 남음`·더보기 AI 사용량 |
 | GET/POST | `/api/seasonings` · GET/PUT/DELETE `/api/seasonings/<id>` | 내 양념 비율 목록·추가 / 상세·수정·삭제(22절) |
 | GET | `/api/shopping` | 장보기 한 번에 받기 `{items, stocked, notes, today}` — 페이지 없음(오프라인 보관, 26절 예외). 7일 지난 산 것은 이때 지운다(28절) |
+| POST/PUT/DELETE | `/api/shopping/notes`, `/api/shopping/notes/<id>` | 메모 만들기(같은 `client_id`면 200) / 고치기 `{place, body, edited_at}`(서버가 더 늦게 저장됐으면 409 + 서버 메모) / 삭제(사진 파일도)(28절) |
+| POST/DELETE | `/api/shopping/notes/<id>/photos`, `…/photos/<photo_id>` | 사진 올리기(multipart `image`, `client_id?`, 메모당 10장) / 삭제(28절) |
 | POST | `/api/shopping/items` | 살 것 추가 201. 같은 `client_id`가 있으면 그 항목 200(28절) |
 | POST | `/api/shopping/items/bulk` | 한 번에 담기 `{source, source_label?, items:[…] 1~50}` → 201 `{created, skipped}`. 목록에 있는 이름·요청 안 겹치는 이름은 건너뜀, 하나라도 틀리면 400 `{error: "N번째 재료: …", errors}`(28절) |
 | PATCH/DELETE | `/api/shopping/items/<id>` | 고치기 또는 체크 `{done, changed_at}`(마지막 변경 우선) / 삭제(28절) |
@@ -99,7 +101,7 @@ recipe-ai/
 | GET/POST | `/api/channels` · PATCH/DELETE `/api/channels/<id>` | 채널 목록·추가 / 기본 채널 숨기기·내 채널 빼기(17절) |
 | GET/POST | `/api/cook-logs` | 기록 목록 / 생성(multipart: 필드 + 사진 + `usages` JSON) |
 | DELETE | `/api/cook-logs/<id>` | 기록 삭제(재고 복원 안 함) |
-| GET | `/api/photos/<key>` | 소유자 확인 후 presigned URL로 302(로컬은 파일 전송) |
+| GET | `/api/photos/<key>` | 소유자 확인(내 접두사 + 사진 행) 후 로컬은 파일 전송(`private, max-age=86400`·nosniff), R2는 presigned URL 302 예정 — 연결 전에는 503(28절). 남의 키·지운 사진 404 |
 
 CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를 1,000건 단위로 받아 upsert(`FOODSAFETY_API_KEY` 필요, 받으면 예시 레시피는 지움). `flask seed-sample-recipes` — 키 없이 화면을 확인하는 직접 쓴 예시 레시피 12개(`is_sample`).
 
@@ -466,7 +468,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 ### 장보기 항목 (Task 1)
 - 테이블 `shopping_items`(16절). UNIQUE(user_id, client_id) — client_id가 NULL인 행끼리는 겹쳐도 된다. `location_id`는 보관 위치를 지우면 DB가 NULL로 바꾼다(`locations.delete_location`은 재료만 막는다). 사용자 삭제 때 CASCADE.
 - 상한: 사용자당 목록 **300개**(`stocked_at`이 있는 산 것은 세지 않음), 넘으면 400 `장보기 목록은 300개까지 담을 수 있어요. 필요 없는 항목을 빼주세요.` 일괄 담기는 건너뛴 것을 뺀 **만들 개수**로 센다. PostgreSQL은 사용자별 트랜잭션 잠금(`pg_advisory_xact_lock`)으로 client_id 확인·개수 확인·추가를 한 줄로 세운다. 가득 차도 이미 있는 `client_id`를 다시 보내면 그 항목 200. 산 것은 따로 300개(`MAX_STOCKED_ITEMS`) — 산 것을 만드는 Task 2 재고에 넣기에서 넘으면 오래된 산 것부터 지운다.
-- `GET /api/shopping` → `{items, stocked, notes, today}`. `items`는 산 것이 아닌 항목(created_at·id 오름차순, 날짜 묶음은 화면이 만든다), `stocked`는 최근 7일 산 것(stocked_at 내림차순), `notes`는 장보기 메모(Task 3 전까지 빈 배열), `today`는 서울 날짜. 요청 때 7일 지난 산 것을 먼저 지운다(크론 없음). 응답은 `Cache-Control: no-store`.
+- `GET /api/shopping` → `{items, stocked, notes, today}`. `items`는 산 것이 아닌 항목(created_at·id 오름차순, 날짜 묶음은 화면이 만든다), `stocked`는 최근 7일 산 것(stocked_at 내림차순), `notes`는 장보기 메모(updated_at·id 내림차순, 사진 포함), `today`는 서울 날짜. 요청 때 7일 지난 산 것을 먼저 지운다(크론 없음). 응답은 `Cache-Control: no-store`.
 - 항목 모양: `{id, client_id, name, quantity, unit, planned_on, location_id, location_name, source, source_label, done_at, done_changed_at, stocked_at, created_at}`.
 - `POST /api/shopping/items` `{name, quantity?, unit?, planned_on?, location_id?, source?, source_label?, client_id?}` → 201. 같은 사용자에게 같은 `client_id`가 있으면 새로 만들지 않고 그 항목을 200으로 돌려준다(오프라인에서 다시 보내도 하나). `client_id`가 있는 요청(기기에서 담은 것)의 위치가 그사이 지워졌거나 내 것이 아니면 400 대신 위치를 비우고 담는다 — 오프라인에서 담은 것을 잃지 않게. `client_id`가 없는 요청과 일괄 담기는 400 그대로.
   - 검증: 이름 1~50자 `이름은 1~50자로 입력해주세요.` · 수량은 0보다 큰 숫자(참/거짓·문자열 불가) `수량은 0보다 커야 해요.` · 단위 10자(비면 `개`) · 날짜 `YYYY-MM-DD` `날짜 형식이 올바르지 않아요.` · source는 `manual|recipe|staple|urgent|meal_plan|memo`(기본 manual) · source_label 60자 `출처 이름은 1~60자로 입력해주세요.`(공백뿐이면 비움) · 남의/없는 위치 `보관 위치를 다시 선택해주세요.` · client_id는 1~36자 영문·숫자·`-`. 그 밖의 모양 오류는 `잘못된 요청이에요.`
@@ -487,3 +489,14 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **메모 충돌(19절):** 충돌(409·404)이면 호출 측이 기기에서 쓴 내용을 기기에 따로 보관하고 서버 메모를 받아들인다. 기기 `edited_at`이 더 늦으면 서버가 받아들이므로 충돌이 아니고, 그때는 보내기 직전 스냅숏 본문(덮어쓴 서버 쪽)을 한 번 남긴다.
 - **날짜 묶음(`groupItems`):** 서울 날짜 문자열로 `planned_on ≤ 오늘` 오늘(지난 날짜 포함) · `≤ 오늘+6` 이번 주 · 그 뒤 나중에 · 없음 날짜 미정. 묶음 안은 날짜·만든 시각 순, 체크는 자리에 영향 없음, 빈 묶음은 뺀다. `이번 주` 칩은 오늘+6으로 저장.
 - **수량 한 칸(`parseQuantityText`):** `1모`·`30구`·`½봉`·`1/2대`, 숫자만이면 `개`, 단위만이면 1. 숫자 범위는 양념 입력과 같다(0.01~10000), 단위 10자까지. 표시(`quantityText`)는 되읽어도 같은 값.
+
+### 장보기 메모·사진 (Task 3)
+- 테이블 `shopping_notes`(id, user_id CASCADE, client_id, place ≤30, body Text ≤2000, created_at, updated_at, UNIQUE(user_id, client_id)), `shopping_note_photos`(id, note_id CASCADE, client_id, photo_key UNIQUE, created_at, UNIQUE(note_id, client_id)). 사용자당 메모 20개, 메모당 사진 10장.
+- 메모 모양 `{id, client_id, place, body, updated_at, photos:[{id, client_id, url: "/api/photos/<key>"}]}`.
+- `POST /api/shopping/notes` `{place?, body, client_id?, edited_at?}` → 201(같은 `client_id`면 그 메모 200, 가득 차도). body는 문자열(빈 문자열 허용, 앞뒤 공백 그대로 — 자동 저장 중인 글), place는 앞뒤 공백을 빼고 비면 null. `edited_at`(시간대가 붙은 ISO 시각)을 주면 `updated_at`이 그 시각 — 오프라인에서 만들고 고친 메모가 늦게 도착한 만들기 때문에 409가 나지 않게. 오류: `메모는 20개까지 둘 수 있어요.` · `메모는 2000자까지 쓸 수 있어요.` · `장소는 30자까지 입력해주세요.` · 그 밖의 모양 `잘못된 요청이에요.`
+- `PUT /api/shopping/notes/<id>` `{place?, body, edited_at}` → 서버 `updated_at`이 `edited_at`보다 늦으면 409 `{error: "다른 기기에서 먼저 고친 메모가 있어요.", note}`(바꾸지 않음, 기기는 자기 글을 따로 보관 — 19절). 아니면 place·body를 바꾸고 `updated_at = edited_at`(같은 요청을 다시 보내도 200). `edited_at`이 10분 넘게 미래면 서버 시각. 기기 시계 비교라 체크와 같은 한계. 사진 추가·삭제는 `updated_at`을 바꾸지 않는다.
+- `DELETE /api/shopping/notes/<id>` → 204, 커밋 뒤 사진 파일 삭제(실패는 로그만).
+- `POST /api/shopping/notes/<id>/photos` multipart `image`, `client_id?` → 201 사진 모양(같은 `client_id`면 200). 순서: 저장소가 로컬이 아니면 503 `사진을 지금은 올릴 수 없어요.` → 남의/없는 메모 404 → 10MB 초과 413 → 사진 없음 400 `사진을 올려주세요.` → 서명이 JPG·PNG·WEBP 아님 415 `사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요.` → 10장 400 `사진은 메모 하나에 10장까지 넣을 수 있어요.` → 키 `shopping/<user_id>/<uuid4 hex>.<jpg|png|webp>`(확장자는 서명으로) 저장 → 행 커밋(실패하면 방금 저장한 파일 삭제).
+- `DELETE /api/shopping/notes/<id>/photos/<photo_id>` → 204, 커밋 뒤 파일 삭제. 다른 메모의 사진 id는 404.
+- 저장소 `app/storage.py`: `mode()` — R2 값 네 개가 모두 있으면 `r2`, 없고 `RENDER`면 `off`, 아니면 `local`(`backend/uploads/`, 키는 `safe_join`으로 `..`·앞 `/` 거부). **R2는 아직 연결하지 않았다(boto3 미설치)** — `r2`·`off` 모두 사진 올리기·보기 503. 운영에서 사진을 쓰기 전에 boto3를 넣고 put/delete/presigned 302를 붙인다.
+- 회원 탈퇴 때 `shopping/<user_id>/` 파일을 따로 지운다(27절, 탈퇴 태스크).

@@ -1,19 +1,22 @@
 import math
 import re
+import uuid
 import zlib
 from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, abort, g, jsonify, request
 from sqlalchemy import text as sql
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from werkzeug.exceptions import BadRequest
 
+from . import storage
 from .auth import get_owned_or_404, login_required
 from .ingredients import seoul_today
 from .locations import choose_location, owned_location, user_locations
 from .matching import match_prepared, prepare
-from .models import ShoppingItem, db, utcnow
+from .models import ShoppingItem, ShoppingNote, ShoppingNotePhoto, db, utcnow
+from .scan import sniff_image_type
 from .validation import commit_or_duplicate, iso_date, iso_datetime, text
 
 # 장보기 목록(스펙 16·19·28절). 오프라인 기기가 다시 보내도 괜찮게: 추가는 client_id로 한 번만, 체크는 마지막 변경 우선.
@@ -32,6 +35,11 @@ BAD_REQUEST = "잘못된 요청이에요."
 QUANTITY_ERROR = "수량은 0보다 커야 해요."
 CAP_ERROR = f"장보기 목록은 {MAX_SHOPPING_ITEMS}개까지 담을 수 있어요. 필요 없는 항목을 빼주세요."
 LOCATION_CHANGED = "선택한 보관 위치가 방금 바뀌었어요. 다시 시도해주세요."
+MAX_NOTES = 20  # 사용자당
+MAX_PHOTOS = 10  # 메모당(시안 `사진 2 / 10`)
+MAX_BODY = 2000
+MAX_PLACE = 30
+NOTE_CONFLICT = "다른 기기에서 먼저 고친 메모가 있어요."
 EDIT_KEYS = ("name", "quantity", "unit", "planned_on", "location_id")
 CHECK_KEYS = ("done", "changed_at")
 _CLIENT_ID = re.compile(r"[A-Za-z0-9-]{1,36}")
@@ -44,6 +52,27 @@ def _utc(value):
 
 def _iso(value):
     return iso_datetime(value) if value else None
+
+
+def _client_id(value):
+    if value is not None and not (isinstance(value, str) and _CLIENT_ID.fullmatch(value)):
+        abort(400, BAD_REQUEST)
+    return value
+
+
+def photo_json(photo):
+    return {"id": photo.id, "client_id": photo.client_id, "url": f"/api/photos/{photo.photo_key}"}
+
+
+def note_json(note):
+    return {
+        "id": note.id,
+        "client_id": note.client_id,
+        "place": note.place,
+        "body": note.body,
+        "updated_at": iso_datetime(note.updated_at),
+        "photos": [photo_json(p) for p in note.photos],
+    }
 
 
 def item_json(item):
@@ -162,10 +191,16 @@ def snapshot():
     rows = ShoppingItem.query.options(joinedload(ShoppingItem.location)).filter_by(user_id=g.user.id)
     items = rows.filter(ShoppingItem.stocked_at.is_(None)).order_by(ShoppingItem.created_at, ShoppingItem.id).all()
     stocked = rows.filter(ShoppingItem.stocked_at.is_not(None)).order_by(ShoppingItem.stocked_at.desc(), ShoppingItem.id.desc()).all()
+    notes = (
+        ShoppingNote.query.options(selectinload(ShoppingNote.photos))
+        .filter_by(user_id=g.user.id)
+        .order_by(ShoppingNote.updated_at.desc(), ShoppingNote.id.desc())
+        .all()
+    )
     res = jsonify(
         items=[item_json(i) for i in items],
         stocked=[item_json(i) for i in stocked],
-        notes=[],
+        notes=[note_json(n) for n in notes],
         today=seoul_today().isoformat(),
     )
     res.headers["Cache-Control"] = "no-store"
@@ -176,9 +211,7 @@ def snapshot():
 @login_required
 def create_item():
     data = _json_object()
-    client_id = data.get("client_id")
-    if client_id is not None and not (isinstance(client_id, str) and _CLIENT_ID.fullmatch(client_id)):
-        abort(400, BAD_REQUEST)
+    client_id = _client_id(data.get("client_id"))
     _lock_user_items(g.user.id)
     if client_id is not None:
         existing = ShoppingItem.query.filter_by(user_id=g.user.id, client_id=client_id).first()
@@ -277,4 +310,123 @@ def update_item(item_id):
 def delete_item(item_id):
     db.session.delete(get_owned_or_404(ShoppingItem, item_id))
     db.session.commit()
+    return "", 204
+
+
+def _note_fields(data):
+    """메모 칸(place·body). body는 자동 저장 중인 글이라 앞뒤 공백을 그대로 둔다(빈 문자열 허용)."""
+    place, body = data.get("place"), data.get("body")
+    if not isinstance(body, str) or not (place is None or isinstance(place, str)):
+        abort(400, BAD_REQUEST)
+    if len(body) > MAX_BODY:
+        abort(400, f"메모는 {MAX_BODY}자까지 쓸 수 있어요.")
+    place = place.strip() if place else None
+    if place and len(place) > MAX_PLACE:
+        abort(400, f"장소는 {MAX_PLACE}자까지 입력해주세요.")
+    return {"place": place or None, "body": body}
+
+
+def _owned_note(note_id, lock=False):
+    note = db.session.get(ShoppingNote, note_id, with_for_update=lock) if note_id <= 2**31 - 1 else None
+    if note is None or note.user_id != g.user.id:
+        abort(404, "찾을 수 없어요.")
+    return note
+
+
+@bp.post("/notes")
+@login_required
+def create_note():
+    """{place?, body, client_id?, edited_at?}. edited_at은 오프라인에서 만든 시각 — 그 뒤에 고친 PUT이 409가 나지 않게."""
+    data = _json_object()
+    client_id = _client_id(data.get("client_id"))
+    fields = _note_fields(data)
+    edited_at = _changed_at(data["edited_at"]) if "edited_at" in data else utcnow()
+    _lock_user_items(g.user.id)
+    if client_id is not None:
+        existing = ShoppingNote.query.filter_by(user_id=g.user.id, client_id=client_id).first()
+        if existing is not None:
+            return jsonify(note_json(existing))
+    if ShoppingNote.query.filter_by(user_id=g.user.id).count() >= MAX_NOTES:
+        abort(400, f"메모는 {MAX_NOTES}개까지 둘 수 있어요.")
+    note = ShoppingNote(user_id=g.user.id, client_id=client_id, updated_at=edited_at, **fields)
+    db.session.add(note)
+    commit_or_duplicate(BAD_REQUEST)
+    return jsonify(note_json(note)), 201
+
+
+@bp.put("/notes/<int:note_id>")
+@login_required
+def update_note(note_id):
+    """{place, body, edited_at}. 서버 메모가 더 늦게 저장됐으면 409와 서버 메모(기기가 자기 글을 따로 보관한다)."""
+    data = _json_object()
+    fields = _note_fields(data)
+    edited_at = _changed_at(data.get("edited_at"))
+    note = _owned_note(note_id, lock=True)
+    # ponytail: 기기 시계 비교 — 체크(done_changed_at)와 같은 한계. 시계가 크게 틀린 기기는 순서가 틀릴 수 있다.
+    if _utc(note.updated_at) > edited_at:
+        return jsonify(error=NOTE_CONFLICT, note=note_json(note)), 409
+    note.place, note.body, note.updated_at = fields["place"], fields["body"], edited_at
+    db.session.commit()
+    return jsonify(note_json(note))
+
+
+@bp.delete("/notes/<int:note_id>")
+@login_required
+def delete_note(note_id):
+    note = _owned_note(note_id)
+    keys = [p.photo_key for p in note.photos]
+    db.session.delete(note)
+    db.session.commit()
+    storage.delete(keys)  # 커밋 뒤에 — 커밋이 실패하면 파일은 남아 있어야 한다
+    return "", 204
+
+
+@bp.post("/notes/<int:note_id>/photos")
+@login_required
+def upload_photo(note_id):
+    if storage.mode() != "local":
+        abort(503, "사진을 지금은 올릴 수 없어요.")
+    note = _owned_note(note_id)
+    image = request.files.get("image")  # 10MB 초과는 여기서 413
+    client_id = _client_id(request.form.get("client_id"))
+    data = image.read() if image is not None else b""
+    if not data:
+        abort(400, "사진을 올려주세요.")
+    media_type = sniff_image_type(data)  # 선언된 Content-Type이 아니라 파일 서명을 믿는다
+    if media_type is None:
+        abort(415, "사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요.")
+    _lock_user_items(g.user.id)
+    if client_id is not None:
+        existing = ShoppingNotePhoto.query.filter_by(note_id=note.id, client_id=client_id).first()
+        if existing is not None:  # 오프라인에서 다시 보낸 사진
+            return jsonify(photo_json(existing))
+    if ShoppingNotePhoto.query.filter_by(note_id=note.id).count() >= MAX_PHOTOS:
+        abort(400, f"사진은 메모 하나에 {MAX_PHOTOS}장까지 넣을 수 있어요.")
+    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[media_type]
+    key = f"shopping/{g.user.id}/{uuid.uuid4().hex}.{ext}"
+    storage.put(key, data, media_type)
+    photo = ShoppingNotePhoto(note_id=note.id, client_id=client_id, photo_key=key)
+    db.session.add(photo)
+    try:
+        db.session.commit()
+    except Exception as e:  # 행이 없으면 방금 올린 파일도 남기지 않는다
+        db.session.rollback()
+        storage.delete([key])
+        if isinstance(e, IntegrityError):  # 그사이 메모가 지워졌거나 같은 client_id가 동시에 왔다
+            abort(400, BAD_REQUEST)
+        raise
+    return jsonify(photo_json(photo)), 201
+
+
+@bp.delete("/notes/<int:note_id>/photos/<int:photo_id>")
+@login_required
+def delete_photo(note_id, photo_id):
+    note = _owned_note(note_id)
+    photo = db.session.get(ShoppingNotePhoto, photo_id) if photo_id <= 2**31 - 1 else None
+    if photo is None or photo.note_id != note.id:
+        abort(404, "찾을 수 없어요.")
+    key = photo.photo_key
+    db.session.delete(photo)
+    db.session.commit()
+    storage.delete([key])
     return "", 204

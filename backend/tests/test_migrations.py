@@ -238,6 +238,32 @@ def test_shopping_items_migration_adds_and_removes_table(app):
             assert "shopping_items" not in sa.inspect(conn).get_table_names()
 
 
+def test_shopping_notes_migration_adds_and_removes_tables(app):
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="b5b5c5d5e5f5")
+        with db.engine.connect() as conn:
+            inspector = sa.inspect(conn)
+            note_columns = {c["name"] for c in inspector.get_columns("shopping_notes")}
+            photo_columns = {c["name"] for c in inspector.get_columns("shopping_note_photos")}
+            note_fks = {fk["referred_table"]: fk["options"].get("ondelete") for fk in inspector.get_foreign_keys("shopping_notes")}
+            photo_fks = {fk["referred_table"]: fk["options"].get("ondelete") for fk in inspector.get_foreign_keys("shopping_note_photos")}
+            note_uniques = {tuple(u["column_names"]) for u in inspector.get_unique_constraints("shopping_notes")}
+            photo_uniques = {tuple(u["column_names"]) for u in inspector.get_unique_constraints("shopping_note_photos")}
+            indexes = {ix["name"] for ix in inspector.get_indexes("shopping_notes") + inspector.get_indexes("shopping_note_photos")}
+        assert note_columns == {"id", "user_id", "client_id", "place", "body", "created_at", "updated_at"}
+        assert photo_columns == {"id", "note_id", "client_id", "photo_key", "created_at"}
+        assert note_fks == {"users": "CASCADE"}
+        assert photo_fks == {"shopping_notes": "CASCADE"}
+        assert ("user_id", "client_id") in note_uniques
+        assert {("note_id", "client_id"), ("photo_key",)} <= photo_uniques
+        assert {"ix_shopping_notes_user_id", "ix_shopping_note_photos_note_id"} <= indexes
+
+        downgrade(directory=MIGRATIONS, revision="b4b4c4d4e4f4")
+        with db.engine.connect() as conn:
+            tables = set(sa.inspect(conn).get_table_names())
+        assert not {"shopping_notes", "shopping_note_photos"} & tables
+
+
 def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)
@@ -259,5 +285,7 @@ def test_upgrade_to_head_and_back_to_base(app):
             "youtube_videos",
             "ingredient_removals",
             "shopping_items",
+            "shopping_notes",
+            "shopping_note_photos",
         } <= tables
         downgrade(directory=MIGRATIONS, revision="base")
