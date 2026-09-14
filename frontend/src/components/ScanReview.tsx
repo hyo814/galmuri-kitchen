@@ -315,7 +315,7 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
         <div className="scan-foot">
           <div className="actions">
             <button type="button" className="btn secondary" disabled={busy} onClick={onRetake}>
-              다시 찍기
+              {kind === "order" ? "다시 고르기" : "다시 찍기"}
             </button>
             <button className="btn primary" disabled={busy || chosen.length === 0 || !!matched}>
               {busy ? "넣는 중…" : `${chosen.length}개 재고에 넣기`}

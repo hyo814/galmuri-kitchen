@@ -543,6 +543,11 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
   margin-top: 4px;
 }
 
+/* 카메라·앨범처럼 두 버튼 이름 길이가 비슷할 때(1fr 2fr이면 짧은 쪽이 줄바꿈된다) */
+.actions.actions-even {
+  grid-template-columns: 1fr 1fr;
+}
+
 .hint {
   margin: 0;
   font-size: 13px;
@@ -1136,6 +1141,10 @@ button.row-btn > svg {
   background: var(--field);
   color: var(--text);
   text-align: left;
+}
+
+.scan-choice[aria-checked="true"] {
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 .scan-choice-icon {

@@ -115,13 +115,15 @@ export default function ShoppingMemo({ id, user }: { id?: string; user: User }) 
   const [viewing, setViewing] = useState<number | null>(null);
   const [notFound, setNotFound] = useState(false);
   /** 사진에서 살 것 뽑기: 사진 고르기 시트 → 읽는 사진 */
-  const [scan, setScan] = useState<"choose" | { image: Blob } | null>(null);
+  const [scan, setScan] = useState<"choose" | "source" | { image: Blob } | null>(null);
   const [scanHint, setScanHint] = useState("");
   const { data: usage, reload: reloadUsage } = useResource<AiUsage>("/api/ai-usage");
-  const scanFileRef = useRef<HTMLInputElement>(null);
+  const scanCameraRef = useRef<HTMLInputElement>(null);
+  const scanAlbumRef = useRef<HTMLInputElement>(null);
   // 이 화면에 들어온 뒤 실패한 사진 올리기만 보여준다(예: 운영에서 사진 저장소가 꺼져 있을 때)
   const [seenFailed] = useState(() => new Set(failed.flatMap((f) => (f.op.op === "photo_add" ? [f.op.client_id] : []))));
-  const fileRef = useRef<HTMLInputElement>(null);
+  const photoCameraRef = useRef<HTMLInputElement>(null);
+  const photoAlbumRef = useRef<HTMLInputElement>(null);
   const addRef = useRef<HTMLButtonElement>(null);
   const photosTitleRef = useRef<HTMLHeadingElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -258,7 +260,7 @@ export default function ShoppingMemo({ id, user }: { id?: string; user: User }) 
     const photos = latest.current.note?.photos ?? [];
     if (latest.current.offline) return setScanHint("인터넷이 연결되면 읽을 수 있어요");
     setScanHint("");
-    if (!photos.length) scanFileRef.current?.click(); // 메모에 사진이 없으면 읽을 사진만 고른다(메모에 넣지는 않는다)
+    if (!photos.length) setScan("source"); // 메모에 사진이 없으면 읽을 사진만 고른다(메모에 넣지는 않는다)
     else if (photos.length === 1) void scanPhoto(photos[0]);
     else setScan("choose");
   }
@@ -359,16 +361,29 @@ export default function ShoppingMemo({ id, user }: { id?: string; user: User }) 
             {photos.length} / {MAX_PHOTOS}
           </span>
         </div>
-        {/* capture 속성 없음: 폰이 카메라·앨범 중에서 고르게 한다(ScanSheet와 같은 사용자 결정 2026-09-13) */}
+        {/* 안드로이드 14+는 capture 없이 열면 시스템 사진 선택기가 뜨는데 거기엔 카메라가 없다.
+            그래서 카메라용·앨범용 입력을 따로 두고 버튼으로 고르게 한다(ScanSheet와 같은 사용자 결정 2026-09-14) */}
         <input
-          ref={fileRef}
+          ref={photoCameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = ""; // 같은 사진을 다시 골라도 change가 일어나게
+            if (file) void pickPhotos([file]);
+          }}
+        />
+        <input
+          ref={photoAlbumRef}
           type="file"
           accept="image/*"
           multiple
           hidden
           onChange={(e) => {
             const files = [...(e.target.files ?? [])];
-            e.target.value = ""; // 같은 사진을 다시 골라도 change가 일어나게
+            e.target.value = "";
             void pickPhotos(files);
           }}
         />
@@ -380,10 +395,16 @@ export default function ShoppingMemo({ id, user }: { id?: string; user: User }) 
             </button>
           ))}
           {photos.length < MAX_PHOTOS && (
-            <button ref={addRef} type="button" className="sh-photo add" onClick={() => fileRef.current?.click()}>
-              <Icon name="camera" size={22} />
-              사진 추가
-            </button>
+            <>
+              <button ref={addRef} type="button" className="sh-photo add" onClick={() => photoCameraRef.current?.click()}>
+                <Icon name="camera" size={22} />
+                사진 찍기
+              </button>
+              <button type="button" className="sh-photo add" onClick={() => photoAlbumRef.current?.click()}>
+                <Icon name="file" size={22} />
+                앨범
+              </button>
+            </>
           )}
         </div>
         {(photoHint || photoErrors.length > 0) && (
@@ -395,7 +416,19 @@ export default function ShoppingMemo({ id, user }: { id?: string; user: User }) 
         {user.scan !== "off" && (
           <>
             <input
-              ref={scanFileRef}
+              ref={scanCameraRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) setScan({ image: file });
+              }}
+            />
+            <input
+              ref={scanAlbumRef}
               type="file"
               accept="image/*"
               hidden
@@ -499,7 +532,40 @@ export default function ShoppingMemo({ id, user }: { id?: string; user: User }) 
         </Sheet>
       )}
 
-      {scan && scan !== "choose" && (
+      {scan === "source" && (
+        <Sheet
+          title="사진에서 살 것 뽑기"
+          description="메모·전단지를 찍거나 앨범에서 골라주세요"
+          onClose={() => setScan(null)}
+        >
+          <div className="actions actions-even">
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => {
+                setScan(null);
+                scanAlbumRef.current?.click();
+              }}
+            >
+              <Icon name="file" />
+              앨범에서 고르기
+            </button>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={() => {
+                setScan(null);
+                scanCameraRef.current?.click();
+              }}
+            >
+              <Icon name="camera" />
+              카메라로 찍기
+            </button>
+          </div>
+        </Sheet>
+      )}
+
+      {scan && typeof scan === "object" && (
         <MemoScanReview
           image={scan.image}
           sourceLabel={note.place?.trim() || "장보기 메모"}
