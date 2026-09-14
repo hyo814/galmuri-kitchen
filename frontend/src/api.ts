@@ -420,6 +420,16 @@ export interface MealPlan extends MealPlanSummary {
   slots: MealSlot[];
 }
 
+/** GET /api/recipes/choices 한 줄: 칸 채우기 시트의 내 레시피(재고 일치) */
+export interface RecipeChoice {
+  id: number;
+  title: string;
+  servings: number;
+  have_count: number;
+  total_count: number;
+  urgent_names: string[];
+}
+
 /** GET /api/meal-plans. default_servings: 마지막으로 만든 식단의 기본 인분(없으면 1) */
 export interface MealPlanList {
   items: MealPlanSummary[];

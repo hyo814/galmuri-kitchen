@@ -3057,7 +3057,9 @@ button.row-btn > svg {
   text-align: left;
 }
 
-.mo-radio[aria-checked="true"] {
+/* 채우기 시트의 라디오는 행 전체가 label(안에 숨긴 input) */
+.mo-radio[aria-checked="true"],
+.mo-radio:has(input:checked) {
   background: var(--accent-tint);
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
@@ -3079,11 +3081,13 @@ button.row-btn > svg {
   box-shadow: inset 0 0 0 2px var(--control-line);
 }
 
-.mo-radio[aria-checked="true"] .mo-dot {
+.mo-radio[aria-checked="true"] .mo-dot,
+.mo-radio:has(input:checked) .mo-dot {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
-.mo-radio[aria-checked="true"] .mo-dot::after {
+.mo-radio[aria-checked="true"] .mo-dot::after,
+.mo-radio:has(input:checked) .mo-dot::after {
   content: "";
   position: absolute;
   inset: 5px;
@@ -4329,4 +4333,111 @@ button.sh-offline svg:last-child {
 
 .ml-kcal {
   justify-content: space-between;
+}
+
+/* 칸 채우기 시트 — 시안 FillRecipe·FillVideo·FillText */
+.ml-sheet-search {
+  margin: 0;
+  background: var(--field);
+}
+
+/* 목록이 길어도 인분·넣기 버튼이 한 화면(384×832)에 보이게 목록만 스크롤한다(3줄 반쯤 보여 더 있다는 걸 알린다) */
+.ml-picks,
+.ml-vlist {
+  display: flex;
+  flex-direction: column;
+  max-height: min(280px, 32dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.ml-picks {
+  gap: 8px;
+}
+
+.ml-picks .mo-radio {
+  position: relative; /* 숨긴 input이 행 안에 있어야 화살표로 옮길 때 그 행으로 스크롤된다 */
+  min-height: 72px;
+  cursor: pointer;
+}
+
+.ml-picks .row-main {
+  gap: 2px;
+  align-items: flex-start;
+}
+
+.ml-picks .rc-match {
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.ml-picks .sh-tag {
+  margin-bottom: 2px;
+}
+
+.ml-vlist {
+  margin: 0 -8px;
+}
+
+.ml-vlist .r3-vrow {
+  position: relative;
+  grid-template-columns: 112px minmax(0, 1fr);
+  padding: 8px;
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+.ml-vlist .r3-vthumb {
+  width: 112px;
+  height: 63px;
+}
+
+.ml-vlist .r3-vrow:has(input:checked) {
+  background: var(--accent-tint);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+/* 목록 스크롤에 잘리지 않게 테두리를 안쪽에 그린다 */
+.ml-picks .mo-radio:has(input:focus-visible),
+.ml-vlist .r3-vrow:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+}
+
+.ml-status {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--neutral-tint);
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 21px;
+  word-break: keep-all;
+}
+
+/* 점 세 개는 .r3-dots의 prefers-reduced-motion 규칙으로 멈춘다 */
+.ml-status b {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ml-status .r3-dots {
+  margin: 0;
+  gap: 4px;
+}
+
+.ml-status .r3-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+}
+
+.ml-quota {
+  margin-top: -8px;
 }

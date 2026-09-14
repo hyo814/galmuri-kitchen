@@ -15,7 +15,7 @@ export function resetVideoFilter() {
 }
 
 /** 썸네일(없으면 자리 표시) + 오른쪽 아래 길이 배지 */
-function Thumb({ video }: { video: Video }) {
+export function Thumb({ video }: { video: Video }) {
   const duration = formatDuration(video.duration_seconds);
   return (
     <span className={video.thumbnail_url ? "r3-vthumb" : "r3-vthumb noimg"}>
