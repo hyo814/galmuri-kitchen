@@ -66,6 +66,7 @@ def create_app(test_config=None):
 
     from .auth import bp as auth_bp
     from .auth import init_oauth
+    from .export import bp as export_bp
     from .ingredients import bp as ingredients_bp
     from .item_rules import bp as item_rules_bp
     from .locations import bp as locations_bp
@@ -80,6 +81,7 @@ def create_app(test_config=None):
 
     init_oauth(app)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(export_bp)
     app.register_blueprint(ingredients_bp)
     app.register_blueprint(item_rules_bp)
     app.register_blueprint(locations_bp)
