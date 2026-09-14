@@ -1,0 +1,127 @@
+{
+  "artboards": [
+    {
+      "file": "MealsEmpty.dc.html",
+      "title": "1 · 식단이 없을 때",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "CreateSheet.dc.html",
+      "title": "2 · 식단 만들기",
+      "x": 464,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "WeekView.dc.html",
+      "title": "3 · 주 보기 (기본)",
+      "x": 0,
+      "y": 1000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "WeekMenu.dc.html",
+      "title": "3-메뉴 · 식단 메뉴 (⋯)",
+      "x": 464,
+      "y": 1000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "MonthView.dc.html",
+      "title": "4 · 월 보기",
+      "x": 928,
+      "y": 1000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "FillRecipe.dc.html",
+      "title": "5 · 칸 채우기 · 내 레시피",
+      "x": 0,
+      "y": 2000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "FillVideo.dc.html",
+      "title": "5-영상 · 영상에서 넣기",
+      "x": 464,
+      "y": 2000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "FillText.dc.html",
+      "title": "5-직접 · 직접 쓰기",
+      "x": 928,
+      "y": 2000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "SlotDetail.dc.html",
+      "title": "6 · 칸 상세",
+      "x": 1392,
+      "y": 2000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "CopyWeek.dc.html",
+      "title": "7 · 주 복사·반복",
+      "x": 0,
+      "y": 3000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "AIDraftInput.dc.html",
+      "title": "8 · AI 식단 초안 · 입력",
+      "x": 464,
+      "y": 3000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "AIDraftReview.dc.html",
+      "title": "9 · AI 식단 초안 · 확인",
+      "x": 928,
+      "y": 3000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "ShoppingPreview.dc.html",
+      "title": "10 · 장보기 미리보기",
+      "x": 0,
+      "y": 4000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "ShoppingPreviewBottom.dc.html",
+      "title": "10-아래 · 장보기 미리보기 맨 아래",
+      "x": 464,
+      "y": 4000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "WeekViewDark.dc.html",
+      "title": "11 · 주 보기 · 다크",
+      "x": 928,
+      "y": 4000,
+      "w": 384,
+      "h": 832
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}
