@@ -31,10 +31,15 @@ PROMPTS = {
         "purchased_on은 주문 날짜(YYYY-MM-DD)이고, 없으면 null. "
         "price는 그 상품의 결제 금액(원, 정수, 할인 반영)이다. 알 수 없으면 null. " + _COMMON
     ),
+    "memo": (
+        "장을 보려고 손으로 쓴 메모, 마트 전단지, 상품 사진이다. 사야 할 식품 이름을 뽑아라. "
+        "메모에 수량이 있으면 quantity·unit으로, 없으면 1과 '개'. 전단지는 가격·할인·광고 문구를 빼고 상품 이름만. "
+        "지워진 줄(두 줄 긋기)은 뺀다. purchased_on은 항상 null, price는 항상 null. " + _COMMON
+    ),
 }
 
 # 키가 없는 개발 모드에서 화면 흐름을 확인하는 예시 결과
-# (이름, 수량, 단위, 보관 종류, 가격). fridge는 가격이 항상 없어 4개 튜플로 둔다.
+# (이름, 수량, 단위, 보관 종류, 가격). fridge·memo는 가격이 항상 없어 4개 튜플로 둔다.
 SAMPLES = {
     "fridge": [
         ("대파", 1, "단", "fridge"),
@@ -55,6 +60,13 @@ SAMPLES = {
         ("그릭요거트", 2, "개", "fridge", 4580),
         ("애호박", 1, "개", "fridge", 1990),
         ("방울토마토", 500, "g", "fridge", 5990),
+    ],
+    "memo": [
+        ("대파", 1, "단", "fridge"),
+        ("두부", 1, "모", "fridge"),
+        ("계란", 1, "판", "fridge"),
+        ("참기름", 1, "병", "room"),
+        ("양파", 3, "개", "room"),
     ],
 }
 
@@ -88,7 +100,7 @@ def sample_result(kind, today):
         {"name": row[0], "quantity": row[1], "unit": row[2], "location_kind": row[3], "price": row[4] if len(row) > 4 else None}
         for row in SAMPLES[kind]
     ]
-    return {"items": items, "purchased_on": None if kind == "fridge" else today.isoformat()}
+    return {"items": items, "purchased_on": None if kind in ("fridge", "memo") else today.isoformat()}
 
 
 def _parse(content, output_format, max_tokens, label):

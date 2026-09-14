@@ -79,7 +79,7 @@ recipe-ai/
 | GET/POST | `/api/ingredients` | 목록(임박 순, status 포함) / 생성 |
 | POST | `/api/ingredients/bulk` | 스캔 확인 후 일괄 생성 `{items:[{name, quantity, unit, purchased_on, expires_on?, price?, location_id?}]}` 1~50개. 하나라도 틀리면 아무것도 만들지 않고 400 `{error: "N번째 재료: …", errors:[{index, error}]}` |
 | PATCH/DELETE | `/api/ingredients/<id>` | 수정 / 삭제. 삭제는 `?reason=eaten\|discarded`(선택)를 주면 같은 커밋에 `ingredient_removals` 행을 남긴다. 없거나 비면 기록 없이 지우고, 다른 값이면 400 `잘못된 요청이에요.`(지우지 않음) (27절) |
-| POST | `/api/scan?kind=fridge\|receipt\|order` | multipart `image` → `{items:[{name, quantity, unit, location_kind, price}], purchased_on, sample}` |
+| POST | `/api/scan?kind=fridge\|receipt\|order\|memo` | multipart `image` → `{items:[{name, quantity, unit, location_kind, price}], purchased_on, sample}` (fridge·memo는 price·purchased_on 항상 null, memo는 장보기 메모 사진·전단지) |
 | GET/POST | `/api/recipes` | 목록(생성일 아님, `updated_at`·id 내림차순 커서 페이지 25절) / 생성. 목록 `?limit=1~50(기본 30)&cursor=` → `{items:[...], next_cursor}`. 생성 body의 `source`는 `mine`(기본)·`ai`·`youtube`·`instagram`·`blog`·`text`만 받고(`public`은 저장 API로만), `image_url`은 식약처 https 사진 주소만 받는다(AI 레시피 저장용) (2026-09-14, 시안 승인) |
 | GET/PUT/DELETE | `/api/recipes/<id>` | 상세 / 수정 / 삭제. 상세의 `ingredients`는 `[{name, amount, have, matched_name}]`(현재 재고 기준) |
 | GET | `/api/public-recipes/<id>` | 공공 레시피 상세(같은 `ingredients` 모양) |
