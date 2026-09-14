@@ -76,7 +76,11 @@ export default function StoreLinksSheet({ name, affiliates, onClose }: Props) {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={`${s.name}${s.ad ? " 광고" : ""} ${l.label}${ro(l.label)} ${itemName} 찾기 (새 창)`}
-                    onClick={() => remember(s.store)}
+                    aria-disabled={online ? undefined : true}
+                    onClick={(e) => {
+                      if (online) remember(s.store);
+                      else e.preventDefault(); // 인터넷이 없으면 열지 않는다(설명 줄이 안내)
+                    }}
                   >
                     {l.label}
                   </a>

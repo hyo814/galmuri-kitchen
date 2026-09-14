@@ -3209,6 +3209,11 @@ button.row-btn > svg {
   border-top: 1px solid var(--line);
 }
 
+.sh-store:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
 .sh-store-head {
   display: flex;
   align-items: center;
@@ -3253,6 +3258,10 @@ button.row-btn > svg {
 .sh-sorts a.first {
   background: var(--accent-tint);
   color: var(--accent-strong);
+}
+
+.sh-sorts a[aria-disabled] {
+  opacity: 0.5;
 }
 
 .sh-stores-empty {
