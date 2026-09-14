@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import {
   enqueue, markAttempt, markServerError, removeOp, dropWithDependents, applyQueue, applyServerResult, remapRef, classify, newClientId, MAX_ATTEMPTS,
-  groupItems, plannedOnFor, parseQuantityText, quantityText, sourceTag, retryDelay, opRequest, sameOwner, shouldRefresh,
+  groupItems, plannedOnFor, parseQuantityText, quantityText, sourceTag, stockButtonText, stockSummaryText, retryDelay, opRequest, sameOwner, shouldRefresh,
 } from "../src/shopping/sync.ts";
 
 const T = (m) => `2026-09-14T01:${String(m).padStart(2, "0")}:00.000Z`;
@@ -291,7 +291,7 @@ const SNAP = {
   const added = view.items[2];
   assert.equal(added.client_id, "new"); assert.equal(added.pending, true); assert.equal(added.name, "두부");
   assert.equal(added.source, "recipe"); assert.equal(added.source_label, "두부조림"); assert.equal(added.created_at, T(6));
-  assert.equal(added.done_at, null); assert.equal(added.stocked_at, null);
+  assert.equal(added.done_at, null); assert.equal(added.stocked_at, null); assert.equal(added.household, false);
   assert.deepEqual(view.stocked, SNAP.stocked);
   assert.equal(view.today, "2026-09-14");
   // 최근 고친 메모가 앞(서버 순서와 같게)
@@ -524,6 +524,14 @@ assert.deepEqual(sourceTag({ source: "staple", source_label: null }), { text: "�
 assert.deepEqual(sourceTag({ source: "memo", source_label: null }), { text: "메모 사진", tone: "" });
 assert.equal(sourceTag({ source: "manual", source_label: null }), null);
 
+// ---- stockButtonText ----
+assert.equal(stockButtonText(3, 0), "3개 넣기");
+assert.equal(stockButtonText(2, 1), "2개 넣기 · 1개는 산 것으로만");
+assert.equal(stockButtonText(0, 2), "2개 산 것으로 옮기기");
+assert.equal(stockSummaryText(3, 0), "체크한 3개를 재고로 옮겨요");
+assert.equal(stockSummaryText(2, 1), "체크한 3개 중 2개는 재고로, 1개는 산 것으로만 옮겨요");
+assert.equal(stockSummaryText(0, 2), "체크한 2개를 산 것으로 옮겨요");
+
 // ---- 속성 검사: 합친 대기열로 만든 화면 == 합치지 않은 변경 전부로 만든 화면 ----
 // 고정 시드 LCG. client_id는 늘 새것, 참조는 서버에 있거나 앞에서 추가한 대상만, 시각은 늘어나기만 한다.
 // 가끔 맨 앞 op를 "보내는 중"으로 표시해 보낸 op가 그대로 남는지도 본다.
@@ -581,6 +589,8 @@ assert.deepEqual(opRequest({ op: "check", ref: { id: 3 }, done: true, at: T(2) }
 assert.deepEqual(opRequest({ op: "edit", ref: { id: 3 }, fields: { unit: "봉" }, at: T(2) }), { method: "PATCH", path: "/api/shopping/items/3", body: { unit: "봉" } });
 assert.deepEqual(opRequest({ op: "delete", ref: { id: 3 }, at: T(2) }), { method: "DELETE", path: "/api/shopping/items/3" });
 assert.equal(opRequest({ op: "check", ref: { client_id: "c1" }, done: true, at: T(2) }), null);
+assert.deepEqual(opRequest({ op: "add", client_id: "c2", fields: { ...F, household: true }, at: T(1) }).body.household, true);
+assert.deepEqual(opRequest({ op: "edit", ref: { id: 3 }, fields: { household: false }, at: T(2) }).body, { household: false });
 const NF = { place: "이마트", body: "세일" };
 assert.deepEqual(opRequest({ op: "note_add", client_id: "n1", fields: NF, at: T(1) }), { method: "POST", path: "/api/shopping/notes", body: { ...NF, client_id: "n1", edited_at: T(1) } });
 assert.deepEqual(opRequest({ op: "note_save", ref: { id: 7 }, fields: NF, edited_at: T(3) }), { method: "PUT", path: "/api/shopping/notes/7", body: { ...NF, edited_at: T(3) } });

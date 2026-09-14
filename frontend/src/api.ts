@@ -72,6 +72,8 @@ export interface ScanItem {
   unit: string;
   location_kind: LocationKind;
   price: number | null;
+  /** 생활용품(memo 스캔만) — 장보기에는 담고 재고에는 넣지 않는다 */
+  household?: boolean;
 }
 
 export interface ScanResult {
@@ -295,6 +297,8 @@ export interface ShoppingItem {
   location_name: string | null;
   source: ShoppingSource;
   source_label: string | null;
+  /** 생활용품(휴지·세제 등). 재고에 넣기에서 기본으로 산 것으로만 옮긴다 */
+  household: boolean;
   done_at: string | null;
   done_changed_at: string | null;
   stocked_at: string | null;

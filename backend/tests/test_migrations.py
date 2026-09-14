@@ -299,6 +299,26 @@ def test_ai_calls_keep_history_migration(app):
         assert fks == {"users": "CASCADE"}
 
 
+def test_shopping_items_household_migration(app):
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="c1d1e1m1o1a1")
+        with db.engine.begin() as conn:
+            conn.execute(sa.text("INSERT INTO users (id, provider, provider_id, nickname, created_at) VALUES (1, 'test', '1', 'u', CURRENT_TIMESTAMP)"))
+            conn.execute(sa.text("INSERT INTO shopping_items (user_id, name, quantity, unit, source, created_at) VALUES (1, '휴지', 1, '개', 'manual', CURRENT_TIMESTAMP)"))
+
+        upgrade(directory=MIGRATIONS, revision="c2h2o2u2s2e2")
+        with db.engine.connect() as conn:
+            columns = {c["name"]: c for c in sa.inspect(conn).get_columns("shopping_items")}
+            assert conn.execute(sa.text("SELECT household FROM shopping_items")).scalar_one() in (False, 0)  # 이미 있던 항목은 식품으로
+        assert columns["household"]["nullable"] is False
+
+        downgrade(directory=MIGRATIONS, revision="c1d1e1m1o1a1")
+        with db.engine.connect() as conn:
+            columns = {c["name"] for c in sa.inspect(conn).get_columns("shopping_items")}
+            assert conn.execute(sa.text("SELECT COUNT(*) FROM shopping_items")).scalar() == 1
+        assert "household" not in columns
+
+
 def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)

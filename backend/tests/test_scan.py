@@ -368,13 +368,25 @@ def test_scan_unknown_kind_still_400(client, login):
 
 def test_clean_result_memo_drops_price_and_date():
     raw = {
-        "items": [{"name": "대파", "quantity": 1, "unit": "단", "location_kind": "fridge", "price": 3000}],
+        "items": [
+            {"name": "대파", "quantity": 1, "unit": "단", "location_kind": "fridge", "price": 3000, "household": False},
+            {"name": "수세미오이", "quantity": 1, "unit": "개", "location_kind": "room", "price": None, "household": False},
+            {"name": " 주방세제 ", "quantity": 1, "unit": "개", "location_kind": "room", "price": None, "household": "yes"},
+            {"name": "건전지", "quantity": 1, "unit": "개", "location_kind": "room", "price": None},
+        ],
         "purchased_on": "2026-09-12",
     }
     assert clean_result("memo", raw, TODAY) == {
-        "items": [{"name": "대파", "quantity": 1, "unit": "단", "location_kind": "fridge", "price": None}],
+        "items": [
+            {"name": "대파", "quantity": 1, "unit": "단", "location_kind": "fridge", "price": None, "household": False},
+            {"name": "수세미오이", "quantity": 1, "unit": "개", "location_kind": "room", "price": None, "household": False},
+            {"name": "주방세제", "quantity": 1, "unit": "개", "location_kind": "room", "price": None, "household": True},
+            {"name": "건전지", "quantity": 1, "unit": "개", "location_kind": "room", "price": None, "household": True},
+        ],
         "purchased_on": None,
     }
+    # 다른 스캔에는 household가 없다(재고 등록 흐름 그대로)
+    assert "household" not in clean_result("receipt", raw, TODAY)["items"][0]
 
 
 def test_scan_memo_sample_mode(client, login, app, monkeypatch):
@@ -384,12 +396,13 @@ def test_scan_memo_sample_mode(client, login, app, monkeypatch):
     assert res.status_code == 200
     body = res.get_json()
     assert (body["sample"], body["purchased_on"]) == (True, None)
-    assert [(i["name"], i["quantity"], i["unit"], i["location_kind"], i["price"]) for i in body["items"]] == [
-        ("대파", 1, "단", "fridge", None),
-        ("두부", 1, "모", "fridge", None),
-        ("계란", 1, "판", "fridge", None),
-        ("참기름", 1, "병", "room", None),
-        ("양파", 3, "개", "room", None),
+    assert [(i["name"], i["quantity"], i["unit"], i["location_kind"], i["price"], i["household"]) for i in body["items"]] == [
+        ("대파", 1, "단", "fridge", None, False),
+        ("두부", 1, "모", "fridge", None, False),
+        ("계란", 1, "판", "fridge", None, False),
+        ("참기름", 1, "병", "room", None, False),
+        ("양파", 3, "개", "room", None, False),
+        ("수세미", 1, "개", "room", None, True),
     ]
     assert ai_calls(app) == []
 
@@ -402,7 +415,9 @@ def test_extract_memo_uses_memo_prompt(app, fake_anthropic):
     with app.app_context():
         ai.extract("memo", b"\xff\xd8jpeg", "image/jpeg")
     assert calls["parse"]["messages"][0]["content"][1] == {"type": "text", "text": ai.PROMPTS["memo"]}
+    assert calls["parse"]["output_format"] is ai.MemoScanResult
     assert ai.PROMPTS["memo"].endswith(ai._COMMON)
+    assert "생활용품" in ai.PROMPTS["memo"] and "household" in ai.PROMPTS["memo"]
 
 
 def test_scan_memo_calls_ai_and_counts_in_scan_group(client, login, app, monkeypatch):
@@ -413,7 +428,10 @@ def test_scan_memo_calls_ai_and_counts_in_scan_group(client, login, app, monkeyp
     def fake_extract(kind, image_bytes, media_type):
         seen.append(kind)
         raw = {
-            "items": [{"name": "두부", "quantity": 2, "unit": "모", "location_kind": "fridge", "price": 3000}],
+            "items": [
+                {"name": "두부", "quantity": 2, "unit": "모", "location_kind": "fridge", "price": 3000, "household": False},
+                {"name": "키친타월", "quantity": 1, "unit": "개", "location_kind": "room", "price": None, "household": True},
+            ],
             "purchased_on": "2026-09-12",
         }
         return raw, USAGE
@@ -434,7 +452,10 @@ def test_scan_memo_calls_ai_and_counts_in_scan_group(client, login, app, monkeyp
     res = upload(client, kind="memo")
     assert res.status_code == 200
     assert res.get_json() == {
-        "items": [{"name": "두부", "quantity": 2, "unit": "모", "location_kind": "fridge", "price": None}],
+        "items": [
+            {"name": "두부", "quantity": 2, "unit": "모", "location_kind": "fridge", "price": None, "household": False},
+            {"name": "키친타월", "quantity": 1, "unit": "개", "location_kind": "room", "price": None, "household": True},
+        ],
         "purchased_on": None,
         "sample": False,
     }

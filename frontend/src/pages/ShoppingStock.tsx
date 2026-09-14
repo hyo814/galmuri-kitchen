@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError, api, type StorageLocation } from "../api";
 import Icon from "../components/Icon";
 import { formatDate, formatQuantity } from "../format";
+import { stockButtonText, stockSummaryText } from "../shopping/sync";
 import { useAsyncAction } from "../useAsyncAction";
 import { goBack, navigate, setLeaveGuard } from "../useHashRoute";
 import { forgetRecipeCaches, forgetResources } from "../useResource";
@@ -22,6 +23,7 @@ interface DraftItem {
   name: string;
   quantity: number;
   unit: string;
+  household: boolean;
   location_id: number | null;
   location_reason: Reason;
 }
@@ -33,12 +35,14 @@ interface Draft {
 
 interface StockBody {
   purchased_on: string;
-  items: { id: number; name: string; quantity: number; unit: string; location_id: number }[];
+  items: ({ id: number; name: string; quantity: number; unit: string; location_id: number } | { id: number; skip: true })[];
 }
 
 interface Row extends DraftItem {
   /** 고른 위치 id, 아직 안 골랐거나 사라진 위치면 "" */
   chosen: string;
+  /** 재고에 넣기(끄면 재료를 만들지 않고 산 것으로만 옮김). 생활용품은 기본 끔 */
+  stock: boolean;
 }
 
 function BackLink({ onClick }: { onClick: () => void }) {
@@ -84,8 +88,9 @@ export default function ShoppingStock() {
       setPurchasedOn((prev) => prev || next.purchased_on);
       setRows((prev) =>
         next.items.map((item) => {
-          const kept = prev.find((r) => r.id === item.id)?.chosen ?? String(item.location_id ?? "");
-          return { ...item, chosen: locs.some((l) => String(l.id) === kept) ? kept : "" };
+          const old = prev.find((r) => r.id === item.id);
+          const kept = old?.chosen ?? String(item.location_id ?? "");
+          return { ...item, chosen: locs.some((l) => String(l.id) === kept) ? kept : "", stock: old?.stock ?? !item.household };
         }),
       );
     } catch (e) {
@@ -103,7 +108,8 @@ export default function ShoppingStock() {
   }, []);
 
   const dirty =
-    !!draft && (purchasedOn !== draft.purchased_on || rows.some((r) => r.chosen !== String(r.location_id ?? "")));
+    !!draft &&
+    (purchasedOn !== draft.purchased_on || rows.some((r) => r.chosen !== String(r.location_id ?? "") || r.stock === r.household));
   const canLeave = () => !dirty || confirm(LEAVE_CONFIRM);
   useEffect(() => {
     setLeaveGuard(canLeave);
@@ -113,15 +119,15 @@ export default function ShoppingStock() {
     if (canLeave()) goBack("/shopping");
   };
 
-  const choose = (id: number, chosen: string) => {
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, chosen } : r)));
+  const change = (id: number, patch: Partial<Row>) => {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
     setRowErrors(({ [id]: _, ...rest }) => rest);
   };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!draft) return;
-    const unset = rows.filter((r) => !r.chosen);
+    const unset = rows.filter((r) => r.stock && !r.chosen);
     setRowErrors(Object.fromEntries(unset.map((r) => [r.id, "보관 위치를 골라주세요"])));
     if (unset.length) {
       setError(locations.length ? "" : "보관 위치를 먼저 만들어주세요.");
@@ -134,7 +140,11 @@ export default function ShoppingStock() {
     }
     send({
       purchased_on: purchasedOn,
-      items: rows.map((r) => ({ id: r.id, name: r.name, quantity: r.quantity, unit: r.unit, location_id: Number(r.chosen) })),
+      items: rows.map((r) =>
+        r.stock
+          ? { id: r.id, name: r.name, quantity: r.quantity, unit: r.unit, location_id: Number(r.chosen) }
+          : { id: r.id, skip: true as const },
+      ),
     });
   };
 
@@ -214,13 +224,15 @@ export default function ShoppingStock() {
       </main>
     );
 
+  const stockCount = rows.filter((r) => r.stock).length;
+  const skipCount = rows.length - stockCount;
   return (
     <main className="page">
       <BackLink onClick={leave} />
       <header className="topbar">
         <div>
           <h1>재고에 넣기</h1>
-          <p className="summary">체크한 {rows.length}개를 재고로 옮겨요</p>
+          <p className="summary">{stockSummaryText(stockCount, skipCount)}</p>
         </div>
       </header>
 
@@ -242,7 +254,7 @@ export default function ShoppingStock() {
           </label>
         </section>
 
-        <section className="rc-sec sh-in-list" aria-label="넣을 재료">
+        <section className="rc-sec sh-in-list" aria-label={`체크한 항목 · 재고로 ${stockCount}개 · 산 것으로만 ${skipCount}개`}>
           {rows.map((row) => {
             const err = rowErrors[row.id];
             const prefilled = row.chosen !== "" && row.chosen === String(row.location_id ?? "");
@@ -256,32 +268,50 @@ export default function ShoppingStock() {
                         {row.unit}
                       </span>
                     </span>
-                    {prefilled && REASON_LABEL[row.location_reason] && (
-                      <span className="row-sub">{REASON_LABEL[row.location_reason]}</span>
+                    {row.household && <span className="badge sh-in-tag">생활용품</span>}
+                    {!row.stock ? (
+                      <span className="row-sub">산 것으로만 옮겨요</span>
+                    ) : (
+                      prefilled &&
+                      REASON_LABEL[row.location_reason] && <span className="row-sub">{REASON_LABEL[row.location_reason]}</span>
                     )}
                   </span>
-                  <span className="sh-in-sel">
-                    <select
-                      id={`stock-loc-${row.id}`}
-                      className={err ? "input invalid" : "input"}
-                      aria-label={`${row.name} 보관 위치`}
-                      aria-invalid={!!err}
-                      aria-describedby={err ? `stock-err-${row.id}` : undefined}
-                      value={row.chosen}
-                      onChange={(e) => choose(row.id, e.target.value)}
-                    >
-                      {row.chosen === "" && (
-                        <option value="" disabled>
-                          골라주세요
-                        </option>
-                      )}
-                      {locations.map((l) => (
-                        <option key={l.id} value={l.id}>
-                          {l.name}
-                        </option>
-                      ))}
-                    </select>
-                    <Icon name="chevron" size={16} />
+                  {row.stock && (
+                    <span className="sh-in-sel">
+                      <select
+                        id={`stock-loc-${row.id}`}
+                        className={err ? "input invalid" : "input"}
+                        aria-label={`${row.name} 보관 위치`}
+                        aria-invalid={!!err}
+                        aria-describedby={err ? `stock-err-${row.id}` : undefined}
+                        value={row.chosen}
+                        onChange={(e) => change(row.id, { chosen: e.target.value })}
+                      >
+                        {row.chosen === "" && (
+                          <option value="" disabled>
+                            골라주세요
+                          </option>
+                        )}
+                        {locations.map((l) => (
+                          <option key={l.id} value={l.id}>
+                            {l.name}
+                          </option>
+                        ))}
+                      </select>
+                      <Icon name="chevron" size={16} />
+                    </span>
+                  )}
+                  <span className="sh-in-toggle">
+                    <span aria-hidden="true">재고에 넣기</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={row.stock}
+                      aria-label={`${row.name} 재고에 넣기`}
+                      className="r3-toggle"
+                      disabled={busy}
+                      onClick={() => change(row.id, { stock: !row.stock })}
+                    />
                   </span>
                   {err && (
                     <p className="rc-err" id={`stock-err-${row.id}`}>
@@ -324,8 +354,8 @@ export default function ShoppingStock() {
             <button type="button" className="btn outline" disabled={busy} aria-disabled={busy} onClick={leave}>
               취소
             </button>
-            <button className="btn primary" disabled={busy}>
-              {busy ? "넣는 중…" : `${rows.length}개 넣기`}
+            <button className="btn primary sh-in-submit" disabled={busy}>
+              {busy ? "넣는 중…" : stockButtonText(stockCount, skipCount)}
             </button>
           </div>
         </div>

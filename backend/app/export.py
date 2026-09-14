@@ -188,12 +188,13 @@ def export():
         write_csv(
             archive,
             "shopping.csv",
-            ["이름", "수량", "단위", "살 날", "넣을 위치", "체크", "산 날(재고에 넣은 날)", "출처", "출처 이름", "담은 날"],
+            ["이름", "수량", "단위", "생활용품", "살 날", "넣을 위치", "체크", "산 날(재고에 넣은 날)", "출처", "출처 이름", "담은 날"],
             (
                 [
                     i.name,
                     number(i.quantity),
                     i.unit,
+                    "예" if i.household else "",
                     i.planned_on or "",
                     i.location.name if i.location_id else "",
                     "예" if i.done_at else "",

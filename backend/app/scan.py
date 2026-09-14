@@ -7,6 +7,7 @@ from sqlalchemy import text
 
 from . import ai
 from .auth import ai_daily_limit, login_required
+from .household import is_household
 from .ingredients import SEOUL, seoul_today
 from .locations import KINDS
 from .models import AiCall, db, utcnow
@@ -115,7 +116,8 @@ def _price(value):
 
 
 def clean_result(kind, raw, today):
-    """AI(또는 예시) 결과를 화면에 넘기기 전에 정리한다. 모델 출력은 믿지 않는다."""
+    """AI(또는 예시) 결과를 화면에 넘기기 전에 정리한다. 모델 출력은 믿지 않는다.
+    memo만 줄마다 household(생활용품)를 붙인다 — 참/거짓이 아니면 이름으로 짐작한다."""
     raw = raw if isinstance(raw, dict) else {}
     rows = raw.get("items") if isinstance(raw.get("items"), list) else []
     items = []
@@ -127,15 +129,18 @@ def clean_result(kind, raw, today):
             continue
         unit = row.get("unit").strip()[:10].strip() if isinstance(row.get("unit"), str) else ""
         location_kind = row.get("location_kind")
-        items.append(
-            {
-                "name": name.strip()[:50].strip(),
-                "quantity": _quantity(row.get("quantity")),
-                "unit": unit or "개",
-                "location_kind": location_kind if location_kind in KINDS else "fridge",
-                "price": None if kind in ai.NO_PRICE_KINDS else _price(row.get("price")),
-            }
-        )
+        name = name.strip()[:50].strip()
+        item = {
+            "name": name,
+            "quantity": _quantity(row.get("quantity")),
+            "unit": unit or "개",
+            "location_kind": location_kind if location_kind in KINDS else "fridge",
+            "price": None if kind in ai.NO_PRICE_KINDS else _price(row.get("price")),
+        }
+        if kind == "memo":
+            household = row.get("household")
+            item["household"] = household if isinstance(household, bool) else is_household(name)
+        items.append(item)
     purchased_on = None if kind in ai.NO_PRICE_KINDS else _purchased_on(raw.get("purchased_on"), today)
     return {"items": items, "purchased_on": purchased_on}
 
