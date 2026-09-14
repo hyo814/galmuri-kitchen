@@ -24,6 +24,9 @@ SOURCES = ("mine", "ai", "youtube", "instagram", "blog", "text")  # 화면이 �
 URL_ERROR = "링크는 http:// 또는 https://로 시작하는 주소로 입력해주세요."
 RECIPE_LIST_PAGE_SIZE = 30
 RECOMMENDATION_PAGE_SIZE = 20
+CHOICES_CANDIDATE_LIMIT = 200  # ponytail: 최근 200개 안에서만 고른다 — 넘으면 검색어로 찾게 안내하거나 추천 순위 캐시를 쓴다
+CHOICES_MAX = 50
+CHOICES_QUERY_MAX = 50
 
 
 def inventory(user_id):
@@ -190,6 +193,22 @@ def _match_key_fast(key_prepared, prepared_stock):
     return None, key_prepared[0] in ALWAYS_HAVE
 
 
+def stock_context(user_id):
+    """(준비된 재고, 빨리 먹어야 할 재고 이름 집합). 요청마다 한 번 만들어 여러 레시피 요약에 같이 쓴다."""
+    stock = inventory(user_id)
+    return _prepared_stock(stock), {name for name, urgent in stock if urgent}
+
+
+def match_summary(ingredients, prepared_stock, urgent):
+    """레시피 재료 중 재고에 있는 수·전체 수·마저 쓰는 빨리 먹어야 할 재료 이름(식단 칸·칸 채우기 목록, 스펙 20절)."""
+    results = [_match_key_fast(prepare(ingredient_key(i["name"])), prepared_stock) for i in ingredients]
+    return {
+        "have_count": sum(1 for _, has in results if has),
+        "total_count": len(results),
+        "urgent_names": list(dict.fromkeys(name for name, _ in results if name and name in urgent)),
+    }
+
+
 def _card(kind, recipe_id, title, image_url, servings, keys, names, prepared_stock, urgent, matches):
     """겹치는 재료가 하나도 없으면(물만 겹쳐도) None."""
     results = []
@@ -347,6 +366,28 @@ def recommendations():
         body["mine"] = entry["mine"][:10]
         body["mine_total"] = len(entry["mine"])
     return jsonify(**body)
+
+
+@bp.get("/recipes/choices")
+@login_required
+def recipe_choices():
+    """식단 칸 채우기 시트의 `내 레시피` 목록(20절): 최근 200개 후보를 재고 일치 점수 순으로. q가 있으면 제목 필터."""
+    q = request.args.get("q", "").strip()[:CHOICES_QUERY_MAX]
+    query = Recipe.query.filter_by(user_id=g.user.id)
+    if q:
+        query = query.filter(Recipe.title.contains(q, autoescape=True))
+    candidates = query.order_by(Recipe.updated_at.desc(), Recipe.id.desc()).limit(CHOICES_CANDIDATE_LIMIT).all()
+
+    prepared_stock, urgent = stock_context(g.user.id)
+    summaries = [(r, match_summary(r.ingredients, prepared_stock, urgent)) for r in candidates]
+
+    def score(summary):
+        # 재료가 0개인 레시피(공공 레시피 저장·동기화가 빈 RCP_PARTS_DTLS를 그대로 둘 수 있다)도 0/0으로 죽지 않게.
+        rate = summary["have_count"] / summary["total_count"] if summary["total_count"] else 0
+        return rate + 0.1 * len(summary["urgent_names"])
+
+    ranked = sorted(summaries, key=lambda pair: -score(pair[1]))[:CHOICES_MAX]
+    return jsonify(items=[{"id": r.id, "title": r.title, "servings": r.servings, **summary} for r, summary in ranked])
 
 
 @bp.get("/recipes")

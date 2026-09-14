@@ -87,6 +87,11 @@ recipe-ai/
 | GET | `/api/recommendations?section=all\|public&offset=0&limit=20` | 점수 순(25절: `section=all` 기본은 내 레시피 상위 10개 + 공공 레시피 한 페이지, `section=public`은 공공 레시피만). `{mine:[...10개], mine_total, public:[...], public_total, next_offset, sample, inventory_count}`(`section=public`이면 `mine`·`mine_total` 없음). 카드 항목: kind, id, title, image_url, servings, match_rate, have_count, total_count, missing(최대 5, 화면 표시용 이름), urgent_used, urgent_names, score(= match_rate + 0.1 × urgent_used) |
 | POST | `/api/recommendations/ai` | AI 레시피 3개 생성(저장 안 함). 하루 한도는 `AI_DAILY_RECIPE_LIMIT`, 짧은 연속 호출은 사진 인식과 같은 `AI_SCAN_BURST_LIMIT`(60초)로 막는다. `{recipes:[{title, servings, minutes, ingredients:[{name, amount, have, matched_name}], steps, urgent_names, image_url}], urgent_first, sample}`. 저장은 화면이 `POST /api/recipes`(source `ai`, image_url)로 한다 (2026-09-14, 시안 승인) |
 | POST | `/api/recipes/import` | 링크·글 → 레시피 초안(저장 안 함, 17절). 저장은 확인 화면에서 `POST /api/recipes` |
+| GET | `/api/recipes/choices?q=` | 식단 칸 채우기 시트의 `내 레시피` 목록(20절). 최근 200개 후보를 재고 일치 점수 순으로 최대 50개 `{items:[{id, title, servings, have_count, total_count, urgent_names}]}` |
+| GET/POST | `/api/meal-plans` | 목록(`start_on`·id 내림차순, 50개 상한, 페이지 없음) `{items:[plan_summary…], default_servings}` / 만들기 201(20절) |
+| GET/PATCH/DELETE | `/api/meal-plans/<id>` | 상세(`plan_summary` + `goal_kcal`·`goal_note`·`slots`) / 보낸 칸만 고치기(기간이 줄면 밖의 칸은 같은 커밋에서 삭제) / 삭제(칸은 CASCADE) |
+| PUT | `/api/meal-plans/<id>/slots` | 칸 채우기·바꾸기(`{date, meal, recipe_id?, title?, servings?}` → 200, 없던 칸이면 만들고 있으면 덮어씀) |
+| PATCH/DELETE | `/api/meal-slots/<id>` | 인분 고치기(`{servings}`, `SlotDetail` −/+ 바로 저장) / 칸 비우기 |
 | GET | `/api/export/summary` | (`X-Requested-With: fetch` 필요) 내보낼 개수와 오늘(서울) 남은 횟수 `{ingredients, recipes, seasonings, shopping, memos, limit: 5, remaining}`(27절) |
 | GET | `/api/export` | (`X-Requested-With: fetch` 필요) zip 내려받기(`Content-Disposition: attachment; filename="galmuri-kitchen-YYYYMMDD.zip"`, 서울 날짜). `ingredients.csv`·`recipes.csv`·`seasonings.csv`·`shopping.csv`·`shopping_memos.csv`(UTF-8 BOM, 한국어 머리글). 하루 5회(`ai_calls.kind = export`), 넘으면 429 `오늘 내보내기는 5번까지 할 수 있어요. 내일 다시 해주세요.`(27절) |
 | GET | `/api/ai-usage` | 오늘(서울) `{scan:{used, limit}, recipe:{used, limit}}` — `오늘 N번 남음`·더보기 AI 사용량 |
@@ -330,6 +335,33 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
   - AI 초안: 빈 칸만 채운다. 칸마다 후보 2개를 **초안과 함께 미리 받아** `다른 걸로`는 AI를 다시 부르지 않는다. kcal은 1인분 기준 AI 추정치로 표시. 내 레시피에 없는 요리는 `새 레시피` 표시, 넣으면 내 레시피에 저장.
   - 장보기 미리보기(23절 D4): `모자란 만큼 담아요`(자동 체크) · `단위가 달라요 · 직접 골라주세요`(체크 없음) · `담지 않아요`(`목록에 있어요`·`충분해요`) 세 묶음, 줄마다 살 날·`식단` 표시.
 
+**구현 세부 (2026-09-14, 4b-1 Task 1):**
+
+- **테이블:**
+  - `meal_plans`: id, user_id(FK `users` CASCADE, 인덱스), name(String(30)), start_on(Date), days(Integer 1~31), default_servings(Integer 1~20, 기본 1, 23절 D5), goal_kcal(Integer 500~5000, 선택), goal_note(String(100), 선택), created_at, updated_at(onupdate). `slots` 관계(`order_by=(date, id)`, `cascade="all, delete-orphan"`, `passive_deletes=True`).
+  - `meal_slots`: id, plan_id(FK `meal_plans` CASCADE, 인덱스), date(Date), meal(String(10), `breakfast`|`lunch`|`dinner`|`snack`), recipe_id(FK `recipes` SET NULL, 인덱스, 선택), title(String(60) — 레시피 칸도 제목을 복사해 두어 레시피를 지우면 직접 쓰기 칸처럼 남는다), servings(Integer 1~20, 기본 1), est_kcal(Integer 1~3000, 선택 — AI 초안으로 채운 칸만), created_at. `UNIQUE(plan_id, date, meal)`.
+  - Alembic `d1m1e1a1l1s1`(down_revision `c2h2o2u2s2e2`).
+- **재고 일치 요약(`recipes.py`):** `stock_context(user_id)` → `(준비된 재고, 빨리 먹어야 할 재고 이름 집합)`(요청당 한 번). `match_summary(ingredients, prepared_stock, urgent)` → `{have_count, total_count, urgent_names}`(추천과 같은 매칭 규칙, 겹치는 재료가 없어도 빼지 않는다).
+- **`GET /api/recipes/choices?q=`:** 최근 200개(`updated_at`·id 내림차순) 후보를 `match_summary`로 요약해 점수(`have/total + 0.1 × len(urgent_names)`) 내림차순 → 원래 순서로 최대 50개. `q`는 앞뒤 공백 뺀 50자까지(넘으면 앞 50자), 있으면 제목 부분 일치(`Recipe.title.contains(q, autoescape=True)`)로 미리 거른다.
+- **식단·칸 API(`meals.py`, 모두 로그인):**
+  - `GET /api/meal-plans` → `{items:[plan_summary…], default_servings}`(start_on·id 내림차순, 50개 상한, 페이지 없음). `default_servings`는 가장 최근에 만든(created_at·id 최대) 식단의 값, 없으면 1.
+  - `POST /api/meal-plans` `{name, start_on, days, default_servings}` → 201 `plan_json`. 검증: `text(name, "식단 이름은", 30)`, `iso_date(start_on)` 없으면 400 `시작일을 골라주세요.`, `integer(days, "기간은", 1, 31)`, `integer(default_servings, "기본 인분은", 1, 20)`. 50개 상한 → 400 `식단은 50개까지 만들 수 있어요. 지난 식단을 지워주세요.`
+  - `GET /api/meal-plans/<id>` → `plan_json`(칸은 `selectinload(MealSlot.recipe)`로 N+1 없이). 남의 것 404.
+  - `PATCH /api/meal-plans/<id>` — 보낸 칸만 검증·반영. `goal_kcal`은 `null` 또는 `integer(…, "하루 목표 칼로리는", 500, 5000)`, `goal_note`는 `null`/빈 문자열(공백만도 포함) → `null`, 아니면 앞뒤 공백 뺀 100자까지(넘으면 400 `메모는 100자까지 입력해주세요.`). `start_on`·`days`가 바뀌면 새 기간 밖의 칸을 같은 커밋에서 지운다(결정 1).
+  - `DELETE /api/meal-plans/<id>` → 204(칸은 CASCADE).
+  - `PUT /api/meal-plans/<id>/slots` `{date, meal, recipe_id?, title?, servings?}` → 200 `slot_json`(없던 칸이면 만들고, 있으면 덮어쓴다). 검증 순서: 기간 밖 날짜 → 400 `식단 기간 밖의 날짜예요.`, meal 목록 밖 → 400, servings 없으면 `plan.default_servings`, `recipe_id` 있으면 `get_owned_or_404`로 확인하고 `title`은 레시피 제목으로 덮어쓴다(보낸 title 무시), 없으면 `text(title, "무엇을 먹을지는", 60)`. 덮어쓸 때 `est_kcal`은 비운다. 동시에 같은 칸을 처음 채워 UNIQUE 충돌 시 400 `방금 채운 칸이에요. 다시 불러와주세요.`
+  - `PATCH /api/meal-slots/<id>` `{servings}` → 200 `slot_json`. `DELETE /api/meal-slots/<id>` → 204(칸 비우기). 칸 → 식단 → `user_id` 확인, 아니면 404.
+  - 칸 저장마다 `plan_json` 전체가 아니라 칸 하나만 돌려준다(ponytail) — 화면은 받은 칸을 자기 목록에 바꿔 끼운다.
+- **계획하며 정한 것 (스펙·시안에 없던 빈틈, 사용자 확인 대상):**
+  1. 기간을 줄이거나 시작일을 옮기면 새 기간 밖의 칸은 지운다. 화면은 저장 전에 `기간 밖에 채운 칸 N개는 지워져요.`를 보여준다(채운 칸이 있을 때만).
+  2. 장보기 미리보기는 오늘 이후 끼니만 계산한다(지난 끼니 재료를 오늘 사라고 하지 않게). 부제의 기간도 `max(오늘, 시작일)`부터.
+  3. 식단 고르기 시트(제목 아래 `9월 셋째 주 ⌄`): 시안 프레임이 없어 기존 시트 모양으로 `식단 고르기` — 행마다 이름·기간(선택한 식단에 `check`), 맨 아래 `+ 새 식단 만들기`.
+  4. `1달` 칩은 30일(스펙 `days(7 또는 30 등 1~31)`). `직접`은 1~31일 −/+.
+  5. AI 초안은 한 번에 보고 있는 한 주(최대 7일, 28칸)만 채운다(시안 `기간 · 이번 주`). 출력이 길어지는 것을 막고 90초 안에 끝나게 한다.
+  6. 숟가락 단위(`큰술`·`작은술`·`컵`·`꼬집` 등)나 `약간`처럼 양을 셀 수 없는 재료는 재고에 같은 이름이 있으면 `충분해요`, 없으면 `단위가 달라요 · 직접 골라주세요` 묶음(체크 없음, 담으면 `1개`)으로 보낸다. 간장 2큰술 때문에 간장 한 병을 자동으로 담지 않게.
+  7. 식단은 사용자당 50개(목록은 페이지 없이 한 번에, 26절 표에 한 줄 추가).
+  8. 칸의 `est_kcal`은 1인분 추정치(AI 초안으로 채운 칸만). 직접·레시피·영상으로 채우면 비운다.
+
 ## 21. 4b단계 추가: 영양 계산기 (추가: 2026-09-13)
 ### 음식·식단 영양 합산
 - 데이터: 식약처 「식품영양성분 데이터베이스」 공공 API(`FOOD_NUTRITION_API_KEY`). 식품별 100g당 에너지(kcal), 탄수화물, 단백질, 지방, **당류**, 나트륨.
@@ -427,6 +459,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 | 재고 | 2,000 | 서버는 전체(검색·필수품 매칭·요약에 필요), 화면은 50개씩 점진 렌더(무한 스크롤) |
 | 주방 도구·보관 위치·필수품·품목별 규칙 | 수십 개 | 페이지 없음 |
 | 장보기 목록·메모 (2026-09-14, 시안 승인) | 목록 300개(산 것 제외)·메모 20개 | 페이지 없음 — 오프라인에서 전체를 기기에 보관하고 날짜 묶음을 화면에서 만들어야 해서 한 번에 받는다(16·19절) |
+| 식단 목록 (2026-09-14, 4b-1 Task 1) | 50 | 페이지 없음 |
 | 앞으로(먹은 기록·조리 기록) | 커짐 | 서버 커서 페이지 + 무한 스크롤을 기본으로 한다 |
 
 무한 스크롤은 항상 접근성 대안을 둔다: 목록 끝에 보이는 `더 보기` 버튼(IntersectionObserver가 화면에 들어오면 자동으로 불러오고, 버튼은 그것 없이도 동작), 불러오는 중 표시, 끝 상태(`다 봤어요`, 한 페이지에 다 들어가면 숨김), 오류 시 `다시 불러오기`.
