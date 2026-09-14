@@ -25,6 +25,7 @@ export default function Channels({ user }: { user: User }) {
   // 빼기가 끝나 목록이 다시 그려지면 같은 순서의 빼기 버튼(없으면 `내 채널` 제목)으로 포커스
   const focusAfterRemove = useRef<number | null>(null);
   const mineRef = useRef<HTMLElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (off) navigate("/recipes", { replace: true }); // 영상을 쓸 수 없는데 주소로 바로 열었다
@@ -46,10 +47,13 @@ export default function Channels({ user }: { user: User }) {
   const mine = data?.items.filter((c) => !c.is_default) ?? [];
   const defaults = data?.items.filter((c) => c.is_default) ?? [];
   const full = !!data && data.mine_count >= data.mine_limit;
+  // 예시 모드는 서버가 바꾸기를 503으로 막으므로 누르지 못하게 한다(포커스는 남게 aria-disabled)
+  const sample = !!data?.sample;
+  const locked = sample ? { "aria-disabled": true, "aria-describedby": "channels-sample-note" } : {};
 
   const add = async (e: FormEvent) => {
     e.preventDefault();
-    if (full) return;
+    if (full || sample) return;
     setAdding(true);
     setAddError("");
     setRowError(null);
@@ -60,6 +64,7 @@ export default function Channels({ user }: { user: User }) {
       await reload();
     } catch (err) {
       setAddError((err as Error).message);
+      inputRef.current?.focus(); // 고칠 수 있게 입력 칸으로(오류 문구는 aria-describedby로 읽힌다)
     } finally {
       setAdding(false);
     }
@@ -86,7 +91,7 @@ export default function Channels({ user }: { user: User }) {
   };
 
   const remove = (channel: Channel) => {
-    if (!confirm("이 채널의 영상을 목록에서 뺄까요?")) return;
+    if (sample || !confirm("이 채널의 영상을 목록에서 뺄까요?")) return;
     const index = mine.findIndex((c) => c.id === channel.id);
     change(channel, () => api(`/api/channels/${channel.id}`, { method: "DELETE" }), () => {
       focusAfterRemove.current = index;
@@ -94,6 +99,7 @@ export default function Channels({ user }: { user: User }) {
   };
 
   const toggle = (channel: Channel) =>
+    !sample &&
     change(channel, () => api(`/api/channels/${channel.id}`, { method: "PATCH", body: { hidden: !channel.hidden } }));
 
   /** 실패한 줄 바로 아래의 오류 문구 */
@@ -115,16 +121,25 @@ export default function Channels({ user }: { user: User }) {
           <p className="summary">고른 채널의 새 영상만 보여줘요</p>
         </div>
       </header>
+      {sample && (
+        <p className="rc-sample">
+          <Icon name="info" size={16} />
+          예시 채널로 보여줘요
+        </p>
+      )}
 
       <form className="r3-addrow" onSubmit={add} noValidate>
         <input
+          ref={inputRef}
           className="input"
           type="url"
           inputMode="url"
           autoComplete="off"
           aria-label="채널 링크"
-          aria-describedby={addError ? "channel-add-error" : full ? "channel-full" : undefined}
+          aria-describedby={addError ? "channel-add-error" : full ? "channel-full" : sample ? "channels-sample-note" : undefined}
           aria-invalid={addError ? true : undefined}
+          aria-disabled={sample || undefined}
+          readOnly={sample}
           placeholder="채널 링크 붙여넣기"
           maxLength={500}
           disabled={full}
@@ -134,13 +149,17 @@ export default function Channels({ user }: { user: User }) {
             setAddError("");
           }}
         />
-        <button className="btn primary" disabled={adding || full || !url.trim()}>
+        <button className="btn primary" disabled={!sample && (adding || full || !url.trim())} {...locked}>
           {adding ? "추가하는 중…" : "추가"}
         </button>
       </form>
       {addError ? (
         <p className="error r3-add-error" id="channel-add-error" role="alert">
           {addError}
+        </p>
+      ) : sample ? (
+        <p className="hint r3-add-error" id="channels-sample-note">
+          예시에서는 바꿀 수 없어요
         </p>
       ) : (
         full && (
@@ -187,7 +206,7 @@ export default function Channels({ user }: { user: User }) {
                         c.video_count != null && <span className="row-sub">영상 {c.video_count.toLocaleString("ko-KR")}개</span>
                       )}
                     </span>
-                    <button type="button" className="btn danger-sm" aria-label={`${c.title} 빼기`} disabled={busyIds.has(c.id)} onClick={() => remove(c)}>
+                    <button type="button" className="btn danger-sm" aria-label={`${c.title} 빼기`} disabled={busyIds.has(c.id)} {...locked} onClick={() => remove(c)}>
                       빼기
                     </button>
                   </li>
@@ -221,6 +240,7 @@ export default function Channels({ user }: { user: User }) {
                         aria-label={`${c.title} 영상 보여주기`}
                         className="r3-toggle"
                         disabled={busyIds.has(c.id)}
+                        {...locked}
                         onClick={() => toggle(c)}
                       />
                     </li>

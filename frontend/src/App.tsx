@@ -8,7 +8,7 @@ import Login from "./pages/Login";
 import More from "./pages/More";
 import RecipeAi, { RecipeAiDetail, resetAiRecipes } from "./pages/RecipeAi";
 import RecipeDetail from "./pages/RecipeDetail";
-import RecipeForm from "./pages/RecipeForm";
+import RecipeForm, { resetRecipeDraft } from "./pages/RecipeForm";
 import SeasoningCalc from "./pages/SeasoningCalc";
 import SeasoningForm, { resetSeasoningDraft } from "./pages/SeasoningForm";
 import Recipes, { resetRecipesSegment } from "./pages/Recipes";
@@ -131,6 +131,7 @@ export default function App() {
     resetRecipesSegment();
     resetSeasoningDraft();
     resetAiRecipes();
+    resetRecipeDraft();
     scrollTops.clear();
     setUser(null);
   }, []);

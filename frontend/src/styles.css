@@ -1803,7 +1803,7 @@ button.row-btn > svg {
 
 .rc-ing-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 104px 44px;
+  grid-template-columns: minmax(0, 1fr) 88px 44px; /* 384px에서 `돼지고기 앞다리살`이 들어가게 양 칸을 줄였다 */
   align-items: center;
   gap: 8px;
 }
@@ -2764,6 +2764,18 @@ button.row-btn > svg {
 .r3-addrow .btn {
   width: auto;
   padding: 0 18px;
+}
+.btn.r3-all-channels {
+  min-height: 44px;
+  margin: 16px auto 0;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-size: 15px;
+}
+.r3-toggle[aria-disabled="true"],
+.btn.danger-sm[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: default;
 }
 .r3-add-error {
   margin: 8px 20px 0;

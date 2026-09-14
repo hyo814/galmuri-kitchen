@@ -7,7 +7,7 @@ import { SOURCE_LABEL, imageSrc, namesLabel, remainingText } from "../format";
 import { navigate } from "../useHashRoute";
 import { useInfiniteList, type Page } from "../useInfiniteList";
 import { cache, useResource } from "../useResource";
-import { hasAiResults, startAiRecipes } from "./RecipeAi";
+import { hasAiState, startAiRecipes, useAiStatus } from "./RecipeAi";
 import Seasonings from "./Seasonings";
 import Videos, { resetVideoFilter } from "./Videos";
 
@@ -146,6 +146,12 @@ function useRecommendations() {
 function AiEntry() {
   const { data: usage } = useResource<AiUsage>("/api/ai-usage");
   const usedUp = !!usage && usage.recipe.used >= usage.recipe.limit;
+  const status = useAiStatus();
+  // 이미 만든 결과·만드는 중이면 새로 부르지 않고 그 화면을 연다(횟수를 아낀다. 새로 만들기는 `다시 만들기`)
+  const open = () => {
+    if (!status || (status === "error" && !usedUp)) startAiRecipes();
+    navigate("/recipes/ai");
+  };
   return (
     <section className="r3-ai" aria-labelledby="ai-entry-title">
       <span className="r3-ai-mark">
@@ -155,13 +161,10 @@ function AiEntry() {
         <span className="row-title" id="ai-entry-title">
           내 재고로 새 레시피
         </span>
-        <span className="row-sub">AI가 3개 만들어줘요{remainingText(usage)}</span>
+        <span className="row-sub">{status === "done" ? "만든 레시피 3개가 있어요" : `AI가 3개 만들어줘요${remainingText(usage)}`}</span>
       </span>
-      <button type="button" className="btn primary inline" disabled={usedUp} onClick={() => {
-          if (!hasAiResults()) startAiRecipes();
-          navigate("/recipes/ai");
-        }}>
-        만들기
+      <button type="button" className="btn primary inline" disabled={usedUp && !hasAiState()} onClick={open}>
+        {status === "done" ? "결과 보기" : status === "loading" ? "만드는 중…" : "만들기"}
       </button>
     </section>
   );

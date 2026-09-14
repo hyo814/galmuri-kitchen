@@ -111,7 +111,7 @@ class AiCall(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    kind = db.Column(db.String(20), nullable=False)  # fridge | receipt | order | memo | recipe | link | link_fetch(외부 요청 기록, 토큰 없음)
+    kind = db.Column(db.String(20), nullable=False)  # fridge | receipt | order | memo | recipe | link | link_fetch·channel_add·video_refresh(외부 요청 기록, 모델·토큰 없음)
     # 원가 계산용. 단가는 모델마다 달라 모델 이름을 같이 남긴다. 응답을 못 받은 호출(오류·타임아웃)은 비어 있다.
     model = db.Column(db.String(60))
     input_tokens = db.Column(db.Integer)

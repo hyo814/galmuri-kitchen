@@ -68,6 +68,7 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (busy) return;
     const body = step === "link" ? { url: url.trim() } : { text: text.trim() };
     const controller = new AbortController();
     abortRef.current = controller;
@@ -176,7 +177,8 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
               <button type="button" className="btn outline" onClick={cancel}>
                 취소
               </button>
-              <button className="btn primary" disabled={busy || !value.trim()}>
+              {/* 정리하는 동안에도 같은 버튼(disabled 대신 aria-disabled)이라 포커스가 사라지지 않는다 */}
+              <button className="btn primary" disabled={!busy && !value.trim()} aria-disabled={busy || undefined} aria-busy={busy || undefined}>
                 {busy ? "정리하는 중…" : step === "link" ? "가져오기" : "정리하기"}
               </button>
             </div>

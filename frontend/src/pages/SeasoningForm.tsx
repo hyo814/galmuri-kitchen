@@ -11,7 +11,7 @@ import {
   type SeasoningUnit,
 } from "../seasoning";
 import { useAsyncAction } from "../useAsyncAction";
-import { goBack, navigate } from "../useHashRoute";
+import { goBack, navigate, setLeaveGuard } from "../useHashRoute";
 import { forgetResources, useResource } from "../useResource";
 
 const MAX_ITEMS = 30;
@@ -112,10 +112,14 @@ function SeasoningEditor({ initial, editId }: { initial: Seasoning | null; editI
   const [start] = useState(snapshot);
   const dirty = snapshot !== start;
 
-  // ponytail: 앱 안의 뒤로·취소만 확인한다(RecipeForm과 같음). 폰 뒤로가기는 막을 수 없다.
+  // 앱 안의 뒤로·취소·탭 바가 같은 확인을 쓴다(RecipeForm과 같음). 폰 뒤로가기는 막을 수 없다.
+  const canLeave = () => !dirty || confirm(LEAVE_CONFIRM);
+  useEffect(() => {
+    setLeaveGuard(canLeave);
+    return () => setLeaveGuard(null);
+  });
   const leave = () => {
-    if (dirty && !confirm(LEAVE_CONFIRM)) return;
-    goBack(editId ? `/recipes/seasonings/${editId}` : "/recipes");
+    if (canLeave()) goBack(editId ? `/recipes/seasonings/${editId}` : "/recipes");
   };
 
   const clearError = (field: "name" | "basis" | "items") => setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));

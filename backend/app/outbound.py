@@ -5,6 +5,7 @@
   리다이렉트는 매번 다시 검사해 최대 3번, text/html·1MB(fetch_public_page).
 - 둘 다 프록시 환경변수를 쓰지 않고, 리다이렉트까지 합쳐 8초가 지나면 감시 타이머가 소켓을 끊는다.
 예외 메시지에는 주소·키를 넣지 않는다(FetchError는 예외·이유 이름만 담는다).
+예외: 3a의 식약처 공공 레시피 동기화 CLI(`flask sync-public-recipes`, public_recipes.py)는 고정 호스트 하나를 운영자가 직접 부르는 명령이라 이 파일을 거치지 않는다.
 """
 
 import ipaddress

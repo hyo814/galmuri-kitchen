@@ -1,3 +1,4 @@
+import { confirmLeave } from "../useHashRoute";
 import Icon, { type IconName } from "./Icon";
 
 interface Tab {
@@ -27,6 +28,7 @@ export default function TabBar({ path }: { path: string }) {
           aria-current={tab.match(path) ? "page" : undefined}
           onClick={(e) => {
             e.preventDefault();
+            if (!confirmLeave()) return; // 작성 중인 폼이면 나가기 확인
             location.replace("#" + tab.path); // 탭 전환은 히스토리를 쌓지 않는다
           }}
         >

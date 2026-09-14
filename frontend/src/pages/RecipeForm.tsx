@@ -1,8 +1,9 @@
-import { Fragment, useEffect, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type FormEvent } from "react";
+import { flushSync } from "react-dom";
 import { api, type MyRecipe, type RecipeDraft, type RecipeInput } from "../api";
 import Icon from "../components/Icon";
 import { useAsyncAction } from "../useAsyncAction";
-import { goBack, navigate } from "../useHashRoute";
+import { goBack, navigate, setLeaveGuard } from "../useHashRoute";
 import { forgetRecipeCaches, useResource } from "../useResource";
 
 const MAX_INGREDIENTS = 50;
@@ -32,13 +33,41 @@ export function autoGrowTextarea(el: HTMLTextAreaElement | null) {
   el.style.height = `${el.scrollHeight}px`;
 }
 
-// ponytail: 가져온 초안은 모듈 변수로 폼에 넘긴다(새로고침하면 빈 폼). 문제되면 sessionStorage로.
+// 가져온 초안은 모듈 변수로 폼에 넘기고, 폼에 있는 동안 고친 내용까지 sessionStorage에 한 벌 둔다.
+// 폰 뒤로가기로 나갔다가 앞으로 가기(또는 새로고침)로 돌아오면 그 히스토리 칸(state.draft)에서만 되살린다.
+// 저장·나가기 확인·로그아웃 때 지운다.
 let pendingDraft: RecipeDraft | null = null;
+const DRAFT_KEY = "recipe-draft";
+
+function storeDraft(draft: RecipeDraft | null) {
+  try {
+    if (draft) sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    else sessionStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // 저장소를 못 쓰면(사생활 보호 모드 등) 되살리기만 안 된다
+  }
+}
+
+function storedDraft(): RecipeDraft | null {
+  try {
+    const draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? "null") as RecipeDraft | null;
+    return Array.isArray(draft?.ingredients) && Array.isArray(draft.steps) ? draft : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 로그아웃 때 이전 사용자의 가져온 초안이 남지 않게 */
+export function resetRecipeDraft() {
+  pendingDraft = null;
+  storeDraft(null);
+}
 
 /** 링크·글에서 가져온 초안을 `가져온 레시피 확인` 폼으로 연다 */
 export function openDraft(draft: RecipeDraft, { replace = false } = {}) {
   pendingDraft = draft;
   navigate("/recipes/new", { replace });
+  history.replaceState({ ...(history.state as object | null), draft: true }, ""); // 이 칸으로 돌아오면 되살린다
 }
 
 const SOURCE_NAME: Record<RecipeDraft["source"], string> = { youtube: "유튜브", instagram: "인스타그램", blog: "블로그", text: "" };
@@ -105,6 +134,9 @@ function RecipeEditor({ initial, draft = null }: { initial: MyRecipe | null; dra
   );
   const [invalidKey, setInvalidKey] = useState<number | null>(null); // 양만 있고 이름이 빈 재료 줄
   const [focusKey, setFocusKey] = useState<number | null>(null); // 방금 추가한 줄에 커서
+  const addRowRef = useRef<HTMLButtonElement>(null);
+  // 영상 보기에서 가져왔으면 뒤로 링크가 `영상`
+  const [fromVideo] = useState(() => !!(history.state as { from?: string } | null)?.from?.startsWith("/recipes/videos/"));
   const { busy, error, setError, run } = useAsyncAction();
 
   const input = (): RecipeInput => ({
@@ -115,14 +147,28 @@ function RecipeEditor({ initial, draft = null }: { initial: MyRecipe | null; dra
       .map((row) => ({ name: row.name.trim(), amount: row.amount.trim() })),
     steps: steps.map((step) => step.text.trim()).filter(Boolean),
   });
-  const [startJson] = useState(() => JSON.stringify(input()));
+  const json = JSON.stringify(input());
+  const [startJson] = useState(json);
   // 가져온 초안은 고치지 않았어도 나가면 사라지므로(AI 횟수도 이미 썼다) 늘 확인한다
-  const dirty = !!draft || JSON.stringify(input()) !== startJson;
+  const dirty = !!draft || json !== startJson;
 
-  // ponytail: 앱 안의 뒤로·취소만 확인한다. 폰의 뒤로가기 버튼은 막을 수 없어(popstate는 취소 불가) 그대로 나간다.
+  useEffect(() => {
+    if (draft) storeDraft({ ...draft, ...(JSON.parse(json) as RecipeInput) });
+  }, [draft, json]);
+
+  // 앱 안의 뒤로·취소·탭 바가 같은 확인을 쓴다. 폰의 뒤로가기 버튼은 막을 수 없어(popstate는 취소 불가) 초안을 되살리는 것으로 대신한다.
+  const canLeave = () => {
+    if (dirty && !confirm(draft ? LEAVE_DRAFT_CONFIRM : LEAVE_CONFIRM)) return false;
+    if (draft) resetRecipeDraft();
+    return true;
+  };
+  useEffect(() => {
+    setLeaveGuard(canLeave);
+    return () => setLeaveGuard(null);
+  });
+
   const leave = () => {
-    if (dirty && !confirm(draft ? LEAVE_DRAFT_CONFIRM : LEAVE_CONFIRM)) return;
-    goBack(initial ? `/recipes/mine/${initial.id}` : "/recipes");
+    if (canLeave()) goBack(initial ? `/recipes/mine/${initial.id}` : "/recipes");
   };
 
   const updateRow = (key: number, patch: Partial<IngredientRow>) =>
@@ -162,6 +208,7 @@ function RecipeEditor({ initial, draft = null }: { initial: MyRecipe | null; dra
         body,
       });
       forgetRecipeCaches();
+      if (draft) resetRecipeDraft();
       if (initial) goBack(`/recipes/mine/${saved.id}`);
       else navigate(`/recipes/mine/${saved.id}`, { replace: true }); // 뒤로가기하면 목록으로
     });
@@ -169,7 +216,7 @@ function RecipeEditor({ initial, draft = null }: { initial: MyRecipe | null; dra
 
   return (
     <main className="page">
-      <BackLink onClick={leave} label={draft ? "내 레시피" : "레시피"} />
+      <BackLink onClick={leave} label={draft ? (fromVideo ? "영상" : "내 레시피") : "레시피"} />
       <header className="topbar">
         {draft ? (
           <div>
@@ -269,7 +316,12 @@ function RecipeEditor({ initial, draft = null }: { initial: MyRecipe | null; dra
                       type="button"
                       className="icon-btn"
                       aria-label={`${row.name.trim() || "빈 재료"} 빼기`}
-                      onClick={() => setRows((prev) => prev.filter((r) => r.key !== row.key))}
+                      onClick={() => {
+                        // 뺀 뒤 다음 줄 이름 칸(마지막 줄이었으면 `재료 추가`)으로 포커스
+                        const next = rows[index + 1];
+                        flushSync(() => setRows((prev) => prev.filter((r) => r.key !== row.key)));
+                        (next ? document.getElementById(`ingredient-name-${next.key}`) : addRowRef.current)?.focus();
+                      }}
                     >
                       <Icon name="trash" />
                     </button>
@@ -284,7 +336,7 @@ function RecipeEditor({ initial, draft = null }: { initial: MyRecipe | null; dra
               );
             })}
           </div>
-          <button type="button" className="btn secondary rc-add" disabled={rows.length >= MAX_INGREDIENTS} onClick={addRow}>
+          <button ref={addRowRef} type="button" className="btn secondary rc-add" disabled={rows.length >= MAX_INGREDIENTS} onClick={addRow}>
             <Icon name="plus" />
             재료 추가
           </button>
@@ -377,8 +429,9 @@ function EditRecipe({ id }: { id: string }) {
 
 /** /recipes/new (id 없음) · /recipes/mine/:id/edit */
 function NewRecipe() {
-  // StrictMode가 초기화 함수를 두 번 불러도 같은 초안을 받게, 비우는 건 effect에서 한다
-  const [draft] = useState(() => pendingDraft);
+  // StrictMode가 초기화 함수를 두 번 불러도 같은 초안을 받게, 비우는 건 effect에서 한다.
+  // 넘겨받은 초안이 없어도 가져온 초안의 히스토리 칸이면(뒤로 → 앞으로·새로고침) 고치던 내용을 되살린다.
+  const [draft] = useState(() => pendingDraft ?? ((history.state as { draft?: boolean } | null)?.draft ? storedDraft() : null));
   useEffect(() => {
     pendingDraft = null;
   }, []);
