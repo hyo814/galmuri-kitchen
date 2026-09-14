@@ -4,12 +4,14 @@ from flask import Blueprint, abort, g, jsonify, request
 from sqlalchemy import func, or_
 from sqlalchemy.orm import selectinload
 
-from .auth import get_owned_or_404, login_required
+from . import ai, scan
+from .auth import ai_daily_limit, get_owned_or_404, login_required
 from .models import MealPlan, MealSlot, Recipe, db
-from .recipes import match_summary, stock_context
+from .recipe_ai import _int_in, clean_draft, public_image_candidates, similar_public_image
+from .recipes import _prepared_stock, check_recipe_cap, inventory, match_summary, parse_recipe, stock_context
 from .validation import commit_or_duplicate, integer, iso_date, text
 
-# 식단·칸(스펙 20절, 4b-1). 셀프 배치만(복사·AI 초안은 뒤 태스크).
+# 식단·칸(스펙 20절, 4b-1). 셀프 배치·주 복사·AI 초안.
 bp = Blueprint("meals", __name__, url_prefix="/api")
 
 MEALS = ("breakfast", "lunch", "dinner", "snack")
@@ -94,17 +96,19 @@ def _owned_slot(slot_id):
     return slot
 
 
-def _goal_note(value):
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        abort(400, "잘못된 요청이에요.")
-    trimmed = value.strip()
-    if not trimmed:
-        return None
-    if len(trimmed) > 100:
-        abort(400, "메모는 100자까지 입력해주세요.")
-    return trimmed
+def _apply_goals(plan, data):
+    """보낸 목표 칸만 검증해 식단에 넣는다(PATCH·AI 초안 공통)."""
+    if "goal_kcal" in data:
+        value = data["goal_kcal"]
+        plan.goal_kcal = None if value is None else integer(value, "하루 목표 칼로리는", 500, 5000)
+    if "goal_note" in data:
+        value = data["goal_note"]
+        if value is not None and not isinstance(value, str):
+            abort(400, "잘못된 요청이에요.")
+        value = value.strip() if value else None
+        if value and len(value) > 100:
+            abort(400, "메모는 100자까지 입력해주세요.")
+        plan.goal_note = value or None
 
 
 @bp.get("/meal-plans")
@@ -175,11 +179,7 @@ def update_meal_plan(plan_id):
         plan.days = integer(data["days"], "기간은", 1, MAX_DAYS)
     if "default_servings" in data:
         plan.default_servings = integer(data["default_servings"], "기본 인분은", 1, 20)
-    if "goal_kcal" in data:
-        value = data["goal_kcal"]
-        plan.goal_kcal = None if value is None else integer(value, "하루 목표 칼로리는", 500, 5000)
-    if "goal_note" in data:
-        plan.goal_note = _goal_note(data["goal_note"])
+    _apply_goals(plan, data)
     if range_changed:
         # 결정 1: 기간을 줄이거나 시작일을 옮기면 새 기간 밖의 칸은 같은 커밋에서 지운다.
         end_on = _end_on(plan)
@@ -305,3 +305,202 @@ def delete_meal_slot(slot_id):
     db.session.delete(_owned_slot(slot_id))
     db.session.commit()
     return "", 204
+
+
+AI_DRAFT_FAIL = "식단 초안을 만들지 못했어요. 잠시 후 다시 시도해주세요."
+MAX_DRAFT_DAYS = 7  # 결정 5: 보고 있는 한 주만(최대 28칸)
+MAX_DRAFT_DISHES = 30
+MAX_MINE = 100
+RECIPE_CHANGED = "레시피가 방금 바뀌었어요. 초안을 다시 만들어주세요."
+
+
+def clean_meal_draft(raw, empty_keys, mine_by_id, prepared_stock, urgent, candidates):
+    """AI(또는 예시) 식단 초안을 정리한다. 모델 출력은 믿지 않는다. 쓸 칸이 없으면 None.
+    empty_keys: {(날짜 iso, 끼니)} 빈 칸, mine_by_id: 이번 요청에 보낸 내 레시피 {id: {title, servings, ingredients, image_url}}."""
+    raw = raw if isinstance(raw, dict) else {}
+    dishes = []  # 원래 번호 그대로, 못 쓰는 번호는 None
+    for row in raw.get("dishes")[:MAX_DRAFT_DISHES] if isinstance(raw.get("dishes"), list) else []:
+        if not isinstance(row, dict):
+            dishes.append(None)
+            continue
+        est_kcal = _int_in(row.get("kcal_per_serving"), 1, 3000)
+        mine_id = row.get("mine_id")
+        recipe = mine_by_id.get(mine_id) if isinstance(mine_id, int) and not isinstance(mine_id, bool) else None
+        if recipe is not None:
+            dishes.append({
+                "recipe_id": mine_id, "title": recipe["title"], "servings": recipe["servings"], "est_kcal": est_kcal,
+                "ingredients": [], "steps": [],
+                "urgent_names": match_summary(recipe["ingredients"], prepared_stock, urgent)["urgent_names"],
+                "image_url": recipe["image_url"],
+            })
+            continue
+        draft = clean_draft(row)
+        dishes.append(draft and {
+            "recipe_id": None, "title": draft["title"], "servings": draft["servings"], "est_kcal": est_kcal,
+            "ingredients": draft["ingredients"], "steps": draft["steps"],
+            "urgent_names": match_summary(draft["ingredients"], prepared_stock, urgent)["urgent_names"],
+            "image_url": similar_public_image(draft["title"], candidates),
+        })
+
+    slots, seen = [], set()
+    for row in raw.get("slots") if isinstance(raw.get("slots"), list) else []:
+        if not isinstance(row, dict) or not isinstance(row.get("date"), str) or not isinstance(row.get("meal"), str):
+            continue
+        key = (row["date"], row["meal"])
+        if key not in empty_keys or key in seen:
+            continue
+        seen.add(key)
+        options = []
+        for index in row.get("dishes") if isinstance(row.get("dishes"), list) else []:
+            if _int_in(index, 0, len(dishes) - 1) is not None and dishes[index] and index not in options:
+                options.append(index)
+                if len(options) == 3:
+                    break
+        if options:
+            slots.append((key, options))
+    if not slots:
+        return None
+
+    slots.sort(key=lambda slot: (slot[0][0], MEALS.index(slot[0][1])))
+    renumber = {}
+    for _, options in slots:
+        for index in options:
+            renumber.setdefault(index, len(renumber))
+    return {
+        "dishes": [dishes[index] for index in renumber],  # dict는 넣은 순서를 지킨다
+        "slots": [{"date": d, "meal": m, "options": [renumber[i] for i in options]} for (d, m), options in slots],
+    }
+
+
+@bp.post("/meal-plans/<int:plan_id>/ai-draft")
+@login_required
+def draft_meal_plan(plan_id):
+    """빈 칸마다 요리 3개(추천 + `다른 걸로` 후보 2개)를 한 번에 받는다. 칸은 저장하지 않는다(목표 두 칸만 식단에 저장)."""
+    plan = get_owned_or_404(MealPlan, plan_id)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        abort(400, "잘못된 요청이에요.")
+    start_on = iso_date(data.get("start_on"))
+    days = integer(data.get("days"), "기간은", 1, MAX_DRAFT_DAYS)
+    if start_on is None or start_on < plan.start_on or start_on + timedelta(days=days - 1) > _end_on(plan):
+        abort(400, OUT_OF_RANGE)
+    meals = data.get("meals")
+    if (
+        not isinstance(meals, list) or not 1 <= len(meals) <= len(MEALS)
+        or not all(isinstance(m, str) and m in MEALS for m in meals) or len(set(meals)) != len(meals)
+    ):
+        abort(400, "끼니를 하나 이상 골라주세요.")
+    _apply_goals(plan, data)
+
+    dates = [start_on + timedelta(days=i) for i in range(days)]
+    filled = {(s.date, s.meal): s for s in plan.slots}
+    empty = [(d.isoformat(), m) for d in dates for m in MEALS if m in meals and (d, m) not in filled]
+    if not empty:
+        abort(400, "채울 빈 칸이 없어요.")
+    kept = [(d.isoformat(), m, filled[(d, m)].title) for d in dates for m in MEALS if m in meals and (d, m) in filled]
+
+    user_id = g.user.id
+    stock = inventory(user_id)  # 비어도 진행한다(재고 없이도 식단은 짠다)
+    prepared_stock, urgent = _prepared_stock(stock), {name for name, is_urgent in stock if is_urgent}
+    recent = Recipe.query.filter_by(user_id=user_id).order_by(Recipe.updated_at.desc(), Recipe.id.desc()).limit(MAX_MINE)
+    # 커밋하면 객체가 만료돼 행마다 다시 읽으므로 쓸 값만 먼저 꺼내 둔다(최근 수정 순, dict는 순서를 지킨다)
+    mine_by_id = {r.id: {"title": r.title, "servings": r.servings, "ingredients": r.ingredients, "image_url": r.image_url} for r in recent}
+    goal_kcal, goal_note = plan.goal_kcal, plan.goal_note
+    db.session.commit()  # 목표 두 칸은 다음에 미리 채우도록 저장한다
+
+    mode = ai.scan_mode(g.user)
+    if mode == "off":
+        abort(503, "AI 식단 초안을 지금은 쓸 수 없어요.")
+    if mode == "sample":
+        raw = ai.sample_meal_draft(empty)
+    else:
+        scan.check_ai_limits(user_id, scan.RECIPE_KINDS, ai_daily_limit(g.user, "AI_DAILY_RECIPE_LIMIT"), "AI 레시피는")
+        call = scan.start_ai_call(user_id, "meal")
+        try:
+            raw, usage = ai.draft_meals(
+                empty,
+                [f"{name} (빨리)" if is_urgent else name for name, is_urgent in stock],
+                [(recipe_id, r["title"]) for recipe_id, r in mine_by_id.items()],
+                kept,
+                goal_kcal,
+                goal_note,
+            )
+        except ai.AiError:
+            abort(502, AI_DRAFT_FAIL)
+        scan.finish_ai_call(call, usage)
+
+    result = clean_meal_draft(raw, set(empty), mine_by_id, prepared_stock, urgent, public_image_candidates())
+    if result is None:
+        abort(502, AI_DRAFT_FAIL)
+    return jsonify(
+        **result, kept=[{"date": d, "meal": m, "title": title} for d, m, title in kept], sample=mode == "sample"
+    )
+
+
+@bp.post("/meal-plans/<int:plan_id>/ai-draft/apply")
+@login_required
+def apply_meal_draft(plan_id):
+    """초안 넣기: 아직 빈 칸만 채우고, 새 요리는 요리마다 한 번만 내 레시피(source ai)로 저장한다. AI를 부르지 않는다."""
+    plan = get_owned_or_404(MealPlan, plan_id)
+    data = request.get_json(silent=True)
+    dishes = data.get("dishes") if isinstance(data, dict) else None
+    rows = data.get("slots") if isinstance(data, dict) else None
+    if (
+        not isinstance(dishes, list) or not 1 <= len(dishes) <= MAX_DRAFT_DISHES
+        or not isinstance(rows, list) or not 1 <= len(rows) <= MAX_DRAFT_DAYS * len(MEALS)
+    ):
+        abort(400, "잘못된 요청이에요.")
+
+    end_on, slots, seen = _end_on(plan), [], set()
+    for row in rows:
+        row = row if isinstance(row, dict) else {}
+        date, meal, dish = iso_date(row.get("date")), row.get("meal"), _int_in(row.get("dish"), 0, len(dishes) - 1)
+        est_kcal = row.get("est_kcal")
+        if (
+            date is None or not plan.start_on <= date <= end_on or meal not in MEALS or dish is None
+            or (est_kcal is not None and _int_in(est_kcal, 1, 3000) is None) or (date, meal) in seen
+        ):
+            abort(400, "잘못된 요청이에요.")
+        seen.add((date, meal))
+        slots.append((date, meal, dish, est_kcal))
+
+    filled = {(s.date, s.meal) for s in plan.slots}
+    recipes, new_fields = {}, {}  # 칸이 쓰는 요리만 본다: 번호 → 내 레시피 / 새 요리 필드
+    for _, _, index, _ in slots:
+        if index in recipes or index in new_fields:
+            continue
+        dish = dishes[index]
+        if isinstance(dish, dict) and "recipe_id" in dish:
+            recipe_id = _int_in(dish["recipe_id"], 1, 2**31 - 1)
+            recipe = Recipe.query.filter_by(id=recipe_id, user_id=g.user.id).first() if recipe_id else None
+            if recipe is None:
+                abort(400, RECIPE_CHANGED)
+            recipes[index] = recipe
+        else:
+            fields = parse_recipe(dish)
+            fields.pop("source_url", None)
+            new_fields[index] = fields
+    # 새 요리를 쓰는 칸이 모두 이미 찼으면 그 요리는 만들지 않는다.
+    to_create = {i for d, m, i, _ in slots if i in new_fields and (d, m) not in filled}
+    if to_create:
+        check_recipe_cap(len(to_create))
+        candidates = public_image_candidates()
+        for index in sorted(to_create):
+            fields = new_fields[index]
+            recipes[index] = Recipe(
+                user_id=g.user.id, **fields, source="ai", image_url=similar_public_image(fields["title"], candidates)
+            )
+            db.session.add(recipes[index])
+
+    kept = 0
+    for date, meal, index, est_kcal in slots:
+        if (date, meal) in filled:
+            kept += 1
+            continue
+        recipe = recipes[index]
+        db.session.add(MealSlot(
+            plan_id=plan.id, date=date, meal=meal, recipe=recipe, title=recipe.title,
+            servings=plan.default_servings, est_kcal=est_kcal,
+        ))
+    commit_or_duplicate(SLOT_TAKEN)
+    return jsonify(filled=len(slots) - kept, kept=kept, created_recipes=len(to_create)), 201
