@@ -81,4 +81,18 @@ assert.deepEqual(matchRoute("/recipes/seasonings/7/edit").params, { id: "7" });
 assert.equal(matchRoute("/recipes/seasonings/new").pattern, "/recipes/seasonings/new");
 assert.equal(matchRoute("/recipes/seasonings/preset/abc"), null);
 for (const path of ["/", "/recipes", "/recipes/new", "/recipes/mine/3", "/recipes/mine/3/edit", "/recipes/public/9", "/tools"]) assert.equal(matchRoute(path)?.path, path, path);
+// AI 레시피 경로 (3b 계획 태스크 4)
+assert.equal(matchRoute("/recipes/ai").pattern, "/recipes/ai");
+assert.equal(matchRoute("/recipes/ai/2").params.n, "2");
+assert.equal(matchRoute("/recipes/ai/x"), null);
 console.log("matchRoute ok");
+
+// AI 레시피 문구 (3b 계획 태스크 4)
+const { namesLabel, remainingText, withJosa } = await import("../src/format.ts");
+assert.equal(namesLabel(["두부"]), "두부");
+assert.equal(namesLabel(["두부", "대파"]), "두부·대파");
+assert.equal(withJosa(namesLabel(["두부", "대파", "애호박"]), "을", "를"), "두부 외 2개를");
+assert.equal(remainingText(undefined), "");
+assert.equal(remainingText({ scan: { used: 0, limit: 10 }, recipe: { used: 2, limit: 10 } }), " · 오늘 8번 남음");
+assert.equal(remainingText({ scan: { used: 0, limit: 10 }, recipe: { used: 10, limit: 10 } }), " · 오늘은 다 썼어요");
+console.log("ai copy ok");

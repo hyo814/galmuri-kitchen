@@ -1,5 +1,5 @@
 // 값 import는 ".ts" 확장자를 붙인다 — scripts/check-seasoning.mjs가 그냥 node로 이 파일을 읽는다(type import는 지워져서 괜찮다).
-import type { LocationKind } from "./api";
+import type { AiUsage, LocationKind, RecipeSource } from "./api";
 
 /** 1 → "1", 0.25 → "0.25", 1.5 → "1.5" (소수 둘째 자리까지) */
 export const formatQuantity = (q: number) => String(Number(q.toFixed(2)));
@@ -13,6 +13,27 @@ export function formatDate(iso: string): string {
   const md = `${m}월 ${d}일`;
   return y === new Date().getFullYear() ? md : `${y}년 ${md}`;
 }
+
+/** 내 레시피 목록 보조 줄·상세의 출처 표시 (직접 쓴 레시피는 표시 없음) */
+export const SOURCE_LABEL: Record<RecipeSource, string> = {
+  mine: "",
+  public: "추천에서 저장",
+  ai: "AI가 만든 레시피",
+  youtube: "유튜브에서 가져옴",
+  instagram: "인스타그램에서 가져옴",
+  blog: "블로그에서 가져옴",
+  text: "붙여넣은 글에서 가져옴",
+};
+
+/** AI 레시피 남은 횟수 꼬리말: " · 오늘 8번 남음" / " · 오늘은 다 썼어요" / 아직 모르면 "" */
+export function remainingText(usage: AiUsage | undefined): string {
+  if (!usage) return "";
+  const left = usage.recipe.limit - usage.recipe.used;
+  return left > 0 ? ` · 오늘 ${left}번 남음` : " · 오늘은 다 썼어요";
+}
+
+/** ["두부"] → "두부", ["두부", "대파"] → "두부·대파", 3개 이상 → "두부 외 2개" */
+export const namesLabel = (names: string[]) => (names.length <= 2 ? names.join("·") : `${names[0]} 외 ${names.length - 1}개`);
 
 export const KIND_LABEL: Record<LocationKind, string> = { fridge: "냉장", freezer: "냉동", room: "실온" };
 

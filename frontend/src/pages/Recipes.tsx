@@ -1,11 +1,13 @@
 import { useCallback, useState, type ReactNode } from "react";
-import { api, type RecipeSummary, type RecommendationCard, type Recommendations } from "../api";
+import { api, type AiUsage, type RecipeSummary, type RecommendationCard, type Recommendations, type User } from "../api";
+import AddRecipeSheet from "../components/AddRecipeSheet";
 import Icon from "../components/Icon";
 import InfiniteSentinel from "../components/InfiniteSentinel";
-import { imageSrc } from "../format";
+import { SOURCE_LABEL, imageSrc, namesLabel, remainingText } from "../format";
 import { navigate } from "../useHashRoute";
 import { useInfiniteList, type Page } from "../useInfiniteList";
-import { cache } from "../useResource";
+import { cache, useResource } from "../useResource";
+import { hasAiResults, startAiRecipes } from "./RecipeAi";
 import Seasonings from "./Seasonings";
 
 export type Segment = "recommend" | "mine" | "video" | "seasoning";
@@ -32,9 +34,7 @@ export function setRecipesSegment(segment: Segment) {
 
 /** ["두부"] → "두부 마저 써요", ["두부", "대파"] → "두부·대파 마저 써요", 3개 이상 → "두부 외 2개 마저 써요" */
 export function urgentLabel(names: string[]): string {
-  if (names.length === 0) return "";
-  const who = names.length <= 2 ? names.join("·") : `${names[0]} 외 ${names.length - 1}개`;
-  return `${who} 마저 써요`;
+  return names.length === 0 ? "" : `${namesLabel(names)} 마저 써요`;
 }
 
 /** "재료 7개 중 5개 있어요" + 막대 (추천 카드·상세 공통) */
@@ -140,23 +140,56 @@ function useRecommendations() {
   return { meta, ...list };
 }
 
-function RecommendList({ onShowMine }: { onShowMine: () => void }) {
+/** 추천 칸 맨 위 한 줄 카드: 지금 재고로 AI 레시피 3개 만들기 */
+function AiEntry() {
+  const { data: usage } = useResource<AiUsage>("/api/ai-usage");
+  const usedUp = !!usage && usage.recipe.used >= usage.recipe.limit;
+  return (
+    <section className="r3-ai" aria-labelledby="ai-entry-title">
+      <span className="r3-ai-mark">
+        <Icon name="sparkle" size={26} />
+      </span>
+      <span className="row-main">
+        <span className="row-title" id="ai-entry-title">
+          내 재고로 새 레시피
+        </span>
+        <span className="row-sub">AI가 3개 만들어줘요{remainingText(usage)}</span>
+      </span>
+      <button type="button" className="btn primary inline" disabled={usedUp} onClick={() => {
+          if (!hasAiResults()) startAiRecipes();
+          navigate("/recipes/ai");
+        }}>
+        만들기
+      </button>
+    </section>
+  );
+}
+
+function RecommendList({ onShowMine, showAi }: { onShowMine: () => void; showAi: boolean }) {
   const { meta, items, loading, error, hasMore, multiPage, loadMore, reload } = useRecommendations();
+  // 재고 수를 알기 전에는 그리지 않고, 재고가 비었으면 숨긴다(만들 재료가 없다. 깜빡임 방지)
+  const ai = showAi && meta !== undefined && meta.inventoryCount > 0 && <AiEntry />;
 
   // C-L2: 첫 페이지가 실패하면(메타가 없음) 다시 불러오기 버튼을 보여 준다
   if (!meta)
     return error ? (
-      <div className="list-end">
-        <p className="error" role="alert">
-          {error}
-        </p>
-        <button className="btn secondary inline" onClick={reload}>
-          <Icon name="refresh" size={16} />
-          다시 불러오기
-        </button>
-      </div>
+      <>
+        {ai}
+        <div className="list-end">
+          <p className="error" role="alert">
+            {error}
+          </p>
+          <button className="btn secondary inline" onClick={reload}>
+            <Icon name="refresh" size={16} />
+            다시 불러오기
+          </button>
+        </div>
+      </>
     ) : (
-      <p className="center muted">불러오는 중…</p>
+      <>
+        {ai}
+        <p className="center muted">불러오는 중…</p>
+      </>
     );
 
   if (meta.inventoryCount === 0)
@@ -176,19 +209,25 @@ function RecommendList({ onShowMine }: { onShowMine: () => void }) {
   if (noneFound)
     // M11: 카탈로그 자체가 비었을 때(재고와 안 겹치는 것까지 다 세도 공공 레시피가 0)는 "재료를 더 넣어보라"는
     // 안내가 맞지 않는다 — 아직 채우는 중이라는 걸 알려준다.
-    return meta.inventoryCount > 0 && meta.publicCount === 0 ? (
-      <section className="empty">
-        <p>추천할 레시피가 아직 없어요. 곧 채워둘게요.</p>
-      </section>
-    ) : (
-      <section className="empty">
-        <p>지금 재고로 만들 수 있는 요리를 찾지 못했어요.</p>
-        <p className="muted">재료를 더 넣거나 내 레시피를 추가해보세요.</p>
-      </section>
+    return (
+      <>
+        {ai}
+        {meta.inventoryCount > 0 && meta.publicCount === 0 ? (
+          <section className="empty">
+            <p>추천할 레시피가 아직 없어요. 곧 채워둘게요.</p>
+          </section>
+        ) : (
+          <section className="empty">
+            <p>지금 재고로 만들 수 있는 요리를 찾지 못했어요.</p>
+            <p className="muted">재료를 더 넣거나 내 레시피를 추가해보세요.</p>
+          </section>
+        )}
+      </>
     );
 
   return (
     <>
+      {ai}
       {meta.sample && (meta.mine.length > 0 || items.length > 0) && (
         <p className="rc-sample">
           <Icon name="info" size={16} />
@@ -238,7 +277,8 @@ interface RecipeListPage {
   next_cursor: string | null;
 }
 
-function MyRecipeList() {
+function MyRecipeList({ canImport }: { canImport: boolean }) {
+  const [adding, setAdding] = useState(false);
   const fetchPage = useCallback(async (cursor: string | null): Promise<Page<RecipeSummary>> => {
     const path = cursor ? `/api/recipes?limit=30&cursor=${encodeURIComponent(cursor)}` : "/api/recipes?limit=30";
     const data = await api<RecipeListPage>(path);
@@ -281,7 +321,7 @@ function MyRecipeList() {
                   <span className="row-main">
                     <span className="row-title">{recipe.title}</span>
                     <span className="row-sub">
-                      {recipe.servings}인분 · 재료 {recipe.ingredient_count}개{recipe.source === "public" && " · 추천에서 저장"}
+                      {recipe.servings}인분 · 재료 {recipe.ingredient_count}개{SOURCE_LABEL[recipe.source] && ` · ${SOURCE_LABEL[recipe.source]}`}
                     </span>
                   </span>
                   <Icon name="chevron" />
@@ -293,11 +333,13 @@ function MyRecipeList() {
         </>
       )}
       <div className="cta-bar">
-        <button className="btn primary" onClick={() => navigate("/recipes/new")}>
+        {/* 사진 인식과 같은 키가 없으면(scan off) 링크·글 가져오기도 못 하므로 바로 폼으로 */}
+        <button className="btn primary" onClick={() => (canImport ? setAdding(true) : navigate("/recipes/new"))}>
           <Icon name="plus" />
           레시피 추가
         </button>
       </div>
+      {adding && <AddRecipeSheet onClose={() => setAdding(false)} />}
     </>
   );
 }
@@ -313,7 +355,7 @@ function VideoSoon() {
   );
 }
 
-export default function Recipes() {
+export default function Recipes({ user }: { user: User }) {
   const [segment, setSegment] = useState<Segment>(lastSegment);
   const choose = useCallback((next: Segment) => {
     lastSegment = next;
@@ -332,8 +374,8 @@ export default function Recipes() {
           </button>
         ))}
       </div>
-      {segment === "recommend" && <RecommendList onShowMine={() => choose("mine")} />}
-      {segment === "mine" && <MyRecipeList />}
+      {segment === "recommend" && <RecommendList onShowMine={() => choose("mine")} showAi={user.scan !== "off"} />}
+      {segment === "mine" && <MyRecipeList canImport={user.scan !== "off"} />}
       {segment === "video" && <VideoSoon />}
       {segment === "seasoning" && <Seasonings />}
     </main>
