@@ -5,6 +5,7 @@ import TabBar from "./components/TabBar";
 import Fridge from "./pages/Fridge";
 import Login, { rememberLoginProvider } from "./pages/Login";
 import MealAiDraft from "./pages/MealAiDraft";
+import MealShopping from "./pages/MealShopping";
 import Meals, { resetMealsView } from "./pages/Meals";
 import More from "./pages/More";
 import RecipeAi, { RecipeAiDetail, resetAiRecipes } from "./pages/RecipeAi";
@@ -53,6 +54,7 @@ const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
   "/shopping/memos/:id": ({ route, user }) => <ShoppingMemo id={route.params.id} user={user} />,
   "/meals": ({ user }) => <Meals user={user} />,
   "/meals/:id/ai": ({ route, user }) => <MealAiDraft id={route.params.id} user={user} />,
+  "/meals/:id/shopping": ({ route }) => <MealShopping id={route.params.id} />,
   "/more": ({ user, onLogout }) => <More user={user} onLogout={onLogout} />,
   "/tools": () => <Tools />,
 };

@@ -1,6 +1,7 @@
 // 식단 날짜 계산(스펙 20절). 브라우저 API·Date.now()를 부르지 않고 오늘은 인자로 받는다 — scripts/check-meals.mjs가 node로 읽는다.
-import type { MealKind, MealPlanSummary } from "../api";
+import type { MealKind, MealPlanSummary, MealShoppingRow } from "../api";
 import { addDays } from "../format.ts";
+import { quantityText } from "../shopping/sync.ts";
 
 export const MEALS: [MealKind, string][] = [["breakfast", "아침"], ["lunch", "점심"], ["dinner", "저녁"], ["snack", "간식"]];
 export const mealLabel = (meal: MealKind) => MEALS.find(([k]) => k === meal)![1];
@@ -90,3 +91,16 @@ export function kcalText(values: (number | null)[]): string {
 /** 재료 칩 "두부 D-1"(유통기한 있으면), 없으면 이름만 */
 export const urgentChip = (name: string, expiresOn: string | null, today: string) =>
   expiresOn ? `${name} D-${Math.max(0, daysBetween(today, expiresOn))}` : name;
+/** 살 날 태그: 오늘(또는 지남) "오늘 사요", 아니면 "16일(수)에 사요" */
+export const buyDayText = (plannedOn: string, today: string) =>
+  plannedOn <= today ? "오늘 사요" : `${parts(plannedOn)[2]}일(${DOW[weekday(plannedOn)]})에 사요`;
+const amounts = (list: { quantity: number; unit: string }[], extra: string[] = []) => [...list.map((a) => quantityText(a.quantity, a.unit)), ...extra].join(" + ");
+/** 줄 설명: buy·enough "2모 필요 · 1모 있어요"/"2개 필요 · 없어요", manual "있음 8개 · 필요 2판"(재고 없으면 "필요 약간 · 없어요"), listed "장보기 목록에 이미 있어서 건너뛰어요" */
+export function previewDetail(row: MealShoppingRow): string {
+  if (row.reason === "listed") return "장보기 목록에 이미 있어서 건너뛰어요";
+  const need = amounts(row.need, row.need_extra) || "조금";
+  const have = amounts(row.have);
+  if (row.reason === null && row.have.length && !row.need.some((n) => row.have.some((h) => h.unit === n.unit)))
+    return `있음 ${have} · 필요 ${need}`;
+  return `${need} 필요 · ${have ? `${have} 있어요` : "없어요"}`;
+}

@@ -531,6 +531,7 @@ assert.deepEqual(sourceTag({ source: "recipe", source_label: null }), { text: "�
 assert.deepEqual(sourceTag({ source: "urgent", source_label: null }), { text: "곧 떨어져요", tone: "warn" });
 assert.deepEqual(sourceTag({ source: "staple", source_label: null }), { text: "필수품", tone: "" });
 assert.deepEqual(sourceTag({ source: "memo", source_label: null }), { text: "메모 사진", tone: "" });
+assert.deepEqual(sourceTag({ source: "meal_plan", source_label: "9월 셋째 주" }), { text: "식단", tone: "info" });
 assert.equal(sourceTag({ source: "manual", source_label: null }), null);
 
 // ---- stockButtonText ----

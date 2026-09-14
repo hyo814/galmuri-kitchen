@@ -547,6 +547,15 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
         </div>
       )}
 
+      {plan && (
+        <div className="cta-bar">
+          <button type="button" className="btn primary" onClick={() => navigate(`/meals/${plan.id}/shopping`)}>
+            <Icon name="cart" size={20} />
+            장보기 목록 만들기
+          </button>
+        </div>
+      )}
+
       {openSlot && (
         <MealSlotSheet
           slot={openSlot}
