@@ -45,8 +45,17 @@ async function run<T>(store: Store, mode: IDBTransactionMode, fn: (s: IDBObjectS
 }
 
 export async function get<T>(store: Store, key: string): Promise<T | undefined> {
-  if (memory[store].has(key)) return memory[store].get(key) as T;
-  return run<T | undefined>(store, "readonly", (s) => s.get(key)).catch(() => undefined);
+  return (await read<T>(store, key)).value;
+}
+
+/** 읽기 실패를 구분한다(ok false). IndexedDB가 아예 없으면 메모리가 유일한 저장소라 ok. */
+export async function read<T>(store: Store, key: string): Promise<{ ok: boolean; value?: T }> {
+  if (memory[store].has(key)) return { ok: true, value: memory[store].get(key) as T };
+  if (!(await open())) return { ok: true, value: undefined };
+  return run<T | undefined>(store, "readonly", (s) => s.get(key)).then(
+    (value) => ({ ok: true, value }),
+    () => ({ ok: false }),
+  );
 }
 
 export async function set(store: Store, key: string, value: unknown): Promise<void> {

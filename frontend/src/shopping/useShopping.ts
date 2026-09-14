@@ -51,16 +51,19 @@ function changed() {
 
 async function readState() {
   const gen = generation;
-  const [s, q, f, b, t] = await Promise.all([
-    idb.get<ShoppingSnapshot>("kv", "snapshot"), idb.get<Op[]>("kv", "queue"), idb.get<FailedOp[]>("kv", "failed"),
-    idb.get<NoteBackup[]>("kv", "backups"), idb.get<number>("kv", "fetched_at"),
+  const reads = await Promise.all([
+    idb.read<ShoppingSnapshot>("kv", "snapshot"), idb.read<Op[]>("kv", "queue"), idb.read<FailedOp[]>("kv", "failed"),
+    idb.read<NoteBackup[]>("kv", "backups"), idb.read<number>("kv", "fetched_at"),
   ]);
   if (gen !== generation) return;
-  snapshot = s ?? null;
-  queue = q ?? [];
-  failed = f ?? [];
-  backups = b ?? [];
-  fetchedAt = t ?? null;
+  // 읽기에 실패하면 메모리의 마지막 값을 그대로 둔다 — 빈 값으로 바꾸면 다음 저장이 기기의 대기열을 지운다
+  if (reads.some((r) => !r.ok)) return;
+  const [s, q, f, b, t] = reads;
+  snapshot = s.value ?? null;
+  queue = q.value ?? [];
+  failed = f.value ?? [];
+  backups = b.value ?? [];
+  fetchedAt = t.value ?? null;
 }
 
 /** 저장은 늘 QUEUE_LOCK 안에서(다른 탭이 고친 대기열을 옛 메모리 값으로 덮지 않게) */
