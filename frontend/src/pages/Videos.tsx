@@ -157,7 +157,10 @@ export default function Videos({ sample }: { sample: boolean }) {
                   : "아직 모아 둔 영상이 없어요."}
             </p>
             {q && channel !== null && (
-              <button type="button" className="btn secondary inline r3-all-channels" onClick={() => setSelected(null)}>
+              <button type="button" className="btn secondary inline r3-all-channels" onClick={() => {
+                setSelected(null);
+                inputRef.current?.focus(); // 버튼이 사라지므로 검색 칸으로 포커스를 옮긴다
+              }}>
                 전체 채널에서 찾기
               </button>
             )}
