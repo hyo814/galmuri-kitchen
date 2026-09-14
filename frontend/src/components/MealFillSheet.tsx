@@ -139,6 +139,7 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
     setImporting(true);
     setImportError("");
     let stage: "import" | "recipe" | "slot" = "import";
+    let recipe: MyRecipe | undefined;
     try {
       const draft = await api<RecipeDraft>("/api/recipes/import", {
         method: "POST",
@@ -147,7 +148,7 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
       });
       stage = "recipe";
       const { title, servings: recipeServings, ingredients, steps, source_url } = draft;
-      const recipe = await api<MyRecipe>("/api/recipes", {
+      recipe = await api<MyRecipe>("/api/recipes", {
         method: "POST",
         body: { title, servings: recipeServings, ingredients, steps, source: "youtube", source_url },
         signal,
@@ -157,13 +158,18 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
     } catch (e) {
       if (signal.aborted) return;
       setImporting(false);
-      setImportError(
-        stage === "slot"
-          ? SLOT_FAILED
-          : stage === "import" && e instanceof ApiError && e.body?.need_text === true
-            ? NEED_TEXT
-            : (e as Error).message,
-      );
+      if (recipe) {
+        // 레시피는 저장됐다: 넣기를 다시 눌러 같은 영상을 또 정리(중복 레시피·AI 횟수)하지 않게 영상 선택을 풀고,
+        // 내 레시피 칸에서 방금 저장한 레시피를 골라 둔다(제목으로 검색해 목록 50개 밖이어도 보이게)
+        setVideoId(null);
+        setRecipeInput(recipe.title);
+        setRecipeId(recipe.id);
+        recipes.retry(); // 같은 검색어였어도 새 레시피가 들어오게 다시 받는다
+        setTab("recipe");
+        setError(SLOT_FAILED);
+        return;
+      }
+      setImportError(stage === "import" && e instanceof ApiError && e.body?.need_text === true ? NEED_TEXT : (e as Error).message);
     } finally {
       if (stage !== "import") forgetRecipeCaches(); // 도중에 끊겨도 서버에는 저장됐을 수 있다
       void reloadUsage();
@@ -184,6 +190,14 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
   return (
     <div ref={rootRef}>
       <Sheet title={`${mealLabel(meal)} 채우기`} description={slotDateText(date, localToday())} onClose={onClose}>
+        {/* 알림은 처음부터 붙어 있는 영역에 글자만 바꿔 넣는다 — 글자와 함께 새로 붙인 영역은 TalkBack이 읽지 않을 수 있다.
+            sr-only(absolute)라 시트 간격(gap)을 차지하지 않는다. 화면에 보이는 상자·오류는 아래에 따로 그린다 */}
+        <p className="sr-only" role="status">
+          {importing ? `영상에서 레시피를 정리하고 있어요. 10초쯤 걸려요. 다 되면 내 레시피에 저장하고 이 칸에 ${servings}인분으로 넣어줘요.` : ""}
+        </p>
+        <p className="sr-only" role="alert">
+          {tab === "video" ? importError : error}
+        </p>
         <div
           className="segmented"
           role="group"
@@ -255,7 +269,10 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
                       name={`${radioName}-video`}
                       checked={video.id === videoId}
                       disabled={importing}
-                      onChange={() => setVideoId(video.id)}
+                      onChange={() => {
+                        setVideoId(video.id);
+                        setImportError("");
+                      }}
                     />
                     <Thumb video={video} />
                     <span className="r3-vtext">
@@ -276,7 +293,7 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
               />
             )}
             {importing && (
-              <div className="ml-status" role="status">
+              <div className="ml-status">
                 <b>
                   <span className="r3-dots" aria-hidden="true">
                     <i />
@@ -288,11 +305,7 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
                 <span>10초쯤 걸려요. 다 되면 내 레시피에 저장하고 이 칸에 {servings}인분으로 넣어줘요.</span>
               </div>
             )}
-            {importError && (
-              <p className="error" role="alert">
-                {importError}
-              </p>
-            )}
+            {importError && <p className="error">{importError}</p>}
           </>
         )}
 
@@ -339,11 +352,7 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
           </div>
         )}
 
-        {error && tab !== "video" && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
+        {error && tab !== "video" && <p className="error">{error}</p>}
         <div className="actions">
           <button type="button" className="btn outline" onClick={close}>
             취소
