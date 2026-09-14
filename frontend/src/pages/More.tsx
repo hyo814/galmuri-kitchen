@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { api, type AiUsage, type ExportSummary, type ItemRule, type Staple, type StorageLocation, type User } from "../api";
 import Icon from "../components/Icon";
 import LocationsSheet from "../components/LocationsSheet";
@@ -8,7 +8,7 @@ import StaplesSheet from "../components/StaplesSheet";
 import { useInstallPrompt } from "../install";
 import { useAsyncAction } from "../useAsyncAction";
 import { navigate } from "../useHashRoute";
-import { forgetRecipeCaches, useResource } from "../useResource";
+import { forgetRecipeCaches, forgetResources, useResource } from "../useResource";
 
 type Theme = "system" | "light" | "dark";
 
@@ -18,7 +18,7 @@ const THEMES: { value: Theme; label: string; short: string; sub?: string }[] = [
   { value: "dark", label: "어둡게", short: "어둡게" },
 ];
 
-const PROVIDERS: Record<User["provider"], { mark: ReactNode; label: string }> = {
+const PROVIDERS: Partial<Record<string, { mark: ReactNode; label: string }>> = {
   kakao: { mark: "K", label: "카카오로 로그인했어요" },
   naver: { mark: "N", label: "네이버로 로그인했어요" },
   google: { mark: "G", label: "구글로 로그인했어요" },
@@ -98,15 +98,31 @@ function AiUsageRow() {
 }
 
 function ThemeSheet({ value, onChange, onClose }: { value: Theme; onChange: (theme: Theme) => void; onClose: () => void }) {
+  const group = useRef<HTMLDivElement>(null);
+  // 시트가 열리면(Sheet의 showModal 뒤) 지금 고른 항목에 포커스
+  useEffect(() => {
+    group.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
+  }, []);
+
+  // 라디오 그룹 키보드: 위·아래 화살표는 포커스만 옮기고, 고르기는 Space·Enter·탭으로 (roving tabindex)
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    const radios = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]')];
+    const i = radios.indexOf(document.activeElement as HTMLElement);
+    radios[(i + (e.key === "ArrowDown" ? 1 : -1) + radios.length) % radios.length].focus();
+  };
+
   return (
     <Sheet title="화면 테마" description="이 기기에서만 바뀌어요" onClose={onClose}>
-      <div className="mo-radios" role="radiogroup" aria-label="화면 테마">
+      <div ref={group} className="mo-radios" role="radiogroup" aria-label="화면 테마" onKeyDown={onKeyDown}>
         {THEMES.map((t) => (
           <button
             key={t.value}
             className="mo-radio"
             role="radio"
             aria-checked={value === t.value}
+            tabIndex={value === t.value ? 0 : -1}
             onClick={() => onChange(t.value)}
           >
             <span className="mo-dot" aria-hidden="true" />
@@ -129,6 +145,7 @@ function ExportSheet({ onClose }: { onClose: () => void }) {
   const count = (n: number | undefined) => (n === undefined ? "…" : `${n}개`);
 
   const download = async () => {
+    if (busy) return; // 준비 중에도 포커스가 버튼에 남도록 disabled 대신 aria-disabled
     const ok = await run(async () => {
       const res = await api<Response>("/api/export", { raw: true });
       const blob = await res.blob();
@@ -136,11 +153,19 @@ function ExportSheet({ onClose }: { onClose: () => void }) {
       const match = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(disposition);
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = match ? decodeURIComponent(match[1] ?? match[2]) : "galmuri-kitchen.zip";
+      const raw = match ? (match[1] ?? match[2]) : "galmuri-kitchen.zip";
+      try {
+        a.download = decodeURIComponent(raw);
+      } catch {
+        a.download = raw; // 잘못된 % 인코딩이면 받은 이름 그대로
+      }
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 1000); // 바로 지우면 일부 브라우저가 받기 전에 끊는다
     });
-    if (ok) onClose();
+    if (ok) {
+      forgetResources("/api/export"); // 다음에 열면 남은 횟수를 새로 받는다
+      onClose();
+    } else summary.reload(); // 429 등: 남은 횟수·버튼 상태를 서버 값으로 맞춘다
   };
 
   return (
@@ -166,7 +191,8 @@ function ExportSheet({ onClose }: { onClose: () => void }) {
       <p className="mo-note">
         <Icon name="info" size={16} />
         <span>
-          사진은 들어가지 않고 파일 이름만 적어요. 하루 {data?.limit ?? 5}번까지 받을 수 있어요.
+          사진은 들어가지 않고 파일 이름만 적어요.
+          {data && ` 하루 ${data.limit}번까지 받을 수 있어요.`}
           {data && data.remaining < data.limit && (data.remaining > 0 ? ` 오늘 ${data.remaining}번 남았어요.` : " 오늘은 다 받았어요.")}
         </span>
       </p>
@@ -179,11 +205,57 @@ function ExportSheet({ onClose }: { onClose: () => void }) {
         <button className="btn outline" onClick={onClose}>
           취소
         </button>
-        <button className="btn primary" disabled={busy || !data || data.remaining <= 0} onClick={download}>
+        <button
+          className="btn primary"
+          disabled={!data || data.remaining <= 0}
+          aria-disabled={busy || undefined}
+          onClick={download}
+        >
           {!busy && <Icon name="download" />}
           {busy ? "준비하는 중…" : "내려받기"}
         </button>
       </div>
+      <p className="sr-only" role="status">
+        {busy ? "파일을 준비하는 중이에요" : ""}
+      </p>
+    </Sheet>
+  );
+}
+
+/** 누르면 시트가 바로 열리고, 목록은 그때 불러온다(불러오는 중·오류도 시트 안에). 바뀌면 재고 화면처럼 추천·레시피 캐시를 지운다 (I1) */
+function LoadedSheet<T>({
+  url,
+  title,
+  onClose,
+  children,
+}: {
+  url: string;
+  title: string;
+  onClose: () => void;
+  children: (data: T, onChanged: () => Promise<void>) => ReactNode;
+}) {
+  const { data, error, reload } = useResource<T>(url);
+  if (data)
+    return children(data, () => {
+      forgetRecipeCaches();
+      return reload();
+    });
+  return (
+    <Sheet title={title} onClose={onClose}>
+      {error ? (
+        <>
+          <p className="error" role="alert">
+            {error}
+          </p>
+          <button className="btn secondary" onClick={reload}>
+            다시 시도
+          </button>
+        </>
+      ) : (
+        <p className="muted" role="status">
+          불러오는 중…
+        </p>
+      )}
     </Sheet>
   );
 }
@@ -194,16 +266,7 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
   const { canPrompt, installed, prompt } = useInstallPrompt();
   const [panel, setPanel] = useState<Panel | null>(null);
   const [theme, setTheme] = useState<Theme>(() => (document.documentElement.dataset.theme as Theme | undefined) ?? "system");
-  // 재고 화면 톱니바퀴에 있던 설정을 여기서도 연다. 재고 화면처럼 바뀌면 추천·레시피 캐시를 지운다 (I1)
-  const locations = useResource<StorageLocation[]>("/api/locations");
-  const staples = useResource<Staple[]>("/api/staples");
-  const rules = useResource<ItemRule[]>("/api/item-rules");
-  const changed = (reload: () => Promise<void>) => () => {
-    forgetRecipeCaches();
-    return reload();
-  };
-  const loadError = locations.error || staples.error || rules.error;
-  const provider = PROVIDERS[user.provider] ?? PROVIDERS.dev;
+  const provider = PROVIDERS[user.provider];
 
   const onInstallClick = async () => {
     if (canPrompt) await prompt();
@@ -228,12 +291,6 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
         <h1>더보기</h1>
       </header>
 
-      {loadError && (
-        <p className="error" role="alert">
-          {loadError}
-        </p>
-      )}
-
       <h2 className="mo-group">우리 부엌</h2>
       <ul className="list">
         <Row
@@ -245,7 +302,7 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
         <Row
           icon={<Icon name="star" />}
           title="필수품"
-          sub={staples.data?.length ? `떨어지면 알려줄 재료 ${staples.data.length}개` : "떨어지면 알려줄 재료"}
+          sub="떨어지면 알려줄 재료"
           onClick={() => setPanel("staples")}
         />
         <Row
@@ -293,9 +350,9 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
       <h2 className="mo-group">계정</h2>
       <ul className="list">
         <Row
-          icon={provider.mark}
-          iconClass={`mo-provider ${user.provider}`}
-          title={provider.label}
+          icon={provider ? provider.mark : <Icon name="check" />}
+          iconClass={provider ? `mo-provider ${user.provider}` : ""}
+          title={provider ? provider.label : "로그인했어요"}
           sub={user.nickname}
         />
         <Row
@@ -307,14 +364,20 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
         />
       </ul>
 
-      {panel === "locations" && locations.data && (
-        <LocationsSheet locations={locations.data} onChanged={changed(locations.reload)} onClose={() => setPanel(null)} />
+      {panel === "locations" && (
+        <LoadedSheet<StorageLocation[]> url="/api/locations" title="위치 관리" onClose={() => setPanel(null)}>
+          {(data, onChanged) => <LocationsSheet locations={data} onChanged={onChanged} onClose={() => setPanel(null)} />}
+        </LoadedSheet>
       )}
-      {panel === "staples" && staples.data && (
-        <StaplesSheet staples={staples.data} onChanged={changed(staples.reload)} onClose={() => setPanel(null)} />
+      {panel === "staples" && (
+        <LoadedSheet<Staple[]> url="/api/staples" title="필수품" onClose={() => setPanel(null)}>
+          {(data, onChanged) => <StaplesSheet staples={data} onChanged={onChanged} onClose={() => setPanel(null)} />}
+        </LoadedSheet>
       )}
-      {panel === "rules" && rules.data && (
-        <RulesSheet rules={rules.data} onChanged={changed(rules.reload)} onClose={() => setPanel(null)} />
+      {panel === "rules" && (
+        <LoadedSheet<ItemRule[]> url="/api/item-rules" title="품목별 경고" onClose={() => setPanel(null)}>
+          {(data, onChanged) => <RulesSheet rules={data} onChanged={onChanged} onClose={() => setPanel(null)} />}
+        </LoadedSheet>
       )}
       {panel === "theme" && <ThemeSheet value={theme} onChange={chooseTheme} onClose={() => setPanel(null)} />}
       {panel === "export" && <ExportSheet onClose={() => setPanel(null)} />}

@@ -84,7 +84,7 @@ export default function IngredientForm({
       setError("가격은 0~10,000,000원 사이 숫자로 입력해주세요.");
       return;
     }
-    if (usedUp) setDeleting({ reason: "eaten" }); // 수량 0 = 다 썼어요(usedUp이면 onDelete가 있다)
+    if (usedUp) setDeleting({ reason: "eaten" }); // 수량 0 = 다 먹었어요(usedUp이면 onDelete가 있다)
     else run(() => onSubmit(input(), false));
   };
 
@@ -308,7 +308,7 @@ export default function IngredientForm({
               {lastAdded ? "닫기" : "취소"}
             </button>
             <button className={`btn ${usedUp ? "used-up" : "primary"}`} disabled={busy}>
-              {busy ? "저장 중…" : usedUp ? "다 썼어요 (삭제)" : "저장"}
+              {busy ? "저장 중…" : usedUp ? "다 먹었어요 (삭제)" : "저장"}
             </button>
           </div>
           {onDelete && (
@@ -325,7 +325,7 @@ export default function IngredientForm({
           description="왜 지우는지 고르면 이번 달 리포트에 반영해요. 안 골라도 괜찮아요."
           onClose={() => setDeleting(null)}
         >
-          <div className="mo-chips" role="radiogroup" aria-label="지우는 이유">
+          <div className="mo-chips" role="group" aria-label="지우는 이유 (선택)">
             {DELETE_REASONS.map((r) => {
               const checked = deleting.reason === r.value;
               return (
@@ -333,8 +333,7 @@ export default function IngredientForm({
                   key={r.value}
                   type="button"
                   className="mo-chip"
-                  role="radio"
-                  aria-checked={checked}
+                  aria-pressed={checked}
                   onClick={() => setDeleting({ reason: checked ? null : r.value })}
                 >
                   {checked && <Icon name="check" size={18} />}
@@ -344,7 +343,7 @@ export default function IngredientForm({
             })}
           </div>
           <div className="actions">
-            <button type="button" className="btn outline" onClick={() => setDeleting(null)}>
+            <button type="button" className="btn outline" disabled={busy} onClick={() => setDeleting(null)}>
               취소
             </button>
             <button type="button" className="btn danger-fill" disabled={busy} onClick={confirmDelete}>
