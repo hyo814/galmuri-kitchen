@@ -125,7 +125,9 @@ export default function MealPlanSheet({ today, defaultServings, plan, onSaved, o
               <Icon name="plus" />
             </button>
           </div>
-          <p className="ml-hint">새 칸에 먼저 넣을 인분이에요. 처음엔 1인분, 다음 식단부터는 마지막으로 고른 값으로 시작해요</p>
+          <p className="ml-hint">
+            {plan ? "새 칸에 먼저 넣을 인분이에요" : "새 칸에 먼저 넣을 인분이에요. 처음엔 1인분, 다음 식단부터는 마지막으로 고른 값으로 시작해요"}
+          </p>
         </div>
 
         {outside > 0 && (

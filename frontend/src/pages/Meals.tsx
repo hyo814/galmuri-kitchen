@@ -119,10 +119,10 @@ export default function Meals({ user }: { user: User }) {
         onPick={() => setSheet("pick")}
         onChanged={list.reload}
         onDeleted={async () => {
+          forgetResources("/api/meal-plans");
+          await list.reload(); // created와 같은 순서: 목록을 받은 뒤에 바꾼다
           lastPlanId = null;
           setPlanId(null);
-          forgetResources("/api/meal-plans");
-          await list.reload();
           // 지운 식단 화면의 메뉴 버튼이 사라져 포커스를 잃는다 → 제목으로
           setTimeout(() => {
             const h1 = document.querySelector<HTMLElement>(".topbar h1");
@@ -187,6 +187,9 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
     lastWeek[summary.id] = week;
   }, [summary.id, week]);
 
+  // 복사 결과 한 줄은 주·보기가 바뀌면 지운다(식단이 바뀌면 key로 새로 그린다)
+  useEffect(() => setCopied(""), [week, view]);
+
   const switchView = (next: "week" | "month") => {
     lastView = next;
     setView(next);
@@ -210,6 +213,7 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
     setOpenSlot(null);
     if (!dirty.current) return;
     dirty.current = false;
+    setCopied("");
     onChanged();
     await reload();
     // 칸을 비우면 시트를 연 줄 버튼이 사라져 포커스를 잃는다 → 그날 카드로 옮긴다
@@ -224,6 +228,7 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
 
   /** 서버가 돌려준 식단으로 바꾸고 목록(채운 칸 수)도 다시 받는다 */
   const replacePlan = async (next: MealPlan) => {
+    setCopied(""); // 다음 변경에서 지난 복사 결과는 지운다(복사는 끝난 뒤 다시 적는다)
     forgetResources("/api/meal-plans"); // 목록의 채운 칸 수도 다시 받게(이 식단 캐시도 지우니 아래에서 다시 넣는다)
     cache.set(url, next);
     onChanged();
@@ -234,7 +239,7 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
   const saved = async (slot: MealSlot) => {
     if (plan) await replacePlan({ ...plan, slots: [...plan.slots.filter((s) => s.date !== slot.date || s.meal !== slot.meal), slot] });
     setFill(null);
-    // 빈 칸의 + 버튼은 채운 칸 줄로 바뀌어 사라진다 → 그 줄로 포커스
+    // 빈 끼니 칩은 채운 칸 줄로 바뀌어 사라진다 → 그 줄로 포커스
     setTimeout(() => {
       if (document.activeElement !== document.body) return;
       document.querySelector<HTMLElement>(`.ml-day[data-date="${slot.date}"] [data-meal="${slot.meal}"]`)?.focus();
@@ -444,40 +449,55 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
                 </div>
                 {MEALS.map(([meal, label]) => {
                   const slot = slots.get(`${date}|${meal}`);
-                  if (!slot)
-                    return (
-                      <div key={meal} className="ml-slot">
-                        <span className="ml-meal">{label}</span>
-                        <button
-                          type="button"
-                          className="ml-plus"
-                          aria-label={`${head.day} ${label} 채우기`}
-                          aria-haspopup="dialog"
-                          onClick={() => setFill({ date, meal })}
-                        >
-                          <Icon name="plus" />
-                        </button>
-                      </div>
-                    );
+                  if (!slot) return null;
                   const urgent = slot.recipe_id !== null ? urgentLabel(slot.urgent_names) : "";
                   return (
-                    <button key={meal} type="button" className="ml-slot" data-meal={meal} aria-haspopup="dialog" onClick={() => {
+                    <button
+                      key={meal}
+                      type="button"
+                      className="ml-slot"
+                      data-meal={meal}
+                      aria-haspopup="dialog"
+                      aria-label={`${head.day} ${label} ${slot.title}, ${slot.servings}인분${urgent && `, ${urgent}`}`}
+                      onClick={() => {
                         sheetOpen.current = true;
                         setOpenSlot(slot);
-                      }}>
+                      }}
+                    >
                       <span className="ml-meal">{label}</span>
                       <span className="row-main">
                         <span className="ml-title">{slot.title}</span>
-                        {urgent && (
-                          <span className="sh-meta">
-                            <span className="sh-tag warn">{urgent}</span>
-                          </span>
-                        )}
+                        <span className="ml-sub">
+                          {slot.servings}인분
+                          {urgent && (
+                            <>
+                              {" · "}
+                              <span className="ml-use">{urgent}</span>
+                            </>
+                          )}
+                        </span>
                       </span>
-                      <span className="ml-serv">{slot.servings}인분</span>
                     </button>
                   );
                 })}
+                {/* 시안 B: 빈 끼니는 카드 맨 아래 칩 한 줄 */}
+                {filled < 4 && (
+                  <div className="ml-add-chips">
+                    {MEALS.filter(([meal]) => !slots.has(`${date}|${meal}`)).map(([meal, label]) => (
+                      <button
+                        key={meal}
+                        type="button"
+                        className="ml-add-chip"
+                        aria-label={`${head.day} ${label} 채우기`}
+                        aria-haspopup="dialog"
+                        onClick={() => setFill({ date, meal })}
+                      >
+                        <Icon name="plus" size={16} />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </section>
             );
           })}
@@ -491,6 +511,7 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
           onChanged={() => {
             if (sheetOpen.current) dirty.current = true;
             else {
+              setCopied("");
               void reload();
               onChanged();
             }
