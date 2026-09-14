@@ -3,6 +3,7 @@ import type { ShoppingItem, User } from "../api";
 import Icon from "../components/Icon";
 import Mascot from "../components/Mascot";
 import Sheet from "../components/Sheet";
+import ShoppingMemoCard from "../components/ShoppingMemoCard";
 import ShoppingItemSheet, { type ItemInput } from "../components/ShoppingItemSheet";
 import StoreLinksSheet from "../components/StoreLinksSheet";
 import { formatDate, withJosa } from "../format";
@@ -32,7 +33,8 @@ function failedLabel(op: Op, items: { id?: number; client_id: string | null; nam
 
 /** 시안 ShoppingList·ShoppingOffline·ShoppingDark: 장보기 탭 */
 export default function Shopping({ user }: { user: User }) {
-  const { view, offline, pending, failed, act, dismissFailed } = useShopping();
+  const shopping = useShopping();
+  const { view, offline, pending, failed, act, dismissFailed } = shopping;
   const [editing, setEditing] = useState<ViewItem | "new" | null>(null);
   const [store, setStore] = useState<string | null>(null);
   const [showFailed, setShowFailed] = useState(false);
@@ -147,7 +149,7 @@ export default function Shopping({ user }: { user: User }) {
         )}
       </div>
 
-      {/* 메모 카드 자리(sh-memo): Task 10의 ShoppingMemoCard가 여기, 재고에 넣기 막대 위에 들어간다 */}
+      <ShoppingMemoCard shopping={shopping} />
 
       {checked > 0 && (
         <div className="sh-stock">

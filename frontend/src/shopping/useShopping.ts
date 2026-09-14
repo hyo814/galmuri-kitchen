@@ -240,9 +240,10 @@ async function fetchSnapshot(force: boolean): Promise<void> {
 export const refresh = () => fetchSnapshot(true);
 
 /** 변경 하나: (다시 읽고) 합쳐 넣기 → 저장 → 화면 갱신 → 보내기 */
-function act(op: Op) {
+/** 기기 저장소에 넣고 화면을 갱신하면 끝나는 Promise(서버에 보낸 결과는 기다리지 않는다) */
+function act(op: Op): Promise<void> {
   const gen = generation;
-  void load()
+  return load()
     .then(() =>
       withQueue(async () => {
         if (gen !== generation) return;
@@ -263,10 +264,10 @@ function act(op: Op) {
     });
 }
 
-function addPhoto(note: Ref, blob: Blob) {
+function addPhoto(note: Ref, blob: Blob): Promise<void> {
   const client_id = newClientId();
   const blob_key = `local:${client_id}`;
-  void idb.set("blobs", blob_key, blob).then(() => act({ op: "photo_add", note, client_id, blob_key, at: new Date().toISOString() }));
+  return idb.set("blobs", blob_key, blob).then(() => act({ op: "photo_add", note, client_id, blob_key, at: new Date().toISOString() }));
 }
 
 /** 기기에 있는 사진 → 없으면 서버에서 받아 기기에 남긴다 */

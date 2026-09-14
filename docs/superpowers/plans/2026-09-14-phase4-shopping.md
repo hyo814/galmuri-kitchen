@@ -479,8 +479,8 @@ frontend/
 **Interfaces:**
 - Consumes: `useShopping`(`note_add`·`note_save`·`note_delete`·`addPhoto`·`photo_delete`·`photoBlob`·`backups`), `resizeImage`(image.ts, 긴 변 1568px), `goBack`
 - Produces:
-  - **메모 카드(`sh-memo`):** 아이콘 · 제목 `메모 · {어디서}`(어디서가 비면 `메모`) · 본문 첫 줄(`sh-memo-text`, 한 줄 말줄임) · 사진 썸네일(`sh-thumbs`, 최대 4개) · 오른쪽 화살표 → 가장 최근 메모의 장보기 메모 화면. 메모가 2개 이상이면 카드 아래 작은 링크 `메모 N개 더 보기` → `#/shopping/memos`(행: `어디서` 또는 `메모` · 본문 첫 줄 · 사진 수, 아래 `새 메모`). 메모가 없으면 같은 자리에 점선 카드 `메모 쓰기`(note_add 후 화면으로).
-  - **경로:** `#/shopping/memo`(열 메모는 `sessionStorage`의 `shopping-memo-ref`에 `{id}` 또는 `{client_id}` — 오프라인에서 만든 메모도 열리고 새로고침에도 남음), `#/shopping/memos`.
+  - **메모 카드(`sh-memo`):** 아이콘 · 제목 `메모 · {어디서}`(어디서가 비면 `메모`) · 본문 첫 줄(`sh-memo-text`, 한 줄 말줄임) · 사진 썸네일(`sh-thumbs`, 최대 2개 — 리드 결정 2026-09-14) · 오른쪽 화살표 → 가장 최근 메모의 장보기 메모 화면. 메모가 2개 이상이면 카드 아래 작은 링크 `메모 N개 더 보기` → `#/shopping/memos`(행: `어디서` 또는 `메모` · 본문 첫 줄 · 사진 수, 아래 `새 메모`). 메모가 없으면 같은 자리에 점선 카드 `메모 쓰기`(note_add 후 화면으로).
+  - **경로:** `#/shopping/memos/:id`(서버 메모), `#/shopping/memos/local`(열 메모는 `sessionStorage`의 `shopping-memo-ref`에 `{client_id}` — 오프라인에서 만든 메모도 열리고 새로고침에도 남음), `#/shopping/memos/new`(빈 메모를 만들고 local로 바꿈), `#/shopping/memos`.
   - **`MemoPage` — `ShoppingMemo.tsx`:** 뒤로 `장보기`, 제목 `장보기 메모`. `rc-sec` 안 `어디서`(input, 30자, 자리 표시 `이마트 성수점`) · `메모`(textarea `rc-area`, 16px, 2000자). **저장 버튼 없음 — 입력이 멈추고 1초 뒤와 화면을 나갈 때 `note_save`**(대기열이 합쳐 준다). 둘 다 비어 있고 사진도 없는 채로 나가면 메모를 지운다(빈 메모가 쌓이지 않게).
     - `rc-sec` `사진` 머리 + 오른쪽 `N / 10`(`hint`). `sh-photos` 칸: 썸네일들 + 마지막 칸 `사진 추가`(누르면 작은 시트 `사진 찍기`(`<input type="file" accept="image/*" capture="environment">`) · `앨범에서 고르기`(capture 없음)). 10장이면 `사진 추가` 칸을 숨긴다. 오프라인에서 찍은 사진은 기기 blob으로 바로 보이고 썸네일 모서리에 작은 `저장 전`.
     - 사진 아래 `btn secondary` 아이콘 + `사진에서 살 것 뽑기`(Task 11) — 사진이 0장이면 숨김.
