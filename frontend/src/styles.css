@@ -4177,8 +4177,18 @@ button.sh-offline svg:last-child {
   background: var(--surface);
 }
 
+/* 오늘 테두리는 줄·칩 줄 윗선보다 위에 그린다(윗선이 테두리를 끊지 않게) */
 .ml-day.today {
+  position: relative;
+}
+
+.ml-day.today::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
   box-shadow: inset 0 0 0 1.5px var(--accent);
+  pointer-events: none;
 }
 
 .ml-day-head {
