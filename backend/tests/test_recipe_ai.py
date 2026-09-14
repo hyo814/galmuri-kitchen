@@ -2,6 +2,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy import event as sqlalchemy_event
 
 from app import ai, scan
 from app.ingredients import SEOUL, seoul_today
@@ -73,7 +74,7 @@ def test_clean_draft_trims_caps_and_rejects_empty():
     }
     for servings in (0, 21, "2", True, None):
         assert clean_draft(draft(servings=servings))["servings"] == 2
-    for minutes in (0, 301, 999, "20", True, None, 20.5):
+    for minutes in (0, 301, 999, "20", "오분", True, None, 20.5):
         assert clean_draft(draft(minutes=minutes))["minutes"] is None
     assert clean_draft(draft(minutes=300))["minutes"] == 300
     no_minutes = draft()
@@ -136,6 +137,20 @@ def test_similar_public_image_prefers_closest_then_smaller_id(app):
         assert similar_public_image("매콤 두부조림 정식 백반", candidates) == PHOTO.format("near")  # 포함하는 것 중 길이 차가 작은 것
 
 
+def test_similar_public_image_jaccard_tie_and_short_tokens(app):
+    add_public(
+        app,
+        ("된장 찌개 백반", PHOTO.format("first")),
+        ("찌개 된장 정식", PHOTO.format("second")),
+        ("된장 국수", PHOTO.format("noodle")),
+    )
+    with app.app_context():
+        candidates = public_image_candidates()
+        assert similar_public_image("찌개 된장 전", candidates) == PHOTO.format("first")  # 둘 다 2/3 → id 작은 것
+        # '전'(한 글자)은 토큰 비교에서 빠진다: {된장} vs {된장, 국수} = 0.5. 셌다면 1/3이라 사진이 없다
+        assert similar_public_image("된장 전", candidates) == PHOTO.format("noodle")
+
+
 # --- ai.suggest_recipes (가짜 Anthropic 클라이언트) ---
 
 
@@ -148,7 +163,7 @@ def test_suggest_recipes_sends_stock_and_schema(app, fake_anthropic):
     usage = SimpleNamespace(input_tokens=900, output_tokens=400)
     calls = fake_anthropic(response=SimpleNamespace(stop_reason="end_turn", parsed_output=parsed, usage=usage, model="claude-sonnet-5-answered"))
     app.config["ANTHROPIC_API_KEY"] = "test-key"
-    lines = ["두부 (빨리)"] + [f"재료{i}" for i in range(149)]
+    lines = ["두부 (빨리)", "두부 (빨리)"] + [f"재료{i}" for i in range(149)]  # 같은 이름 줄은 한 번만
     with app.app_context():
         result, tokens = ai.suggest_recipes(lines)
 
@@ -159,7 +174,7 @@ def test_suggest_recipes_sends_stock_and_schema(app, fake_anthropic):
     request = calls["parse"]
     assert (request["model"], request["output_format"]) == ("claude-sonnet-5", ai.Suggestions)
     prompt = request["messages"][0]["content"]
-    assert "두부 (빨리)" in prompt.splitlines()
+    assert prompt.splitlines().count("두부 (빨리)") == 1
     assert "재료98" in prompt.splitlines() and "재료99" not in prompt  # 재고는 100줄까지만 보낸다
 
 
@@ -258,6 +273,15 @@ def test_ai_recipes_real_call_cleans_marks_urgent_and_logs_tokens(client, login,
     assert ai_call_costs(app) == [("claude-sonnet-5-answered", 1500, 120)]
 
 
+def test_ai_recipes_returns_first_three_usable(client, login, app, monkeypatch):
+    login()
+    app.config["ANTHROPIC_API_KEY"] = "test-key"
+    add_ingredient(client, "두부")
+    titles = ["가지볶음", "나물무침", "두부조림", "라면", "무국"]
+    monkeypatch.setattr(ai, "suggest_recipes", lambda lines: ({"recipes": [draft(t) for t in titles]}, USAGE))
+    assert [r["title"] for r in make(client).get_json()["recipes"]] == titles[:3]
+
+
 def test_ai_recipes_failure_is_502_and_counted(client, login, app, monkeypatch):
     user = login()
     app.config["ANTHROPIC_API_KEY"] = "test-key"
@@ -329,6 +353,52 @@ def test_recipe_burst_limit_separate_from_scan(client, login, app, monkeypatch):
         db.session.commit()
     res = make(client)
     assert (res.status_code, res.get_json()) == (429, {"error": "잠시 후 다시 시도해주세요."})
+
+
+def test_recipe_burst_limit_boundary(client, login, app, monkeypatch):
+    user = login()
+    app.config.update(ANTHROPIC_API_KEY="test-key", AI_SCAN_BURST_LIMIT=3)
+    add_ingredient(client, "두부")
+    monkeypatch.setattr(ai, "suggest_recipes", lambda lines: ({"recipes": [draft()]}, USAGE))
+    _, now = fix_clock(monkeypatch)
+    with app.app_context():
+        db.session.add_all([AiCall(user_id=user.id, kind="recipe", created_at=now - timedelta(seconds=59)) for _ in range(2)])
+        db.session.commit()
+    assert make(client).status_code == 200  # 60초 안에 2번(한도 - 1) → 된다
+    res = make(client)  # 이제 3번 → 막힌다
+    assert (res.status_code, res.get_json()) == (429, {"error": "잠시 후 다시 시도해주세요."})
+
+
+def test_limit_check_and_call_record_share_one_locked_transaction(client, login, app, monkeypatch):
+    """세고 기록하는 사이에 다른 요청이 끼어들지 않게, PostgreSQL에서는 사용자·묶음별 잠금을 잡고 같은 트랜잭션에서 기록한다."""
+    login()
+    app.config["ANTHROPIC_API_KEY"] = "test-key"
+    add_ingredient(client, "두부")
+    monkeypatch.setattr(ai, "suggest_recipes", lambda lines: ({"recipes": [draft()]}, USAGE))
+    events = []
+    with app.app_context():
+        engine = db.engine
+
+    def on_execute(conn, cursor, statement, *args):
+        events.append(statement.split()[0].upper() if "pg_advisory_xact_lock" not in statement else "LOCK")
+
+    def on_commit(conn):
+        events.append("COMMIT")
+
+    sqlalchemy_event.listen(engine, "before_cursor_execute", on_execute)
+    sqlalchemy_event.listen(engine, "commit", on_commit)
+    try:
+        assert make(client).status_code == 200
+    finally:
+        sqlalchemy_event.remove(engine, "before_cursor_execute", on_execute)
+        sqlalchemy_event.remove(engine, "commit", on_commit)
+    first_insert = events.index("INSERT")
+    before = events[:first_insert]
+    last_commit = len(before) - 1 - before[::-1].index("COMMIT") if "COMMIT" in before else -1
+    in_transaction = before[last_commit + 1 :]
+    assert in_transaction.count("SELECT") >= 2  # 연속·하루 한도를 센 SELECT가 INSERT와 같은 트랜잭션
+    assert events[first_insert + 1] == "COMMIT"
+    assert ("LOCK" in in_transaction) == (engine.dialect.name == "postgresql")
 
 
 # --- GET /api/ai-usage ---

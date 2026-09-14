@@ -105,7 +105,12 @@ def test_row_fields_maps_cookrcp01_row():
         ("http://openapi.foodsafetykorea.go.kr/x.png", "https://openapi.foodsafetykorea.go.kr/x.png"),
         ("https://www.foodsafetykorea.go.kr/x.png", "https://www.foodsafetykorea.go.kr/x.png"),
         ("http://evil.example.com/x.png", None),  # 다른 호스트는 http를 https로 바꿔주지 않고 버린다
-        ("https://evil.example.com/x.png", "https://evil.example.com/x.png"),  # 이미 https면 호스트를 가리지 않는다
+        ("https://evil.example.com/x.png", None),  # https여도 식약처 호스트가 아니면 버린다
+        ("https://www.foodsafetykorea.go.kr.evil.example/x.png", None),
+        ("https://evil.example\\@www.foodsafetykorea.go.kr/x.png", None),  # 브라우저는 evil.example을 부른다
+        ("https://u:p@www.foodsafetykorea.go.kr/x.png", None),
+        ("https://www.foodsafetykorea.go.kr/x y.png", None),
+        ("https://[", None),
         ("javascript:alert(1)", None),
         ("ftp://www.foodsafetykorea.go.kr/x.png", None),
         ("", None),

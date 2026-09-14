@@ -14,7 +14,6 @@ from .auth import get_owned_or_404, login_required
 from .ingredients import seasoning_names, seoul_today, status_of, user_rules
 from .matching import match_prepared, prepare
 from .models import Ingredient, PublicRecipe, Recipe, db
-from .public_recipes import IMAGE_HTTPS_HOSTS
 from .recipe_parse import ingredient_key
 from .validation import integer, iso_datetime, text
 
@@ -136,16 +135,17 @@ def _source_url(value):
     return value.strip()
 
 
-def _image_url(value):
-    """AI 레시피에 붙인 비슷한 공공 레시피 사진만 받는다(식약처 https). 유튜브 썸네일 같은 외부 사진은 저장하지 않는다(스펙 25절)."""
+def _image_url(value, source):
+    """AI 레시피에 붙인 비슷한 공공 레시피 사진만 받는다: 공공 레시피에 실제로 있는 주소와 똑같을 때만.
+    주소 모양을 따지지 않으므로 역슬래시·사용자 정보 같은 호스트 속이기가 통하지 않는다. 유튜브 썸네일 같은 외부 사진은 저장하지 않는다(스펙 25절)."""
     if value is None:
         return None
-    try:
-        parsed = urlparse(value) if isinstance(value, str) and len(value) <= 500 else None
-        host = parsed and parsed.hostname
-    except ValueError:  # "https://[" 같은 깨진 주소
-        host = None
-    if not host or parsed.scheme != "https" or host not in IMAGE_HTTPS_HOSTS:
+    if (
+        source != "ai"
+        or not isinstance(value, str)
+        or not 0 < len(value) <= 500
+        or db.session.query(PublicRecipe.id).filter_by(image_url=value).first() is None
+    ):
         abort(400, "잘못된 요청이에요.")
     return value
 
@@ -391,9 +391,10 @@ def list_recipes():
 def create_recipe():
     data = request.get_json(silent=True)
     fields = parse_recipe(data)
-    if data.get("source", "mine") not in SOURCES:
+    source = data.get("source", "mine")
+    if source not in SOURCES:
         abort(400, "잘못된 요청이에요.")
-    fields.update(source=data.get("source", "mine"), image_url=_image_url(data.get("image_url")))
+    fields.update(source=source, image_url=_image_url(data.get("image_url"), source))
     _check_recipe_cap()
     recipe = Recipe(user_id=g.user.id, **fields)
     db.session.add(recipe)

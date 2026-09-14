@@ -222,5 +222,6 @@ SAMPLE_SUGGESTIONS = [
 
 def suggest_recipes(stock_lines):
     """재고 줄(임박 재료가 앞, '(빨리)' 표시)로 레시피 3개를 만든다. (결과, 토큰 사용량)을 돌려주고, 실패하면 AiError."""
-    prompt = RECIPE_PROMPT + "\n".join(stock_lines[:MAX_STOCK_LINES])
+    lines = list(dict.fromkeys(stock_lines))[:MAX_STOCK_LINES]  # 같은 재료를 여러 번 넣었어도 한 줄
+    prompt = RECIPE_PROMPT + "\n".join(lines)
     return _parse(prompt, Suggestions, 8192, "recipe suggestions")

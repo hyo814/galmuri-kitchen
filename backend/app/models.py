@@ -151,7 +151,7 @@ class Recipe(db.Model):
     servings = db.Column(db.Integer, nullable=False, default=2)
     ingredients = db.Column(db.JSON, nullable=False, default=list)  # [{name, amount}]
     steps = db.Column(db.JSON, nullable=False, default=list)  # [str]
-    source = db.Column(db.String(20), nullable=False, default="mine")  # mine | public | ai | youtube | instagram | text
+    source = db.Column(db.String(20), nullable=False, default="mine")  # mine | public | ai | youtube | instagram | blog | text
     source_url = db.Column(db.String(500))
     public_recipe_id = db.Column(db.Integer, db.ForeignKey("public_recipes.id", ondelete="SET NULL"))
     image_url = db.Column(db.String(500))

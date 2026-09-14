@@ -154,7 +154,7 @@ def test_optional_fields_and_non_object_body(client, login):
     assert client.post("/api/recipes", json=["title"]).status_code == 400
 
 
-def test_create_recipe_accepts_import_sources_and_image(client, login):
+def test_create_recipe_accepts_import_sources_and_image(client, login, app):
     login()
     for source in ("ai", "youtube", "blog"):
         recipe = create(client, source=source).get_json()
@@ -164,24 +164,33 @@ def test_create_recipe_accepts_import_sources_and_image(client, login):
         assert (res.status_code, res.get_json()) == (400, {"error": "잘못된 요청이에요."})
 
     photo = "https://www.foodsafetykorea.go.kr/uploadimg/cook/10_00100_2.jpg"
+    add_public(app, image_url=photo)
     res = create(client, source="ai", image_url=photo)
     assert (res.status_code, res.get_json()["image_url"]) == (201, photo)
     assert create(client, image_url=None).get_json()["image_url"] is None
     for bad in (
-        "http://www.foodsafetykorea.go.kr/uploadimg/cook/1.jpg",
+        "https://www.foodsafetykorea.go.kr/uploadimg/cook/other.jpg",  # 식약처 주소여도 공공 레시피에 없는 사진
+        "http://www.foodsafetykorea.go.kr/uploadimg/cook/10_00100_2.jpg",
         "https://i.ytimg.com/vi/abc/hqdefault.jpg",
         "javascript:alert(1)",
-        "https://www.foodsafetykorea.go.kr@evil.example/1.jpg",
+        "https://evil.example\\@www.foodsafetykorea.go.kr/uploadimg/cook/10_00100_2.jpg",
+        "https://u:p@www.foodsafetykorea.go.kr/uploadimg/cook/10_00100_2.jpg",
+        "https://www.foodsafetykorea.go.kr.evil.example/uploadimg/cook/10_00100_2.jpg",
         "https://[",
         "",
-        "https://www.foodsafetykorea.go.kr/" + "a" * 500,
-        ["https://www.foodsafetykorea.go.kr/1.jpg"],
+        photo + "a" * 500,
+        [photo],
     ):
-        res = create(client, image_url=bad)
+        res = create(client, source="ai", image_url=bad)
         assert (res.status_code, res.get_json()) == (400, {"error": "잘못된 요청이에요."}), bad
+    for source in ("mine", "youtube"):  # 사진은 AI 레시피에만 붙인다
+        res = create(client, source=source, image_url=photo)
+        assert (res.status_code, res.get_json()) == (400, {"error": "잘못된 요청이에요."})
+    res = create(client, image_url=photo)
+    assert res.status_code == 400
 
     recipe = create(client, source="ai", image_url=photo).get_json()
-    res = client.put(f"/api/recipes/{recipe['id']}", json={**BODY, "source": "youtube", "image_url": "https://www.foodsafetykorea.go.kr/2.jpg"})
+    res = client.put(f"/api/recipes/{recipe['id']}", json={**BODY, "source": "youtube", "image_url": None})
     assert (res.status_code, res.get_json()["source"], res.get_json()["image_url"]) == (200, "ai", photo)
 
 

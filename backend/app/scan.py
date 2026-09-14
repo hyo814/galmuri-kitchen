@@ -1,7 +1,9 @@
 import math
+import zlib
 from datetime import datetime, time, timedelta, timezone
 
 from flask import Blueprint, abort, current_app, g, jsonify, request
+from sqlalchemy import text
 
 from . import ai
 from .auth import login_required
@@ -54,8 +56,15 @@ def calls_recent(user_id, kinds):
 
 
 def check_ai_limits(user_id, kinds, limit, what):
-    """연속 호출·하루 한도를 넘으면 429. what은 문구 주어(예: "사진 인식은")."""
-    # ponytail: 세고 나서 호출하므로 동시에 여러 번 보내면 한도를 조금 넘을 수 있다. 문제되면 사용자 단위 잠금
+    """연속 호출·하루 한도를 넘으면 429. what은 문구 주어(예: "사진 인식은").
+    바로 뒤에 start_ai_call을 불러 같은 트랜잭션에서 기록해야 한다(그 사이에 커밋하지 않는다).
+    PostgreSQL은 사용자·kind 묶음별 트랜잭션 잠금을 잡아, 동시에 온 요청이 같은 개수를 보고 함께 통과하지 못하게 한다(커밋·롤백 때 풀린다)."""
+    if db.session.get_bind().dialect.name == "postgresql":
+        db.session.execute(
+            text("SELECT pg_advisory_xact_lock(:group_key, :user_id)"),
+            {"group_key": zlib.crc32(",".join(kinds).encode()) & 0x7FFFFFFF, "user_id": user_id},
+        )
+    # ponytail: SQLite(개발용)는 잠그지 않는다 — 동시에 보내면 한도를 조금 넘을 수 있다. 운영은 PostgreSQL이다.
     if calls_recent(user_id, kinds) >= current_app.config["AI_SCAN_BURST_LIMIT"]:
         abort(429, "잠시 후 다시 시도해주세요.")
     if calls_today(user_id, kinds) >= limit:
@@ -64,6 +73,7 @@ def check_ai_limits(user_id, kinds, limit, what):
 
 def start_ai_call(user_id, kind):
     """AI로 보낸 호출은 성공·실패와 관계없이 센다(실패도 비용이 들어 남용을 막기 위해). 호출 직전에 부른다.
+    커밋하면 check_ai_limits가 잡은 잠금이 풀린다.
     created_at을 명시적으로 넣는다: 모델 기본값(utcnow) 대신 이 모듈의 utcnow를 써서
     calls_today/calls_recent와 같은 시계를 보게 한다(테스트에서 시계를 고정하기 쉽다)."""
     call = AiCall(user_id=user_id, kind=kind, model=current_app.config["CLAUDE_MODEL"], created_at=utcnow())

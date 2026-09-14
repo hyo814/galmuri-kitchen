@@ -29,9 +29,10 @@ def clean_draft(raw):
     for row in raw.get("ingredients") if isinstance(raw.get("ingredients"), list) else []:
         name = row.get("name") if isinstance(row, dict) else None
         name = name.strip()[:MAX_NAME].strip() if isinstance(name, str) else ""
-        if not name or normalize(name) in seen:
+        key = normalize(name) or name  # "(국산)"처럼 괄호뿐인 이름은 정규화하면 비어 버린다
+        if not name or key in seen:
             continue
-        seen.add(normalize(name))
+        seen.add(key)
         amount = row.get("amount")
         ingredients.append({"name": name, "amount": amount.strip()[:MAX_AMOUNT].strip() if isinstance(amount, str) else ""})
         if len(ingredients) == MAX_INGREDIENTS:
