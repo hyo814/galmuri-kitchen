@@ -121,3 +121,12 @@ export function timeAgo(iso: string, now = Date.now()): string {
   if (days < 365) return `${Math.floor(days / 30)}달 전`;
   return `${Math.floor(days / 365)}년 전`;
 }
+
+/** 영상 칸 채널 칩 이름: 한글 채널명 뒤에 붙은 영어만 뗀다. "자취요리신 simple cooking" → "자취요리신", "편스토랑X   FUNSTAURANT-X" → "편스토랑X".
+ *  한글이 없는 이름은 그대로(목록의 채널명은 전체 이름을 쓴다) */
+export function shortChannelName(title: string): string {
+  const words = title.trim().split(/\s+/);
+  let last = words.length - 1;
+  while (last >= 0 && !/[가-힣]/.test(words[last])) last--;
+  return last < 0 ? title.trim() : words.slice(0, last + 1).join(" ");
+}

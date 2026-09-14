@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ChannelList, type Video, type VideoPage } from "../api";
 import Icon from "../components/Icon";
 import InfiniteSentinel from "../components/InfiniteSentinel";
-import { formatDuration, timeAgo, withJosa } from "../format";
+import { formatDuration, shortChannelName, timeAgo, withJosa } from "../format";
 import { navigate } from "../useHashRoute";
 import { useInfiniteList, type Page } from "../useInfiniteList";
 import { useResource } from "../useResource";
@@ -118,8 +118,8 @@ export default function Videos({ sample }: { sample: boolean }) {
           전체
         </button>
         {chips.map((c) => (
-          <button key={c.id} type="button" className="r3-fchip" aria-pressed={channel === c.id} onClick={() => setSelected(c.id)}>
-            {c.title}
+          <button key={c.id} type="button" className="r3-fchip" aria-pressed={channel === c.id} aria-label={c.title} onClick={() => setSelected(c.id)}>
+            {shortChannelName(c.title)}
           </button>
         ))}
       </div>
