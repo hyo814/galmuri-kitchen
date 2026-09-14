@@ -18,7 +18,19 @@ from . import storage
 from .auth import login_user, user_json
 from .defaults import seed_user_defaults
 from .ingredients import seoul_today
-from .models import Ingredient, Recipe, Seasoning, ShoppingNote, ShoppingNotePhoto, Staple, StorageLocation, User, db, utcnow
+from .models import (
+    Ingredient,
+    Recipe,
+    Seasoning,
+    ShoppingItem,
+    ShoppingNote,
+    ShoppingNotePhoto,
+    Staple,
+    StorageLocation,
+    User,
+    db,
+    utcnow,
+)
 from .public_recipes import SAMPLE_FILE
 
 bp = Blueprint("demo", __name__, cli_group=None)  # 명령은 `flask purge-demo-users`
@@ -58,6 +70,19 @@ SEASONING = {
         {"name": "다진 마늘", "amount": 1, "unit": "큰술"},
     ],
 }
+DEFAULT_RECIPE_LABEL = "두부조림"  # 이름이 든 예시 레시피가 없을 때 쓰는 출처 태그(스펙 16절)
+# 장보기 예시(시안 docs/design/shopping-4/ShoppingList.dc.html). (이름, 수량, 단위, 며칠 뒤(None=날짜 미정), source, 체크됨, 생활용품)
+SHOPPING_ITEMS = [
+    ("두부", 1, "모", 0, "recipe", False, False),
+    ("대파", 1, "단", 0, "urgent", True, False),
+    ("청양고추", 1, "봉", 0, "recipe", False, False),
+    ("계란", 30, "구", 3, "staple", False, False),
+    ("우유", 1, "L", 3, "manual", True, False),
+    ("수세미", 1, "개", 3, "manual", False, True),
+    ("간장", 1, "병", None, "staple", False, False),  # STAPLES 중 재고에 없는 필수품 → 필수품 배너와 일치
+]
+STOCKED_SHOPPING_ITEM = ("양파", 1, "망")  # 어제 재고에 넣어 '산 것' 접힘이 보이게
+SHOPPING_MEMO = {"place": "이마트 성수점", "body": "세일 수요일까지\n계란은 30구로\n두부 2+1 행사 확인"}
 
 
 def ip_key(ip):
@@ -73,7 +98,7 @@ def ip_key(ip):
 
 
 def seed_demo_data(user_id):
-    """새 사용자 기본값 + 예시 재고·필수품·레시피 2개·양념 비율 1개. commit은 호출 측에서."""
+    """새 사용자 기본값 + 예시 재고·필수품·레시피 2개·양념 비율 1개·장보기(살 것 7개·산 것 1개·메모 1개). commit은 호출 측에서."""
     seed_user_defaults(user_id)
     db.session.flush()
     locations = {loc.kind: loc.id for loc in StorageLocation.query.filter_by(user_id=user_id)}
@@ -93,8 +118,8 @@ def seed_demo_data(user_id):
     for name, category in STAPLES:
         db.session.add(Staple(user_id=user_id, name=name, category=category))
     samples = {item["rcp_seq"]: item for item in json.loads(SAMPLE_FILE.read_text(encoding="utf-8"))}
-    for seq in RECIPE_SAMPLES:
-        item = samples[seq]
+    recipes = [samples[seq] for seq in RECIPE_SAMPLES]
+    for item in recipes:
         db.session.add(
             Recipe(
                 user_id=user_id,
@@ -106,6 +131,43 @@ def seed_demo_data(user_id):
             )
         )
     db.session.add(Seasoning(user_id=user_id, **SEASONING))
+
+    def recipe_label(name):
+        return next((r["title"] for r in recipes if any(ing["name"] == name for ing in r["ingredients"])), DEFAULT_RECIPE_LABEL)
+
+    now = utcnow()
+    for name, quantity, unit, days, source, checked, household in SHOPPING_ITEMS:
+        db.session.add(
+            ShoppingItem(
+                user_id=user_id,
+                name=name,
+                quantity=quantity,
+                unit=unit,
+                planned_on=None if days is None else today + timedelta(days=days),
+                location_id=None if household else locations["fridge"],
+                source=source,
+                source_label=recipe_label(name) if source == "recipe" else None,
+                household=household,
+                done_at=now if checked else None,
+                done_changed_at=now if checked else None,
+            )
+        )
+    stocked_name, stocked_quantity, stocked_unit = STOCKED_SHOPPING_ITEM
+    stocked_at = now - timedelta(days=1)
+    db.session.add(
+        ShoppingItem(
+            user_id=user_id,
+            name=stocked_name,
+            quantity=stocked_quantity,
+            unit=stocked_unit,
+            location_id=locations["fridge"],
+            source="manual",
+            done_at=stocked_at,
+            done_changed_at=stocked_at,
+            stocked_at=stocked_at,
+        )
+    )
+    db.session.add(ShoppingNote(user_id=user_id, **SHOPPING_MEMO))
 
 
 def delete_demo_users(query, limit=None):
