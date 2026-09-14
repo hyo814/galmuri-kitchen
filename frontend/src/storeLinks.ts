@@ -1,7 +1,7 @@
 // ⚠ 검증 전 — 아래 STORES 주소는 네트워크 없이 기억에 기대 적은 후보다(4단계 계획 Task 5). 틀릴 수 있다.
 // Task 9 Step 2에서 사용자가 갤럭시 S22 Ultra(크롬·삼성 인터넷)로 `node scripts/check-store-links.mjs --print` 링크를
 // 하나씩 열어 ① 검색어 ② 정렬 적용 ③ 앱 전환 뒤 검색어 유지를 확인한다. 통과한 칸만 남기고 안 되는 정렬 칸은 지우며
-// (칩이 숨겨진다) verified에 확인 날짜를 적는다. 그 전에는 화면에서 onlyVerified로 걸러 내보내지 않는다.
+// (칩이 숨겨진다) verified에 확인 날짜를 적는다. 그 전에는 운영 화면(onlyVerified)에서 정렬 칩 없이 `검색 결과` 하나만 보여준다.
 // 쇼핑몰 링크는 이 파일 한 곳에서만 만든다(스펙 16·25절). 순서는 제휴 여부와 무관하다.
 
 export type StoreId = "coupang" | "naver" | "kurly" | "emart" | "homeplus" | "lottemart" | "gmarket";
@@ -110,7 +110,7 @@ export function searchQuery(name: string): string {
 export interface StoreLink { sort: SortId | null; label: string; url: string }
 
 /** 쇼핑몰마다 링크(있는 정렬만, 하나도 없으면 [검색 결과]). 순서: lastUsed가 있으면 그 쇼핑몰 맨 위, 나머지는 STORES 순서.
- *  ad는 쇼핑몰 단위(시안: 이름 옆 `광고`) — 제휴 ID와 링크 형식이 둘 다 있을 때만. 검색어가 비면 []. onlyVerified면 verified 없는 쇼핑몰 제외 */
+ *  ad는 쇼핑몰 단위(시안: 이름 옆 `광고`) — 제휴 ID와 링크 형식이 둘 다 있을 때만. 검색어가 비면 []. onlyVerified면 verified 없는 쇼핑몰은 [검색 결과]만 */
 export function storeLinks(
   name: string,
   affiliates: Partial<Record<StoreId, string>>,
@@ -121,7 +121,6 @@ export function storeLinks(
   const { lastUsed = null, onlyVerified = false, formats = AFFILIATE_FORMATS } = options;
   const last = STORES.filter((s) => s.id === lastUsed);
   return [...last, ...STORES.filter((s) => s.id !== lastUsed)]
-    .filter((s) => !onlyVerified || s.verified)
     .map((s) => {
       const affId = affiliates[s.id];
       const format = formats[s.id];
@@ -130,7 +129,7 @@ export function storeLinks(
         const url = template.replace("{q}", encodeURIComponent(q));
         return ad ? format!(url, affId!) : url;
       };
-      const sorted = SORTS.filter((o) => s.sorts[o.id]).map((o) => ({ sort: o.id, label: o.label, url: make(s.sorts[o.id]!) }));
+      const sorted = SORTS.filter((o) => s.sorts[o.id] && (!onlyVerified || s.verified)).map((o) => ({ sort: o.id, label: o.label, url: make(s.sorts[o.id]!) }));
       const links = sorted.length ? sorted : [{ sort: null, label: "검색 결과", url: make(s.search) }];
       return { store: s.id, name: s.name, ad, links };
     });

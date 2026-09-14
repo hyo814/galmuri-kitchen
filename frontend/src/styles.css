@@ -119,6 +119,11 @@ button {
   outline-offset: 2px;
 }
 
+/* 화면 이동 뒤 제목으로 옮긴 포커스는 테두리를 그리지 않는다(키보드 포커스는 그대로 보인다) */
+h1[tabindex="-1"]:focus:not(:focus-visible) {
+  outline: none;
+}
+
 .muted {
   color: var(--text-2);
 }
@@ -3365,7 +3370,40 @@ button.row-btn > svg {
   color: var(--text-2);
 }
 
-/* `2개 넣기 · 1개는 산 것으로만`이 두 줄이 돼도 낱말 가운데서 끊지 않는다 */
+/* 살 것 추가: 목록에 이미 있는 이름 알림 + 그래도 담기 */
+.notice.sh-dup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 8px;
+  padding-block: 0;
+  word-break: keep-all;
+}
+
+.sh-dup button {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+/* 버튼 위 한 줄: 산 것으로만 옮길 개수(버튼은 `N개 넣기`만) */
+.sh-in-hint {
+  max-width: 480px;
+  margin: 0 auto 8px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-2);
+  text-align: center;
+  word-break: keep-all;
+}
+
+/* 한 줄(26px)만큼 CTA가 높아지니 마지막 내용이 가려지지 않게 */
+.page:has(.sh-in-hint) {
+  padding-bottom: calc(138px + var(--tabbar-h) + env(safe-area-inset-bottom));
+}
+
+/* 버튼 글자는 짧지만 큰 글씨 설정에서도 낱말 가운데서 끊지 않는다 */
 .btn.sh-in-submit {
   word-break: keep-all;
   line-height: 22px;

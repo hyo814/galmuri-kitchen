@@ -75,6 +75,12 @@ for (const r of withAd) {
 }
 assert.ok(storeLinks("대파", { coupang: "Y" }).every((r) => !r.ad)); // 기본 AFFILIATE_FORMATS는 비어 있다
 
-assert.deepEqual(storeLinks("대파", {}, { onlyVerified: true }).map((r) => r.store), ids.filter((id) => STORES.find((s) => s.id === id).verified));
+// 운영(onlyVerified): 쇼핑몰은 모두 보이고, 폰 확인 전 쇼핑몰은 정렬 칩 없이 검색 주소 하나만
+for (const r of storeLinks("대파", {}, { onlyVerified: true })) {
+  const store = STORES.find((s) => s.id === r.store);
+  if (store.verified) assert.deepEqual(r.links, storeLinks("대파", {}).find((x) => x.store === r.store).links, r.store);
+  else assert.deepEqual(r.links, [{ sort: null, label: "검색 결과", url: store.search.replace("{q}", encodeURIComponent("대파")) }], r.store);
+}
+assert.deepEqual(storeLinks("대파", {}, { onlyVerified: true }).map((r) => r.store), ids);
 
 console.log("store links ok");

@@ -2,8 +2,8 @@
 import assert from "node:assert/strict";
 import {
   enqueue, markAttempt, markServerError, removeOp, dropWithDependents, applyQueue, applyServerResult, remapRef, classify, newClientId, MAX_ATTEMPTS,
-  groupItems, plannedOnFor, parseQuantityText, quantityText, sourceTag, stockButtonText, stockSummaryText, retryDelay, opRequest, sameOwner, shouldRefresh,
-  memoScanRows,
+  groupItems, plannedOnFor, parseQuantityText, quantityText, recipeQuantity, sourceTag, stockButtonText, stockSummaryText, retryDelay, opRequest, sameOwner, shouldRefresh,
+  memoScanRows, nameKey,
 } from "../src/shopping/sync.ts";
 
 const T = (m) => `2026-09-14T01:${String(m).padStart(2, "0")}:00.000Z`;
@@ -511,7 +511,15 @@ for (const [text, quantity, unit] of [
   ["1모", 1, "모"], ["30구", 30, "구"], ["1L", 1, "L"], ["½봉", 0.5, "봉"], ["1/2대", 0.5, "대"], ["2", 2, "개"], ["모", 1, "모"], ["", 1, "개"],
   [" 1 모 ", 1, "모"], ["1½봉", 1.5, "봉"], ["1 1/2컵", 1.5, "컵"], ["0.5kg", 0.5, "kg"], ["300g", 300, "g"], ["가나다라마바사아자차", 1, "가나다라마바사아자차"],
 ]) assert.deepEqual(parseQuantityText(text), { quantity, unit }, text);
-for (const text of ["0개", "-1개", "1가나다라마바사아자차카", "1/0개", "1-2개", "10001개", "1모2", "½½봉"]) assert.equal(parseQuantityText(text), null, text);
+for (const [text, quantity, unit] of [
+  ["두 봉지", 2, "봉지"], ["한 모", 1, "모"], ["한모", 1, "모"], ["하나", 1, "개"], ["셋", 3, "개"], ["네 개", 4, "개"], ["다섯 팩", 5, "팩"], ["열 알", 10, "알"],
+  ["세트", 1, "세트"], ["약간", 1, "약간"],
+]) assert.deepEqual(parseQuantityText(text), { quantity, unit }, text);
+for (const text of ["0개", "-1개", "1가나다라마바사아자차카", "1/0개", "1-2개", "10001개", "1모2", "½½봉", "두부 한 모", "큰 봉지", "1 큰 술", "두 봉지 반", "두 2개"]) assert.equal(parseQuantityText(text), null, text);
+// 레시피 양 → 장보기 수량(못 읽으면 1 약간)
+for (const [amount, quantity, unit] of [
+  ["200g", 200, "g"], ["1/2모(150g)", 0.5, "모"], ["1½큰술", 1.5, "큰술"], ["2개", 2, "개"], ["", 1, "개"], ["약간", 1, "약간"], ["10~15개", 1, "약간"], ["한 줌", 1, "줌"],
+]) assert.deepEqual(recipeQuantity(amount), { quantity, unit }, amount);
 for (const [q, u, text] of [[0.5, "봉", "½봉"], [1, "모", "1모"], [30, "구", "30구"], [1.5, "봉", "1½봉"], [12.5, "g", "12.5g"], [0.33, "개", "0.33개"]]) {
   assert.equal(quantityText(q, u), text);
   assert.deepEqual(parseQuantityText(text), { quantity: q, unit: u }, `되돌리기 ${text}`);
@@ -527,7 +535,7 @@ assert.equal(sourceTag({ source: "manual", source_label: null }), null);
 
 // ---- stockButtonText ----
 assert.equal(stockButtonText(3, 0), "3개 넣기");
-assert.equal(stockButtonText(2, 1), "2개 넣기 · 1개는 산 것으로만");
+assert.equal(stockButtonText(2, 1), "2개 넣기");
 assert.equal(stockButtonText(0, 2), "2개 산 것으로 옮기기");
 assert.equal(stockSummaryText(3, 0), "체크한 3개를 재고로 옮겨요");
 assert.equal(stockSummaryText(2, 1), "체크한 3개 중 2개는 재고로, 1개는 산 것으로만 옮겨요");
@@ -626,5 +634,12 @@ assert.deepEqual(memoScanRows(["대파", "두 부"], ["두부"]), [{ checked: tr
 assert.equal(memoScanRows(Array(15).fill("양파"), []).every((r) => r.checked), true);
 assert.equal(memoScanRows(Array(16).fill("양파"), []).some((r) => r.checked), false);
 assert.deepEqual(memoScanRows([], ["대파"]), []);
+// nameKey: 서버 normalize와 같게(괄호·띄어쓰기·대소문자) + 계란 → 달걀
+assert.equal(nameKey(" 대파 (국산) "), "대파");
+assert.equal(nameKey("유정란 달걀"), nameKey("유정란계란"));
+assert.equal(nameKey("계란(특란)"), "달걀");
+assert.equal(nameKey("Milk"), nameKey("milk"));
+assert.notEqual(nameKey("대파"), nameKey("쪽파"));
+assert.deepEqual(memoScanRows(["달걀"], ["계란"]), [{ checked: false, listed: true }]);
 
 console.log("shopping sync ok");

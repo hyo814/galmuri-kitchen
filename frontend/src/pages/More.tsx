@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { api, type AiUsage, type ExportSummary, type ItemRule, type Staple, type StorageLocation, type User } from "../api";
+import { ApiError, api, type AiUsage, type ExportSummary, type ItemRule, type Staple, type StorageLocation, type User } from "../api";
 import Icon from "../components/Icon";
 import LocationsSheet from "../components/LocationsSheet";
 import RulesSheet from "../components/RulesSheet";
@@ -190,7 +190,7 @@ function ExportSheet({ onClose }: { onClose: () => void }) {
           <b>{count(data?.seasonings)}</b>
         </li>
         <li>
-          <span>장보기</span>
+          <span>장보기 (산 것 포함)</span>
           <b>{count(data?.shopping)}</b>
         </li>
         <li>
@@ -289,10 +289,19 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
     setPanel(null);
   };
 
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const logout = async () => {
+    setLogoutError(null);
+    const offlineText = "인터넷이 연결되면 로그아웃할 수 있어요";
+    // 서버에서 로그아웃되기 전에 기기 데이터를 지우면 세션은 살아 있는데 대기 변경만 사라진다
+    if (!navigator.onLine) return setLogoutError(offlineText);
     const pending = await pendingShoppingChanges();
-    if (!confirm(pending ? `보내지 않은 변경 ${pending}개가 사라져요. 로그아웃할까요?` : "로그아웃할까요?")) return;
-    await api("/api/logout", { method: "POST" }).catch(() => {});
+    if (!confirm(pending ? `보내지 않은 변경 ${pending}건이 사라져요. 로그아웃할까요?` : "로그아웃할까요?")) return;
+    try {
+      await api("/api/logout", { method: "POST" });
+    } catch (e) {
+      return setLogoutError(e instanceof ApiError && e.status === 0 ? offlineText : (e as Error).message);
+    }
     onLogout();
   };
 
@@ -375,6 +384,11 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
           onClick={logout}
         />
       </ul>
+      {logoutError && (
+        <p className="error" role="alert">
+          {logoutError}
+        </p>
+      )}
 
       {panel === "locations" && (
         <LoadedSheet<StorageLocation[]> url="/api/locations" title="위치 관리" onClose={() => setPanel(null)}>

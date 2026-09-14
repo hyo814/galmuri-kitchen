@@ -22,7 +22,7 @@ interface Props {
   image: Blob;
   /** 장보기 항목 출처 이름: 메모의 어디서, 없으면 `장보기 메모` */
   sourceLabel: string;
-  /** 지금 장보기 목록의 이름들(이미 있는 건 끈 채로 `이미 있어요`) */
+  /** 지금 장보기 목록의 이름들(이미 있는 건 끈 채로 `목록에 있어요`) */
   listed: string[];
   today: string;
   /** 인식 요청이 끝났다(남은 횟수 새로 받기) */
@@ -197,7 +197,7 @@ function Review({ result, sourceLabel, listed, today, onDone }: Pick<Props, "sou
                   </span>
                   <span className="row-sub">
                     {row.quantity}
-                    {row.listed && " · 이미 있어요"}
+                    {row.listed && " · 목록에 있어요"}
                   </span>
                 </button>
               )}

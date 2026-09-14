@@ -7,14 +7,14 @@ import ShoppingMemoCard from "../components/ShoppingMemoCard";
 import ShoppingItemSheet, { type ItemInput } from "../components/ShoppingItemSheet";
 import StoreLinksSheet from "../components/StoreLinksSheet";
 import { formatDate, withJosa } from "../format";
-import { groupItems, newClientId, quantityText, sourceTag, type EditFields, type Op, type Ref, type ViewItem } from "../shopping/sync";
+import { groupItems, nameKey, newClientId, quantityText, sourceTag, type EditFields, type Op, type Ref, type ViewItem } from "../shopping/sync";
 import { useShopping } from "../shopping/useShopping";
 import { navigate } from "../useHashRoute";
 
 const refOf = (item: ViewItem): Ref => (item.id !== undefined ? { id: item.id } : { client_id: item.client_id! });
 /** 행 key: 기기에서 만든 항목은 보낸 뒤에도 client_id가 같아 자리·포커스가 유지된다 */
 const keyOf = (item: { id?: number; client_id: string | null }) => item.client_id ?? `id:${item.id}`;
-const sameName = (a: string, b: string) => a.replace(/\s+/g, "") === b.replace(/\s+/g, "");
+const sameName = (a: string, b: string) => nameKey(a) === nameKey(b);
 const now = () => new Date().toISOString();
 const seoulDate = (iso: string) => new Date(iso).toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
 
@@ -248,7 +248,10 @@ export default function Shopping({ user }: { user: User }) {
                       {item.name}
                       <span>{quantityText(item.quantity, item.unit)}</span>
                     </span>
-                    {item.stocked_at && <span className="row-sub">{formatDate(seoulDate(item.stocked_at))} 재고에 넣었어요</span>}
+                    {item.stocked_at && (
+                      // ponytail: 스냅숏에 넣음·건너뜀 구분이 없어 생활용품만 `샀어요`. 일반 재료를 끄고 옮긴 것도 구분하려면 서버가 skip 여부를 준다
+                      <span className="row-sub">{formatDate(seoulDate(item.stocked_at))} {item.household ? "샀어요" : "재고에 넣었어요"}</span>
+                    )}
                   </span>
                   {/* 같은 버튼을 유지해야 누른 뒤 포커스가 사라지지 않는다 */}
                   <button
@@ -272,6 +275,7 @@ export default function Shopping({ user }: { user: User }) {
           item={editing === "new" ? undefined : editing}
           today={today}
           onSave={save}
+          listedNames={items.map((i) => i.name)}
           onDelete={editing === "new" ? undefined : () => remove(editing)}
           onClose={() => setEditing(null)}
         />

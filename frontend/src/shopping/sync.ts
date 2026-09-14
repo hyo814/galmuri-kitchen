@@ -327,21 +327,36 @@ export function plannedOnFor(choice: "today" | "week" | "undated", today: string
   return choice === "today" ? today : choice === "week" ? addDays(today, 6) : null;
 }
 
-/** 시안 AddSheet 수량 칸 한 줄: "1모"·"30구"·"1L"·"½봉"·"1/2대"·"2"(→개)·"모"(→1)·""(→1개). 0 이하·틀린 숫자·단위 11자 이상은 null */
+const NATIVE_NUMBERS: Record<string, number> = {
+  하나: 1, 한: 1, 둘: 2, 두: 2, 셋: 3, 세: 3, 넷: 4, 네: 4, 다섯: 5, 여섯: 6, 일곱: 7, 여덟: 8, 아홉: 9, 열: 10,
+};
+
+/** 시안 AddSheet 수량 칸 한 줄: "1모"·"30구"·"1L"·"½봉"·"1/2대"·"2"(→개)·"모"(→1)·""(→1개)·"두 봉지"·"한모"(한~열).
+ *  0 이하·틀린 숫자·단위 11자 이상·단위 안 띄어쓰기("두부 한 모")는 null */
 export function parseQuantityText(text: string): { quantity: number; unit: string } | null {
+  // ponytail: "세트"만 3트로 읽지 않게 막았다. 다른 단위가 한~열로 시작해 잘못 읽히면 여기에 더한다
+  const native = text.trim().match(/^(하나|한|둘|두|셋|세(?!트)|넷|네|다섯|여섯|일곱|여덟|아홉|열)\s*(\S*)$/);
+  if (native) return /[\d¼⅓½⅔¾/+-]/.test(native[2]) || [...native[2]].length > 10 ? null : { quantity: NATIVE_NUMBERS[native[1]], unit: native[2] || "개" };
   const [, number, unit] = text.trim().match(/^([\d.\s/¼⅓½⅔¾]*)(.*)$/s)!;
-  if (/[\d¼⅓½⅔¾/+-]/.test(unit) || [...unit].length > 10) return null;
+  if (/[\d¼⅓½⅔¾/+\s-]/.test(unit) || [...unit].length > 10) return null;
   const quantity = number.trim() ? parseAmountInput(number) : 1;
   return quantity === null ? null : { quantity, unit: unit || "개" };
 }
 
-/** 메모 사진 확인 화면의 첫 체크(시안 승인 결정 8: 15개 넘으면 모두 끈 채로). 목록에 이미 있는 이름(띄어쓰기 무시)은 끄고 `이미 있어요` */
+/** 레시피 재료 양 → 장보기 수량. 괄호 속 무게는 빼고 읽고("1/2모(150g)" → ½모), 못 읽으면("약간"·"10~15개") 1 약간 */
+export function recipeQuantity(amount: string): { quantity: number; unit: string } {
+  return parseQuantityText(amount.replace(/\([^)]*\)/g, "")) ?? { quantity: 1, unit: "약간" };
+}
+
+/** 장보기 같은 이름 비교(서버 matching.normalize와 같게: 괄호 내용·띄어쓰기 빼고 소문자, 계란 → 달걀) */
+export const nameKey = (name: string) => name.replace(/\([^)]*\)/g, "").replace(/\s+/g, "").toLowerCase().replaceAll("계란", "달걀");
+
+/** 메모 사진 확인 화면의 첫 체크(시안 승인 결정 8: 15개 넘으면 모두 끈 채로). 목록에 이미 있는 이름(nameKey)은 끄고 `목록에 있어요` */
 export const MEMO_SCAN_CHECK_MAX = 15;
 export function memoScanRows(names: string[], listed: string[]): { checked: boolean; listed: boolean }[] {
-  const key = (s: string) => s.replace(/\s+/g, "");
-  const have = new Set(listed.map(key));
+  const have = new Set(listed.map(nameKey));
   return names.map((name) => {
-    const dup = have.has(key(name));
+    const dup = have.has(nameKey(name));
     return { checked: !dup && names.length <= MEMO_SCAN_CHECK_MAX, listed: dup };
   });
 }
@@ -349,10 +364,9 @@ export function memoScanRows(names: string[], listed: string[]): { checked: bool
 /** 1,"모" → "1모", 0.5,"봉" → "½봉", 12.5,"g" → "12.5g" (parseQuantityText로 되돌리면 같은 값) */
 export const quantityText = (quantity: number, unit: string) => amountInputText(quantity) + unit;
 
-/** 재고에 넣기 버튼: 재료로 넣을 개수와 산 것으로만 옮길 개수 */
+/** 재고에 넣기 버튼(384px 한 줄): 넣을 게 있으면 `N개 넣기`, 모두 산 것으로만이면 `N개 산 것으로 옮기기`. 산 것으로만 옮길 개수는 버튼 위 한 줄이 알린다 */
 export function stockButtonText(stock: number, skip: number): string {
-  if (!skip) return `${stock}개 넣기`;
-  return stock ? `${stock}개 넣기 · ${skip}개는 산 것으로만` : `${skip}개 산 것으로 옮기기`;
+  return stock ? `${stock}개 넣기` : `${skip}개 산 것으로 옮기기`;
 }
 
 /** 재고에 넣기 요약 줄: 재료로 넣을 개수와 산 것으로만 옮길 개수를 따로 */
