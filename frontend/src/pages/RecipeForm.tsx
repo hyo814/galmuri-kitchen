@@ -8,6 +8,7 @@ import { forgetRecipeCaches, useResource } from "../useResource";
 const MAX_INGREDIENTS = 50;
 const MAX_STEPS = 30;
 const LEAVE_CONFIRM = "작성 중인 내용이 사라져요. 나갈까요?";
+const LEAVE_DRAFT_CONFIRM = "가져온 레시피가 사라져요. 나갈까요?";
 
 interface IngredientRow {
   key: number;
@@ -120,7 +121,7 @@ function RecipeEditor({ initial, draft = null }: { initial: MyRecipe | null; dra
 
   // ponytail: 앱 안의 뒤로·취소만 확인한다. 폰의 뒤로가기 버튼은 막을 수 없어(popstate는 취소 불가) 그대로 나간다.
   const leave = () => {
-    if (dirty && !confirm(LEAVE_CONFIRM)) return;
+    if (dirty && !confirm(draft ? LEAVE_DRAFT_CONFIRM : LEAVE_CONFIRM)) return;
     goBack(initial ? `/recipes/mine/${initial.id}` : "/recipes");
   };
 

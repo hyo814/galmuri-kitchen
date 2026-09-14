@@ -2159,8 +2159,9 @@ button.row-btn > svg {
   color: var(--accent-strong);
 }
 
-.btn.saved:disabled {
-  opacity: 1;
+.btn.primary[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .r3-again {
@@ -2396,6 +2397,12 @@ button.row-btn > svg {
   border-radius: 6px;
   background: #1f1f1f;
   color: #fff;
+}
+
+@media (prefers-color-scheme: dark) {
+  .r3-source-thumb {
+    background: var(--field);
+  }
 }
 
 .r3-source-thumb img {

@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
-import { api, type AiSuggestions, type AiUsage, type Ingredient, type MyRecipe } from "../api";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { api, type AiRecipe, type AiSuggestions, type AiUsage, type Ingredient, type MyRecipe } from "../api";
 import Icon from "../components/Icon";
 import Mascot from "../components/Mascot";
 import { imageSrc, namesLabel, remainingText, withJosa } from "../format";
-import { useAsyncAction } from "../useAsyncAction";
 import { goBack, navigate } from "../useHashRoute";
 import { forgetRecipeCaches, useResource } from "../useResource";
 import { BackLink, RecipeBody } from "./RecipeDetail";
@@ -11,104 +10,125 @@ import { MatchLine, urgentLabel } from "./Recipes";
 
 type AiState = { status: "loading"; urgent: string[] } | { status: "error"; message: string } | { status: "done"; data: AiSuggestions };
 
-// ponytail: 결과·저장 상태는 모듈 변수(뒤로 갔다 와도 다시 부르지 않음, 새로고침하면 사라짐)
+// ponytail: 결과·저장 상태는 모듈 변수(뒤로 갔다 와도 다시 부르지 않음, 새로고침하면 사라짐).
+// 만드는 중에 화면을 떠나도 요청은 끊지 않는다(서버는 이미 횟수를 셌다) — 돌아오면 만드는 중이거나 결과가 보인다.
 let state: AiState | null = null;
-let controller: AbortController | null = null;
-let listener: ((next: AiState | null) => void) | null = null;
-const savedIndexes = new Set<number>();
+let generation = 0; // 다시 만들기·로그아웃 뒤에 도착한 옛 응답을 버리는 번호
+// 저장 상태는 레시피 객체에 붙인다: 다시 만들기 뒤에 끝난 옛 저장이 새 카드에 표시되지 않는다
+let saved = new WeakSet<AiRecipe>();
+let pending = new WeakSet<AiRecipe>();
+let version = 0;
+const listeners = new Set<() => void>();
 
-const set = (next: AiState | null) => {
-  state = next;
-  listener?.(next);
+const emit = () => {
+  version++;
+  listeners.forEach((listener) => listener());
+};
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 };
 
-/** 로그아웃 때 이전 사용자의 AI 결과가 남지 않게 */
-export function resetAiRecipes() {
-  controller?.abort();
-  state = null;
-  savedIndexes.clear();
+/** 모듈 상태가 바뀌면 다시 그린다 */
+function useAiStore() {
+  useSyncExternalStore(subscribe, () => version);
+  return state;
 }
 
-function generate() {
-  controller?.abort();
-  const own = new AbortController();
-  controller = own;
-  savedIndexes.clear();
-  set({ status: "loading", urgent: [] });
+/** 로그아웃 때 이전 사용자의 AI 결과가 남지 않게(진행 중인 응답도 버린다) */
+export function resetAiRecipes() {
+  generation++;
+  state = null;
+  saved = new WeakSet();
+  pending = new WeakSet();
+  emit();
+}
+
+/** `만들기`(추천 칸 카드)·`다시 만들기`만 부른다. 이미 만드는 중이면 새로 부르지 않는다. */
+export function startAiRecipes() {
+  if (state?.status === "loading") return;
+  const id = ++generation;
+  state = { status: "loading", urgent: [] };
+  emit();
   // 만드는 중 문구의 `빨리 먹어야 할 두부·대파`: 재고 중 임박·지남 이름(실패해도 문구만 빠진다)
-  api<Ingredient[]>("/api/ingredients", { signal: own.signal })
+  api<Ingredient[]>("/api/ingredients")
     .then((items) => {
-      if (state?.status !== "loading" || controller !== own) return;
+      if (id !== generation || state?.status !== "loading") return;
       const urgent = items.filter((item) => item.status === "urgent" || item.status === "danger").map((item) => item.name);
-      set({ status: "loading", urgent: [...new Set(urgent)] });
+      state = { status: "loading", urgent: [...new Set(urgent)] };
+      emit();
     })
     .catch(() => {});
-  api<AiSuggestions>("/api/recommendations/ai", { method: "POST", signal: own.signal })
-    .then((data) => set({ status: "done", data }))
-    .catch((e: unknown) => {
-      if (own.signal.aborted) return;
-      set({ status: "error", message: (e as Error).message });
-    });
-}
-
-/** 화면이 떠 있는 동안 상태를 받는다. 결과가 없으면 만들기 시작, 만드는 중에 화면을 떠나면 요청을 끊는다. */
-function useAiState(start: boolean) {
-  const [view, setView] = useState(state);
-  useEffect(() => {
-    listener = setView;
-    if (start && (state === null || state.status === "error")) generate();
-    else setView(state);
-    return () => {
-      listener = null;
-      // StrictMode는 마운트 → 정리 → 마운트를 바로 이어서 한다. 정말 떠났을 때만(다시 붙지 않았을 때) 끊는다.
-      queueMicrotask(() => {
-        if (listener || state?.status === "done") return;
-        controller?.abort();
-        state = null;
-      });
-    };
-  }, [start]);
-  return view;
-}
-
-async function saveSuggestion(data: AiSuggestions, index: number) {
-  const recipe = data.recipes[index];
-  await api<MyRecipe>("/api/recipes", {
-    method: "POST",
-    body: {
-      title: recipe.title,
-      servings: recipe.servings,
-      ingredients: recipe.ingredients.map(({ name, amount }) => ({ name, amount })),
-      steps: recipe.steps,
-      source: "ai",
-      ...(recipe.image_url ? { image_url: recipe.image_url } : {}),
+  api<AiSuggestions>("/api/recommendations/ai", { method: "POST" }).then(
+    (data) => {
+      if (id !== generation) return;
+      state = { status: "done", data };
+      emit();
     },
-  });
-  savedIndexes.add(index);
-  forgetRecipeCaches();
+    (e: unknown) => {
+      if (id !== generation) return;
+      state = { status: "error", message: (e as Error).message };
+      emit();
+    },
+  );
 }
 
-function SaveButton({ data, index }: { data: AiSuggestions; index: number }) {
-  const [saved, setSaved] = useState(() => savedIndexes.has(index));
-  const { busy, error, run } = useAsyncAction();
+async function saveRecipe(recipe: AiRecipe) {
+  if (pending.has(recipe) || saved.has(recipe)) return;
+  pending.add(recipe);
+  emit();
+  try {
+    await api<MyRecipe>("/api/recipes", {
+      method: "POST",
+      body: {
+        title: recipe.title,
+        servings: recipe.servings,
+        ingredients: recipe.ingredients.map(({ name, amount }) => ({ name, amount })),
+        steps: recipe.steps,
+        source: "ai",
+        ...(recipe.image_url ? { image_url: recipe.image_url } : {}),
+      },
+    });
+    saved.add(recipe);
+    forgetRecipeCaches();
+  } finally {
+    pending.delete(recipe);
+    emit();
+  }
+}
+
+/** 저장 → 저장했어요. 버튼 요소를 바꾸지 않아 포커스가 그대로 남는다. 목록과 자세히가 같은 진행 상태를 본다. */
+function SaveButton({ recipe }: { recipe: AiRecipe }) {
+  useAiStore();
+  const [error, setError] = useState("");
+  const done = saved.has(recipe);
+  const busy = pending.has(recipe);
+  const save = async () => {
+    if (done || busy) return;
+    setError("");
+    try {
+      await saveRecipe(recipe);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
   return (
     <>
-      {saved ? (
-        <button type="button" className="btn saved" disabled>
-          <Icon name="check" size={18} />
-          저장했어요
-        </button>
-      ) : (
-        <button
-          type="button"
-          className="btn primary"
-          disabled={busy}
-          onClick={() => run(async () => (await saveSuggestion(data, index), setSaved(true)))}
-        >
-          <Icon name="bookmark" size={18} />
-          {busy ? "저장 중…" : "저장"}
-        </button>
-      )}
+      <button
+        type="button"
+        className={done ? "btn saved" : "btn primary"}
+        aria-disabled={done || busy || undefined}
+        aria-label={`${recipe.title} ${done ? "저장했어요" : "저장"}`}
+        onClick={save}
+      >
+        <Icon name={done ? "check" : "bookmark"} size={18} />
+        {done ? "저장했어요" : busy ? "저장 중…" : "저장"}
+      </button>
+      <span className="sr-only" role="status">
+        {done ? "저장했어요" : ""}
+      </span>
       {error && (
         <p className="error" role="alert">
           {error}
@@ -119,11 +139,19 @@ function SaveButton({ data, index }: { data: AiSuggestions; index: number }) {
 }
 
 function Loading({ urgent }: { urgent: string[] }) {
+  // 알림 영역을 먼저 그려 두고 문구를 나중에 넣어야 스크린리더가 읽는다
+  const [announce, setAnnounce] = useState(false);
+  useEffect(() => setAnnounce(true), []);
   return (
     <>
-      <section className="r3-loading" role="status">
+      <p className="sr-only" role="status">
+        {announce ? "재고를 보고 레시피를 고르고 있어요" : ""}
+      </p>
+      <section className="r3-loading">
         <Mascot />
-        <p className="r3-loading-title">재고를 보고 레시피를 고르고 있어요</p>
+        <p className="r3-loading-title" aria-hidden="true">
+          재고를 보고 레시피를 고르고 있어요
+        </p>
         <p className="muted r3-loading-sub">
           {urgent.length > 0 && (
             <>
@@ -148,11 +176,8 @@ function Loading({ urgent }: { urgent: string[] }) {
 }
 
 function Results({ data }: { data: AiSuggestions }) {
-  const { data: usage, reload } = useResource<AiUsage>("/api/ai-usage");
-  // 방금 만든 1번이 반영된 남은 횟수를 받는다(useResource는 캐시를 먼저 보여 준다)
-  useEffect(() => {
-    reload();
-  }, [data, reload]);
+  // 결과 화면은 결과가 나온 뒤에만 마운트되므로 첫 요청이 곧 방금 쓴 횟수를 반영한 값이다(따로 다시 부르지 않는다)
+  const { data: usage } = useResource<AiUsage>("/api/ai-usage");
   // 만드는 중 화면의 h1이 사라져 포커스가 body로 떨어졌으면 결과 제목으로 옮긴다
   useEffect(() => {
     const heading = document.querySelector<HTMLElement>("main.page h1");
@@ -223,14 +248,14 @@ function Results({ data }: { data: AiSuggestions }) {
                 >
                   자세히
                 </button>
-                <SaveButton data={data} index={index} />
+                <SaveButton recipe={recipe} />
               </div>
             </li>
           );
         })}
       </ul>
       <div className="rc-actions r3-again">
-        <button type="button" className="btn outline" disabled={usedUp} onClick={generate}>
+        <button type="button" className="btn outline" disabled={usedUp} onClick={startAiRecipes}>
           <Icon name="sparkle" />
           다시 만들기{remainingText(usage)}
         </button>
@@ -239,20 +264,24 @@ function Results({ data }: { data: AiSuggestions }) {
   );
 }
 
-/** #/recipes/ai — 만드는 중 → 결과 3개 */
+/** #/recipes/ai — 만드는 중 → 결과 3개. 요청은 `만들기`가 시작한다. 상태가 없으면(새로고침·주소로 열기) 레시피 탭으로 */
 export default function RecipeAi() {
-  const view = useAiState(true);
+  const view = useAiStore();
+  useEffect(() => {
+    if (!view) navigate("/recipes", { replace: true });
+  }, [view]);
+  if (!view) return null;
   return (
     <main className="page">
       <BackLink />
-      {view?.status === "done" ? (
+      {view.status === "done" ? (
         <Results data={view.data} />
       ) : (
         <>
           <header className="topbar">
             <h1>AI 레시피</h1>
           </header>
-          {view?.status === "error" ? (
+          {view.status === "error" ? (
             <section className="r3-loading">
               <span className="scan-fail-icon">
                 <Icon name="alert" size={28} />
@@ -265,7 +294,7 @@ export default function RecipeAi() {
               </button>
             </section>
           ) : (
-            <Loading urgent={view?.status === "loading" ? view.urgent : []} />
+            <Loading urgent={view.urgent} />
           )}
         </>
       )}
@@ -275,17 +304,18 @@ export default function RecipeAi() {
 
 /** #/recipes/ai/:n — 결과 한 개 자세히(3a 상세 모양). 결과가 없으면(새로고침) 레시피 탭으로 */
 export function RecipeAiDetail({ index }: { index: number }) {
-  const view = useAiState(false);
+  const view = useAiStore();
   const recipe = view?.status === "done" ? view.data.recipes[index] : undefined;
   useEffect(() => {
     if (!recipe) navigate("/recipes", { replace: true });
   }, [recipe]);
-  if (!recipe || view?.status !== "done") return null;
+  if (!recipe) return null;
   const src = imageSrc(recipe.image_url);
   return (
     <main className="page">
       <BackLink to="/recipes/ai" label="AI 레시피" />
-      {src && <img className="rc-hero" src={src} alt="비슷한 요리 사진" />}
+      {/* 사진 아래 글자가 같은 뜻을 알려주므로 대체 텍스트는 비운다 */}
+      {src && <img className="rc-hero" src={src} alt="" />}
       {src && <p className="hint r3-photo-note">비슷한 요리 사진이에요</p>}
       <header className="rc-head">
         <h1>{recipe.title}</h1>
@@ -296,7 +326,7 @@ export function RecipeAiDetail({ index }: { index: number }) {
       <RecipeBody servings={recipe.servings} ingredients={recipe.ingredients} steps={recipe.steps} />
       <div className="cta-bar">
         <div className="r3-detail-save">
-          <SaveButton data={view.data} index={index} />
+          <SaveButton recipe={recipe} />
         </div>
       </div>
     </main>

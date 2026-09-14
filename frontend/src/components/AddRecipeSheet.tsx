@@ -32,24 +32,24 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
   const { data: usage } = useResource<AiUsage>("/api/ai-usage");
   const abortRef = useRef<AbortController | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const firstStep = useRef(true);
+  const fieldRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const prevStep = useRef(step);
 
   // 시트를 닫으면(뒤로가기·배경 탭 포함) 진행 중인 요청도 멈춘다
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  // 방법 고르기로 돌아오면 시트 제목으로 포커스(링크·글 단계는 입력 칸이 autoFocus)
+  // 단계가 바뀌면: 방법 고르기로 돌아왔거나 경고와 함께 글 붙여넣기로 바뀌었으면 시트 제목으로 포커스
+  // (그 밖의 링크·글 단계는 입력 칸이 autoFocus). 이전 단계와 비교하므로 StrictMode의 두 번 실행에도 튀지 않는다.
   useEffect(() => {
-    if (firstStep.current) {
-      firstStep.current = false;
-      return;
-    }
-    if (step !== "pick") return;
+    if (prevStep.current === step) return;
+    prevStep.current = step;
+    if (step === "link" || (step === "text" && !warning)) return;
     const heading = rootRef.current?.querySelector<HTMLElement>(".sheet-header h2");
     if (heading) {
       heading.tabIndex = -1;
       heading.focus();
     }
-  }, [step]);
+  }, [step, warning]);
 
   const go = (next: AddStep) => {
     abortRef.current?.abort();
@@ -58,11 +58,11 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
     setStep(next);
   };
 
-  // 영상 보기에서 바로 글 단계로 열었으면 취소는 시트를 닫는다
+  // 영상 보기에서 바로 글 단계로 열었으면 취소는 시트를 닫는다. dialog.close()로 닫아야 여는 버튼으로 포커스가 돌아간다(close 이벤트가 onClose를 부른다)
   const cancel = () => {
     if (initialStep === "pick") return go("pick");
     abortRef.current?.abort();
-    onClose();
+    rootRef.current?.querySelector("dialog")?.close();
   };
 
   const submit = async (e: FormEvent) => {
@@ -80,8 +80,9 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
       if (controller.signal.aborted) return;
       setBusy(false);
       setWarning((err as Error).message);
-      // 링크를 못 읽었으면 같은 시트를 글 붙여넣기로 바꾼다
-      if (err instanceof ApiError && err.body?.need_text === true) setStep("text");
+      // 링크를 못 읽었으면 같은 시트를 글 붙여넣기로 바꾼다(포커스는 위 effect가 제목으로). 아니면 고칠 수 있게 입력 칸으로
+      if (err instanceof ApiError && err.body?.need_text === true && step === "link") setStep("text");
+      else fieldRef.current?.focus();
     }
   };
 
@@ -136,6 +137,9 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
               <label className="field">
                 <span className="field-label">링크</span>
                 <input
+                  ref={(el) => {
+                    fieldRef.current = el;
+                  }}
                   className="input"
                   type="url"
                   inputMode="url"
@@ -151,7 +155,10 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
               <label className="field">
                 <span className="field-label">레시피 글</span>
                 <textarea
-                  ref={autoGrowTextarea}
+                  ref={(el) => {
+                    fieldRef.current = el;
+                    autoGrowTextarea(el);
+                  }}
                   className="input r3-area"
                   rows={5}
                   maxLength={10000}
@@ -160,7 +167,7 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
                     autoGrowTextarea(e.currentTarget);
                     setText(e.target.value);
                   }}
-                  autoFocus
+                  autoFocus={!warning}
                 />
               </label>
             )}

@@ -24,7 +24,8 @@ export function BackLink({ to = "/recipes", label = "레시피" }: { to?: string
 }
 
 /** 재료(인분 조절·있음 표시)와 만드는 법. 내 레시피·공공 레시피·AI 레시피 상세가 같이 쓴다 */
-export function RecipeBody({ servings: base, ingredients, steps }: { servings: number; ingredients: RecipeIngredientStatus[]; steps: string[] }) {
+export function RecipeBody({ servings: rawBase, ingredients, steps }: { servings: number; ingredients: RecipeIngredientStatus[]; steps: string[] }) {
+  const base = Math.max(1, rawBase || 1); // 인분이 0·빈 값이면 비율이 NaN이 되지 않게
   const [servings, setServings] = useState<number | null>(null); // null이면 레시피 기준 인분
   const shown = servings ?? base;
   const ratio = shown / base;
@@ -164,7 +165,7 @@ export default function RecipeDetail({ kind, id }: { kind: "mine" | "public"; id
   return (
     <main className="page">
       <BackLink />
-      {src && <img className="rc-hero" src={src} alt={similarPhoto ? "비슷한 요리 사진" : ""} />}
+      {src && <img className="rc-hero" src={src} alt="" />}
       {src && similarPhoto && <p className="hint r3-photo-note">비슷한 요리 사진이에요</p>}
       <header className="rc-head">
         <h1>{recipe.title}</h1>
@@ -176,6 +177,7 @@ export default function RecipeDetail({ kind, id }: { kind: "mine" | "public"; id
               <a className="r3-link" href={sourceUrl} target="_blank" rel="noopener noreferrer">
                 원본 보기
                 <Icon name="external" size={16} />
+                <span className="sr-only"> (새 창에서 열려요)</span>
               </a>
             </>
           )}

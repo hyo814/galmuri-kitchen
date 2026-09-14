@@ -7,6 +7,7 @@ import { SOURCE_LABEL, imageSrc, namesLabel, remainingText } from "../format";
 import { navigate } from "../useHashRoute";
 import { useInfiniteList, type Page } from "../useInfiniteList";
 import { cache, useResource } from "../useResource";
+import { startAiRecipes } from "./RecipeAi";
 import Seasonings from "./Seasonings";
 
 export type Segment = "recommend" | "mine" | "video" | "seasoning";
@@ -154,7 +155,10 @@ function AiEntry() {
         </span>
         <span className="row-sub">AI가 3개 만들어줘요{remainingText(usage)}</span>
       </span>
-      <button type="button" className="btn primary inline" disabled={usedUp} onClick={() => navigate("/recipes/ai")}>
+      <button type="button" className="btn primary inline" disabled={usedUp} onClick={() => {
+          startAiRecipes();
+          navigate("/recipes/ai");
+        }}>
         만들기
       </button>
     </section>
@@ -163,8 +167,8 @@ function AiEntry() {
 
 function RecommendList({ onShowMine, showAi }: { onShowMine: () => void; showAi: boolean }) {
   const { meta, items, loading, error, hasMore, multiPage, loadMore, reload } = useRecommendations();
-  // 재고가 비었을 때는 AI 카드도 숨긴다(만들 재료가 없다)
-  const ai = showAi && meta?.inventoryCount !== 0 && <AiEntry />;
+  // 재고 수를 알기 전에는 그리지 않고, 재고가 비었으면 숨긴다(만들 재료가 없다. 깜빡임 방지)
+  const ai = showAi && meta !== undefined && meta.inventoryCount > 0 && <AiEntry />;
 
   // C-L2: 첫 페이지가 실패하면(메타가 없음) 다시 불러오기 버튼을 보여 준다
   if (!meta)
