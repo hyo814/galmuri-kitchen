@@ -46,6 +46,11 @@ export function resetAiRecipes() {
   emit();
 }
 
+/** 이미 만든 결과가 있으면 추천 칸 `만들기`는 새로 부르지 않고 그 결과를 연다(횟수를 아낀다. 새로 만들기는 `다시 만들기`). */
+export function hasAiResults() {
+  return state?.status === "done";
+}
+
 /** `만들기`(추천 칸 카드)·`다시 만들기`만 부른다. 이미 만드는 중이면 새로 부르지 않는다. */
 export function startAiRecipes() {
   if (state?.status === "loading") return;

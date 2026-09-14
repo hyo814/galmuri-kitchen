@@ -7,7 +7,7 @@ import { SOURCE_LABEL, imageSrc, namesLabel, remainingText } from "../format";
 import { navigate } from "../useHashRoute";
 import { useInfiniteList, type Page } from "../useInfiniteList";
 import { cache, useResource } from "../useResource";
-import { startAiRecipes } from "./RecipeAi";
+import { hasAiResults, startAiRecipes } from "./RecipeAi";
 import Seasonings from "./Seasonings";
 
 export type Segment = "recommend" | "mine" | "video" | "seasoning";
@@ -156,7 +156,7 @@ function AiEntry() {
         <span className="row-sub">AI가 3개 만들어줘요{remainingText(usage)}</span>
       </span>
       <button type="button" className="btn primary inline" disabled={usedUp} onClick={() => {
-          startAiRecipes();
+          if (!hasAiResults()) startAiRecipes();
           navigate("/recipes/ai");
         }}>
         만들기
