@@ -72,11 +72,11 @@ def _host_key(host):
 class PublicOnlyHTTPSConnection(HTTPSConnection):
     """addresses가 있으면 검사한 IP 하나에만 연결한다(DNS를 다시 묻지 않고, A 레코드를 여러 개 돌지 않는다).
     연결된 소켓의 상대 주소가 공인 IP가 아니면 TLS·요청 헤더를 보내기 전에 끊는다.
-    소켓은 dup해 sockets에 모아 두고, 전체 시간이 지나면 감시 타이머가 shutdown으로 막힌 TLS·읽기를 깨운다.
+    소켓은 어댑터에 dup해 모아 두고, 전체 시간이 지나면 감시 타이머가 shutdown으로 막힌 TLS·읽기를 깨운다.
     urllib3 2.x에서 connect()가 소켓을 만드는 _new_conn()을 감싼다."""
 
     addresses = None  # 호스트 키 → 검사한 IP
-    sockets = None
+    adapter = None  # PublicOnlyAdapter(소켓 모으기·감시 타이머)
 
     def _new_conn(self):
         if self.addresses is None:
@@ -97,8 +97,8 @@ class PublicOnlyHTTPSConnection(HTTPSConnection):
         if not public:
             sock.close()
             raise FetchError("PrivateAddress")
-        if self.sockets is not None:
-            self.sockets.append(sock.dup())  # 같은 연결을 가리키는 우리 fd라 다른 스레드에서 shutdown해도 안전하다
+        if self.adapter is not None:
+            self.adapter.register(sock)
         return sock
 
 
@@ -106,8 +106,9 @@ class PublicOnlyAdapter(HTTPAdapter):
     """요청 한 번(리다이렉트 포함)에만 쓴다."""
 
     def __init__(self, addresses=None):
-        self.sockets, self.expired = [], False
-        connection = type("PinnedConnection", (PublicOnlyHTTPSConnection,), {"addresses": addresses, "sockets": self.sockets})
+        self.sockets, self.expired, self.closed = [], False, False
+        self.lock = threading.Lock()  # 감시 타이머 스레드와 요청 스레드가 sockets·expired·closed를 함께 본다
+        connection = type("PinnedConnection", (PublicOnlyHTTPSConnection,), {"addresses": addresses, "adapter": self})
         self.pool_class = type("PinnedPool", (HTTPSConnectionPool,), {"ConnectionCls": connection})
         super().__init__()
 
@@ -115,17 +116,31 @@ class PublicOnlyAdapter(HTTPAdapter):
         super().init_poolmanager(*args, **kwargs)
         self.poolmanager.pool_classes_by_scheme = {"https": self.pool_class}  # http는 앞에서 거절한다
 
+    def register(self, sock):
+        """새 연결을 감시 대상에 넣는다. 이미 시간이 지났으면(타이머가 먼저 돌았으면) 연결을 닫고 멈춘다."""
+        with self.lock:
+            if self.expired or self.closed:
+                sock.close()
+                raise FetchError("TooSlow")
+            self.sockets.append(sock.dup())  # 같은 연결을 가리키는 우리 fd라 다른 스레드에서 shutdown해도 안전하다
+
     def expire(self):
-        self.expired = True
-        for sock in list(self.sockets):
-            try:
-                sock.shutdown(socket.SHUT_RDWR)
-            except OSError:
-                pass
+        with self.lock:
+            if self.closed:  # 닫은 fd 번호는 다른 연결이 다시 쓸 수 있다
+                return
+            self.expired = True
+            for sock in self.sockets:
+                try:
+                    sock.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
 
     def close(self):
+        with self.lock:
+            self.closed = True
+            sockets, self.sockets = self.sockets, []
         super().close()
-        for sock in self.sockets:
+        for sock in sockets:
             sock.close()
 
 
@@ -195,30 +210,32 @@ def _fetch(url, params=None, public=False):
     watchdog.daemon = True
     watchdog.start()
     try:
-        with session:
-            for _ in range(MAX_REDIRECTS + 1 if public else 1):
-                if public:
-                    host, ip = _check_public_url(url)
-                    addresses[host] = ip
-                timeout = (CONNECT_SECONDS, _remaining(deadline))
-                res = session.get(url, params=params, headers=HEADERS, timeout=timeout, allow_redirects=False, stream=True)
-                with res:
-                    if public and res.status_code in REDIRECT_CODES:
-                        location = res.headers.get("Location")
-                        if not location:
-                            raise FetchError("BadRedirect")
-                        url = urljoin(url, location)
-                        continue
-                    if res.status_code != 200:
-                        raise FetchError(f"HTTP{res.status_code}")
-                    if public and not res.headers.get("Content-Type", "").lower().startswith("text/html"):
-                        raise FetchError("NotHtml")
-                    return _read(res, deadline, adapter), _charset(res), url
-            raise FetchError("TooManyRedirects")
+        for _ in range(MAX_REDIRECTS + 1 if public else 1):
+            _remaining(deadline)  # 시간이 지난 뒤 시작하는 단계는 DNS도 묻지 않는다
+            if public:
+                host, ip = _check_public_url(url)
+                addresses[host] = ip
+            timeout = (CONNECT_SECONDS, _remaining(deadline))
+            res = session.get(url, params=params, headers=HEADERS, timeout=timeout, allow_redirects=False, stream=True)
+            with res:
+                if public and res.status_code in REDIRECT_CODES:
+                    location = res.headers.get("Location")
+                    if not location:
+                        raise FetchError("BadRedirect")
+                    url = urljoin(url, location)
+                    continue
+                if res.status_code != 200:
+                    raise FetchError(f"HTTP{res.status_code}")
+                if public and not res.headers.get("Content-Type", "").lower().startswith("text/html"):
+                    raise FetchError("NotHtml")
+                return _read(res, deadline, adapter), _charset(res), url
+        raise FetchError("TooManyRedirects")
     except (requests.RequestException, urllib3.exceptions.HTTPError, OSError) as e:
         raise FetchError("TooSlow" if adapter.expired else type(e).__name__) from None
     finally:
         watchdog.cancel()
+        watchdog.join()  # 돌고 있는 타이머가 끝난 뒤에 dup한 fd를 닫는다
+        session.close()
 
 
 def fetch_fixed(url, params=None):

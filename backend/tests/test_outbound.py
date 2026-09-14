@@ -68,7 +68,10 @@ def fake_send(monkeypatch, responses):
 
 class FakeSocket:
     def __init__(self, ip):
-        self.ip, self.closed, self.dups = ip, False, 0
+        self.ip, self.closed, self.dups, self.shutdowns = ip, False, 0, 0
+
+    def shutdown(self, how):
+        self.shutdowns += 1
 
     def getpeername(self):
         return (self.ip, 443)
@@ -232,7 +235,39 @@ def test_adapter_uses_public_only_connection():
     pool = adapter.poolmanager.connection_from_url(PAGE)
     assert issubclass(pool.ConnectionCls, outbound.PublicOnlyHTTPSConnection)
     assert pool.ConnectionCls.addresses == {"recipe.example.com": "93.184.216.34"}
-    assert pool.ConnectionCls.sockets is adapter.sockets
+    assert pool.ConnectionCls.adapter is adapter
+
+
+def test_connection_after_watchdog_fired_is_closed(monkeypatch):
+    """감시 타이머가 먼저 돌았으면 그 뒤에 만든 연결도 닫고 멈춘다. 어댑터를 닫은 뒤의 타이머는 fd를 건드리지 않는다."""
+    monkeypatch.setattr(urllib3.util.connection, "create_connection", lambda address, *args, **kwargs: FakeSocket("93.184.216.34"))
+    adapter = outbound.PublicOnlyAdapter({"recipe.example.com": "93.184.216.34"})
+    connection = adapter.pool_class.ConnectionCls
+    sock = connection("recipe.example.com", 443)._new_conn()
+    assert (sock.dups, len(adapter.sockets)) == (1, 1)
+    adapter.expire()
+    assert adapter.sockets[0].shutdowns == 1
+
+    late = FakeSocket("93.184.216.34")
+    monkeypatch.setattr(urllib3.util.connection, "create_connection", lambda address, *args, **kwargs: late)
+    with pytest.raises(FetchError) as caught:
+        connection("recipe.example.com", 443)._new_conn()
+    assert (str(caught.value), late.closed, late.dups, len(adapter.sockets)) == ("TooSlow", True, 0, 1)
+
+    dup = adapter.sockets[0]
+    adapter.close()
+    adapter.expire()
+    assert (dup.closed, dup.shutdowns, adapter.sockets) == (True, 1, [])
+
+
+def test_hop_after_deadline_does_not_resolve(monkeypatch):
+    monkeypatch.setattr(outbound.socket, "getaddrinfo", fail_if_called)
+    monkeypatch.setattr(requests.Session, "send", fail_if_called)
+    calls = []
+    monkeypatch.setattr(outbound.time, "monotonic", lambda: calls.append(1) or (0 if len(calls) == 1 else 9))
+    with pytest.raises(FetchError) as caught:
+        outbound.fetch_public_page(PAGE)
+    assert str(caught.value) == "TooSlow"
 
 
 @pytest.mark.parametrize("ip", ["10.0.0.1", "127.0.0.1", "::1", "169.254.169.254"])
@@ -255,8 +290,9 @@ def test_pinned_connection_connects_only_to_checked_ip(monkeypatch):
         return FakeSocket("93.184.216.34")
 
     monkeypatch.setattr(urllib3.util.connection, "create_connection", create_connection)
-    sockets = []
-    pinned = type("Pinned", (outbound.PublicOnlyHTTPSConnection,), {"addresses": {"recipe.example.com": "93.184.216.34"}, "sockets": sockets})
+    adapter = outbound.PublicOnlyAdapter({"recipe.example.com": "93.184.216.34"})
+    sockets = adapter.sockets
+    pinned = adapter.pool_class.ConnectionCls
     conn = pinned("Recipe.Example.com.", 443)
     sock = conn._new_conn()
     assert seen == [("93.184.216.34", 443)] and conn.host == "Recipe.Example.com"
@@ -351,7 +387,7 @@ def test_fetch_public_page_deadline_after_request_went_out(monkeypatch):
 
     def clock():
         calls.append(1)
-        return 0 if len(calls) <= 2 else 9  # 시작·요청 전에는 0초, 첫 읽기 때 9초
+        return 0 if len(calls) <= 3 else 9  # 시작·DNS 전·요청 전에는 0초, 첫 읽기 때 9초
 
     monkeypatch.setattr(outbound.time, "monotonic", clock)
     sent = fake_send(monkeypatch, [response(200, b"<p>slow</p>")])
@@ -376,7 +412,7 @@ def test_watchdog_cuts_blocked_read(monkeypatch):
             pass
 
     def send(self, request, **kwargs):
-        self.get_adapter(request.url).sockets.append(client.dup())  # 진짜 연결이면 PublicOnlyHTTPSConnection이 넣는다
+        self.get_adapter(request.url).register(client)  # 진짜 연결이면 PublicOnlyHTTPSConnection이 넣는다
         res = response(200)
         res.raw = BlockingRaw()
         return res
