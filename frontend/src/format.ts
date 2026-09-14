@@ -1,3 +1,4 @@
+// 값 import는 ".ts" 확장자를 붙인다 — scripts/check-seasoning.mjs가 그냥 node로 이 파일을 읽는다(type import는 지워져서 괜찮다).
 import type { LocationKind } from "./api";
 
 /** 1 → "1", 0.25 → "0.25", 1.5 → "1.5" (소수 둘째 자리까지) */
