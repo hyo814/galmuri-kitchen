@@ -3269,6 +3269,7 @@ button.row-btn > svg {
   font-size: 15px;
   line-height: 22px;
   color: var(--text-2);
+}
 
 /* ---- 4단계 재고에 넣기 (시안 docs/design/shopping-4/StockIn.dc.html) ---- */
 .sh-name {
@@ -3394,4 +3395,276 @@ button.row-btn > svg {
 
 .sh-in-make {
   width: auto;
+}
+
+/* ---- 4단계 장보기 탭 (시안 docs/design/shopping-4/ShoppingList·ShoppingOffline·ShoppingDark·AddSheet) ---- */
+.sh-summary {
+  margin: 4px 20px 0;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text-2);
+}
+
+.sh-offline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 20px 0;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--inverse-bg);
+  color: var(--inverse-text);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.sh-offline b {
+  margin-left: auto;
+  font-weight: 600;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+/* 저장하지 못한 변경 띠(시안에 없는 상태): 오프라인 띠 모양 그대로, 누르면 시트 */
+button.sh-offline {
+  width: calc(100% - 40px);
+  min-height: 44px;
+  border: 0;
+  text-align: left;
+}
+
+button.sh-offline svg:last-child {
+  margin-left: auto;
+}
+
+.sh-failed {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sh-failed li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sh-stock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 20px 0;
+  padding: 10px 10px 10px 16px;
+  border-radius: 16px;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-size: 15px;
+  font-weight: 600;
+  word-break: keep-all;
+}
+
+.sh-stock .btn {
+  flex-shrink: 0;
+  width: auto;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.sh-group {
+  margin: 20px 20px 0;
+  font-size: 14px;
+  line-height: 21px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.sh-group + .list {
+  margin-top: 8px;
+}
+
+.sh-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 6px;
+  min-height: 64px;
+  padding: 6px 8px 6px 10px;
+}
+
+.sh-row .icon-btn {
+  color: var(--text-2);
+}
+
+.sh-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+}
+
+.sh-check i {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 2px var(--control-line);
+  color: var(--on-accent);
+}
+
+.sh-row.done .sh-check i {
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.sh-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  min-height: 52px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.sh-row.done .sh-name {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+.sh-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.sh-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: var(--neutral-tint);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sh-tag.warn {
+  background: var(--warn-tint);
+  color: var(--warn);
+}
+
+.sh-tag.info {
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+}
+
+.sh-pending {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.sh-fold {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: calc(100% - 40px);
+  min-height: 48px;
+  margin: 16px 20px 0;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 15px;
+}
+
+.sh-fold + .list {
+  margin-top: 8px;
+}
+
+.sh-bought {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 8px 12px 8px 20px;
+}
+
+.sh-bought .btn {
+  width: auto;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 15px;
+}
+
+/* 살 것 추가·고치기 시트 */
+.sh-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sh-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 8px;
+}
+
+.sh-form .rc-err {
+  margin: -8px 0 0;
+}
+
+.sh-when {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sh-when button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--chip-text);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.sh-when button[aria-pressed="true"] {
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+/* showPicker가 없는 브라우저에서 보이게 바꾼 날짜 칸 */
+.sh-when .input {
+  flex-basis: 100%;
 }

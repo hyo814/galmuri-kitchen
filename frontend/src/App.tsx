@@ -9,6 +9,7 @@ import More from "./pages/More";
 import RecipeAi, { RecipeAiDetail, resetAiRecipes } from "./pages/RecipeAi";
 import RecipeDetail from "./pages/RecipeDetail";
 import RecipeForm, { resetRecipeDraft } from "./pages/RecipeForm";
+import Shopping from "./pages/Shopping";
 import ShoppingStock from "./pages/ShoppingStock";
 import SeasoningCalc from "./pages/SeasoningCalc";
 import SeasoningForm, { resetSeasoningDraft } from "./pages/SeasoningForm";
@@ -42,7 +43,7 @@ const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
   "/recipes/seasonings/preset/:id": ({ route }) => <SeasoningCalc kind="preset" id={route.params.id} />,
   "/recipes/seasonings/:id": ({ route }) => <SeasoningCalc kind="mine" id={route.params.id} />,
   "/recipes/seasonings/:id/edit": ({ route }) => <SeasoningForm id={route.params.id} />,
-  "/shopping": () => <ComingSoon route="/shopping" />,
+  "/shopping": ({ user }) => <Shopping user={user} />,
   "/shopping/stock": () => <ShoppingStock />,
   "/meals": () => <ComingSoon route="/meals" />,
   "/more": ({ user, onLogout }) => <More user={user} onLogout={onLogout} />,

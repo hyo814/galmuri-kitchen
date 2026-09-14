@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { ApiError, api, type ShoppingItem, type ShoppingSource } from "../api";
+import { ApiError, type ShoppingSource } from "../api";
 import { withJosa } from "../format";
-import { forgetResources } from "../useResource";
+import { addMany } from "../shopping/useShopping";
 import Icon from "./Icon";
 
 const BULK_MAX = 50; // 서버 한 번에 담기 상한
@@ -34,7 +34,7 @@ export default function ShoppingAddButton({ source, sourceLabel, items, label, c
   const add = async () => {
     if (busy || done) return;
     const show = (text: string, error: boolean) => setMessage({ key, text, error });
-    // ponytail: 온라인 API만 쓴다. 장보기 오프라인 보관(useShopping)이 들어오면 그 addMany로 바꿔 오프라인에서도 담게 한다.
+    // ponytail: 온라인에서만 담는다(서버가 이미 있는 이름을 건너뛴다). 오프라인 담기는 기기 목록과 이름을 비교해야 해서 필요해지면 act add로.
     if (!navigator.onLine) {
       show(OFFLINE, true);
       return;
@@ -45,16 +45,13 @@ export default function ShoppingAddButton({ source, sourceLabel, items, label, c
     const skipped: string[] = [];
     try {
       for (let i = 0; i < items.length; i += BULK_MAX) {
-        const res = await api<{ created: ShoppingItem[]; skipped: string[] }>("/api/shopping/items/bulk", {
-          method: "POST",
-          // 공공·AI 레시피는 제목·재료 이름이 서버 상한(60·50자)보다 길 수 있어 자른다
-          body: {
-            source,
-            source_label: sourceLabel ? cut(sourceLabel, 60) : null,
-            items: items.slice(i, i + BULK_MAX).map((item) => ({ ...item, name: cut(item.name, 50) })),
-          },
-        });
-        created += res.created.length;
+        // 공공·AI 레시피는 제목·재료 이름이 서버 상한(60·50자)보다 길 수 있어 자른다. addMany가 담은 뒤 장보기 목록을 새로 받는다
+        const res = await addMany(
+          source,
+          items.slice(i, i + BULK_MAX).map((item) => ({ ...item, name: cut(item.name, 50) })),
+          sourceLabel ? cut(sourceLabel, 60) : undefined,
+        );
+        created += res.created;
         skipped.push(...res.skipped);
       }
       const names = skipped.length > 3 ? `${skipped.slice(0, 3).join(", ")} 외 ${skipped.length - 3}개` : skipped.join(", ");
@@ -67,7 +64,6 @@ export default function ShoppingAddButton({ source, sourceLabel, items, label, c
       if (items.length === 1 && e instanceof ApiError && e.errors?.[0]) text = e.errors[0].error;
       show(created ? `${created}개는 담았어요 · ${text}` : text, true);
     } finally {
-      if (created || skipped.length) forgetResources("/api/shopping");
       setBusy(false);
     }
   };

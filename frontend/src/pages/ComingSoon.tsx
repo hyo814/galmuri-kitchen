@@ -2,16 +2,6 @@ import Icon, { type IconName } from "../components/Icon";
 
 // ponytail: 기능이 만들어질 때까지 탭 자리만 잡아 두는 안내 화면. 각 단계에서 진짜 화면으로 교체한다.
 const PAGES: Record<string, { title: string; icon: IconName; items: string[] }> = {
-  "/shopping": {
-    title: "장보기",
-    icon: "cart",
-    items: [
-      "살 날짜를 정한 장보기 목록",
-      "떨어진 필수품·부족한 재료 바로 담기",
-      "쿠팡·네이버·컬리 등 쇼핑몰 검색 링크",
-      "매장에서 쓰는 메모·사진 (인터넷 없이도)",
-    ],
-  },
   "/meals": {
     title: "식단",
     icon: "calendar",
