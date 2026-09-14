@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   enqueue, markAttempt, markServerError, removeOp, dropWithDependents, applyQueue, applyServerResult, remapRef, classify, newClientId, MAX_ATTEMPTS,
   groupItems, plannedOnFor, parseQuantityText, quantityText, sourceTag, stockButtonText, stockSummaryText, retryDelay, opRequest, sameOwner, shouldRefresh,
+  memoScanRows,
 } from "../src/shopping/sync.ts";
 
 const T = (m) => `2026-09-14T01:${String(m).padStart(2, "0")}:00.000Z`;
@@ -619,5 +620,11 @@ assert.equal(shouldRefresh(NOW - 1000, NOW, 0, true), true);
 assert.deepEqual([0, 1, 2, 3].map(retryDelay), [2000, 4000, 8000, 16000]);
 assert.equal(retryDelay(20), 300000);
 assert.equal(retryDelay(-1), 2000);
+
+// memoScanRows: 기본 모두 켬, 목록에 있는 이름(띄어쓰기 무시)은 끄고 표시, 15개 넘으면 모두 끔
+assert.deepEqual(memoScanRows(["대파", "두 부"], ["두부"]), [{ checked: true, listed: false }, { checked: false, listed: true }]);
+assert.equal(memoScanRows(Array(15).fill("양파"), []).every((r) => r.checked), true);
+assert.equal(memoScanRows(Array(16).fill("양파"), []).some((r) => r.checked), false);
+assert.deepEqual(memoScanRows([], ["대파"]), []);
 
 console.log("shopping sync ok");

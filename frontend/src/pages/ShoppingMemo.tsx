@@ -1,14 +1,18 @@
 // 시안 MemoPage `장보기 메모`(4단계 계획 Task 10) + 메모 목록. 저장 버튼 없이 입력이 1초 멈추면·화면을 나갈 때 저장한다.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { AiUsage, User } from "../api";
 import Icon from "../components/Icon";
+import MemoScanReview from "../components/MemoScanReview";
 import Sheet from "../components/Sheet";
 import {
   MAX_NOTES, MemoBackupNotice, PhotoImg, editedAfter, firstLine, matchesRef, newMemo, openMemo, refOf, savedMemoRef,
 } from "../components/ShoppingMemoCard";
 import { resizeImage } from "../image";
-import type { Ref, ViewNote } from "../shopping/sync";
+import type { Ref, ViewNote, ViewPhoto } from "../shopping/sync";
 import { useShopping } from "../shopping/useShopping";
 import { goBack, navigate } from "../useHashRoute";
+import { useResource } from "../useResource";
+import { showShoppingNotice } from "./Shopping";
 
 const MAX_PHOTOS = 10;
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024; // 서버 한 장 상한
@@ -92,7 +96,7 @@ export function NewShoppingMemo() {
 }
 
 /** `#/shopping/memos/:id`(서버 메모) · `#/shopping/memos/local`(sessionStorage의 메모 — 기기에서 막 만든 메모도) */
-export default function ShoppingMemo({ id }: { id?: string }) {
+export default function ShoppingMemo({ id, user }: { id?: string; user: User }) {
   const shopping = useShopping();
   const { view, act, addPhoto, photoBlob, failed, offline, keepBackup } = shopping;
   const [ref] = useState<Ref | null>(() => (id ? { id: Number(id) } : savedMemoRef()));
@@ -109,6 +113,11 @@ export default function ShoppingMemo({ id }: { id?: string }) {
   const [photoHint, setPhotoHint] = useState("");
   const [viewing, setViewing] = useState<number | null>(null);
   const [notFound, setNotFound] = useState(false);
+  /** 사진에서 살 것 뽑기: 사진 고르기 시트 → 읽는 사진 */
+  const [scan, setScan] = useState<"choose" | { image: Blob } | null>(null);
+  const [scanHint, setScanHint] = useState("");
+  const { data: usage, reload: reloadUsage } = useResource<AiUsage>("/api/ai-usage");
+  const scanFileRef = useRef<HTMLInputElement>(null);
   // 이 화면에 들어온 뒤 실패한 사진 올리기만 보여준다(예: 운영에서 사진 저장소가 꺼져 있을 때)
   const [seenFailed] = useState(() => new Set(failed.flatMap((f) => (f.op.op === "photo_add" ? [f.op.client_id] : []))));
   const fileRef = useRef<HTMLInputElement>(null);
@@ -244,6 +253,22 @@ export default function ShoppingMemo({ id }: { id?: string }) {
     }
   }
 
+  function startScan() {
+    const photos = latest.current.note?.photos ?? [];
+    if (latest.current.offline) return setScanHint("인터넷이 연결되면 읽을 수 있어요");
+    setScanHint("");
+    if (!photos.length) scanFileRef.current?.click(); // 메모에 사진이 없으면 읽을 사진만 고른다(메모에 넣지는 않는다)
+    else if (photos.length === 1) void scanPhoto(photos[0]);
+    else setScan("choose");
+  }
+
+  async function scanPhoto(photo: ViewPhoto) {
+    setScan(null);
+    const blob = await photoBlob(photo);
+    if (blob) setScan({ image: blob });
+    else setScanHint("사진을 불러오지 못했어요. 다시 시도해주세요.");
+  }
+
   if (!note)
     return (
       <main className="page">
@@ -366,7 +391,33 @@ export default function ShoppingMemo({ id }: { id?: string }) {
             {[photoHint, ...photoErrors].filter(Boolean).join(" ")}
           </p>
         )}
-        {/* ponytail: `사진에서 살 것 뽑기`(시안 sh-ai)는 Task 11이 연결하면서 넣는다 */}
+        {user.scan !== "off" && (
+          <>
+            <input
+              ref={scanFileRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) setScan({ image: file });
+              }}
+            />
+            <button type="button" className="btn secondary sh-ai" onClick={startScan}>
+              <Icon name="sparkle" size={18} />
+              사진에서 살 것 뽑기
+            </button>
+            {user.scan === "on" && usage && (
+              <p className="hint sh-ai-hint">
+                {usage.scan.used < usage.scan.limit ? `오늘 ${usage.scan.limit - usage.scan.used}번 남음` : "오늘은 다 썼어요"}
+              </p>
+            )}
+            <p className="rc-err sh-ai-hint" role="status">
+              {scanHint}
+            </p>
+          </>
+        )}
       </section>
 
       <div className="rc-actions">
@@ -433,6 +484,33 @@ export default function ShoppingMemo({ id }: { id?: string }) {
             </button>
           </div>
         </Sheet>
+      )}
+
+      {scan === "choose" && (
+        <Sheet title="어느 사진에서 뽑을까요?" onClose={() => setScan(null)}>
+          <div className="sh-photos">
+            {photos.map((photo, i) => (
+              <button key={photo.client_id ?? photo.id} type="button" className="sh-photo" aria-label={`메모 사진 ${i + 1}에서 뽑기`} onClick={() => void scanPhoto(photo)}>
+                <PhotoImg photo={photo} photoBlob={photoBlob} alt="" />
+              </button>
+            ))}
+          </div>
+        </Sheet>
+      )}
+
+      {scan && scan !== "choose" && (
+        <MemoScanReview
+          image={scan.image}
+          sourceLabel={note.place?.trim() || "장보기 메모"}
+          listed={view?.items.map((i) => i.name) ?? []}
+          today={view?.today ?? ""}
+          onScanned={() => void reloadUsage()}
+          onDone={(text) => {
+            showShoppingNotice(text);
+            navigate("/shopping", { replace: true });
+          }}
+          onClose={() => setScan(null)}
+        />
       )}
 
       {shown && viewing !== null && (

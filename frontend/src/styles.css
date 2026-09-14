@@ -3946,3 +3946,30 @@ button.sh-offline svg:last-child {
   min-height: 48px;
   font-size: 16px;
 }
+
+/* 사진에서 살 것 뽑기(시안 MemoPage sh-ai, 4단계 계획 Task 11) + 확인 화면(재고 스캔 확인 모양) */
+.sh-ai {
+  margin-top: 14px;
+}
+
+.rc-err.sh-ai-hint,
+.hint.sh-ai-hint {
+  margin: 6px 0 0;
+}
+
+.scan-edit.mo-scan-edit {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.scan-edit.mo-scan-edit .input {
+  text-align: left;
+}
+
+.badge.sh-in-tag.mo-scan-tag {
+  margin: 0 0 0 6px;
+  vertical-align: 2px;
+}
+
+.btn.mo-scan-all {
+  align-self: flex-end;
+}
