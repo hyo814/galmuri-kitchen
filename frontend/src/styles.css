@@ -3694,3 +3694,255 @@ button.sh-offline svg:last-child {
 .sh-when .input {
   flex-basis: 100%;
 }
+
+/* 장보기 메모 카드·메모 화면(시안 ShoppingList `sh-memo`, MemoPage) */
+.sh-memo-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.sh-memo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 20px 0;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+}
+
+.sh-memo > svg {
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+
+.sh-memo .mo-ico {
+  align-self: flex-start;
+  background: var(--warn-tint);
+  color: var(--warn);
+}
+
+.sh-memo-new {
+  min-height: 64px;
+  border: 1.5px dashed var(--control-line);
+  background: transparent;
+}
+
+.sh-memo-new .mo-ico {
+  align-self: center;
+}
+
+.sh-memo-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sh-memo-title {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+}
+
+.sh-memo-text {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sh-thumbs {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.sh-thumbs i {
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--neutral-tint);
+}
+
+.sh-thumbs img,
+.sh-photo img,
+.sh-photo-ph {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sh-memo-more {
+  display: inline-flex;
+  align-self: flex-end;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  margin: 4px 20px 0;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sh-memo-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 20px 0;
+  padding: 0 4px 0 14px;
+  border-radius: 14px;
+  background: var(--warn-tint);
+  color: var(--warn);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  word-break: keep-all;
+}
+
+.sh-memo-notice span {
+  flex: 1;
+  padding: 12px 0;
+}
+
+.sh-memo-notice button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.topbar + .sh-memo-notice {
+  margin-top: 16px;
+}
+
+.sh-backup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--field);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sh-backup p {
+  margin: 0;
+}
+
+.sh-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sh-compare .field-label {
+  margin: 0;
+}
+
+.sh-compare .sh-backup + .field-label {
+  margin-top: 8px;
+}
+
+.sh-backup-actions {
+  margin: 0;
+}
+
+.sh-memo-list .row-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sh-photos {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.sh-photo {
+  position: relative;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 12px;
+  background: var(--neutral-tint);
+}
+
+.sh-photo.add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: var(--field);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sh-photo-pending {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  padding: 0 5px;
+  border-radius: 6px;
+  background: var(--inverse-bg);
+  color: var(--inverse-text);
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.sh-photo-err {
+  margin: 12px 0 0;
+}
+
+.sh-viewer-img {
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 16px;
+  background: var(--neutral-tint);
+}
+
+.sh-viewer-img img {
+  max-width: 100%;
+  max-height: 60dvh;
+  object-fit: contain;
+}
+
+.sh-viewer-img .sh-photo-ph {
+  aspect-ratio: 1;
+}
+
+.sh-viewer-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.sh-viewer-nav .btn {
+  min-height: 48px;
+  font-size: 16px;
+}

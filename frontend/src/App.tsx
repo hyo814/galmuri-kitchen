@@ -14,6 +14,7 @@ import ShoppingStock from "./pages/ShoppingStock";
 import SeasoningCalc from "./pages/SeasoningCalc";
 import SeasoningForm, { resetSeasoningDraft } from "./pages/SeasoningForm";
 import Recipes, { resetRecipesSegment } from "./pages/Recipes";
+import ShoppingMemo, { NewShoppingMemo, ShoppingMemos } from "./pages/ShoppingMemo";
 import Tools from "./pages/Tools";
 import Channels from "./pages/Channels";
 import VideoPlayer from "./pages/VideoPlayer";
@@ -45,6 +46,10 @@ const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
   "/recipes/seasonings/:id/edit": ({ route }) => <SeasoningForm id={route.params.id} />,
   "/shopping": ({ user }) => <Shopping user={user} />,
   "/shopping/stock": () => <ShoppingStock />,
+  "/shopping/memos": () => <ShoppingMemos />,
+  "/shopping/memos/new": () => <NewShoppingMemo />,
+  "/shopping/memos/local": () => <ShoppingMemo />,
+  "/shopping/memos/:id": ({ route }) => <ShoppingMemo id={route.params.id} />,
   "/meals": () => <ComingSoon route="/meals" />,
   "/more": ({ user, onLogout }) => <More user={user} onLogout={onLogout} />,
   "/tools": () => <Tools />,

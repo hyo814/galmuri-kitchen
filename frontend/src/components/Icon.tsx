@@ -120,6 +120,12 @@ const PATHS = {
       <path d="M13.5 6.5l4 4" />
     </>
   ),
+  memo: (
+    <>
+      <path d="M5 4h14v16H5z" />
+      <path d="M8.5 9h7M8.5 12.5h7M8.5 16h4" />
+    </>
+  ),
   info: (
     <>
       <circle cx="12" cy="12" r="9" />
