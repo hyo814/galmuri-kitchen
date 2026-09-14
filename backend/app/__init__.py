@@ -47,6 +47,7 @@ def create_app(test_config=None):
         CLAUDE_MODEL=os.environ.get("CLAUDE_MODEL") or "claude-sonnet-5",
         AI_DAILY_SCAN_LIMIT=int(os.environ.get("AI_DAILY_SCAN_LIMIT") or 10),
         AI_SCAN_BURST_LIMIT=int(os.environ.get("AI_SCAN_BURST_LIMIT") or 3),
+        AI_DAILY_RECIPE_LIMIT=int(os.environ.get("AI_DAILY_RECIPE_LIMIT") or 10),
         FOODSAFETY_API_KEY=os.environ.get("FOODSAFETY_API_KEY") or None,
     )
     if test_config:
@@ -68,6 +69,7 @@ def create_app(test_config=None):
     from .item_rules import bp as item_rules_bp
     from .locations import bp as locations_bp
     from .public_recipes import bp as public_recipes_bp
+    from .recipe_ai import bp as recipe_ai_bp
     from .recipes import bp as recipes_bp
     from .scan import bp as scan_bp
     from .seasonings import bp as seasonings_bp
@@ -80,6 +82,7 @@ def create_app(test_config=None):
     app.register_blueprint(item_rules_bp)
     app.register_blueprint(locations_bp)
     app.register_blueprint(public_recipes_bp)
+    app.register_blueprint(recipe_ai_bp)
     app.register_blueprint(recipes_bp)
     app.register_blueprint(scan_bp)
     app.register_blueprint(seasonings_bp)

@@ -80,12 +80,14 @@ def get_owned_or_404(model, obj_id):
 
 
 def user_json(user):
-    """/api/me와 개발용 로그인이 같은 모양을 돌려준다. scan·scan_limit은 사진으로 추가 버튼 표시용."""
+    """/api/me와 개발용 로그인이 같은 모양을 돌려준다. scan은 사진으로 추가·AI 레시피 입구 표시용(같은 키로 판단한다).
+    ponytail: 이름이 scan이라 헷갈리면 ai로 바꾼다."""
     return jsonify(
         id=user.id,
         nickname=user.nickname,
         scan=scan_mode(),
         scan_limit=current_app.config["AI_DAILY_SCAN_LIMIT"],
+        recipe_limit=current_app.config["AI_DAILY_RECIPE_LIMIT"],
     )
 
 

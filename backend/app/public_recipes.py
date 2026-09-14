@@ -21,7 +21,7 @@ PAGE_SIZE = 1000
 MAX_RESPONSE_BYTES = 20 * 1024 * 1024  # fix round 1 (S1): 응답 크기를 미리 제한해 메모리 고갈을 막는다
 MAX_TOTAL_ROWS = 5000  # fix round 1 (S1): total_count를 그대로 믿지 않고 상한을 둔다(식약처는 실제로 약 1,100건)
 SAMPLE_FILE = Path(__file__).parent / "data" / "sample_recipes.json"
-_IMAGE_HTTPS_HOSTS = {"www.foodsafetykorea.go.kr", "openapi.foodsafetykorea.go.kr"}  # fix round 1 (S2)
+IMAGE_HTTPS_HOSTS = {"www.foodsafetykorea.go.kr", "openapi.foodsafetykorea.go.kr"}  # fix round 1 (S2). 내 레시피 image_url 검사도 같이 쓴다
 MAX_IMAGE_URL = 500
 
 
@@ -31,18 +31,22 @@ def _short(value, limit):
 
 
 def _image_url(value):
-    """식약처 이미지 주소만 https로 정리한다. 그 외 호스트·스킴은 안전하지 않다고 보고 버린다(None)."""
+    """식약처 이미지 주소만 https로 정리한다. 그 외 호스트·스킴은 안전하지 않다고 보고 버린다(None).
+    역슬래시·공백·사용자 정보(@)는 브라우저와 urlparse가 호스트를 다르게 읽을 수 있어 버린다."""
     if not isinstance(value, str):
         return None
     value = value.strip()
-    if not value:
+    if not value or "\\" in value or "\x00" in value or any(char.isspace() for char in value):
         return None
-    parsed = urlparse(value)
-    if parsed.scheme == "http" and parsed.hostname in _IMAGE_HTTPS_HOSTS:
-        parsed = parsed._replace(scheme="https")
-    if parsed.scheme != "https" or not parsed.netloc:
+    try:
+        parsed = urlparse(value)
+        host = parsed.hostname
+    except ValueError:  # "https://[" 같은 깨진 주소
         return None
-    return urlunparse(parsed)[:MAX_IMAGE_URL] or None
+    if parsed.scheme not in ("http", "https") or host not in IMAGE_HTTPS_HOSTS or "@" in parsed.netloc:
+        return None
+    url = urlunparse(parsed._replace(scheme="https"))
+    return url if len(url) <= MAX_IMAGE_URL else None
 
 
 def _kcal(value):

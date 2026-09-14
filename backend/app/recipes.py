@@ -23,6 +23,7 @@ MAX_RECIPES_PER_USER = 1000
 MAX_INGREDIENTS = 50
 MAX_STEPS = 30
 ALWAYS_HAVE = {"물"}  # 물은 재고에 넣지 않으니 늘 있는 것으로 본다
+SOURCES = ("mine", "ai", "youtube", "instagram", "blog", "text")  # 화면이 만들 수 있는 출처. public은 저장 API만 쓴다
 URL_ERROR = "링크는 http:// 또는 https://로 시작하는 주소로 입력해주세요."
 RECIPE_LIST_PAGE_SIZE = 30
 RECOMMENDATION_PAGE_SIZE = 20
@@ -134,8 +135,24 @@ def _source_url(value):
     return value.strip()
 
 
+def _image_url(value, source):
+    """AI 레시피에 붙인 비슷한 공공 레시피 사진만 받는다: 공공 레시피에 실제로 있는 주소와 똑같을 때만.
+    주소 모양을 따지지 않으므로 역슬래시·사용자 정보 같은 호스트 속이기가 통하지 않는다. 유튜브 썸네일 같은 외부 사진은 저장하지 않는다(스펙 25절)."""
+    if value is None:
+        return None
+    if (
+        source != "ai"
+        or not isinstance(value, str)
+        or not 0 < len(value) <= 500
+        or "\x00" in value  # PostgreSQL은 NUL 문자열 비교에서 오류를 낸다
+        or db.session.query(PublicRecipe.id).filter_by(image_url=value).first() is None
+    ):
+        abort(400, "잘못된 요청이에요.")
+    return value
+
+
 def parse_recipe(data):
-    """생성·수정(PUT) 공통. source는 서버가 정하므로 받지 않는다. source_url은 보냈을 때만 바꾼다."""
+    """생성·수정(PUT) 공통. source·image_url은 만들 때만 받는다(create_recipe). source_url은 보냈을 때만 바꾼다."""
     if not isinstance(data, dict):
         abort(400, "잘못된 요청이에요.")
     fields = {
@@ -373,9 +390,14 @@ def list_recipes():
 @bp.post("/recipes")
 @login_required
 def create_recipe():
-    fields = parse_recipe(request.get_json(silent=True))
+    data = request.get_json(silent=True)
+    fields = parse_recipe(data)
+    source = data.get("source", "mine")
+    if source not in SOURCES:
+        abort(400, "잘못된 요청이에요.")
+    fields.update(source=source, image_url=_image_url(data.get("image_url"), source))
     _check_recipe_cap()
-    recipe = Recipe(user_id=g.user.id, source="mine", **fields)
+    recipe = Recipe(user_id=g.user.id, **fields)
     db.session.add(recipe)
     db.session.commit()
     return jsonify(recipe_json(recipe, inventory(g.user.id))), 201

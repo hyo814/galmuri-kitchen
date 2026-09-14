@@ -135,32 +135,13 @@ def test_clean_result_quantity_overflow_falls_back_to_one():
 # --- ai.extract (가짜 Anthropic 클라이언트) ---
 
 
-def fake_anthropic(monkeypatch, response=None, error=None):
-    calls = {}
-
-    class FakeClient:
-        def __init__(self, **kwargs):
-            calls["client"] = kwargs
-            self.messages = self
-
-        def parse(self, **kwargs):
-            calls["parse"] = kwargs
-            if error is not None:
-                raise error
-            return response
-
-    monkeypatch.setattr(anthropic, "Anthropic", FakeClient)
-    return calls
-
-
-def test_extract_sends_image_prompt_and_schema(app, monkeypatch):
+def test_extract_sends_image_prompt_and_schema(app, fake_anthropic):
     parsed = ai.ScanResult(
         items=[ai.ScanItem(name="우유", quantity=1, unit="개", location_kind="fridge", price=2980)],
         purchased_on="2026-09-12",
     )
     usage = SimpleNamespace(input_tokens=1500, output_tokens=120)
     calls = fake_anthropic(
-        monkeypatch,
         response=SimpleNamespace(stop_reason="end_turn", parsed_output=parsed, usage=usage, model="claude-sonnet-5-answered"),
     )
     app.config.update(ANTHROPIC_API_KEY="test-key", CLAUDE_MODEL="claude-sonnet-5")
@@ -191,17 +172,17 @@ def _validation_error():
         return e
 
 
-@pytest.mark.parametrize(
-    "response, error",
-    [
-        (SimpleNamespace(stop_reason="refusal", parsed_output=None), None),
-        (SimpleNamespace(stop_reason="end_turn", parsed_output=None), None),
-        (None, anthropic.APIError("boom", request=None, body=None)),
-        (None, _validation_error()),
-    ],
-)
-def test_extract_failures_raise_ai_error(app, monkeypatch, response, error):
-    fake_anthropic(monkeypatch, response=response, error=error)
+AI_FAILURES = [
+    (SimpleNamespace(stop_reason="refusal", parsed_output=None), None),
+    (SimpleNamespace(stop_reason="end_turn", parsed_output=None), None),
+    (None, anthropic.APIError("boom", request=None, body=None)),
+    (None, _validation_error()),
+]
+
+
+@pytest.mark.parametrize("response, error", AI_FAILURES)
+def test_extract_failures_raise_ai_error(app, fake_anthropic, response, error):
+    fake_anthropic(response=response, error=error)
     app.config["ANTHROPIC_API_KEY"] = "test-key"
     with app.app_context(), pytest.raises(ai.AiError):
         ai.extract("fridge", b"img", "image/png")

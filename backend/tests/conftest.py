@@ -1,5 +1,7 @@
 import os
+import socket
 
+import anthropic
 import pytest
 
 from app import create_app, database_url
@@ -17,7 +19,46 @@ TEST_CONFIG = {
     "ANTHROPIC_API_KEY": None,  # 셸에 키가 있어도 테스트는 예시 모드로 시작한다
     "CLAUDE_MODEL": "claude-sonnet-5",  # 셸의 CLAUDE_MODEL이 ai_calls.model 확인을 흔들지 않게 고정한다
     "FOODSAFETY_API_KEY": None,  # 셸에 키가 있어도 동기화 테스트는 키 없음으로 시작한다
+    "YOUTUBE_API_KEY": None,
 }
+
+
+@pytest.fixture(autouse=True)
+def block_network(monkeypatch):
+    """테스트는 네트워크를 부르지 않는다. 가짜를 깜빡하면 조용히 밖으로 나가지 않고 여기서 실패한다.
+    requests·httpx(anthropic)는 IP 주소로 연결할 때도 getaddrinfo를 거친다. 로컬 PostgreSQL 테스트 DB(psycopg)만 허용한다."""
+    real_getaddrinfo = socket.getaddrinfo
+
+    def guarded(host, *args, **kwargs):
+        if host not in ("localhost", "127.0.0.1", "::1"):
+            raise AssertionError("테스트에서 네트워크를 부르면 안 돼요")
+        return real_getaddrinfo(host, *args, **kwargs)
+
+    monkeypatch.setattr(socket, "getaddrinfo", guarded)
+
+
+@pytest.fixture
+def fake_anthropic(monkeypatch):
+    """anthropic.Anthropic을 가짜로 바꾸고, 받은 인자를 calls에 모은다."""
+
+    def _fake(response=None, error=None):
+        calls = {}
+
+        class FakeClient:
+            def __init__(self, **kwargs):
+                calls["client"] = kwargs
+                self.messages = self
+
+            def parse(self, **kwargs):
+                calls["parse"] = kwargs
+                if error is not None:
+                    raise error
+                return response
+
+        monkeypatch.setattr(anthropic, "Anthropic", FakeClient)
+        return calls
+
+    return _fake
 
 
 @pytest.fixture
