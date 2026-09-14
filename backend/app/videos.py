@@ -29,6 +29,7 @@ bp = Blueprint("videos", __name__, url_prefix="/api", cli_group=None)  # 명령�
 
 DEFAULT_CHANNELS_FILE = Path(__file__).parent / "data" / "default_channels.json"
 PAGE_SIZE = 30
+FEED_PER_CHANNEL = 12  # 전체 목록에는 채널마다 최신 12개까지만 섞는다(자주 올리는 채널이 도배하지 않게). 채널 칩·검색은 받아둔 30개 모두
 MAX_QUERY = 50
 MINE_LIMIT = 30
 STALE_AFTER = timedelta(hours=6)
@@ -323,6 +324,11 @@ def list_videos():
     query = query.filter(visible_filter(g.user.id), YoutubeVideo.fetched_at >= utcnow() - KEEP_FOR)
     if channel is not None:
         query = query.filter(YoutubeChannel.id == channel)
+    elif not q:
+        # ponytail: 요청마다 창 함수로 채널별 순위를 매긴다(보이는 채널 × 30개라 가볍다). 느려지면 받을 때 순위를 저장한다
+        rank = func.row_number().over(partition_by=YoutubeVideo.channel_id, order_by=(YoutubeVideo.published_at.desc(), YoutubeVideo.id.desc()))
+        ranked = select(YoutubeVideo.id, rank.label("rank")).where(YoutubeVideo.fetched_at >= utcnow() - KEEP_FOR).subquery()
+        query = query.filter(YoutubeVideo.id.in_(select(ranked.c.id).where(ranked.c.rank <= FEED_PER_CHANNEL)))
     if q:
         escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         query = query.filter(YoutubeVideo.title.ilike(f"%{escaped}%", escape="\\"))

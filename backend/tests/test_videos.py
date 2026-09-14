@@ -548,6 +548,20 @@ def test_refresh_budget_per_user_and_global_serves_cache(on_client, on_login, on
     assert calls == [cid("A")]
 
 
+def test_all_feed_caps_each_channel_but_chip_and_search_show_all(on_client, on_login, on_app, monkeypatch, no_youtube):
+    on_login()
+    monkeypatch.setattr(videos, "FEED_PER_CHANNEL", 2)
+    make_channel(on_app, "A", default=True, videos_=[("a1", 0, "A 1"), ("a2", 1, "A 2"), ("a3", 2, "A 3 찌개")])
+    make_channel(on_app, "B", default=True, videos_=[("b1", 5, "B 1")])
+
+    assert titles(on_client.get("/api/videos")) == ["A 1", "A 2", "B 1"]  # A는 최신 2개만, 오래된 B가 밀리지 않는다
+    assert titles(on_client.get("/api/videos?limit=1&cursor=" + on_client.get("/api/videos?limit=2").get_json()["next_cursor"])) == ["B 1"]
+    with on_app.app_context():
+        a_pk = YoutubeChannel.query.filter_by(channel_id=cid("A")).one().id
+    assert titles(on_client.get(f"/api/videos?channel={a_pk}")) == ["A 1", "A 2", "A 3 찌개"]  # 채널 칩은 모두
+    assert titles(on_client.get("/api/videos?q=찌개")) == ["A 3 찌개"]  # 검색도 받아둔 영상 모두에서
+
+
 def test_video_rows_not_counted_as_ai_use(client, login, app):
     user = login()
     with app.app_context():
@@ -630,7 +644,8 @@ def test_videos_pagination_ties_filters_and_limits(on_client, on_login, on_app, 
 
     for i in range(50):
         published(on_app, b, f"many{i}", same - timedelta(days=1, minutes=i))
-    count = lambda limit: len(on_client.get(f"/api/videos?limit={limit}").get_json()["items"])  # noqa: E731
+    # 전체 목록은 채널마다 12개까지라 한 채널(B, 51개)의 칩 목록으로 페이지 크기를 잰다
+    count = lambda limit: len(on_client.get(f"/api/videos?channel={b}&limit={limit}").get_json()["items"])  # noqa: E731
     assert (count(0), count(51), count("abc"), count(-5)) == (1, 50, 30, 1)
 
 
