@@ -238,6 +238,79 @@ def test_deleting_recipe_keeps_slot_as_text(client, login):
     assert (kept["id"], kept["recipe_id"], kept["title"], kept["have_count"]) == (slot["id"], None, "라면", None)
 
 
+def test_copy_week_fills_empty_only_and_extends_days(client, login, app):
+    login()
+    plan = make_plan(client).get_json()
+    recipe = add_recipe(client, "된장찌개", [{"name": "된장", "amount": "1큰술"}])
+    put_slot(client, plan["id"], date="2026-09-14", meal="breakfast", title="우유·시리얼")
+    dinner = put_slot(client, plan["id"], date="2026-09-14", meal="dinner", recipe_id=recipe["id"]).get_json()
+    put_slot(client, plan["id"], date="2026-09-16", meal="breakfast", title="토마토 계란")
+
+    with app.app_context():  # 복사 대상 주(9/21)는 아직 기간 밖이라 API로는 못 채우니 직접 넣는다
+        db.session.add(MealSlot(plan_id=plan["id"], date=date(2026, 9, 21), meal="breakfast", title="토스트", servings=1))
+        db.session.commit()
+
+    res = client.post(f"/api/meal-plans/{plan['id']}/copy-week", json={"from_on": "2026-09-14", "weeks": 2})
+    assert res.status_code == 200
+    body = res.get_json()
+    assert (body["copied"], body["kept"], body["plan"]["days"]) == (5, 1, 21)
+
+    slots = {(s["date"], s["meal"]): s for s in body["plan"]["slots"]}
+    assert slots[("2026-09-21", "breakfast")]["title"] == "토스트"
+    copied_dinner = slots[("2026-09-28", "dinner")]
+    assert (copied_dinner["recipe_id"], copied_dinner["servings"]) == (dinner["recipe_id"], dinner["servings"])
+
+
+def test_copy_week_limits(client, login):
+    login()
+    plan = make_plan(client).get_json()
+    put_slot(client, plan["id"], date="2026-09-14", meal="breakfast", title="아침")
+
+    def copy_week(**body):
+        return client.post(f"/api/meal-plans/{plan['id']}/copy-week", json=body)
+
+    assert copy_week(from_on="2026-09-14", weeks=5).status_code == 400
+
+    res = copy_week(from_on="2026-09-14", weeks=3)
+    assert (res.status_code, res.get_json()["plan"]["days"]) == (200, 28)
+
+    res2 = copy_week(from_on="2026-09-14", weeks=4)
+    assert (res2.status_code, res2.get_json()["error"]) == (400, "식단은 31일까지라 3주까지 복사할 수 있어요.")
+
+    res3 = copy_week(from_on="2026-10-05", weeks=1)
+    assert (res3.status_code, res3.get_json()["error"]) == (400, "이 주는 더 복사할 수 없어요.")
+
+    res4 = copy_week(from_on="2026-09-28", weeks=1)
+    assert (res4.status_code, res4.get_json()["plan"]["days"]) == (200, 28)
+
+
+def test_copy_week_bad_from_on(client, login):
+    login()
+    plan = make_plan(client).get_json()
+
+    def copy_week(**body):
+        return client.post(f"/api/meal-plans/{plan['id']}/copy-week", json=body)
+
+    res_not_week_start = copy_week(from_on="2026-09-15", weeks=1)
+    assert (res_not_week_start.status_code, res_not_week_start.get_json()["error"]) == (400, "잘못된 요청이에요.")
+
+    res_out_of_range = copy_week(from_on="2026-10-30", weeks=1)
+    assert (res_out_of_range.status_code, res_out_of_range.get_json()["error"]) == (400, "잘못된 요청이에요.")
+
+    res_empty_week = copy_week(from_on="2026-09-14", weeks=1)
+    assert (res_empty_week.status_code, res_empty_week.get_json()["error"]) == (400, "이번 주에 채운 칸이 없어요.")
+
+
+def test_copy_week_other_user_404(client, login):
+    login("owner")
+    plan = make_plan(client).get_json()
+    put_slot(client, plan["id"], date="2026-09-14", meal="breakfast")
+
+    login("intruder")
+    res = client.post(f"/api/meal-plans/{plan['id']}/copy-week", json={"from_on": "2026-09-14", "weeks": 1})
+    assert res.status_code == 404
+
+
 def test_user_delete_cascades(client, login, app):
     user = login()
     plan = make_plan(client).get_json()
