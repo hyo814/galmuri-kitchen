@@ -58,6 +58,8 @@ def create_app(test_config=None):
         R2_BUCKET=os.environ.get("R2_BUCKET") or None,
         COUPANG_PARTNERS_ID=os.environ.get("COUPANG_PARTNERS_ID") or None,  # 제휴 링크(스펙 16·25절), 없으면 일반 검색 링크
         DEMO_LOGIN=os.environ.get("DEMO_LOGIN") == "1",  # 로그인 화면 '로그인 없이 체험하기'(demo.py)
+        DEMO_IP_HOURLY_LIMIT=int(os.environ.get("DEMO_IP_HOURLY_LIMIT") or 30),  # 같은 IP(IPv6는 /64)에서 1시간에 만들 수 있는 체험 계정 수. 사무실·행사장처럼 한 주소를 여럿이 쓰면 넉넉히
+        DEMO_IP_DAILY_LIMIT=int(os.environ.get("DEMO_IP_DAILY_LIMIT") or 100),  # 같은 IP에서 24시간에 만들 수 있는 체험 계정 수
         DEMO_AI_GLOBAL_DAILY=int(os.environ.get("DEMO_AI_GLOBAL_DAILY") or 300),  # 체험 계정 전체 AI 호출 24시간 예산, 넘으면 예시 결과
         TRUSTED_PROXY_HOPS=int(os.environ.get("TRUSTED_PROXY_HOPS") or 1),  # X-Forwarded-For를 붙이는 앞단 프록시 수(docs/deploy.md 5-3)
     )

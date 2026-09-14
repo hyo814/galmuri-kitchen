@@ -270,7 +270,7 @@ function LoadedSheet<T>({
   );
 }
 
-type Panel = "locations" | "staples" | "rules" | "theme" | "export" | "install";
+type Panel = "locations" | "staples" | "rules" | "theme" | "export" | "install" | "credits";
 
 export default function More({ user, onLogout }: { user: User; onLogout: () => void }) {
   const { canPrompt, installed, prompt } = useInstallPrompt();
@@ -365,6 +365,12 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
           sub="재고·레시피를 파일로 받아요"
           onClick={() => setPanel("export")}
         />
+        <Row
+          icon={<Icon name="info" />}
+          title="데이터 출처"
+          sub="레시피·소비기한 참고값·영상·글꼴·AI"
+          onClick={() => setPanel("credits")}
+        />
       </ul>
 
       <h2 className="mo-group">계정</h2>
@@ -407,6 +413,35 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
       )}
       {panel === "theme" && <ThemeSheet value={theme} onChange={chooseTheme} onClose={() => setPanel(null)} />}
       {panel === "export" && <ExportSheet onClose={() => setPanel(null)} />}
+      {panel === "credits" && (
+        <Sheet title="데이터 출처" description="갈무리부엌은 이런 공공 데이터와 서비스를 써요" onClose={() => setPanel(null)}>
+          <ul className="mo-credits">
+            <li>
+              <b>식품의약품안전처 식품안전나라 조리식품 레시피 DB</b>
+              <span>추천 레시피와 요리 사진을 가져와요</span>
+            </li>
+            <li>
+              <b>식품의약품안전처 「식품유형별 소비기한 설정 보고서」</b>
+              <span>품목별 기본 소비기한은 이 보고서의 참고값이에요</span>
+            </li>
+            <li>
+              <b>YouTube</b>
+              <span>영상과 썸네일은 YouTube에서 제공해요</span>
+            </li>
+            <li>
+              <b>Google Fonts · IBM Plex Sans KR</b>
+              <span>SIL Open Font License 1.1로 써요</span>
+            </li>
+            <li>
+              <b>Anthropic Claude</b>
+              <span>사진 인식과 AI 레시피 만들기에 써요</span>
+            </li>
+          </ul>
+          <button className="btn secondary" onClick={() => setPanel(null)}>
+            닫기
+          </button>
+        </Sheet>
+      )}
       {panel === "install" && (
         <Sheet title="홈 화면에 설치하기" onClose={() => setPanel(null)}>
           <p>안드로이드(삼성 인터넷·크롬): 오른쪽 위 메뉴(점 세 개) → "앱 설치" 또는 "홈 화면에 추가"를 눌러주세요.</p>
