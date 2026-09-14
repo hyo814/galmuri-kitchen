@@ -211,7 +211,7 @@ export default function RecipeDetail({ kind, id }: { kind: "mine" | "public"; id
 
       <RecipeBody title={recipe.title} servings={recipe.servings} ingredients={recipe.ingredients} steps={recipe.steps} />
 
-      {recipe.kind === "public" && (
+      {recipe.kind === "public" && !recipe.is_sample && (
         <p className="hint rc-source">
           출처:{" "}
           <a href="https://www.foodsafetykorea.go.kr" target="_blank" rel="noopener noreferrer">
