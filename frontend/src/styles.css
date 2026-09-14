@@ -543,6 +543,19 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
   margin-top: 4px;
 }
 
+/* 카메라·앨범처럼 두 버튼 이름 길이가 비슷할 때(1fr 2fr이면 짧은 쪽이 줄바꿈된다).
+   384px 폭에서 "앨범에서 고르기"가 한 줄에 들어가게 좌우 여백·아이콘 간격을 줄인다(높이는 그대로 둬 터치 영역 44px+ 유지) */
+.actions.actions-even {
+  grid-template-columns: 1fr 1fr;
+}
+
+.actions-even .btn {
+  gap: 4px;
+  padding: 0 8px;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
 .hint {
   margin: 0;
   font-size: 13px;
@@ -1136,6 +1149,10 @@ button.row-btn > svg {
   background: var(--field);
   color: var(--text);
   text-align: left;
+}
+
+.scan-choice[aria-checked="true"] {
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 .scan-choice-icon {

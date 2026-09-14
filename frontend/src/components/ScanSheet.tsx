@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from "react";
 import { ApiError, api, type ScanKind, type ScanResult, type StorageLocation } from "../api";
 import { resizeImage } from "../image";
 import Icon, { type IconName } from "./Icon";
@@ -116,7 +116,8 @@ interface Props {
 export default function ScanSheet({ mode, limit, locations, onAdded, onManual, onClose, onLocationsStale }: Props) {
   const [kind, setKind] = useState<ScanKind>("fridge");
   const [step, setStep] = useState<Step>({ name: "pick" });
-  const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const albumRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -136,12 +137,14 @@ export default function ScanSheet({ mode, limit, locations, onAdded, onManual, o
           ? step.message
           : "";
 
-  const choose = (next: ScanKind) => {
-    setKind(next);
-    fileRef.current?.click();
-  };
+  const retake = () => (kind === "order" ? albumRef : cameraRef).current?.click();
+  const retakeLabel = kind === "order" ? "다시 고르기" : "다시 찍기";
 
-  const retake = () => fileRef.current?.click();
+  const onFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // 같은 사진을 다시 골라도 change가 일어나게
+    if (file) scan(file);
+  };
 
   const scan = async (file: File) => {
     const controller = new AbortController();
@@ -183,24 +186,23 @@ export default function ScanSheet({ mode, limit, locations, onAdded, onManual, o
         <p className="sr-only" role="status" aria-live="polite">
           {liveText}
         </p>
-        {/* capture 속성 없음: 폰이 카메라·갤러리 중에서 고르게 한다 (사용자 결정 2026-09-13) */}
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            e.target.value = ""; // 같은 사진을 다시 골라도 change가 일어나게
-            if (file) scan(file);
-          }}
-        />
+        {/* 안드로이드 14+는 capture 없이 열면 시스템 사진 선택기가 뜨는데 거기엔 카메라가 없다.
+            그래서 카메라용·앨범용 입력을 따로 두고 버튼으로 고르게 한다 (사용자 결정 2026-09-14) */}
+        <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={onFile} />
+        <input ref={albumRef} type="file" accept="image/*" hidden onChange={onFile} />
 
         {step.name === "pick" && (
           <>
-            <div className="scan-choices">
+            <div className="scan-choices" role="radiogroup" aria-label="사진 종류">
               {SCAN_CHOICES.map((c) => (
-                <button key={c.kind} type="button" className="scan-choice" onClick={() => choose(c.kind)}>
+                <button
+                  key={c.kind}
+                  type="button"
+                  role="radio"
+                  aria-checked={kind === c.kind}
+                  className="scan-choice"
+                  onClick={() => setKind(c.kind)}
+                >
                   <span className="scan-choice-icon">
                     <Icon name={c.icon} />
                   </span>
@@ -210,6 +212,31 @@ export default function ScanSheet({ mode, limit, locations, onAdded, onManual, o
                   </span>
                 </button>
               ))}
+            </div>
+            <div className="actions actions-even">
+              {kind === "order" ? (
+                <>
+                  <button type="button" className="btn secondary" onClick={() => cameraRef.current?.click()}>
+                    <Icon name="camera" size={18} />
+                    카메라로 찍기
+                  </button>
+                  <button type="button" className="btn primary" onClick={() => albumRef.current?.click()}>
+                    <Icon name="file" size={18} />
+                    앨범에서 고르기
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="btn secondary" onClick={() => albumRef.current?.click()}>
+                    <Icon name="file" size={18} />
+                    앨범에서 고르기
+                  </button>
+                  <button type="button" className="btn primary" onClick={() => cameraRef.current?.click()}>
+                    <Icon name="camera" size={18} />
+                    카메라로 찍기
+                  </button>
+                </>
+              )}
             </div>
             <p className="hint scan-quota">
               <Icon name="info" size={16} />
@@ -241,7 +268,7 @@ export default function ScanSheet({ mode, limit, locations, onAdded, onManual, o
             <div className="actions">
               {canRetake ? (
                 <button type="button" className="btn secondary" onClick={retake}>
-                  다시 찍기
+                  {retakeLabel}
                 </button>
               ) : (
                 <button type="button" className="btn secondary" onClick={onClose}>
