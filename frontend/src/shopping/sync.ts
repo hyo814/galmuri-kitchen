@@ -10,7 +10,7 @@
 //            add·note_add·photo_add면 queue = remapRef(queue, op.client_id, body.id). 그다음 queue = removeOp(queue, op.qid).
 //      - drop: { queue, dropBlobs } = dropWithDependents(queue, op.qid) — 실패 목록에 op를 남겨 화면에 보여준다.
 //      - conflict(note_save 409·404): 기기에서 쓴 fields를 backups에 남기고, 409면 applyServerResult(snapshot, op, body.note), removeOp.
-//      - retry·auth: 멈춘다(보낸 횟수는 이미 셌다).
+//      - retry: 5xx였으면 queue = markServerError(queue, op.qid) 저장 후 멈춘다. auth: 멈춘다.
 import type { ShoppingItem, ShoppingNote, ShoppingNotePhoto, ShoppingSnapshot, ShoppingSource } from "../api";
 import { addDays } from "../format.ts";
 import { amountInputText, parseAmountInput } from "../seasoning.ts";
@@ -25,7 +25,7 @@ export interface ItemFields {
 export type EditFields = Partial<Omit<ItemFields, "source" | "source_label">>;
 export interface NoteFields { place: string | null; body: string }
 
-/** qid: enqueue가 붙이는 대기열 안 번호(보내는 쪽이 이것으로 찾는다). attempts: 보낸 횟수(markAttempt) */
+/** qid: enqueue가 붙이는 대기열 안 번호(보내는 쪽이 이것으로 찾는다). attempts: 보낸 횟수(markAttempt). serverErrors: 5xx 받은 횟수(markServerError) */
 export type Op = (
   | { op: "add"; client_id: string; fields: ItemFields; at: string }
   | { op: "edit"; ref: Ref; fields: EditFields; at: string }
@@ -36,7 +36,7 @@ export type Op = (
   | { op: "note_delete"; ref: Ref; at: string }
   | { op: "photo_add"; note: Ref; client_id: string; blob_key: string; at: string }
   | { op: "photo_delete"; note: Ref; photo: Ref; at: string }
-) & { qid?: number; attempts?: number };
+) & { qid?: number; attempts?: number; serverErrors?: number };
 
 /** 아직 안 보낸 항목·메모·사진은 id가 없고 pending: true. 사진은 서버 것이면 url, 기기 것이면 blob_key */
 export type ViewItem = Omit<ShoppingItem, "id"> & { id?: number; pending: boolean };
@@ -119,6 +119,10 @@ export function enqueue(queue: Op[], next: Op): { queue: Op[]; dropBlobs: string
 /** 보내기 직전에 부른다(저장한 뒤 보냄) */
 export const markAttempt = (queue: Op[], qid: number): Op[] =>
   queue.map((o) => (o.qid === qid ? { ...o, attempts: (o.attempts ?? 0) + 1 } : o));
+
+/** 5xx를 받았을 때 센다(classify가 retry를 돌려준 뒤 저장). 네트워크 실패·408·429는 세지 않는다 */
+export const markServerError = (queue: Op[], qid: number): Op[] =>
+  queue.map((o) => (o.qid === qid ? { ...o, serverErrors: (o.serverErrors ?? 0) + 1 } : o));
 
 /** 성공·충돌로 끝난 op를 뺀다 */
 export const removeOp = (queue: Op[], qid: number): Op[] => queue.filter((o) => o.qid !== qid);
@@ -203,8 +207,11 @@ export function applyServerResult(snapshot: ShoppingSnapshot, op: Op, body: unkn
     const i = list.findIndex((x) => x.id === value.id || (value.client_id !== null && x.client_id === value.client_id));
     return i >= 0 ? list.map((x, j) => (j === i ? value : x)) : [...list, value];
   };
+  const hasId = typeof (body as { id?: unknown } | null)?.id === "number";
   switch (op.op) {
     case "add": case "edit": case "check":
+      // 체크·고치기의 404(이미 없음)도 ok로 오므로, 항목이 아닌 body면 그 항목을 스냅숏에서 뺀다
+      if (!hasId) return op.op === "add" ? snapshot : { ...snapshot, items: snapshot.items.filter((i) => !matches(i, op.ref)) };
       return { ...snapshot, items: upsert(snapshot.items, body as ShoppingItem) };
     case "delete":
       return { ...snapshot, items: snapshot.items.filter((i) => !matches(i, op.ref)) };
@@ -235,7 +242,7 @@ export function remapRef(queue: Op[], client_id: string, id: number): Op[] {
   });
 }
 
-/** 보낸 결과 분류(op.attempts는 markAttempt로 이번 것까지 센 값):
+/** 보낸 결과 분류(op.serverErrors는 이전까지 받은 5xx 횟수):
  *  ok(빼고 다음) · retry(멈추고 나중에: 네트워크 0·408·429는 끝없이, 5xx는 MAX_ATTEMPTS번 전까지) · auth(멈춤: 401) ·
  *  drop(dropWithDependents 후 실패 목록에: 400·413·415, 사진 저장소가 꺼진 photo_add 503, 5xx가 MAX_ATTEMPTS번) ·
  *  conflict(note_save 409 다른 기기가 먼저 고침·404 다른 기기가 지움 — 둘 다 기기 사본을 보관, 스펙 19절). 지우기·체크의 404는 이미 없으니 ok */
@@ -246,7 +253,7 @@ export function classify(op: Op, status: number): "ok" | "retry" | "auth" | "dro
   if (status === 404 && (op.op === "check" || op.op === "delete" || op.op === "note_delete" || op.op === "photo_delete")) return "ok";
   if (status === 503 && op.op === "photo_add") return "drop";
   if (status === 0 || status === 408 || status === 429) return "retry";
-  if (status >= 500) return (op.attempts ?? 0) >= MAX_ATTEMPTS ? "drop" : "retry";
+  if (status >= 500) return (op.serverErrors ?? 0) + 1 >= MAX_ATTEMPTS ? "drop" : "retry"; // 이번 5xx까지 세서 MAX번째면 실패
   return "drop";
 }
 

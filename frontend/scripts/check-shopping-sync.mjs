@@ -1,7 +1,7 @@
 // 오프라인 장보기 순수 로직 검사 (4단계 계획 Task 6). `npm run check` — Node 24가 .ts를 바로 읽는다.
 import assert from "node:assert/strict";
 import {
-  enqueue, markAttempt, removeOp, dropWithDependents, applyQueue, applyServerResult, remapRef, classify, newClientId, MAX_ATTEMPTS,
+  enqueue, markAttempt, markServerError, removeOp, dropWithDependents, applyQueue, applyServerResult, remapRef, classify, newClientId, MAX_ATTEMPTS,
   groupItems, plannedOnFor, parseQuantityText, quantityText, sourceTag,
 } from "../src/shopping/sync.ts";
 
@@ -442,9 +442,18 @@ for (const op of Object.values(OP)) {
 }
 // 5xx는 MAX_ATTEMPTS번째에 실패 목록으로
 assert.equal(MAX_ATTEMPTS, 5);
-assert.equal(classify({ ...OP.add, attempts: MAX_ATTEMPTS - 1 }, 500), "retry");
-assert.equal(classify({ ...OP.add, attempts: MAX_ATTEMPTS }, 500), "drop");
-assert.equal(classify({ ...OP.note_save, attempts: MAX_ATTEMPTS }, 502), "drop");
+assert.equal(classify({ ...OP.add, serverErrors: MAX_ATTEMPTS - 2 }, 500), "retry");
+assert.equal(classify({ ...OP.add, serverErrors: MAX_ATTEMPTS - 1 }, 500), "drop");
+assert.equal(classify({ ...OP.note_save, serverErrors: MAX_ATTEMPTS - 1 }, 502), "drop");
+// 오프라인 재시도(0·429)는 5xx 횟수에 들어가지 않는다: 여러 번 보냈어도 첫 502는 retry
+assert.equal(classify({ ...OP.add, attempts: 99 }, 502), "retry");
+assert.deepEqual(markServerError([{ ...OP.add, qid: 1 }], 1)[0].serverErrors, 1);
+// 체크 404(항목이 이미 없음)의 오류 body는 항목으로 들어가지 않고 그 항목을 뺀다
+{
+  const snap = { items: [{ id: 7, client_id: null, name: "두부" }], stocked: [], notes: [], today: "2026-09-14" };
+  const out = applyServerResult(snap, { op: "check", ref: { id: 7 }, done: true, at: "2026-09-14T00:00:00Z" }, { error: "찾을 수 없어요." });
+  assert.deepEqual(out.items, []);
+}
 
 // ---- newClientId: 서버 형식 [A-Za-z0-9-]{1,36} ----
 {
