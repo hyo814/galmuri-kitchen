@@ -18,6 +18,7 @@ export const ROUTES = [
   "/recipes/seasonings/:id",
   "/recipes/seasonings/:id/edit",
   "/shopping",
+  "/shopping/stock",
   "/meals",
   "/more",
   "/tools",
