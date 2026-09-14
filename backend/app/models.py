@@ -119,6 +119,30 @@ class KitchenTool(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
 
+class ShoppingItem(db.Model):
+    """장보기 항목(스펙 16절). stocked_at이 있으면 재고에 넣은 것(산 것, 7일 보이고 지운다)."""
+
+    __tablename__ = "shopping_items"
+    # 기기에서 만든 id로 다시 보내도 하나만 생긴다. client_id가 NULL인 행끼리는 겹쳐도 된다.
+    __table_args__ = (db.UniqueConstraint("user_id", "client_id"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    client_id = db.Column(db.String(36))
+    name = db.Column(db.String(50), nullable=False)
+    quantity = db.Column(db.Float, nullable=False, default=1)
+    unit = db.Column(db.String(10), nullable=False, default="개")
+    planned_on = db.Column(db.Date)
+    location_id = db.Column(db.Integer, db.ForeignKey("storage_locations.id", ondelete="SET NULL"), index=True)
+    location = db.relationship("StorageLocation")
+    source = db.Column(db.String(10), nullable=False, default="manual")  # manual | recipe | staple | urgent | meal_plan | memo
+    source_label = db.Column(db.String(60))  # 태그용(레시피 이름 등)
+    done_at = db.Column(db.DateTime(timezone=True))
+    done_changed_at = db.Column(db.DateTime(timezone=True))  # 체크·해제를 마지막으로 바꾼 기기 시각(스펙 19절)
+    stocked_at = db.Column(db.DateTime(timezone=True))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
 class AiCall(db.Model):
     __tablename__ = "ai_calls"
 

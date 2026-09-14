@@ -91,6 +91,10 @@ recipe-ai/
 | GET | `/api/export` | (`X-Requested-With: fetch` 필요) zip 내려받기(`Content-Disposition: attachment; filename="galmuri-kitchen-YYYYMMDD.zip"`, 서울 날짜). `ingredients.csv`·`recipes.csv`·`seasonings.csv`(UTF-8 BOM, 한국어 머리글). 하루 5회(`ai_calls.kind = export`), 넘으면 429 `오늘 내보내기는 5번까지 할 수 있어요. 내일 다시 해주세요.`(27절) |
 | GET | `/api/ai-usage` | 오늘(서울) `{scan:{used, limit}, recipe:{used, limit}}` — `오늘 N번 남음`·더보기 AI 사용량 |
 | GET/POST | `/api/seasonings` · GET/PUT/DELETE `/api/seasonings/<id>` | 내 양념 비율 목록·추가 / 상세·수정·삭제(22절) |
+| GET | `/api/shopping` | 장보기 한 번에 받기 `{items, stocked, notes, today}` — 페이지 없음(오프라인 보관, 26절 예외). 7일 지난 산 것은 이때 지운다(28절) |
+| POST | `/api/shopping/items` | 살 것 추가 201. 같은 `client_id`가 있으면 그 항목 200(28절) |
+| POST | `/api/shopping/items/bulk` | 한 번에 담기 `{source, source_label?, items:[…] 1~50}` → 201 `{created, skipped}`. 목록에 있는 이름·요청 안 겹치는 이름은 건너뜀, 하나라도 틀리면 400 `{error: "N번째 재료: …", errors}`(28절) |
+| PATCH/DELETE | `/api/shopping/items/<id>` | 고치기 또는 체크 `{done, changed_at}`(마지막 변경 우선) / 삭제(28절) |
 | GET | `/api/videos`, `/api/videos/<id>` | 요리 채널 영상(17절) |
 | GET/POST | `/api/channels` · PATCH/DELETE `/api/channels/<id>` | 채널 목록·추가 / 기본 채널 숨기기·내 채널 빼기(17절) |
 | GET/POST | `/api/cook-logs` | 기록 목록 / 생성(multipart: 필드 + 사진 + `usages` JSON) |
@@ -456,3 +460,18 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
   - 엑셀 수식 주입 방지: `=` `+` `-` `@` 탭·CR(전각 `＝＋－＠` 포함, 앞 공백은 건너뛰고 봄)로 시작하는 칸은 앞에 `'`를 붙인다. 숫자는 정수면 정수로, 아니면 반올림 없이 적는다.
   - 하루 5회는 `ai_calls.kind = export`로 세고(AI 사용량·원가에 안 셈), 한도에 걸린 요청은 기록하지 않는다. 기록은 zip을 만들기 전에 하므로 만들다 실패해도 한 번으로 센다.
   - 두 API 모두 GET이지만 한도를 쓰므로 `X-Requested-With: fetch`가 없으면 400(다른 사이트 링크로 한도를 쓰지 못하게). 응답은 `Cache-Control: no-store`·`X-Content-Type-Options: nosniff`.
+
+## 28. 4단계 구현 세부 (추가: 2026-09-14)
+
+### 장보기 항목 (Task 1)
+- 테이블 `shopping_items`(16절). UNIQUE(user_id, client_id) — client_id가 NULL인 행끼리는 겹쳐도 된다. `location_id`는 보관 위치를 지우면 DB가 NULL로 바꾼다(`locations.delete_location`은 재료만 막는다). 사용자 삭제 때 CASCADE.
+- 상한: 사용자당 목록 **300개**(`stocked_at`이 있는 산 것은 세지 않음), 넘으면 400 `장보기 목록은 300개까지 담을 수 있어요. 필요 없는 항목을 빼주세요.` 일괄 담기는 건너뛴 것을 뺀 **만들 개수**로 센다. PostgreSQL은 사용자별 트랜잭션 잠금(`pg_advisory_xact_lock`)으로 client_id 확인·개수 확인·추가를 한 줄로 세운다.
+- `GET /api/shopping` → `{items, stocked, notes, today}`. `items`는 산 것이 아닌 항목(created_at·id 오름차순, 날짜 묶음은 화면이 만든다), `stocked`는 최근 7일 산 것(stocked_at 내림차순), `notes`는 장보기 메모(Task 3 전까지 빈 배열), `today`는 서울 날짜. 요청 때 7일 지난 산 것을 먼저 지운다(크론 없음).
+- 항목 모양: `{id, client_id, name, quantity, unit, planned_on, location_id, location_name, source, source_label, done_at, done_changed_at, stocked_at, created_at}`.
+- `POST /api/shopping/items` `{name, quantity?, unit?, planned_on?, location_id?, source?, source_label?, client_id?}` → 201. 같은 사용자에게 같은 `client_id`가 있으면 새로 만들지 않고 그 항목을 200으로 돌려준다(오프라인에서 다시 보내도 하나).
+  - 검증: 이름 1~50자 `이름은 1~50자로 입력해주세요.` · 수량은 0보다 큰 숫자(참/거짓·문자열 불가) `수량은 0보다 커야 해요.` · 단위 10자(비면 `개`) · 날짜 `YYYY-MM-DD` `날짜 형식이 올바르지 않아요.` · source는 `manual|recipe|staple|urgent|meal_plan|memo`(기본 manual) · source_label 60자 · 남의/없는 위치 `보관 위치를 다시 선택해주세요.` · client_id는 1~36자 영문·숫자·`-`. 그 밖의 모양 오류는 `잘못된 요청이에요.`
+- `POST /api/shopping/items/bulk` `{source, source_label?, items:[{name, quantity?, unit?, planned_on?, location_id?}] 1~50}` → 201 `{created:[…], skipped:["대파"]}`. 목록에 있는 항목(체크했어도, 산 것 제외)과 `names_match`되는 이름, 요청 안에서 앞 항목과 겹치는 이름은 건너뛴다. 하나라도 틀리면 아무것도 만들지 않고 400 `{error: "N번째 재료: …", errors:[{index, error}]}`.
+- `PATCH /api/shopping/items/<id>` 두 모양(섞거나 체크 모양이 틀리면 400 `잘못된 요청이에요.`):
+  - 고치기 `{name?, quantity?, unit?, planned_on?, location_id?}` — 보낸 칸만, 도착 순서대로 덮어쓴다. `planned_on`·`location_id`는 null로 비운다.
+  - 체크 `{done: bool, changed_at: 시간대가 붙은 ISO 시각}` — `changed_at`이 저장된 `done_changed_at`보다 이르면 바꾸지 않고 현재 항목을 200(늦게 도착한 옛 체크). 아니면 `done_at = done ? changed_at : null`, `done_changed_at = changed_at`. 서버 시각보다 10분 넘게 미래면 서버 시각으로 자른다. 기기 시계 차이만큼 순서가 틀릴 수 있다(허용, 문제되면 서버 수신 순서로).
+- `DELETE /api/shopping/items/<id>` → 204. 남의 것·없는 것은 PATCH·DELETE 모두 404.
