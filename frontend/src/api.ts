@@ -277,6 +277,50 @@ export interface ChannelList {
   sample: boolean;
 }
 
+export type ShoppingSource = "manual" | "recipe" | "staple" | "urgent" | "meal_plan" | "memo";
+
+/** 장보기 항목(스펙 16절). 날짜는 YYYY-MM-DD, 시각은 ISO */
+export interface ShoppingItem {
+  id: number;
+  client_id: string | null;
+  name: string;
+  quantity: number;
+  unit: string;
+  planned_on: string | null;
+  location_id: number | null;
+  location_name: string | null;
+  source: ShoppingSource;
+  source_label: string | null;
+  done_at: string | null;
+  done_changed_at: string | null;
+  stocked_at: string | null;
+  created_at: string;
+}
+
+export interface ShoppingNotePhoto {
+  id: number;
+  client_id: string | null;
+  url: string;
+}
+
+/** 장보기 메모(스펙 19절) */
+export interface ShoppingNote {
+  id: number;
+  client_id: string | null;
+  place: string | null;
+  body: string;
+  updated_at: string;
+  photos: ShoppingNotePhoto[];
+}
+
+/** GET /api/shopping — 오프라인 보관용으로 한 번에 받는다. stocked: 최근 7일 산 것 */
+export interface ShoppingSnapshot {
+  items: ShoppingItem[];
+  stocked: ShoppingItem[];
+  notes: ShoppingNote[];
+  today: string;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
