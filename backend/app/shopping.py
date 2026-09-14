@@ -14,7 +14,7 @@ from . import storage
 from .auth import get_owned_or_404, login_required
 from .ingredients import check_ingredient_cap, seoul_today
 from .ingredients import parse_fields as ingredient_fields
-from .locations import choose_location, default_location, owned_location, user_locations
+from .locations import choose_location, owned_location, user_locations
 from .matching import match_prepared, normalize, prepare
 from .models import Ingredient, ShoppingItem, ShoppingNote, ShoppingNotePhoto, db, utcnow
 from .scan import sniff_image_type
@@ -45,7 +45,8 @@ NOTE_CONFLICT = "다른 기기에서 먼저 고친 메모가 있어요."
 
 LIST_CHANGED = "목록이 방금 바뀌었어요. 다시 불러와주세요."
 EDIT_KEYS = ("name", "quantity", "unit", "planned_on", "location_id")
-STOCK_KEYS = ("name", "quantity", "unit", "location_id")  # 시안 StockIn에 유통기한·가격 칸이 없어 받지 않는다
+STOCK_KEYS = ("name", "quantity", "unit", "location_id")
+NO_LOCATIONS = "보관 위치를 먼저 만들어주세요."  # 시안 StockIn에 유통기한·가격 칸이 없어 받지 않는다
 CHECK_KEYS = ("done", "changed_at")
 _CLIENT_ID = re.compile(r"[A-Za-z0-9-]{1,36}")
 
@@ -212,6 +213,7 @@ def _changed_at(value):
 def snapshot():
     """목록·산 것·메모를 한 번에(오프라인 보관용, 페이지 없음 — 스펙 26절 예외)."""
     cutoff = utcnow() - timedelta(days=STOCKED_KEEP_DAYS)
+    _lock_user_items(g.user.id)  # 재고에 넣기·산 것으로 옮기기와 같은 잠금 순서(사용자 잠금 → 행)
     # ponytail: 7일 지난 산 것은 이 요청 때 지운다(크론 없음). 오래 안 열면 그만큼 남아 있지만 보이지 않는다.
     ShoppingItem.query.filter(ShoppingItem.user_id == g.user.id, ShoppingItem.stocked_at < cutoff).delete(synchronize_session=False)
     db.session.commit()
@@ -476,7 +478,8 @@ def delete_photo(note_id, photo_id):
 @login_required
 def stock_draft():
     """재고에 넣기 화면 초안: 체크했고 아직 안 넣은 항목(목록 순서)과 위치 프리필(스펙 23절 D3).
-    위치 이유 item(항목에 정한 위치) → same_name(이름이 같은 가장 최근 재료의 위치) → default(첫 냉장 위치)."""
+    위치 이유 item(항목에 정한 위치) → same_name(이름이 같은 가장 최근 재료의 위치) → default(첫 냉장 위치)
+    → none(보관 위치가 하나도 없음, location_id null — 화면이 고르게 한다)."""
     items = (
         ShoppingItem.query.filter(ShoppingItem.user_id == g.user.id, ShoppingItem.done_at.is_not(None), ShoppingItem.stocked_at.is_(None))
         .order_by(ShoppingItem.created_at, ShoppingItem.id)
@@ -491,7 +494,8 @@ def stock_draft():
             .order_by(Ingredient.created_at, Ingredient.id)
         )
         latest = {normalize(name): location_id for name, location_id in rows.all()}  # 뒤(최근)가 앞을 덮는다
-    fallback = None
+    locations = user_locations(g.user.id)
+    fallback = choose_location(locations, None).id if locations else None
     result = []
     for item in items:
         if item.location_id is not None:
@@ -499,12 +503,13 @@ def stock_draft():
         elif (location_id := latest.get(normalize(item.name))) is not None:
             reason = "same_name"
         else:
-            fallback = fallback or default_location(g.user.id).id
-            location_id, reason = fallback, "default"
+            location_id, reason = fallback, "default" if fallback is not None else "none"
         result.append(
             {"id": item.id, "name": item.name, "quantity": item.quantity, "unit": item.unit, "location_id": location_id, "location_reason": reason}
         )
-    return jsonify(purchased_on=seoul_today().isoformat(), items=result)
+    res = jsonify(purchased_on=seoul_today().isoformat(), items=result)
+    res.headers["Cache-Control"] = "no-store"
+    return res
 
 
 @bp.post("/items/stock")
@@ -513,11 +518,12 @@ def stock_items():
     """체크한 항목을 재고로 옮긴다. 재료 생성과 stocked_at 기록은 한 트랜잭션이고, 하나라도 틀리면 아무것도 하지 않는다."""
     data = _json_object()
     rows = data.get("items")
-    if not isinstance(rows, list) or not 1 <= len(rows) <= BULK_MAX:
-        abort(400, f"재료를 1~{BULK_MAX}개 보내주세요.")
+    # 체크한 항목은 목록 상한(300개)까지 있을 수 있어 한 번에 모두 받는다(재료 2000개 상한은 그대로).
+    if not isinstance(rows, list) or not 1 <= len(rows) <= MAX_SHOPPING_ITEMS:
+        abort(400, f"재료를 1~{MAX_SHOPPING_ITEMS}개 보내주세요.")
     if not all(isinstance(row, dict) for row in rows):
         abort(400, BAD_REQUEST)
-    ids = _ids_or_400([row.get("id") for row in rows], BULK_MAX)
+    ids = _ids_or_400([row.get("id") for row in rows], MAX_SHOPPING_ITEMS)
     if len(set(ids)) != len(ids):
         abort(400, BAD_REQUEST)
     purchased_on = iso_date(data.get("purchased_on"))
@@ -526,22 +532,22 @@ def stock_items():
     if purchased_on > seoul_today():
         abort(400, "산 날은 오늘보다 뒤일 수 없어요.")
 
-    # 행을 잠가(PostgreSQL FOR UPDATE) 같은 항목을 동시에 두 번 보내도 재고에 두 번 들어가지 않게 한다.
-    # 기다린 쪽은 먼저 넣은 결과(stocked_at 있음)를 보고 400이 된다.
+    # 사용자 잠금 → 행 잠금(id 순, PostgreSQL FOR UPDATE) 순서로, 같은 항목을 동시에 두 번 보내도 재고에 한 번만 들어간다.
+    _lock_user_items(g.user.id)
     items = (
-        ShoppingItem.query.filter(
-            ShoppingItem.id.in_(ids),
-            ShoppingItem.user_id == g.user.id,
-            ShoppingItem.done_at.is_not(None),
-            ShoppingItem.stocked_at.is_(None),
-        )
+        ShoppingItem.query.filter(ShoppingItem.id.in_(ids), ShoppingItem.user_id == g.user.id)
+        .order_by(ShoppingItem.id)
         .with_for_update()
         .all()
     )
-    if len(items) != len(ids):
+    if len(items) == len(ids) and all(item.stocked_at is not None for item in items):
+        return jsonify(created=0)  # 이미 넣은 요청을 다시 보냄(응답을 못 받은 기기) — 두 번 넣지 않는다
+    if len(items) != len(ids) or any(item.done_at is None or item.stocked_at is not None for item in items):
         abort(400, LIST_CHANGED)
 
     locations = user_locations(g.user.id)
+    if not locations:
+        abort(400, NO_LOCATIONS)
     parsed, errors = [], []
     for index, row in enumerate(rows):
         body = {key: row[key] for key in STOCK_KEYS if key in row}
@@ -590,6 +596,7 @@ def match_items():
 def mark_stocked():
     """스캔으로 이미 재고에 넣은 항목을 산 것으로 옮긴다(재료는 만들지 않음). 내 목록에 없는 id는 조용히 넘긴다."""
     ids = _ids_or_400(_json_object().get("ids"), MAX_SHOPPING_ITEMS)
+    _lock_user_items(g.user.id)
     ShoppingItem.query.filter(
         ShoppingItem.id.in_(ids), ShoppingItem.user_id == g.user.id, ShoppingItem.stocked_at.is_(None)
     ).update({"stocked_at": utcnow()}, synchronize_session=False)

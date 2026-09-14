@@ -120,6 +120,8 @@ def parse_fields(data, creating, locations=None):
             quantity = float(data.get("quantity", 1))
         except (TypeError, ValueError):
             abort(400, "수량은 숫자로 입력해주세요.")
+        except OverflowError:  # 10**400 같은 거대한 정수
+            abort(400, "수량은 0보다 커야 해요.")
         if not (math.isfinite(quantity) and quantity > 0):
             abort(400, "수량은 0보다 커야 해요.")
         fields["quantity"] = quantity

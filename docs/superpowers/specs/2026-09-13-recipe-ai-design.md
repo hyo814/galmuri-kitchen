@@ -98,7 +98,7 @@ recipe-ai/
 | POST | `/api/shopping/items/bulk` | 한 번에 담기 `{source, source_label?, items:[…] 1~50}` → 201 `{created, skipped}`. 목록에 있는 이름·요청 안 겹치는 이름은 건너뜀, 하나라도 틀리면 400 `{error: "N번째 재료: …", errors}`(28절) |
 | PATCH/DELETE | `/api/shopping/items/<id>` | 고치기 또는 체크 `{done, changed_at}`(마지막 변경 우선) / 삭제(28절) |
 | GET | `/api/shopping/stock-draft` | 재고에 넣기 초안 `{purchased_on, items:[{id, name, quantity, unit, location_id, location_reason}]}` — 체크했고 안 넣은 항목(28절) |
-| POST | `/api/shopping/items/stock` | 체크한 항목 재고에 넣기 `{purchased_on, items:[{id, name, quantity, unit, location_id}] 1~50}` → 201 `{created}`, 재료 생성과 산 것 기록은 한 트랜잭션(28절) |
+| POST | `/api/shopping/items/stock` | 체크한 항목 재고에 넣기 `{purchased_on, items:[{id, name, quantity, unit, location_id}] 1~300}` → 201 `{created}`(이미 넣은 요청을 다시 보내면 200 `{created: 0}`), 재료 생성과 산 것 기록은 한 트랜잭션(28절) |
 | POST | `/api/shopping/items/match` | 스캔으로 넣은 이름과 맞는 목록 항목 `{names:[…] 1~50}` → `{items:[{id, name}]}`(28절) |
 | POST | `/api/shopping/items/mark-stocked` | 산 것으로 옮기기(재료 안 만듦) `{ids:[…] 1~300}` → 204(28절) |
 | GET | `/api/videos`, `/api/videos/<id>` | 요리 채널 영상(17절) |
@@ -507,10 +507,10 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - 회원 탈퇴 때 `shopping/<user_id>/` 파일을 따로 지운다(27절, 탈퇴 태스크).
 
 ### 재고에 넣기 (Task 2)
-- `GET /api/shopping/stock-draft` → `{purchased_on: 오늘(서울), items:[{id, name, quantity, unit, location_id, location_reason}]}`. 체크했고(`done_at` 있음) 아직 안 넣은(`stocked_at` 없음) 항목만, 목록 순서(created_at·id). 위치 프리필(23절 D3)과 이유: 항목에 정한 위치 `item` → 이름을 `normalize`한 값이 같은 재료 중 가장 최근에 만든 것의 위치 `same_name`(시안 `같은 이름 재료가 있던 곳`) → 첫 냉장 위치 `default`.
-- `POST /api/shopping/items/stock` `{purchased_on, items:[{id, name, quantity, unit, location_id}] 1~50}` → 201 `{created: N}`. 산 날은 하나(`YYYY-MM-DD`, `날짜 형식이 올바르지 않아요.`, 오늘보다 뒤면 `산 날은 오늘보다 뒤일 수 없어요.`). 시안 `StockIn`에 유통기한·가격 칸이 없어 그 칸은 보내도 무시한다(`유통기한은 재고에서 고칠 수 있어요`). 한 트랜잭션에서 차례로:
-  1. 항목 행을 잠그고(PostgreSQL `FOR UPDATE`) 모든 `id`가 내 항목·체크됨·안 넣음인지 본다. 아니면 400 `목록이 방금 바뀌었어요. 다시 불러와주세요.`(같은 요청을 다시 보내거나 동시에 두 번 보내도 재고에 한 번만 들어간다). `id`가 정수가 아니거나 겹치면 `잘못된 요청이에요.`
-  2. 각 줄을 재고 `parse_fields`로 검증(수량·단위·위치 규칙과 문구는 재고와 같음, 위치가 null이면 첫 냉장 위치). 틀리면 아무것도 만들지 않고 400 `{error: "N번째 재료: …", errors}`.
+- `GET /api/shopping/stock-draft` → `{purchased_on: 오늘(서울), items:[{id, name, quantity, unit, location_id, location_reason}]}`. 체크했고(`done_at` 있음) 아직 안 넣은(`stocked_at` 없음) 항목만, 목록 순서(created_at·id). 위치 프리필(23절 D3)과 이유: 항목에 정한 위치 `item` → 이름을 `normalize`한 값이 같은 재료 중 가장 최근에 만든 것의 위치 `same_name`(시안 `같은 이름 재료가 있던 곳`, 예: 재료 `대파 (국산)` ↔ 항목 `대파`) → 첫 냉장 위치(없으면 첫 위치) `default` → 보관 위치가 하나도 없으면 `location_id: null`·`none`(화면이 위치를 고르게 한다). 응답은 `Cache-Control: no-store`.
+- `POST /api/shopping/items/stock` `{purchased_on, items:[{id, name, quantity, unit, location_id}] 1~300}`(체크한 항목은 목록 상한 300개까지 있을 수 있어 한 번에, 재료 2000개 상한은 그대로) → 201 `{created: N}`. 산 날은 하나(`YYYY-MM-DD`, `날짜 형식이 올바르지 않아요.`, 오늘보다 뒤면 `산 날은 오늘보다 뒤일 수 없어요.`). 시안 `StockIn`에 유통기한·가격 칸이 없어 그 칸은 보내도 무시한다(`유통기한은 재고에서 고칠 수 있어요`). 한 트랜잭션에서 차례로:
+  1. 사용자 잠금(`pg_advisory_xact_lock`) → 항목 행 잠금(id 순, PostgreSQL `FOR UPDATE`) 순서로 잡고(스냅숏의 7일 정리·산 것으로 옮기기도 사용자 잠금을 먼저 잡는다), 모든 `id`가 내 항목·체크됨·안 넣음인지 본다. 모든 `id`가 내 항목이고 이미 넣었으면(응답을 못 받은 기기가 다시 보냄) 아무것도 하지 않고 200 `{created: 0}`. 그 밖에(일부만 넣음·안 체크·없음·남의 것) 400 `목록이 방금 바뀌었어요. 다시 불러와주세요.` 동시에 두 번 보내도 재고에 한 번만 들어간다. `id`가 정수가 아니거나 겹치면 `잘못된 요청이에요.`
+  2. 각 줄을 재고 `parse_fields`로 검증(수량·단위·위치 규칙과 문구는 재고와 같음, 거대한 정수 수량도 400 `수량은 0보다 커야 해요.`, 위치가 null이면 첫 냉장 위치). 보관 위치가 하나도 없으면 400 `보관 위치를 먼저 만들어주세요.`. 틀리면 아무것도 만들지 않고 400 `{error: "N번째 재료: …", errors}`.
   3. 재료 2000개 상한(`check_ingredient_cap`, 문구 그대로).
   4. 재료를 만들고 항목 `stocked_at = 지금` → 커밋. 불러온 뒤 위치가 지워지면 400 `선택한 보관 위치가 방금 바뀌었어요. 다시 시도해주세요.`
 - `POST /api/shopping/items/match` `{names:[문자열 50자 이하] 1~50}` → `{items:[{id, name}]}` — 목록에 있는 항목(체크했어도, 산 것 제외, 목록 순서) 중 `names_match`되는 것. 영수증·주문 스캔으로 재고에 넣은 뒤 `장보기 목록에 있던 우유·양파도 샀나요?` 제안용(16절).
