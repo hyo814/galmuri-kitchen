@@ -3,6 +3,7 @@ import { localToday, type DeleteReason, type Ingredient, type IngredientInput, t
 import { addDays, withJosa } from "../format";
 import { useAsyncAction } from "../useAsyncAction";
 import Icon from "./Icon";
+import ShoppingAddButton, { cut } from "./ShoppingAddButton";
 import Sheet from "./Sheet";
 
 const MAX_PRICE = 10_000_000;
@@ -71,6 +72,11 @@ export default function IngredientForm({
   });
 
   const priceTooHigh = price !== "" && Number(price) > MAX_PRICE;
+
+  // 고치던 내용이 있으면 `장보기 보기`로 떠나기 전에 묻는다(RecipeForm과 같은 문구)
+  const snapshot = JSON.stringify([name, quantity, unit, price, purchasedOn, expiresOn, locationId]);
+  const [start] = useState(snapshot);
+  const canLeave = () => snapshot === start || confirm("작성 중인 내용이 사라져요. 나갈까요?");
 
   const changeQuantity = (direction: 1 | -1) => {
     const min = initial ? 0 : 0.01;
@@ -311,6 +317,16 @@ export default function IngredientForm({
               {busy ? "저장 중…" : usedUp ? "다 먹었어요 (삭제)" : "저장"}
             </button>
           </div>
+          {initial && (
+            <ShoppingAddButton
+              source={initial.status === "urgent" || initial.status === "danger" ? "urgent" : "manual"}
+              items={[
+                { name: initial.name, quantity: initial.quantity > 0 ? initial.quantity : undefined, unit: cut(initial.unit, 10) },
+              ]}
+              label="장보기에 담기"
+              canLeave={canLeave}
+            />
+          )}
           {onDelete && (
             <button type="button" className="btn danger-text" disabled={busy} onClick={() => setDeleting({ reason: null })}>
               이 재료 삭제

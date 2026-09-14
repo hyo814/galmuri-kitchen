@@ -3166,3 +3166,31 @@ button.row-btn > svg {
   font-weight: 700;
   white-space: nowrap;
 }
+
+/* 다른 화면에서 장보기에 담기(시안 RecipeEntry) */
+.sh-missing-cta {
+  margin-top: 12px;
+}
+
+/* 결과 줄(role=status)은 늘 붙어 있고, 내용이 있을 때만 이 클래스로 여백·배경을 준다 */
+.sh-add .error,
+.sh-add-result {
+  margin-top: 8px;
+}
+
+.sh-add-result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-size: 15px;
+  line-height: 22px;
+  word-break: keep-all;
+}
+
+.sh-add-result > span {
+  padding-top: 11px;
+}
