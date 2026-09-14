@@ -69,6 +69,9 @@
 | `FOOD_NUTRITION_API_KEY` | 선택 | 영양 계산기 구현 후 | 식약처 공공데이터포털(식품영양성분 DB) |
 | `YOUTUBE_API_KEY` | 선택 | 3단계 요리 채널 영상·유튜브 링크 가져오기(없으면 개발 모드는 예시 영상, 운영은 영상 칸 숨김). 설정은 아래 5-2 | Google Cloud Console(YouTube Data API v3) |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | 선택 | 장보기 메모 사진. **R2 연결은 아직 안 됨** — 지금 운영에서는 값이 있든 없든 사진 올리기·보기가 503(`DEV_MODE`가 아니면 로컬 디스크에 두지 않는다 — Render 디스크는 배포 때 지워진다). 연결할 때: 비공개 버킷, 네 값 설정, 오프라인 사진 보관을 위해 버킷 CORS에 앱 주소 GET 허용. 로컬 개발은 값 없이 `backend/uploads/`(gitignore) | Cloudflare 대시보드 R2 |
+| `DEMO_LOGIN` | 선택 | `1`이면 로그인 화면에 `로그인 없이 체험하기`(심사·둘러보기용). 누를 때마다 예시 재고가 든 새 계정을 만들고 24시간 뒤 지운다. 설정은 아래 5-3 | 직접 설정 |
+| `DEMO_AI_GLOBAL_DAILY` | 선택 | 체험 계정 전체의 사진 인식·AI 레시피 호출 24시간 예산(기본 300). 넘으면 체험 계정은 예시 결과로 동작 | 직접 설정 |
+| `TRUSTED_PROXY_HOPS` | 선택 | `X-Forwarded-For`를 붙이는 앞단 프록시 수(기본 1, Render). 체험 계정 IP 한도가 이 값으로 접속 주소를 고른다. 확인은 아래 5-3 | 직접 설정 |
 | `DEV_MODE` | 로컬 전용 | 로컬 개발 | 운영(Render)에는 **넣지 않는다** |
 
 키가 비어 있으면 개발 모드에서는 샘플 데이터로 동작(각 기능 구현 시 적용), 운영에서는 해당 기능을 숨긴다.
@@ -136,6 +139,27 @@
 4. Render 환경변수 `YOUTUBE_API_KEY`에 넣고 다시 배포
 5. 기본 채널이 확정되면 `backend/app/data/default_channels.json`에 `[{"channel_id": "UC…", "name": "메모용 이름"}]` 모양으로 적고 배포한 뒤 Render Shell에서 `flask seed-default-channels`(목록에서 뺀 채널은 기본 채널에서 꺼진다). **지금 파일은 사용자 확정 전이라 빈 목록(`[]`)이다.**
 6. 사용량: 무료 한도 하루 10,000 units. 채널 하나 새로 받기 3 units(channels·playlistItems·videos 각 1), 채널당 6시간마다·요청당 3채널까지, 채널 추가 3 units, 유튜브 링크 가져오기 1 unit. 앱이 사용자별 하루 새로 받기 20번·채널 추가 30번, 전체 24시간 추정 8,000 units로 막는다(`backend/app/videos.py`의 `DAILY_UNIT_BUDGET`). 전체 검색(search.list, 100 units)은 쓰지 않는다.
+
+## 5-3. 체험하기 계정 (`DEMO_LOGIN=1`)
+1. Render 웹 서비스 환경변수에 `DEMO_LOGIN` = `1`을 넣고 다시 배포한다. `DEV_MODE`와 상관없이 운영에서 켤 수 있다. 끄려면 변수를 지운다.
+2. 체험 계정은 `provider=demo`, 닉네임 `체험 사용자`로 만들어지고 예시 재고 10개(두부 D-1·대파 D-2 포함)·필수품 3개·레시피 2개·양념 비율 1개가 들어 있다.
+3. 막는 장치(`backend/app/demo.py`):
+   - 같은 IP(IPv6는 /64 대역)에서 1시간에 3개, 24시간에 10개. IP는 저장하지 않고 `SECRET_KEY`에서 뽑은 키로 서명한 해시 앞 16자만 계정 식별값에 붙인다.
+   - 체험 계정 전체 5,000개. 가득 차면 거절하지 않고 가장 오래된 체험 계정부터 지우고 새로 만든다(한 번에 50개까지, 그래도 차 있으면 거절).
+   - 체험 계정의 사진 인식·AI 레시피(링크 가져오기 포함) 하루 한도는 각각 3번. 체험 계정 전체가 24시간에 `DEMO_AI_GLOBAL_DAILY`(기본 300)번을 쓰면 AI를 부르지 않고 예시 결과를 보여 준다.
+   - 영상 칸은 유튜브 할당량을 쓰지 않게 체험 계정에는 늘 예시 목록이다(채널 추가·새로 받기 없음).
+4. **지우기 Cron Job:** New → **Cron Job** → 같은 GitHub 저장소, Language **Docker**, Region Singapore
+   - Schedule: `0 * * * *` (한 시간마다)
+   - Command: `flask --app app purge-demo-users`
+   - Environment Variables: 웹 서비스와 같은 `SECRET_KEY`·`DATABASE_URL`(Environment Group으로 묶으면 편하다)
+   - 24시간 지난 체험 계정과 그 데이터(재고·레시피 등, `ON DELETE CASCADE`)를 지운다. AI 호출 기록(`ai_calls`)은 원가·체험 예산 계산을 위해 사용자 칸만 비우고 남는다(`SET NULL`). Cron Job이 없어도 체험하기를 누를 때마다 만료 계정을 50개씩 함께 지운다.
+5. **IP 한도 확인(배포 후 한 번):** IP 한도는 `X-Forwarded-For`의 뒤에서 `TRUSTED_PROXY_HOPS`(기본 1)번째 값을 접속 주소로 본다.
+   - **꾸민 헤더가 통하지 않는지:** 같은 컴퓨터에서 앞쪽 값만 바꿔 네 번 보낸다. 네 번째가 `429`면 정상이다(꾸민 값이 무시되고 같은 주소로 셈). 넷 다 `200`이면 앞쪽 값을 믿고 있는 것이니 `TRUSTED_PROXY_HOPS`를 줄인다. 확인 뒤 만든 체험 계정은 24시간 뒤 지워진다.
+     ```
+     for i in 1 2 3 4; do curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<도메인>/api/demo-login \
+       -H 'X-Requested-With: fetch' -H "X-Forwarded-For: 9.9.9.$i"; done
+     ```
+   - **다른 사람이 막히지 않는지:** 위 확인 직후(한 시간 안) 다른 네트워크의 기기(와이파이를 끈 폰 LTE 등)에서 `로그인 없이 체험하기`를 누른다. 들어가지면 정상이다. `체험하기를 너무 많이 눌렀어요`가 나오면 모든 사람이 프록시 주소 하나로 묶인 것이니 `TRUSTED_PROXY_HOPS`를 늘려 다시 배포하고 두 확인을 반복한다.
 
 ## 6. 폰에 앱처럼 설치 (갤럭시)
 1. Chrome에서 `https://<도메인>` 열기

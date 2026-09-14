@@ -447,7 +447,7 @@ def test_recipe_list_pagination_never_leaks_other_users_recipes(client, login, a
     _make_recipes(app, intruder.id, 5)
 
     with client.session_transaction() as s:  # 세션을 owner로 되돌린다(login()은 매번 새 사용자를 만든다)
-        s["user_id"] = owner.id
+        s["user_id"], s["pid"] = owner.id, owner.provider_id
     seen = []
     cursor = None
     for _ in range(10):

@@ -264,6 +264,41 @@ def test_shopping_notes_migration_adds_and_removes_tables(app):
         assert not {"shopping_notes", "shopping_note_photos"} & tables
 
 
+def test_ai_calls_keep_history_migration(app):
+    def ai_calls_shape(conn):
+        inspector = sa.inspect(conn)
+        columns = {c["name"]: c for c in inspector.get_columns("ai_calls")}
+        fks = {fk["referred_table"]: fk["options"].get("ondelete") for fk in inspector.get_foreign_keys("ai_calls")}
+        index_names = {ix["name"] for ix in inspector.get_indexes("ai_calls")}
+        return columns, fks, index_names
+
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="b5b5c5d5e5f5")
+        with db.engine.begin() as conn:
+            conn.execute(sa.text("INSERT INTO users (id, provider, provider_id, nickname, created_at) VALUES (1, 'demo', 'x', 'u', CURRENT_TIMESTAMP)"))
+            conn.execute(sa.text("INSERT INTO ai_calls (user_id, kind, created_at) VALUES (1, 'recipe', CURRENT_TIMESTAMP)"))
+
+        upgrade(directory=MIGRATIONS, revision="c1d1e1m1o1a1")
+        with db.engine.connect() as conn:
+            columns, fks, index_names = ai_calls_shape(conn)
+        assert columns["user_id"]["nullable"] is True
+        assert columns["demo"]["nullable"] is False
+        assert fks == {"users": "SET NULL"}
+        assert {"ix_ai_calls_created_at", "ix_ai_calls_user_id"} <= index_names
+        with db.engine.begin() as conn:
+            if conn.dialect.name == "sqlite":
+                conn.execute(sa.text("PRAGMA foreign_keys=ON"))
+            conn.execute(sa.text("DELETE FROM users"))
+            assert conn.execute(sa.text("SELECT user_id, demo FROM ai_calls")).all() == [(None, False)]
+
+        downgrade(directory=MIGRATIONS, revision="b5b5c5d5e5f5")
+        with db.engine.connect() as conn:
+            columns, fks, _ = ai_calls_shape(conn)
+            assert conn.execute(sa.text("SELECT COUNT(*) FROM ai_calls")).scalar() == 0
+        assert "demo" not in columns and columns["user_id"]["nullable"] is False
+        assert fks == {"users": "CASCADE"}
+
+
 def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)

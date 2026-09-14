@@ -23,6 +23,7 @@ const PROVIDERS: Partial<Record<string, { mark: ReactNode; label: string }>> = {
   naver: { mark: "N", label: "네이버로 로그인했어요" },
   google: { mark: "G", label: "구글로 로그인했어요" },
   dev: { mark: <Icon name="settings" />, label: "개발용 계정으로 로그인했어요" },
+  demo: { mark: <Icon name="sparkle" />, label: "체험 계정으로 둘러보는 중이에요" },
 };
 
 /** 화면 테마를 이 기기에 저장하고 바로 적용한다. 첫 화면 적용은 index.html의 인라인 스크립트가 같은 방식으로 한다 */
@@ -348,6 +349,7 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
       </ul>
 
       <h2 className="mo-group">계정</h2>
+      {user.provider === "demo" && <p className="mo-demo-banner">체험 계정이에요 · 하루 뒤 사라져요</p>}
       <ul className="list">
         <Row
           icon={provider ? provider.mark : <Icon name="check" />}

@@ -17,11 +17,16 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
     api<AuthOptions>("/api/auth-options").then(setOptions, (e: Error) => setError(e.message));
   }, []);
 
-  const devLogin = async () => {
+  const [busy, setBusy] = useState(false);
+  const postLogin = async (url: string) => {
+    if (busy) return;
+    setBusy(true);
+    setError("");
     try {
-      onLogin(await api<User>("/api/dev-login", { method: "POST" }));
+      onLogin(await api<User>(url, { method: "POST" }));
     } catch (e) {
       setError((e as Error).message);
+      setBusy(false);
     }
   };
 
@@ -52,12 +57,20 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
           Google로 계속하기
         </a>
       )}
+      {options?.demo_login && (
+        <>
+          <button className="btn secondary" onClick={() => postLogin("/api/demo-login")} disabled={busy}>
+            로그인 없이 체험하기
+          </button>
+          <p className="login-note">예시 재고가 들어 있는 체험 공간이 열려요. 하루 뒤 사라져요.</p>
+        </>
+      )}
       {options?.dev_login && (
-        <button className="btn secondary" onClick={devLogin}>
+        <button className="btn secondary" onClick={() => postLogin("/api/dev-login")} disabled={busy}>
           개발용 로그인
         </button>
       )}
-      {options && options.providers.length === 0 && !options.dev_login && (
+      {options && options.providers.length === 0 && !options.dev_login && !options.demo_login && (
         <p className="center muted">아직 로그인 방법이 설정되지 않았어요.</p>
       )}
     </main>

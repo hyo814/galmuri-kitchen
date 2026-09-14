@@ -3,7 +3,7 @@
 from flask import Blueprint, abort, current_app, g, jsonify, request
 
 from . import ai, outbound, scan
-from .auth import login_required
+from .auth import ai_daily_limit, login_required
 from .matching import normalize, tokens
 from .models import AiCall, PublicRecipe, db
 from .recipe_parse import MAX_AMOUNT, MAX_NAME, MAX_STEP, ingredient_key
@@ -93,13 +93,13 @@ def ai_recipes():
     stock = inventory(g.user.id)
     if not stock:
         abort(400, "재고에 재료를 먼저 추가해주세요.")
-    mode = ai.scan_mode()
+    mode = ai.scan_mode(g.user)
     if mode == "off":
         abort(503, "AI 레시피를 지금은 쓸 수 없어요.")
     if mode == "sample":
         raw = {"recipes": ai.SAMPLE_SUGGESTIONS}
     else:
-        scan.check_ai_limits(g.user.id, scan.RECIPE_KINDS, current_app.config["AI_DAILY_RECIPE_LIMIT"], "AI 레시피는")
+        scan.check_ai_limits(g.user.id, scan.RECIPE_KINDS, ai_daily_limit(g.user, "AI_DAILY_RECIPE_LIMIT"), "AI 레시피는")
         call = scan.start_ai_call(g.user.id, "recipe")
         try:
             raw, usage = ai.suggest_recipes([f"{name} (빨리)" if urgent else name for name, urgent in stock])
@@ -174,14 +174,14 @@ def import_recipe():
             "web": ("blog", value),
         }[kind]
 
-    mode = ai.scan_mode()
+    mode = ai.scan_mode(g.user)
     if mode == "off":
         abort(503, "레시피 가져오기를 지금은 쓸 수 없어요.")
     if mode == "sample":
         card = ai.SAMPLE_SOURCE_CARD if link else None
         return jsonify(**clean_draft(ai.SAMPLE_IMPORT), source=source, source_url=source_url, source_card=card, sample=True)
 
-    user_id, limit = g.user.id, current_app.config["AI_DAILY_RECIPE_LIMIT"]
+    user_id, limit = g.user.id, ai_daily_limit(g.user, "AI_DAILY_RECIPE_LIMIT")
     youtube_key = current_app.config["YOUTUBE_API_KEY"]
     # 한도에 걸린 요청은 외부 요청도 기록도 하지 않는다. 외부 요청은 따로 기록하고 따로 센다(link_fetch, AI 한도·사용량에는 안 셈).
     # 외부 요청을 기다리는 동안 DB 잠금·연결을 잡지 않게 커밋해 두고, AI를 부르기 직전에 다시 잠그고 세어 같은 트랜잭션에서 기록한다.
@@ -238,8 +238,7 @@ def import_recipe():
 @login_required
 def ai_usage():
     """오늘(서울 날짜) 쓴 횟수와 한도. 화면의 `오늘 N번 남음`은 recipe.limit - recipe.used."""
-    config = current_app.config
     return jsonify(
-        scan={"used": scan.calls_today(g.user.id, scan.SCAN_KINDS), "limit": config["AI_DAILY_SCAN_LIMIT"]},
-        recipe={"used": scan.calls_today(g.user.id, scan.RECIPE_KINDS), "limit": config["AI_DAILY_RECIPE_LIMIT"]},
+        scan={"used": scan.calls_today(g.user.id, scan.SCAN_KINDS), "limit": ai_daily_limit(g.user, "AI_DAILY_SCAN_LIMIT")},
+        recipe={"used": scan.calls_today(g.user.id, scan.RECIPE_KINDS), "limit": ai_daily_limit(g.user, "AI_DAILY_RECIPE_LIMIT")},
     )

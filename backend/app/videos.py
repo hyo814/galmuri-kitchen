@@ -77,8 +77,11 @@ SAMPLE_VIDEOS = [  # (제목, 채널 id, 길이 초, 며칠 전, 설명)
 ]
 
 
-def video_mode():
-    """on: 키 있음 / sample: 키 없음 + 개발 모드(예시 목록) / off: 키 없음 + 운영(영상 칸 숨김)"""
+def video_mode(user):
+    """on: 키 있음 / sample: 키 없음 + 개발 모드(예시 목록) / off: 키 없음 + 운영(영상 칸 숨김).
+    체험 계정은 유튜브 할당량을 쓰지 않게 늘 예시 목록(채널 추가·새로 받기 없음)."""
+    if user.provider == "demo":
+        return "sample"
     if current_app.config["YOUTUBE_API_KEY"]:
         return "on"
     return "sample" if current_app.config["DEV_MODE"] else "off"
@@ -291,7 +294,7 @@ def channel_json(channel, mine=False, hidden=False):
 def list_videos():
     """보이는 채널 영상 published_at·id 내림차순 커서 페이지(스펙 26절). q는 캐시된 제목에서만 찾는다.
     새로 받기·오래된 영상 지우기는 첫 페이지(cursor 없음)에서만 한다."""
-    mode = video_mode()
+    mode = video_mode(g.user)
     if mode == "off":
         abort(503, OFF)
     limit = min(max(request.args.get("limit", PAGE_SIZE, type=int), 1), 50)
@@ -338,7 +341,7 @@ def list_videos():
 @bp.get("/videos/<int:video_pk>")
 @login_required
 def get_video(video_pk):
-    mode = video_mode()
+    mode = video_mode(g.user)
     if mode == "off":
         abort(503, OFF)
     if mode == "sample":
@@ -363,7 +366,7 @@ def get_video(video_pk):
 @login_required
 def list_channels():
     """내가 추가한 채널(추가한 순) 다음 기본 채널. 영상 칸 채널 칩은 hidden이 아닌 것."""
-    mode = video_mode()
+    mode = video_mode(g.user)
     if mode == "off":
         abort(503, OFF)
     if mode == "sample":
@@ -405,7 +408,7 @@ def add_channel():
     link = parse_channel_link(data.get("url") if isinstance(data, dict) else None)
     if link is None:
         abort(400, BAD_LINK)
-    if video_mode() != "on":
+    if video_mode(g.user) != "on":
         abort(503, CANNOT_ADD)
     user_id, key = g.user.id, current_app.config["YOUTUBE_API_KEY"]
     kind, value = link
@@ -470,7 +473,7 @@ def hide_channel(channel_pk):
     hidden = data.get("hidden") if isinstance(data, dict) else None
     if not isinstance(hidden, bool):
         abort(400, "잘못된 요청이에요.")
-    if video_mode() != "on":
+    if video_mode(g.user) != "on":
         abort(503, CANNOT_CHANGE)
     channel = db.session.get(YoutubeChannel, channel_pk) if channel_pk <= MAX_INT else None
     row = UserChannel.query.filter_by(user_id=g.user.id, channel_id=channel_pk).first() if channel else None
@@ -492,7 +495,7 @@ def hide_channel(channel_pk):
 def delete_channel(channel_pk):
     """내가 추가한 채널 빼기. 채널·영상 행은 다른 사용자가 쓸 수 있어 남긴다.
     ponytail: 아무도 안 쓰는 채널 행 정리는 30일 영상 삭제로 충분, 쌓이면 CLI를 추가한다."""
-    if video_mode() != "on":
+    if video_mode(g.user) != "on":
         abort(503, CANNOT_CHANGE)
     row = UserChannel.query.filter_by(user_id=g.user.id, channel_id=channel_pk, hidden=False).first() if channel_pk <= MAX_INT else None
     if row is None:

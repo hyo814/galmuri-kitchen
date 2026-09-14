@@ -374,6 +374,14 @@ button {
   padding: 24px 20px calc(32px + env(safe-area-inset-bottom));
 }
 
+.login-note {
+  margin: -4px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-2);
+  text-align: center;
+}
+
 .login-hero {
   display: flex;
   flex: 1;
@@ -2905,7 +2913,8 @@ button.row-btn > svg {
   color: var(--text-3);
 }
 
-.mo-group + .list {
+.mo-group + .list,
+.mo-demo-banner + .list {
   margin-top: 8px;
 }
 
@@ -2978,6 +2987,18 @@ button.row-btn > svg {
 .mo-provider.naver {
   background: #03c75a;
   color: #ffffff;
+}
+
+/* 체험 계정 안내(demo): 계정 묶음 제목 바로 아래 한 줄 */
+.mo-demo-banner {
+  margin: 8px 20px 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--warn-tint);
+  color: var(--warn);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
 }
 
 .mo-provider.google {

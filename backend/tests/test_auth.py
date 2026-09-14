@@ -31,7 +31,7 @@ def test_dev_login_hidden_without_dev_mode(make_app):
     c = make_app(DEV_MODE=False).test_client()
     c.environ_base["HTTP_X_REQUESTED_WITH"] = "fetch"
     assert c.post("/api/dev-login").status_code == 404
-    assert c.get("/api/auth-options").get_json() == {"providers": [], "dev_login": False}
+    assert c.get("/api/auth-options").get_json() == {"providers": [], "dev_login": False, "demo_login": False}
 
 
 def test_logout_clears_session(client):

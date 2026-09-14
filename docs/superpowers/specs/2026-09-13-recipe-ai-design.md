@@ -145,6 +145,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - OAuth state 검증(Authlib).
 - CSRF: 상태 변경 요청에 커스텀 헤더 요구.
 - 사진: 비공개 버킷, 소유자 확인 후 만료 5분 presigned URL.
+- 체험하기 계정(추가: 2026-09-14, 사용자 결정 "체험 계정 + 카카오 로그인"): `DEMO_LOGIN=1`일 때만 `POST /api/demo-login`이 열린다. 누를 때마다 새 계정(`provider=demo`)과 예시 데이터를 만들고 24시간 뒤 `flask purge-demo-users`로 지운다. IP(IPv6는 /64)별 1시간 3개·하루 10개, 전체 5,000개(차면 오래된 체험 계정부터 재활용), IP는 `SECRET_KEY`에서 뽑은 키의 HMAC 해시만 남긴다. 체험 계정 AI 하루 한도 3번, 체험 전체 AI 24시간 예산(`DEMO_AI_GLOBAL_DAILY`)을 넘으면 예시 결과, 영상은 늘 예시 목록. 세션은 `user_id`와 `provider_id`가 함께 맞아야 한다. `ai_calls`는 사용자를 지워도 남는다(`SET NULL`, `demo` 표시).
 - 비밀값(ANTHROPIC_API_KEY, FOODSAFETY_API_KEY, KAKAO_CLIENT_ID/SECRET, NAVER_CLIENT_ID/SECRET, GOOGLE_CLIENT_ID/SECRET, R2_*, DATABASE_URL, SECRET_KEY)은 환경변수. `.env`는 gitignore.
 
 ## 10. 테스트

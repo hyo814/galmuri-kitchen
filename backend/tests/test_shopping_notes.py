@@ -34,6 +34,7 @@ def photo_path(app, url):
 def as_user(client, user):
     with client.session_transaction() as s:
         s["user_id"] = user.id
+        s["pid"] = user.provider_id  # login_required가 세션 pid를 확인한다
 
 
 def test_requires_login(client):
