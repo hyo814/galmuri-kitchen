@@ -216,6 +216,28 @@ def test_ingredient_removals_migration_adds_and_removes_table(app):
             assert "ingredient_removals" not in sa.inspect(conn).get_table_names()
 
 
+def test_shopping_items_migration_adds_and_removes_table(app):
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="b4b4c4d4e4f4")
+        with db.engine.connect() as conn:
+            inspector = sa.inspect(conn)
+            columns = {c["name"] for c in inspector.get_columns("shopping_items")}
+            fks = {fk["referred_table"]: fk["options"].get("ondelete") for fk in inspector.get_foreign_keys("shopping_items")}
+            uniques = {tuple(u["column_names"]) for u in inspector.get_unique_constraints("shopping_items")}
+            index_names = {ix["name"] for ix in inspector.get_indexes("shopping_items")}
+        assert columns == {
+            "id", "user_id", "client_id", "name", "quantity", "unit", "planned_on", "location_id", "source",
+            "source_label", "done_at", "done_changed_at", "stocked_at", "created_at",
+        }
+        assert fks == {"users": "CASCADE", "storage_locations": "SET NULL"}
+        assert ("user_id", "client_id") in uniques
+        assert {"ix_shopping_items_user_id", "ix_shopping_items_location_id"} <= index_names
+
+        downgrade(directory=MIGRATIONS, revision="b3b3c3d3e3f3")
+        with db.engine.connect() as conn:
+            assert "shopping_items" not in sa.inspect(conn).get_table_names()
+
+
 def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)
@@ -236,5 +258,6 @@ def test_upgrade_to_head_and_back_to_base(app):
             "user_channels",
             "youtube_videos",
             "ingredient_removals",
+            "shopping_items",
         } <= tables
         downgrade(directory=MIGRATIONS, revision="base")

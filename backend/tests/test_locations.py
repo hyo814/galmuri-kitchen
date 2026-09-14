@@ -82,3 +82,14 @@ def test_other_users_location_is_hidden(client, login):
     res = client.post("/api/ingredients", json={"name": "우유", "purchased_on": "2026-09-10", "location_id": location_id})
     assert res.status_code == 400
     assert res.get_json()["error"] == "보관 위치를 다시 선택해주세요."
+
+
+def test_deleting_location_nulls_shopping_item_location(client, login):
+    login()
+    room = client.get("/api/locations").get_json()[-1]["id"]
+    item = client.post("/api/shopping/items", json={"name": "휴지", "location_id": room}).get_json()
+    assert item["location_id"] == room
+
+    assert client.delete(f"/api/locations/{room}").status_code == 204
+    listed = client.get("/api/shopping").get_json()["items"]
+    assert [(i["id"], i["location_id"], i["location_name"]) for i in listed] == [(item["id"], None, None)]

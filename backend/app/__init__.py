@@ -76,6 +76,7 @@ def create_app(test_config=None):
     from .recipes import bp as recipes_bp
     from .scan import bp as scan_bp
     from .seasonings import bp as seasonings_bp
+    from .shopping import bp as shopping_bp
     from .staples import bp as staples_bp
     from .tools import bp as tools_bp
     from .videos import bp as videos_bp
@@ -91,6 +92,7 @@ def create_app(test_config=None):
     app.register_blueprint(recipes_bp)
     app.register_blueprint(scan_bp)
     app.register_blueprint(seasonings_bp)
+    app.register_blueprint(shopping_bp)
     app.register_blueprint(staples_bp)
     app.register_blueprint(tools_bp)
     app.register_blueprint(videos_bp)
