@@ -27,11 +27,6 @@ export default function SettingsSheet({ onOpen, onClose }: Props) {
           </li>
         ))}
       </ul>
-      {/* 더보기는 탭이므로 탭 바처럼 히스토리를 쌓지 않는다 */}
-      <button className="mo-more-link" onClick={() => location.replace("#/more")}>
-        <span>품목별 경고·로그아웃은 더보기로 옮겼어요</span>
-        <b>더보기로 가기</b>
-      </button>
     </Sheet>
   );
 }
