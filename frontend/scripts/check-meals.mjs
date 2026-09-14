@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   defaultPlanName, weekStarts, weekDates, initialWeek, rangeText, dayHead, slotDateText, monthGrid,
   copyMaxWeeks, copyTarget, pickPlan, daysBetween, dateWithDow, planEnd, slotsOutside, weekOf,
+  emptySlotCount, kcalText, urgentChip,
 } from "../src/meals/plan.ts";
 
 // 식단 이름: 월요일 시작 주, 1일이 든 주가 첫째. 28일 이상은 "N월 식단"
@@ -73,5 +74,19 @@ assert.equal(pickPlan([], "2026-09-15"), undefined);
 
 assert.equal(daysBetween("2026-09-28", "2026-10-04"), 6);
 assert.equal(daysBetween("2026-02-27", "2026-03-01"), 2);
+
+// AI 초안: 고른 끼니의 빈 칸 수·kcal 합·곧 먹어야 할 재료 칩(Task 8)
+const D2 = ["2026-09-14", "2026-09-15"];
+assert.equal(emptySlotCount(D2, ["lunch", "dinner"], []), 4);
+assert.equal(emptySlotCount(D2, ["lunch", "dinner"], [{ date: "2026-09-14", meal: "lunch" }, { date: "2026-09-14", meal: "breakfast" }, { date: "2026-09-16", meal: "lunch" }]), 3);
+assert.equal(emptySlotCount(D2, [], []), 0);
+assert.equal(kcalText([]), "");
+assert.equal(kcalText([null, null]), "");
+assert.equal(kcalText([420, null, 620]), "약 1,040kcal");
+assert.equal(kcalText([0]), "약 0kcal");
+assert.equal(urgentChip("두부", "2026-09-15", "2026-09-14"), "두부 D-1");
+assert.equal(urgentChip("대파", "2026-09-14", "2026-09-14"), "대파 D-0");
+assert.equal(urgentChip("우유", "2026-09-10", "2026-09-14"), "우유 D-0");
+assert.equal(urgentChip("양파", null, "2026-09-14"), "양파");
 
 console.log("check-meals: ok");

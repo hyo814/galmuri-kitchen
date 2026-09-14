@@ -79,3 +79,14 @@ export function copyTarget(plan: Pick<MealPlanSummary, "start_on" | "days">, wee
 export function pickPlan(items: MealPlanSummary[], today: string): MealPlanSummary | undefined {
   return items.find((p) => p.start_on <= today && today <= p.end_on) ?? items[0];
 }
+/** 고른 끼니의 빈 칸 수(시안 `고른 끼니의 빈 칸 9개만 채워요`) */
+export const emptySlotCount = (dates: string[], meals: MealKind[], slots: { date: string; meal: MealKind }[]) =>
+  dates.length * meals.length - slots.filter((s) => dates.includes(s.date) && meals.includes(s.meal)).length;
+/** "약 1,040kcal" — 값이 하나도 없으면 "" */
+export function kcalText(values: (number | null)[]): string {
+  const known = values.filter((v): v is number => v !== null);
+  return known.length ? `약 ${known.reduce((a, b) => a + b, 0).toLocaleString("ko-KR")}kcal` : "";
+}
+/** 재료 칩 "두부 D-1"(유통기한 있으면), 없으면 이름만 */
+export const urgentChip = (name: string, expiresOn: string | null, today: string) =>
+  expiresOn ? `${name} D-${Math.max(0, daysBetween(today, expiresOn))}` : name;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api, localToday, type MealKind, type MealPlan, type MealPlanList, type MealPlanSummary, type MealSlot, type User } from "../api";
+import { api, localToday, type AiUsage, type MealKind, type MealPlan, type MealPlanList, type MealPlanSummary, type MealSlot, type User } from "../api";
 import Icon from "../components/Icon";
 import Mascot from "../components/Mascot";
 import MealCopySheet, { type CopyResult } from "../components/MealCopySheet";
@@ -8,23 +8,35 @@ import MealPickerSheet from "../components/MealPickerSheet";
 import MealPlanSheet from "../components/MealPlanSheet";
 import MealSlotSheet from "../components/MealSlotSheet";
 import Sheet from "../components/Sheet";
-import { addDays, withJosa } from "../format";
+import { addDays, remainingText, withJosa } from "../format";
 import {
   dayHead, defaultPlanName, initialWeek, MEALS, monthGrid, pickPlan, rangeText, slotDateText, weekDates, weekOf, weekStarts,
 } from "../meals/plan";
 import { useAsyncAction } from "../useAsyncAction";
+import { navigate } from "../useHashRoute";
 import { cache, forgetResources, useResource } from "../useResource";
+import { forgetMealDraft } from "./MealAiDraft";
 import { urgentLabel } from "./Recipes";
 
 // 탭을 오가도 보던 식단·보기·주를 기억한다(로그아웃 때 resetMealsView)
 let lastPlanId: number | null = null;
 let lastView: "week" | "month" = "week";
 let lastWeek: Record<number, string> = {};
+/** AI 초안을 넣은 뒤 식단 머리에 한 번 보여줄 한 줄 */
+let notice: { planId: number; text: string } | null = null;
 
 export function resetMealsView() {
   lastPlanId = null;
   lastView = "week";
   lastWeek = {};
+  notice = null;
+  forgetMealDraft();
+}
+
+/** AI 초안 넣기 뒤: 그 식단을 열고 머리에 결과 한 줄을 한 번 보여준다 */
+export function showMealsNotice(planId: number, text: string) {
+  lastPlanId = planId;
+  notice = { planId, text };
 }
 
 /** 식단별로 보고 있던 주 시작일(AI 초안 화면이 이 주를 채운다) */
@@ -32,7 +44,7 @@ export function currentWeekOf(planId: number): string | undefined {
   return lastWeek[planId];
 }
 
-function LoadError({ error, onRetry }: { error: string; onRetry: () => void }) {
+export function LoadError({ error, onRetry }: { error: string; onRetry: () => void }) {
   return (
     <div className="list-end">
       <p className="error" role="alert">
@@ -50,7 +62,8 @@ export default function Meals({ user }: { user: User }) {
   const today = localToday();
   const list = useResource<MealPlanList>("/api/meal-plans");
   const [planId, setPlanId] = useState(lastPlanId);
-  const [sheet, setSheet] = useState<"create" | "pick" | null>(null);
+  /** create-ai: `AI로 초안 만들기` — 만든 뒤 바로 AI 초안 화면으로 */
+  const [sheet, setSheet] = useState<"create" | "create-ai" | "pick" | null>(null);
 
   const choose = (id: number) => {
     lastPlanId = id;
@@ -62,13 +75,14 @@ export default function Meals({ user }: { user: User }) {
     await list.reload(); // 목록에 새 식단이 들어온 뒤에 바꿔야 이전 식단이 잠깐 보이지 않는다
     choose(plan.id);
     setSheet(null);
+    if (sheet === "create-ai") navigate(`/meals/${plan.id}/ai`);
   };
 
   const items = list.data?.items;
   // 기억한 식단이 목록에 없으면(지워짐) 오늘이 든 식단부터
   const current = items && (items.find((p) => p.id === planId) ?? pickPlan(items, today));
 
-  const createSheet = sheet === "create" && list.data && (
+  const createSheet = (sheet === "create" || sheet === "create-ai") && list.data && (
     <MealPlanSheet today={today} defaultServings={list.data.default_servings} onSaved={created} onClose={() => setSheet(null)} />
   );
 
@@ -102,7 +116,14 @@ export default function Meals({ user }: { user: User }) {
                 <Icon name="plus" />
                 식단 만들기
               </button>
+              {user.scan !== "off" && (
+                <button type="button" className="btn outline" aria-haspopup="dialog" onClick={() => setSheet("create-ai")}>
+                  <Icon name="sparkle" />
+                  AI로 초안 만들기
+                </button>
+              )}
             </div>
+            {user.scan !== "off" && <AiQuota />}
           </section>
         )}
         {createSheet}
@@ -149,6 +170,12 @@ export default function Meals({ user }: { user: User }) {
   );
 }
 
+/** 빈 화면 `AI로 초안 만들기` 아래 횟수 줄 */
+function AiQuota() {
+  const { data } = useResource<AiUsage>("/api/ai-usage");
+  return <p className="r3-quota ml-empty-quota">AI 레시피와 같은 횟수를 써요{remainingText(data)}</p>;
+}
+
 interface PlanWeekProps {
   summary: MealPlanSummary;
   today: string;
@@ -175,7 +202,7 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
   /** 월 보기에서 보고 있는 달 "2026-09"(null이면 보고 있는 주의 달) */
   const [month, setMonth] = useState<string | null>(null);
   const [sheet, setSheet] = useState<"menu" | "copy" | "edit" | null>(null);
-  /** 이번 주 복사 결과 한 줄 */
+  /** 이번 주 복사·AI 초안 넣기 결과 한 줄 */
   const [copied, setCopied] = useState("");
   const [openSlot, setOpenSlot] = useState<MealSlot | null>(null);
   const [fill, setFill] = useState<{ date: string; meal: MealKind; current?: MealSlot } | null>(null);
@@ -187,8 +214,18 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
     lastWeek[summary.id] = week;
   }, [summary.id, week]);
 
-  // 복사 결과 한 줄은 주·보기가 바뀌면 지운다(식단이 바뀌면 key로 새로 그린다)
-  useEffect(() => setCopied(""), [week, view]);
+  // 복사 결과 한 줄은 주·보기가 바뀌면 지운다(식단이 바뀌면 key로 새로 그린다). 처음 그릴 때는 지우지 않는다(AI 초안 결과)
+  const shownFor = useRef(`${week}|${view}`);
+  useEffect(() => {
+    if (shownFor.current === `${week}|${view}`) return;
+    shownFor.current = `${week}|${view}`;
+    setCopied("");
+  }, [week, view]);
+  // AI 초안 넣기 결과: 알림 영역을 먼저 그린 뒤 문구를 넣어야 스크린리더가 읽는다. 한 번 보여주고 지운다
+  useEffect(() => {
+    if (notice?.planId === summary.id) setCopied(notice.text);
+    notice = null;
+  }, [summary.id]);
 
   const switchView = (next: "week" | "month") => {
     lastView = next;
@@ -281,6 +318,12 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
           </p>
         </div>
         <div className="ml-head-actions">
+          {user.scan !== "off" && (
+            <button type="button" className="ml-ai-pill" onClick={() => navigate(`/meals/${summary.id}/ai`)}>
+              <Icon name="sparkle" size={18} />
+              AI 초안
+            </button>
+          )}
           <button
             type="button"
             className="icon-btn"

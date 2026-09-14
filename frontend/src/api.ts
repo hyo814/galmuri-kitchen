@@ -435,3 +435,23 @@ export interface MealPlanList {
   items: MealPlanSummary[];
   default_servings: number;
 }
+
+/** POST /api/meal-plans/<id>/ai-draft 의 요리 한 개. recipe_id가 있으면 내 레시피, 없으면 새 요리(넣을 때 내 레시피로 저장) */
+export interface MealDraftDish {
+  recipe_id: number | null;
+  title: string;
+  servings: number;
+  est_kcal: number | null;
+  ingredients: RecipeIngredient[];
+  steps: string[];
+  urgent_names: string[];
+  image_url: string | null;
+}
+
+/** AI 식단 초안: 칸마다 options(dishes 번호, 첫 번째가 추천·나머지는 `다른 걸로` 후보), kept는 이미 채워 그대로 둘 칸 */
+export interface MealDraft {
+  dishes: MealDraftDish[];
+  slots: { date: string; meal: MealKind; options: number[] }[];
+  kept: { date: string; meal: MealKind; title: string }[];
+  sample: boolean;
+}
