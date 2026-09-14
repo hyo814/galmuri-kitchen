@@ -91,33 +91,25 @@ def sample_result(kind, today):
     return {"items": items, "purchased_on": None if kind == "fridge" else today.isoformat()}
 
 
-def extract(kind, image_bytes, media_type):
-    """사진 한 장에서 재료 목록을 뽑는다. (결과, 토큰 사용량)을 돌려주고, 실패하면 AiError."""
+def _parse(content, output_format, max_tokens, label):
+    """구조화 출력 호출 공통. (결과 dict, 토큰 사용량)을 돌려주고, 실패하면 AiError.
+    예외 내용에는 요청이 들어 있을 수 있어 로그에는 예외 이름만 남긴다."""
     # gthread 워커는 요청 처리 중에도 계속 heartbeat를 보내므로 gunicorn --timeout(120s, Dockerfile)이
     # 이 호출을 끊지 않는다. SDK는 두 번의 시도(45s + 45s) 사이에 retry-after(최대 60s)를 기다릴 수 있어
     # 최악의 경우 약 150초까지 걸릴 수 있다. 그동안 사용자는 화면에서 취소할 수 있다.
     client = anthropic.Anthropic(api_key=current_app.config["ANTHROPIC_API_KEY"], timeout=45, max_retries=1)
-    image = base64.standard_b64encode(image_bytes).decode("utf-8")
     try:
         response = client.messages.parse(
             model=current_app.config["CLAUDE_MODEL"],
-            max_tokens=4096,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image}},
-                        {"type": "text", "text": PROMPTS[kind]},
-                    ],
-                }
-            ],
-            output_format=ScanResult,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": content}],
+            output_format=output_format,
         )
     except (anthropic.APIError, ValidationError) as e:
-        current_app.logger.warning("scan %s failed: %s", kind, type(e).__name__)
+        current_app.logger.warning("%s failed: %s", label, type(e).__name__)
         raise AiError(type(e).__name__) from e
     if response.stop_reason == "refusal" or response.parsed_output is None:
-        current_app.logger.warning("scan %s failed: stop_reason=%s", kind, response.stop_reason)
+        current_app.logger.warning("%s failed: stop_reason=%s", label, response.stop_reason)
         raise AiError(response.stop_reason)
     # model은 요청한 이름이 아니라 실제로 답한(과금된) 모델 이름이다.
     usage = {
@@ -126,3 +118,109 @@ def extract(kind, image_bytes, media_type):
         "output_tokens": response.usage.output_tokens,
     }
     return response.parsed_output.model_dump(), usage
+
+
+def extract(kind, image_bytes, media_type):
+    """사진 한 장에서 재료 목록을 뽑는다. (결과, 토큰 사용량)을 돌려주고, 실패하면 AiError."""
+    image = base64.standard_b64encode(image_bytes).decode("utf-8")
+    content = [
+        {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image}},
+        {"type": "text", "text": PROMPTS[kind]},
+    ]
+    return _parse(content, ScanResult, 4096, f"scan {kind}")
+
+
+class DraftIngredient(BaseModel):
+    name: str
+    amount: str
+
+
+class RecipeDraft(BaseModel):
+    title: str
+    servings: int
+    ingredients: list[DraftIngredient]
+    steps: list[str]
+
+
+class AiRecipe(RecipeDraft):
+    minutes: int  # 조리 시간(분). 결과 카드 "2인분 · 20분"
+
+
+class Suggestions(BaseModel):
+    recipes: list[AiRecipe]
+
+
+MAX_STOCK_LINES = 100
+
+RECIPE_PROMPT = (
+    "아래는 사용자의 재고다. 한 줄에 재료 하나이고, '(빨리)'가 붙은 재료는 빨리 먹어야 한다. "
+    "'(빨리)' 재료를 먼저 쓰는 한국 가정식 레시피 3개를 만들어라. "
+    "재고에 없는 재료는 소금·간장·설탕·식용유·참기름·후추 같은 기본 양념만 쓰고, 그 밖의 재료는 꼭 필요할 때만 레시피마다 최대 2개까지 쓴다. "
+    "title은 요리 이름만 짧게 쓴다. servings는 1~20 사이로 추정한 인분, minutes는 조리 시간(분) 추정이다. "
+    "ingredients의 name은 재고에 있는 이름을 그대로 쓰고, amount는 '200g', '1큰술', '약간'처럼 짧게 쓴다. "
+    "steps는 한 단계에 한 문장씩 쓴다.\n\n재고:\n"
+)
+
+# 키가 없는 개발 모드에서 화면 흐름을 확인하는 예시 결과(시안 AIResult와 같은 요리)
+SAMPLE_SUGGESTIONS = [
+    {
+        "title": "두부 대파 짜글이",
+        "servings": 2,
+        "minutes": 20,
+        "ingredients": [
+            {"name": "두부", "amount": "1모"},
+            {"name": "대파", "amount": "1대"},
+            {"name": "양파", "amount": "1/2개"},
+            {"name": "고추장", "amount": "1큰술"},
+            {"name": "고춧가루", "amount": "1큰술"},
+            {"name": "간장", "amount": "1큰술"},
+        ],
+        "steps": [
+            "두부는 깍둑썰고 대파와 양파는 먹기 좋게 썰어요.",
+            "냄비에 물 한 컵과 고추장·고춧가루·간장을 풀어 끓여요.",
+            "두부와 양파를 넣고 5분 끓여요.",
+            "대파를 넣고 자작해질 때까지 조금 더 졸여요.",
+        ],
+    },
+    {
+        "title": "애호박 두부전",
+        "servings": 2,
+        "minutes": 25,
+        "ingredients": [
+            {"name": "애호박", "amount": "1/2개"},
+            {"name": "두부", "amount": "1/2모"},
+            {"name": "계란", "amount": "2개"},
+            {"name": "부침가루", "amount": "3큰술"},
+            {"name": "소금", "amount": "약간"},
+        ],
+        "steps": [
+            "애호박은 곱게 채 썰고 두부는 물기를 짜서 으깨요.",
+            "애호박·두부·계란·부침가루·소금을 섞어 반죽해요.",
+            "기름 두른 팬에 한 숟가락씩 올려 앞뒤로 노릇하게 부쳐요.",
+        ],
+    },
+    {
+        "title": "대파 계란볶음밥",
+        "servings": 1,
+        "minutes": 15,
+        "ingredients": [
+            {"name": "밥", "amount": "1공기"},
+            {"name": "대파", "amount": "1/2대"},
+            {"name": "계란", "amount": "2개"},
+            {"name": "간장", "amount": "1큰술"},
+            {"name": "식용유", "amount": "2큰술"},
+        ],
+        "steps": [
+            "대파를 송송 썰어요.",
+            "기름에 대파를 볶아 파기름을 내요.",
+            "계란을 스크램블하고 밥을 넣어 함께 볶아요.",
+            "간장을 팬 가장자리에 둘러 섞어요.",
+        ],
+    },
+]
+
+
+def suggest_recipes(stock_lines):
+    """재고 줄(임박 재료가 앞, '(빨리)' 표시)로 레시피 3개를 만든다. (결과, 토큰 사용량)을 돌려주고, 실패하면 AiError."""
+    prompt = RECIPE_PROMPT + "\n".join(stock_lines[:MAX_STOCK_LINES])
+    return _parse(prompt, Suggestions, 8192, "recipe suggestions")

@@ -61,7 +61,7 @@ def test_requires_login(client):
 def test_create_list_get_update_delete(client, login):
     login()
     add_ingredient(client, "대파(국산) 1단")
-    res = create(client, source="ai")
+    res = create(client)
     assert res.status_code == 201
     recipe = res.get_json()
     assert recipe == {
@@ -76,7 +76,7 @@ def test_create_list_get_update_delete(client, login):
             {"name": "밥", "amount": "", "have": False, "matched_name": None},
         ],
         "steps": ["대파를 썰어요.", "계란과 밥을 볶아요."],
-        "source": "mine",  # 클라이언트가 보낸 source는 무시하고 서버가 정한다
+        "source": "mine",  # source를 보내지 않으면 직접 쓴 레시피
         "source_url": None,
         "public_recipe_id": None,
         "image_url": None,
@@ -152,6 +152,37 @@ def test_optional_fields_and_non_object_body(client, login):
     link = create(client, source_url="https://www.youtube.com/watch?v=abc").get_json()
     assert link["source_url"] == "https://www.youtube.com/watch?v=abc"
     assert client.post("/api/recipes", json=["title"]).status_code == 400
+
+
+def test_create_recipe_accepts_import_sources_and_image(client, login):
+    login()
+    for source in ("ai", "youtube", "blog"):
+        recipe = create(client, source=source).get_json()
+        assert client.get(f"/api/recipes/{recipe['id']}").get_json()["source"] == source
+    for source in ("public", "hack", None, 1):
+        res = create(client, source=source)
+        assert (res.status_code, res.get_json()) == (400, {"error": "잘못된 요청이에요."})
+
+    photo = "https://www.foodsafetykorea.go.kr/uploadimg/cook/10_00100_2.jpg"
+    res = create(client, source="ai", image_url=photo)
+    assert (res.status_code, res.get_json()["image_url"]) == (201, photo)
+    assert create(client, image_url=None).get_json()["image_url"] is None
+    for bad in (
+        "http://www.foodsafetykorea.go.kr/uploadimg/cook/1.jpg",
+        "https://i.ytimg.com/vi/abc/hqdefault.jpg",
+        "javascript:alert(1)",
+        "https://www.foodsafetykorea.go.kr@evil.example/1.jpg",
+        "https://[",
+        "",
+        "https://www.foodsafetykorea.go.kr/" + "a" * 500,
+        ["https://www.foodsafetykorea.go.kr/1.jpg"],
+    ):
+        res = create(client, image_url=bad)
+        assert (res.status_code, res.get_json()) == (400, {"error": "잘못된 요청이에요."}), bad
+
+    recipe = create(client, source="ai", image_url=photo).get_json()
+    res = client.put(f"/api/recipes/{recipe['id']}", json={**BODY, "source": "youtube", "image_url": "https://www.foodsafetykorea.go.kr/2.jpg"})
+    assert (res.status_code, res.get_json()["source"], res.get_json()["image_url"]) == (200, "ai", photo)
 
 
 def test_put_keeps_source_url_when_not_sent(client, login):

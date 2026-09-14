@@ -118,3 +118,9 @@ def test_me_reports_scan_mode_and_limit(client, app):
     assert (me["scan"], me["scan_limit"]) == ("on", 5)
     app.config.update(ANTHROPIC_API_KEY=None, DEV_MODE=False)
     assert client.get("/api/me").get_json()["scan"] == "off"
+
+
+def test_me_includes_recipe_limit(client, app):
+    assert client.post("/api/dev-login").get_json()["recipe_limit"] == 10
+    app.config["AI_DAILY_RECIPE_LIMIT"] = 4
+    assert client.get("/api/me").get_json()["recipe_limit"] == 4

@@ -14,6 +14,7 @@ from .auth import get_owned_or_404, login_required
 from .ingredients import seasoning_names, seoul_today, status_of, user_rules
 from .matching import match_prepared, prepare
 from .models import Ingredient, PublicRecipe, Recipe, db
+from .public_recipes import IMAGE_HTTPS_HOSTS
 from .recipe_parse import ingredient_key
 from .validation import integer, iso_datetime, text
 
@@ -23,6 +24,7 @@ MAX_RECIPES_PER_USER = 1000
 MAX_INGREDIENTS = 50
 MAX_STEPS = 30
 ALWAYS_HAVE = {"물"}  # 물은 재고에 넣지 않으니 늘 있는 것으로 본다
+SOURCES = ("mine", "ai", "youtube", "instagram", "blog", "text")  # 화면이 만들 수 있는 출처. public은 저장 API만 쓴다
 URL_ERROR = "링크는 http:// 또는 https://로 시작하는 주소로 입력해주세요."
 RECIPE_LIST_PAGE_SIZE = 30
 RECOMMENDATION_PAGE_SIZE = 20
@@ -134,8 +136,22 @@ def _source_url(value):
     return value.strip()
 
 
+def _image_url(value):
+    """AI 레시피에 붙인 비슷한 공공 레시피 사진만 받는다(식약처 https). 유튜브 썸네일 같은 외부 사진은 저장하지 않는다(스펙 25절)."""
+    if value is None:
+        return None
+    try:
+        parsed = urlparse(value) if isinstance(value, str) and len(value) <= 500 else None
+        host = parsed and parsed.hostname
+    except ValueError:  # "https://[" 같은 깨진 주소
+        host = None
+    if not host or parsed.scheme != "https" or host not in IMAGE_HTTPS_HOSTS:
+        abort(400, "잘못된 요청이에요.")
+    return value
+
+
 def parse_recipe(data):
-    """생성·수정(PUT) 공통. source는 서버가 정하므로 받지 않는다. source_url은 보냈을 때만 바꾼다."""
+    """생성·수정(PUT) 공통. source·image_url은 만들 때만 받는다(create_recipe). source_url은 보냈을 때만 바꾼다."""
     if not isinstance(data, dict):
         abort(400, "잘못된 요청이에요.")
     fields = {
@@ -373,9 +389,13 @@ def list_recipes():
 @bp.post("/recipes")
 @login_required
 def create_recipe():
-    fields = parse_recipe(request.get_json(silent=True))
+    data = request.get_json(silent=True)
+    fields = parse_recipe(data)
+    if data.get("source", "mine") not in SOURCES:
+        abort(400, "잘못된 요청이에요.")
+    fields.update(source=data.get("source", "mine"), image_url=_image_url(data.get("image_url")))
     _check_recipe_cap()
-    recipe = Recipe(user_id=g.user.id, source="mine", **fields)
+    recipe = Recipe(user_id=g.user.id, **fields)
     db.session.add(recipe)
     db.session.commit()
     return jsonify(recipe_json(recipe, inventory(g.user.id))), 201

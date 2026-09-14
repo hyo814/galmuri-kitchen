@@ -14,6 +14,7 @@ bp = Blueprint("scan", __name__, url_prefix="/api/scan")
 
 UPLOAD_KINDS = ("fridge", "receipt", "order")
 SCAN_KINDS = ("fridge", "receipt", "order", "memo")  # 일일 한도를 함께 세는 kind (memo는 4단계 장보기 메모 사진)
+RECIPE_KINDS = ("recipe", "link")  # AI 레시피 제안 + 링크·글 가져오기
 MAX_ITEMS = 50
 MAX_QUANTITY = 9999
 MAX_PRICE = 10_000_000
@@ -31,26 +32,51 @@ def sniff_image_type(data):
     return None
 
 
-def scans_today(user_id):
-    """오늘(서울 날짜) 이 사용자가 쓴 사진 인식 횟수. created_at은 UTC로 저장되므로 서울 하루를 UTC 구간으로 바꿔 센다."""
+def calls_today(user_id, kinds):
+    """오늘(서울 날짜) 이 사용자가 kinds로 쓴 AI 호출 횟수. created_at은 UTC로 저장되므로 서울 하루를 UTC 구간으로 바꿔 센다."""
     start = datetime.combine(seoul_today(), time.min, tzinfo=SEOUL).astimezone(timezone.utc)
-    # ponytail: 세고 나서 호출하므로 동시에 여러 장을 보내면 한도를 조금 넘을 수 있다. 문제되면 사용자 단위 잠금
     return AiCall.query.filter(
         AiCall.user_id == user_id,
-        AiCall.kind.in_(SCAN_KINDS),
+        AiCall.kind.in_(kinds),
         AiCall.created_at >= start,
         AiCall.created_at < start + timedelta(days=1),
     ).count()
 
 
-def scans_recent(user_id):
-    """지난 60초 안에 이 사용자가 보낸 사진 인식 횟수. 짧은 시간에 몰아 보내는 것(계정당 동시 진행 스캔 포함)을 막는다."""
+def calls_recent(user_id, kinds):
+    """지난 60초 안에 이 사용자가 kinds로 보낸 AI 호출 횟수. 짧은 시간에 몰아 보내는 것(동시 진행 호출 포함)을 막는다."""
     cutoff = utcnow() - timedelta(seconds=BURST_WINDOW_SECONDS)
     return AiCall.query.filter(
         AiCall.user_id == user_id,
-        AiCall.kind.in_(SCAN_KINDS),
+        AiCall.kind.in_(kinds),
         AiCall.created_at >= cutoff,
     ).count()
+
+
+def check_ai_limits(user_id, kinds, limit, what):
+    """연속 호출·하루 한도를 넘으면 429. what은 문구 주어(예: "사진 인식은")."""
+    # ponytail: 세고 나서 호출하므로 동시에 여러 번 보내면 한도를 조금 넘을 수 있다. 문제되면 사용자 단위 잠금
+    if calls_recent(user_id, kinds) >= current_app.config["AI_SCAN_BURST_LIMIT"]:
+        abort(429, "잠시 후 다시 시도해주세요.")
+    if calls_today(user_id, kinds) >= limit:
+        abort(429, f"오늘 {what} {limit}번까지 쓸 수 있어요. 내일 다시 써주세요.")
+
+
+def start_ai_call(user_id, kind):
+    """AI로 보낸 호출은 성공·실패와 관계없이 센다(실패도 비용이 들어 남용을 막기 위해). 호출 직전에 부른다.
+    created_at을 명시적으로 넣는다: 모델 기본값(utcnow) 대신 이 모듈의 utcnow를 써서
+    calls_today/calls_recent와 같은 시계를 보게 한다(테스트에서 시계를 고정하기 쉽다)."""
+    call = AiCall(user_id=user_id, kind=kind, model=current_app.config["CLAUDE_MODEL"], created_at=utcnow())
+    db.session.add(call)
+    db.session.commit()
+    return call
+
+
+def finish_ai_call(call, usage):
+    # ponytail: 응답은 받았지만 AiError가 되는 호출(refusal·max_tokens·스키마 불일치)의 토큰은 버려진다.
+    # 그런 호출이 잦아 원가가 어긋나면 AiError에 usage를 실어 기록한다.
+    call.model, call.input_tokens, call.output_tokens = usage["model"], usage["input_tokens"], usage["output_tokens"]
+    db.session.commit()
 
 
 def _quantity(value):
@@ -125,25 +151,12 @@ def scan():
     if mode == "sample":
         return jsonify(**clean_result(kind, ai.sample_result(kind, today), today), sample=True)
 
-    if scans_recent(g.user.id) >= current_app.config["AI_SCAN_BURST_LIMIT"]:
-        abort(429, "잠시 후 다시 시도해주세요.")
-    limit = current_app.config["AI_DAILY_SCAN_LIMIT"]
-    if scans_today(g.user.id) >= limit:
-        abort(429, f"오늘 사진 인식은 {limit}번까지 쓸 수 있어요. 내일 다시 써주세요.")
-
-    # AI로 보낸 호출은 성공·실패와 관계없이 센다(실패도 비용이 들어 남용을 막기 위해).
+    check_ai_limits(g.user.id, SCAN_KINDS, current_app.config["AI_DAILY_SCAN_LIMIT"], "사진 인식은")
     # 업로드 검증(kind·사진 유무·형식)에서 걸린 요청은 세지 않는다.
-    # created_at을 명시적으로 넣는다: 모델 기본값(utcnow) 대신 이 모듈의 utcnow를 써서
-    # scans_today/scans_recent와 같은 시계를 보게 한다(테스트에서 시계를 고정하기 쉽다).
-    call = AiCall(user_id=g.user.id, kind=kind, model=current_app.config["CLAUDE_MODEL"], created_at=utcnow())
-    db.session.add(call)
-    db.session.commit()
+    call = start_ai_call(g.user.id, kind)
     try:
         raw, usage = ai.extract(kind, data, media_type)
     except ai.AiError:
         abort(502, "인식에 실패했어요. 직접 입력해주세요.")
-    # ponytail: 응답은 받았지만 AiError가 되는 호출(refusal·max_tokens·스키마 불일치)의 토큰은 버려진다.
-    # 그런 호출이 잦아 원가가 어긋나면 AiError에 usage를 실어 기록한다.
-    call.model, call.input_tokens, call.output_tokens = usage["model"], usage["input_tokens"], usage["output_tokens"]
-    db.session.commit()
+    finish_ai_call(call, usage)
     return jsonify(**clean_result(kind, raw, today), sample=False)
