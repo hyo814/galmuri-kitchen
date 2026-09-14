@@ -14,6 +14,8 @@ from app.models import (
     ItemRule,
     Recipe,
     Seasoning,
+    ShoppingItem,
+    ShoppingNote,
     Staple,
     StorageLocation,
     User,
@@ -22,7 +24,7 @@ from app.models import (
 )
 from tests.test_shopping_notes import add_note, photo_path, upload
 
-USER_TABLES = (Ingredient, StorageLocation, ItemRule, Staple, Recipe, Seasoning, AiCall)
+USER_TABLES = (Ingredient, StorageLocation, ItemRule, Staple, Recipe, Seasoning, ShoppingItem, ShoppingNote, AiCall)
 
 
 @pytest.fixture
@@ -88,6 +90,56 @@ def test_demo_users_are_isolated(demo_app):
     assert a_item not in b_ids
     assert b.delete(f"/api/ingredients/{a_item}").status_code == 404
     assert len(a.get("/api/ingredients").get_json()) == len(demo.INGREDIENTS)
+
+
+def test_demo_login_seeds_shopping_list(demo_app):
+    c = new_client(demo_app)
+    c.post("/api/demo-login")
+    body = c.get("/api/shopping").get_json()
+    items, stocked, notes = body["items"], body["stocked"], body["notes"]
+    assert len(items) == len(demo.SHOPPING_ITEMS) == 7
+    assert len(stocked) == 1
+    assert len(notes) == 1
+
+    by_name = {i["name"]: i for i in items}
+    assert (by_name["두부"]["source"], by_name["두부"]["source_label"]) == ("recipe", "된장찌개")
+    assert (by_name["청양고추"]["source"], by_name["청양고추"]["source_label"]) == ("recipe", "된장찌개")
+    assert by_name["대파"]["source"] == "urgent"
+    assert (by_name["계란"]["source"], by_name["간장"]["source"]) == ("staple", "staple")
+    assert by_name["두부"]["location_name"] == "냉장실"
+    assert by_name["수세미"]["household"] is True and by_name["수세미"]["location_id"] is None
+
+    checked = {i["name"] for i in items if i["done_at"]}
+    assert checked == {"대파", "우유"}
+    for i in items:
+        assert (i["done_at"] is not None) == (i["done_changed_at"] is not None)
+
+    today = seoul_today().isoformat()
+    this_week = (seoul_today() + timedelta(days=3)).isoformat()
+    assert {i["name"] for i in items if i["planned_on"] == today} == {"두부", "대파", "청양고추"}
+    assert {i["name"] for i in items if i["planned_on"] == this_week} == {"계란", "우유", "수세미"}
+    assert {i["name"] for i in items if i["planned_on"] is None} == {"간장"}
+
+    assert stocked[0]["name"] == "양파" and stocked[0]["stocked_at"] is not None
+
+    assert notes[0]["place"] == "이마트 성수점"
+    assert "두부 2+1" in notes[0]["body"]
+    assert notes[0]["photos"] == []
+
+
+def test_demo_users_shopping_is_isolated(demo_app):
+    a, b = new_client(demo_app), new_client(demo_app)
+    a_id = a.post("/api/demo-login").get_json()["id"]
+    b_id = b.post("/api/demo-login").get_json()["id"]
+    a_ids = {i["id"] for i in a.get("/api/shopping").get_json()["items"]}
+    b_item = b.get("/api/shopping").get_json()["items"][0]
+    assert b_item["id"] not in a_ids
+    assert a.delete(f"/api/shopping/items/{b_item['id']}").status_code == 404
+    with demo_app.app_context():
+        assert ShoppingItem.query.filter_by(user_id=a_id).count() == len(demo.SHOPPING_ITEMS) + 1
+        assert ShoppingItem.query.filter_by(user_id=b_id).count() == len(demo.SHOPPING_ITEMS) + 1
+        assert ShoppingNote.query.filter_by(user_id=a_id).count() == 1
+        assert ShoppingNote.query.filter_by(user_id=b_id).count() == 1
 
 
 def test_demo_ai_limits_are_lower(demo_app, monkeypatch):
