@@ -94,7 +94,7 @@ def to_json(item, today, rules, seasonings=()):
     }
 
 
-def _check_ingredient_cap(user_id, new_count):
+def check_ingredient_cap(user_id, new_count):
     existing = Ingredient.query.filter_by(user_id=user_id).count()
     if existing + new_count > MAX_INGREDIENTS_PER_USER:
         abort(400, f"재료는 {MAX_INGREDIENTS_PER_USER}개까지 저장할 수 있어요. 다 쓴 재료를 정리해주세요.")
@@ -180,7 +180,7 @@ def list_ingredients():
 @login_required
 def create_ingredient():
     fields = parse_fields(request.get_json(silent=True), creating=True)
-    _check_ingredient_cap(g.user.id, 1)
+    check_ingredient_cap(g.user.id, 1)
     item = Ingredient(user_id=g.user.id, **fields)
     db.session.add(item)
     db.session.commit()
@@ -195,7 +195,7 @@ def create_ingredients_bulk():
     items = data.get("items") if isinstance(data, dict) else None
     if not isinstance(items, list) or not 1 <= len(items) <= BULK_MAX:
         abort(400, f"재료를 1~{BULK_MAX}개 보내주세요.")
-    _check_ingredient_cap(g.user.id, len(items))
+    check_ingredient_cap(g.user.id, len(items))
     locations = user_locations(g.user.id)
     rows, errors = [], []
     for index, item in enumerate(items):
