@@ -64,7 +64,7 @@ export interface User {
 /** 재료를 지우는 이유(선택): 다 먹었어요 / 버렸어요 */
 export type DeleteReason = "eaten" | "discarded";
 
-export type ScanKind = "fridge" | "receipt" | "order";
+export type ScanKind = "fridge" | "receipt" | "order" | "memo";
 
 export interface ScanItem {
   name: string;

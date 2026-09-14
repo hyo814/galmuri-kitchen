@@ -335,6 +335,17 @@ export function parseQuantityText(text: string): { quantity: number; unit: strin
   return quantity === null ? null : { quantity, unit: unit || "개" };
 }
 
+/** 메모 사진 확인 화면의 첫 체크(시안 승인 결정 8: 15개 넘으면 모두 끈 채로). 목록에 이미 있는 이름(띄어쓰기 무시)은 끄고 `이미 있어요` */
+export const MEMO_SCAN_CHECK_MAX = 15;
+export function memoScanRows(names: string[], listed: string[]): { checked: boolean; listed: boolean }[] {
+  const key = (s: string) => s.replace(/\s+/g, "");
+  const have = new Set(listed.map(key));
+  return names.map((name) => {
+    const dup = have.has(key(name));
+    return { checked: !dup && names.length <= MEMO_SCAN_CHECK_MAX, listed: dup };
+  });
+}
+
 /** 1,"모" → "1모", 0.5,"봉" → "½봉", 12.5,"g" → "12.5g" (parseQuantityText로 되돌리면 같은 값) */
 export const quantityText = (quantity: number, unit: string) => amountInputText(quantity) + unit;
 

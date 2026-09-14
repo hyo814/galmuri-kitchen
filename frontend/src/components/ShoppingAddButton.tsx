@@ -10,6 +10,13 @@ const OFFLINE = "인터넷이 연결되면 담을 수 있어요";
 /** 이모지(서로게이트 쌍)를 반으로 자르지 않게 글자 단위로 자른다 */
 export const cut = (s: string, n: number) => Array.from(s).slice(0, n).join("");
 
+/** `장보기에 2개 담았어요 · 이미 있는 대파는 뺐어요`(담은 게 없으면 뺀 것만) */
+export function addedText(created: number, skipped: string[]): string {
+  const names = skipped.length > 3 ? `${skipped.slice(0, 3).join(", ")} 외 ${skipped.length - 3}개` : skipped.join(", ");
+  const skippedText = skipped.length ? `이미 있는 ${withJosa(names, "은", "는")} 뺐어요` : "";
+  return created ? `장보기에 ${created}개 담았어요${skippedText ? ` · ${skippedText}` : ""}` : skippedText;
+}
+
 interface Props {
   source: ShoppingSource;
   sourceLabel?: string;
@@ -54,9 +61,7 @@ export default function ShoppingAddButton({ source, sourceLabel, items, label, c
         created += res.created;
         skipped.push(...res.skipped);
       }
-      const names = skipped.length > 3 ? `${skipped.slice(0, 3).join(", ")} 외 ${skipped.length - 3}개` : skipped.join(", ");
-      const skippedText = skipped.length ? `이미 있는 ${withJosa(names, "은", "는")} 뺐어요` : "";
-      show(created ? `장보기에 ${created}개 담았어요${skippedText ? ` · ${skippedText}` : ""}` : skippedText, false);
+      show(addedText(created, skipped), false);
       setDoneKey(key);
     } catch (e) {
       let text = e instanceof ApiError && e.status === 0 ? OFFLINE : (e as Error).message;

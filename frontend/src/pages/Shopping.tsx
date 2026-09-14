@@ -31,6 +31,12 @@ function failedLabel(op: Op, items: { id?: number; client_id: string | null; nam
   }
 }
 
+let pendingNotice: string | null = null;
+/** 다른 화면(메모 사진에서 담기)에서 장보기로 올 때 목록 위에 한 번 보여줄 알림 */
+export const showShoppingNotice = (text: string) => {
+  pendingNotice = text;
+};
+
 /** 시안 ShoppingList·ShoppingOffline·ShoppingDark: 장보기 탭 */
 export default function Shopping({ user }: { user: User }) {
   const shopping = useShopping();
@@ -39,7 +45,12 @@ export default function Shopping({ user }: { user: User }) {
   const [store, setStore] = useState<string | null>(null);
   const [showFailed, setShowFailed] = useState(false);
   const [stockedOpen, setStockedOpen] = useState(false);
-  const [notice, setNotice] = useState<{ text: string; near: "stock" | "bought" } | null>(null);
+  const [notice, setNotice] = useState<{ text: string; near: "stock" | "bought" } | null>(() =>
+    pendingNotice ? { text: pendingNotice, near: "stock" } : null,
+  );
+  useEffect(() => {
+    pendingNotice = null; // 초기값에서 지우지 않는다(StrictMode가 초기값 함수를 두 번 부른다)
+  }, []);
   /** 빼기 뒤 포커스: 뺀 행이 화면에서 사라지면 next 행 이름(없으면 머리 + 버튼)으로 */
   const [focusAfterDelete, setFocusAfterDelete] = useState<{ deleted: string; next: string | null } | null>(null);
   const addButton = useRef<HTMLButtonElement>(null);
