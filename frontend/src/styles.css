@@ -3168,23 +3168,21 @@ button.row-btn > svg {
 }
 
 /* 다른 화면에서 장보기에 담기(시안 RecipeEntry) */
-.sh-add {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
 .sh-missing-cta {
   margin-top: 12px;
 }
 
+/* 결과 줄(role=status)은 늘 붙어 있고, 내용이 있을 때만 이 클래스로 여백·배경을 준다 */
+.sh-add .error,
+.sh-add-result {
+  margin-top: 8px;
+}
+
 .sh-add-result {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  column-gap: 8px;
-  padding: 0 4px 0 14px;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0 14px;
   border-radius: 12px;
   background: var(--accent-tint);
   color: var(--accent-strong);
@@ -3194,9 +3192,5 @@ button.row-btn > svg {
 }
 
 .sh-add-result > span {
-  padding: 11px 0;
-}
-
-.sh-add > [role="status"]:empty {
-  display: none;
+  padding-top: 11px;
 }
