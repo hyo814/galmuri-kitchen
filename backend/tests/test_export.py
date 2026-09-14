@@ -1,9 +1,10 @@
 import csv
 import io
 import zipfile
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import app.export as export_module
+from app import scan
 from app.ingredients import SEOUL, seoul_today
 from app.models import AiCall, PublicRecipe, ShoppingItem, ShoppingNote, ShoppingNotePhoto, User, db, utcnow
 
@@ -240,9 +241,13 @@ def test_export_daily_limit(client, login, app):
     assert export_calls(app) == 10  # 한도에 걸린 요청은 기록하지 않는다
 
 
-def test_export_limit_uses_seoul_midnight(client, login, app):
+def test_export_limit_uses_seoul_midnight(client, login, app, monkeypatch):
+    # 실제 seoul_today()를 쓰면 테스트가 실제 서울 자정과 겹쳐 도는 아주 드문 순간에
+    # 이 함수를 두 번(테스트 셋업·summary 핸들러) 부르는 사이 날짜가 바뀌어 flaky해진다 → 고정한다.
+    fixed_today = date(2026, 9, 13)
+    monkeypatch.setattr(scan, "seoul_today", lambda: fixed_today)
     login()
     me = user_id(app)
-    midnight = datetime.combine(seoul_today(), time.min, tzinfo=SEOUL).astimezone(timezone.utc)
+    midnight = datetime.combine(fixed_today, time.min, tzinfo=SEOUL).astimezone(timezone.utc)
     add_calls(app, me, *[midnight - timedelta(seconds=1)] * 5, midnight)
     assert client.get("/api/export/summary").get_json()["remaining"] == 4
