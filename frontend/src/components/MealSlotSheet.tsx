@@ -12,11 +12,13 @@ interface Props {
   today: string;
   /** 인분을 저장했거나 칸을 비웠다(닫힐 때 식단을 다시 받는다) */
   onChanged: () => void;
+  /** 다른 걸로 바꾸기: 이 시트를 닫고 같은 칸의 채우기 시트를 연다 */
+  onReplace: (slot: MealSlot) => void;
   onClose: () => void;
 }
 
 /** 시안 SlotDetail: 칸 상세. 인분은 누를 때마다 바로 저장, 칸 비우기는 확인 없이(다시 채우면 된다) */
-export default function MealSlotSheet({ slot: initial, today, onChanged, onClose }: Props) {
+export default function MealSlotSheet({ slot: initial, today, onChanged, onReplace, onClose }: Props) {
   const [slot, setSlot] = useState(initial);
   const [servings, setServings] = useState(initial.servings);
   const [saveError, setSaveError] = useState("");
@@ -93,8 +95,8 @@ export default function MealSlotSheet({ slot: initial, today, onChanged, onClose
         )}
       </div>
 
-      {isRecipe && (
-        <div className="ml-stack">
+      <div className="ml-stack">
+        {isRecipe && (
           <a
             className="btn outline"
             href={`#/recipes/mine/${slot.recipe_id}`}
@@ -106,8 +108,12 @@ export default function MealSlotSheet({ slot: initial, today, onChanged, onClose
             <Icon name="book" />
             레시피 보기
           </a>
-        </div>
-      )}
+        )}
+        <button type="button" className="btn secondary" onClick={() => onReplace({ ...slot, servings })}>
+          <Icon name="refresh" />
+          다른 걸로 바꾸기
+        </button>
+      </div>
 
       {removeError && (
         <p className="error" role="alert">

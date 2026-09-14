@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { localToday, type MealPlan, type MealPlanList, type MealPlanSummary, type MealSlot, type User } from "../api";
+import { localToday, type MealKind, type MealPlan, type MealPlanList, type MealPlanSummary, type MealSlot, type User } from "../api";
 import Icon from "../components/Icon";
 import Mascot from "../components/Mascot";
+import MealFillSheet from "../components/MealFillSheet";
 import MealPickerSheet from "../components/MealPickerSheet";
 import MealPlanSheet from "../components/MealPlanSheet";
 import MealSlotSheet from "../components/MealSlotSheet";
@@ -39,8 +40,7 @@ function LoadError({ error, onRetry }: { error: string; onRetry: () => void }) {
   );
 }
 
-// user: AI 초안 버튼(scan off면 숨김)을 켜는 Task 8에서 쓴다
-export default function Meals(_: { user: User }) {
+export default function Meals({ user }: { user: User }) {
   const today = localToday();
   const list = useResource<MealPlanList>("/api/meal-plans");
   const [planId, setPlanId] = useState(lastPlanId);
@@ -109,6 +109,7 @@ export default function Meals(_: { user: User }) {
         key={current.id}
         summary={current}
         today={today}
+        user={user}
         onPick={() => setSheet("pick")}
         onChanged={list.reload}
       />
@@ -132,13 +133,15 @@ export default function Meals(_: { user: User }) {
 interface PlanWeekProps {
   summary: MealPlanSummary;
   today: string;
+  /** 채우기 시트의 영상 칸(user.videos) */
+  user: User;
   onPick: () => void;
   /** 칸을 바꿨다: 목록(식단 고르기의 채운 칸 수)도 다시 받는다 */
   onChanged: () => void;
 }
 
 /** 시안 WeekView: 머리·식단 고르기·주 이동·하루 카드 */
-function PlanWeek({ summary, today, onPick, onChanged }: PlanWeekProps) {
+function PlanWeek({ summary, today, user, onPick, onChanged }: PlanWeekProps) {
   const { data: plan, error, reload } = useResource<MealPlan>(`/api/meal-plans/${summary.id}`);
   const shown = plan ?? summary;
   const weeks = weekStarts(shown);
@@ -146,6 +149,7 @@ function PlanWeek({ summary, today, onPick, onChanged }: PlanWeekProps) {
   const week = picked && weeks.includes(picked) ? picked : initialWeek(shown, today);
   const index = weeks.indexOf(week);
   const [openSlot, setOpenSlot] = useState<MealSlot | null>(null);
+  const [fill, setFill] = useState<{ date: string; meal: MealKind; current?: MealSlot } | null>(null);
   /** 시트가 열려 있는 동안 바뀐 칸은 닫을 때 한 번에 다시 받는다. 닫은 뒤 늦게 끝난 저장은 바로 다시 받는다 */
   const dirty = useRef(false);
   const sheetOpen = useRef(false);
@@ -153,6 +157,38 @@ function PlanWeek({ summary, today, onPick, onChanged }: PlanWeekProps) {
   useEffect(() => {
     lastWeek[summary.id] = week;
   }, [summary.id, week]);
+
+  const closeSlot = async (slot: MealSlot) => {
+    sheetOpen.current = false;
+    setOpenSlot(null);
+    if (!dirty.current) return;
+    dirty.current = false;
+    onChanged();
+    await reload();
+    // 칸을 비우면 시트를 연 줄 버튼이 사라져 포커스를 잃는다 → 그날 카드로 옮긴다
+    setTimeout(() => {
+      if (document.activeElement !== document.body) return;
+      const day = document.querySelector<HTMLElement>(`.ml-day[data-date="${slot.date}"]`);
+      if (!day) return;
+      day.tabIndex = -1;
+      day.focus();
+    });
+  };
+
+  /** 채우기 시트에서 넣었다: 받은 칸을 식단에 끼워 넣고 다시 받은 뒤 닫는다(닫자마자 빈 칸이 잠깐 보이지 않게) */
+  const saved = async (slot: MealSlot) => {
+    const url = `/api/meal-plans/${summary.id}`;
+    forgetResources("/api/meal-plans"); // 목록의 채운 칸 수도 다시 받게(이 식단 캐시도 지우니 아래에서 다시 넣는다)
+    if (plan) cache.set(url, { ...plan, slots: [...plan.slots.filter((s) => s.date !== slot.date || s.meal !== slot.meal), slot] });
+    onChanged();
+    await reload();
+    setFill(null);
+    // 빈 칸의 + 버튼은 채운 칸 줄로 바뀌어 사라진다 → 그 줄로 포커스
+    setTimeout(() => {
+      if (document.activeElement !== document.body) return;
+      document.querySelector<HTMLElement>(`.ml-day[data-date="${slot.date}"] [data-meal="${slot.meal}"]`)?.focus();
+    });
+  };
 
   const move = (step: number) => setPicked(weeks[index + step]);
   const dates = weekDates(week, shown);
@@ -215,15 +251,20 @@ function PlanWeek({ summary, today, onPick, onChanged }: PlanWeekProps) {
                     return (
                       <div key={meal} className="ml-slot">
                         <span className="ml-meal">{label}</span>
-                        {/* 채우기 시트는 Task 6 */}
-                        <button type="button" className="ml-plus" aria-label={`${head.day} ${label} 채우기`} disabled>
+                        <button
+                          type="button"
+                          className="ml-plus"
+                          aria-label={`${head.day} ${label} 채우기`}
+                          aria-haspopup="dialog"
+                          onClick={() => setFill({ date, meal })}
+                        >
                           <Icon name="plus" />
                         </button>
                       </div>
                     );
                   const urgent = slot.recipe_id !== null ? urgentLabel(slot.urgent_names) : "";
                   return (
-                    <button key={meal} type="button" className="ml-slot" aria-haspopup="dialog" onClick={() => {
+                    <button key={meal} type="button" className="ml-slot" data-meal={meal} aria-haspopup="dialog" onClick={() => {
                         sheetOpen.current = true;
                         setOpenSlot(slot);
                       }}>
@@ -257,22 +298,22 @@ function PlanWeek({ summary, today, onPick, onChanged }: PlanWeekProps) {
               onChanged();
             }
           }}
-          onClose={async () => {
-            sheetOpen.current = false;
-            setOpenSlot(null);
-            if (!dirty.current) return;
-            dirty.current = false;
-            onChanged();
-            await reload();
-            // 칸을 비우면 시트를 연 줄 버튼이 사라져 포커스를 잃는다 → 그날 카드로 옮긴다
-            setTimeout(() => {
-              if (document.activeElement !== document.body) return;
-              const day = document.querySelector<HTMLElement>(`.ml-day[data-date="${openSlot.date}"]`);
-              if (!day) return;
-              day.tabIndex = -1;
-              day.focus();
-            });
+          onClose={() => closeSlot(openSlot)}
+          onReplace={(slot) => {
+            void closeSlot(slot);
+            setFill({ date: slot.date, meal: slot.meal, current: slot });
           }}
+        />
+      )}
+      {fill && plan && (
+        <MealFillSheet
+          plan={plan}
+          date={fill.date}
+          meal={fill.meal}
+          current={fill.current}
+          user={user}
+          onSaved={saved}
+          onClose={() => setFill(null)}
         />
       )}
     </main>
