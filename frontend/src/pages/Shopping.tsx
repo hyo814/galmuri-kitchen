@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ShoppingItem, User } from "../api";
 import Icon from "../components/Icon";
 import Mascot from "../components/Mascot";
+import MemoPhotoScan, { type ScanState } from "../components/MemoPhotoScan";
 import Sheet from "../components/Sheet";
 import ShoppingMemoCard from "../components/ShoppingMemoCard";
 import ShoppingItemSheet, { type ItemInput } from "../components/ShoppingItemSheet";
@@ -42,6 +43,8 @@ export default function Shopping({ user }: { user: User }) {
   const shopping = useShopping();
   const { view, offline, pending, failed, act, dismissFailed } = shopping;
   const [editing, setEditing] = useState<ViewItem | "new" | null>(null);
+  /** 살 것 추가 시트의 "사진에서 뽑기": 메모 없이 바로 카메라·앨범 → MemoScanReview */
+  const [scan, setScan] = useState<ScanState>(null);
   const [store, setStore] = useState<string | null>(null);
   const [showFailed, setShowFailed] = useState(false);
   const [stockedOpen, setStockedOpen] = useState(false);
@@ -278,8 +281,26 @@ export default function Shopping({ user }: { user: User }) {
           listedNames={items.map((i) => i.name)}
           onDelete={editing === "new" ? undefined : () => remove(editing)}
           onClose={() => setEditing(null)}
+          user={user}
+          offline={offline}
+          onScanPhoto={() => {
+            setEditing(null);
+            setScan("source");
+          }}
         />
       )}
+      <MemoPhotoScan
+        scan={scan}
+        onScanChange={setScan}
+        sourceLabel="장보기 메모"
+        listed={items.map((i) => i.name)}
+        today={today}
+        onScanned={() => {}}
+        onDone={(text) => {
+          setScan(null);
+          setNotice({ text, near: "stock" });
+        }}
+      />
       {store !== null && <StoreLinksSheet name={store} affiliates={user.shop_affiliates} onClose={() => setStore(null)} />}
       {showFailed && (
         <Sheet title="저장하지 못한 변경" description="이 변경은 저장하지 못했어요. 확인했으면 지워주세요." onClose={() => setShowFailed(false)}>

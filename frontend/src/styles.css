@@ -2377,6 +2377,9 @@ button.row-btn > svg {
   align-items: center;
   gap: 3px;
   min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--accent-strong);
   font-size: 14px;
   font-weight: 600;

@@ -2,7 +2,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { AiUsage, User } from "../api";
 import Icon from "../components/Icon";
-import MemoScanReview from "../components/MemoScanReview";
+import MemoPhotoScan, { type ScanState } from "../components/MemoPhotoScan";
 import Sheet from "../components/Sheet";
 import {
   MAX_NOTES, MemoBackupNotice, PhotoImg, editedAfter, firstLine, matchesRef, newMemo, openMemo, refOf, savedMemoRef,
@@ -115,11 +115,9 @@ export default function ShoppingMemo({ id, user }: { id?: string; user: User }) 
   const [viewing, setViewing] = useState<number | null>(null);
   const [notFound, setNotFound] = useState(false);
   /** 사진에서 살 것 뽑기: 사진 고르기 시트 → 읽는 사진 */
-  const [scan, setScan] = useState<"choose" | "source" | { image: Blob } | null>(null);
+  const [scan, setScan] = useState<"choose" | ScanState>(null);
   const [scanHint, setScanHint] = useState("");
   const { data: usage, reload: reloadUsage } = useResource<AiUsage>("/api/ai-usage");
-  const scanCameraRef = useRef<HTMLInputElement>(null);
-  const scanAlbumRef = useRef<HTMLInputElement>(null);
   // 이 화면에 들어온 뒤 실패한 사진 올리기만 보여준다(예: 운영에서 사진 저장소가 꺼져 있을 때)
   const [seenFailed] = useState(() => new Set(failed.flatMap((f) => (f.op.op === "photo_add" ? [f.op.client_id] : []))));
   const photoCameraRef = useRef<HTMLInputElement>(null);
@@ -415,29 +413,6 @@ export default function ShoppingMemo({ id, user }: { id?: string; user: User }) 
         )}
         {user.scan !== "off" && (
           <>
-            <input
-              ref={scanCameraRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              hidden
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = "";
-                if (file) setScan({ image: file });
-              }}
-            />
-            <input
-              ref={scanAlbumRef}
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = "";
-                if (file) setScan({ image: file });
-              }}
-            />
             <button type="button" className="btn secondary sh-ai" onClick={startScan}>
               <Icon name="sparkle" size={18} />
               사진에서 살 것 뽑기
@@ -532,42 +507,10 @@ export default function ShoppingMemo({ id, user }: { id?: string; user: User }) 
         </Sheet>
       )}
 
-      {scan === "source" && (
-        <Sheet
-          title="사진에서 살 것 뽑기"
-          description="메모·전단지를 찍거나 앨범에서 골라주세요"
-          onClose={() => setScan(null)}
-        >
-          <div className="actions actions-even">
-            <button
-              type="button"
-              className="btn secondary"
-              onClick={() => {
-                setScan(null);
-                scanAlbumRef.current?.click();
-              }}
-            >
-              <Icon name="file" size={18} />
-              앨범에서 고르기
-            </button>
-            <button
-              type="button"
-              className="btn primary"
-              onClick={() => {
-                setScan(null);
-                scanCameraRef.current?.click();
-              }}
-            >
-              <Icon name="camera" size={18} />
-              카메라로 찍기
-            </button>
-          </div>
-        </Sheet>
-      )}
-
-      {scan && typeof scan === "object" && (
-        <MemoScanReview
-          image={scan.image}
+      {scan !== "choose" && (
+        <MemoPhotoScan
+          scan={scan}
+          onScanChange={setScan}
           sourceLabel={note.place?.trim() || "장보기 메모"}
           listed={view?.items.map((i) => i.name) ?? []}
           today={view?.today ?? ""}
@@ -576,7 +519,6 @@ export default function ShoppingMemo({ id, user }: { id?: string; user: User }) 
             showShoppingNotice(text);
             navigate("/shopping", { replace: true });
           }}
-          onClose={() => setScan(null)}
         />
       )}
 

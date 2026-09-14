@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import type { User } from "../api";
 import { formatDate, withJosa } from "../format";
 import { nameKey, plannedOnFor, parseQuantityText, quantityText, type EditFields, type ViewItem } from "../shopping/sync";
 import { setLeaveGuard } from "../useHashRoute";
@@ -20,6 +21,10 @@ interface Props {
   listedNames?: string[];
   onDelete?: () => void;
   onClose: () => void;
+  user: User;
+  offline: boolean;
+  /** 추가 모드의 "사진에서 뽑기": 이 시트를 닫고 사진 고르기를 연다 */
+  onScanPhoto: () => void;
 }
 
 function whenOf(plannedOn: string | null, today: string): { when: When; date: string } {
@@ -30,7 +35,7 @@ function whenOf(plannedOn: string | null, today: string): { when: When; date: st
 }
 
 /** 시안 AddSheet: 살 것 추가·고치기. 저장은 useShopping.act라 인터넷이 없어도 된다 */
-export default function ShoppingItemSheet({ item, today, onSave, listedNames = [], onDelete, onClose }: Props) {
+export default function ShoppingItemSheet({ item, today, onSave, listedNames = [], onDelete, onClose, user, offline, onScanPhoto }: Props) {
   const initial = item ? whenOf(item.planned_on, today) : { when: "today" as When, date: "" };
   const startQuantity = item ? quantityText(item.quantity, item.unit) : "";
   const [name, setName] = useState(item?.name ?? "");
@@ -44,6 +49,7 @@ export default function ShoppingItemSheet({ item, today, onSave, listedNames = [
   const [touched, setTouched] = useState(false);
   /** showPicker가 없는 브라우저: 날짜 칸을 보이게 해서 직접 고르게 한다 */
   const [dateVisible, setDateVisible] = useState(false);
+  const [scanHint, setScanHint] = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   const whenLabel = useId();
@@ -224,6 +230,26 @@ export default function ShoppingItemSheet({ item, today, onSave, listedNames = [
               추가
             </button>
           </div>
+        )}
+        {!item && user.scan !== "off" && (
+          <>
+            <button
+              type="button"
+              className="r3-link"
+              onClick={() => {
+                if (offline) { setScanHint("인터넷이 연결되면 읽을 수 있어요"); return; }
+                onScanPhoto();
+              }}
+            >
+              <Icon name="sparkle" size={16} />
+              사진에서 뽑기
+            </button>
+            {scanHint && (
+              <p className="rc-err sh-ai-hint" role="status">
+                {scanHint}
+              </p>
+            )}
+          </>
         )}
       </form>
     </Sheet>
