@@ -1,3 +1,5 @@
+import base64
+import io
 from datetime import date, datetime, time, timedelta, timezone
 from types import SimpleNamespace
 
@@ -8,7 +10,7 @@ from app import ai, outbound, scan
 from app.ingredients import SEOUL, seoul_today
 from app.models import AiCall, PublicRecipe, User, db
 from app.recipe_ai import clean_draft, public_image_candidates, similar_public_image
-from tests.test_scan import AI_FAILURES, USAGE, ai_call_costs, ai_calls, fail_if_called
+from tests.test_scan import AI_FAILURES, JPEG_BYTES, PNG_BYTES, USAGE, ai_call_costs, ai_calls, fail_if_called
 
 FAIL = "레시피를 만들지 못했어요. 잠시 후 다시 시도해주세요."
 PHOTO = "https://www.foodsafetykorea.go.kr/uploadimg/cook/{}.jpg"
@@ -829,3 +831,143 @@ def test_link_fetch_not_counted_as_ai_use(client, login, app, monkeypatch):
     with app.app_context():
         fetch_rows = AiCall.query.filter_by(kind="link_fetch").all()
         assert {(c.model, c.input_tokens, c.output_tokens) for c in fetch_rows} == {NO_TOKENS}
+
+
+# --- 사진으로 가져오기 (POST /api/recipes/import multipart) ---
+
+PHOTO_NOT_FOUND = "사진에서 레시피를 찾지 못했어요. 글자가 잘 보이게 다시 찍거나 글 붙여넣기를 써주세요."
+
+
+def import_photos(client, *images):
+    """images: 파일 내용(bytes). 요청마다 새 BytesIO를 만든다."""
+    files = [(io.BytesIO(data), f"photo{i}.jpg", "image/jpeg") for i, data in enumerate(images)]
+    return client.post("/api/recipes/import", data={"image": files}, content_type="multipart/form-data")
+
+
+def test_extract_recipe_from_images_sends_image_blocks_and_prompt(app, fake_anthropic):
+    parsed = ai.ImportResult(found=True, recipe=ai.RecipeDraft(title="잡채", servings=4, ingredients=[ai.DraftIngredient(name="당면", amount="300g")], steps=["삶아요."]))
+    usage = SimpleNamespace(input_tokens=2400, output_tokens=300)
+    calls = fake_anthropic(response=SimpleNamespace(stop_reason="end_turn", parsed_output=parsed, usage=usage, model="claude-sonnet-5"))
+    app.config["ANTHROPIC_API_KEY"] = "test-key"
+    with app.app_context():
+        result, tokens = ai.extract_recipe_from_images([(JPEG_BYTES, "image/jpeg"), (PNG_BYTES, "image/png")])
+    assert result["found"] is True and result["recipe"]["title"] == "잡채"
+    assert tokens == {"model": "claude-sonnet-5", "input_tokens": 2400, "output_tokens": 300}
+    request = calls["parse"]
+    assert request["output_format"] is ai.ImportResult
+    content = request["messages"][0]["content"]
+    assert [block["type"] for block in content] == ["image", "image", "text"]
+    assert content[0]["source"] == {"type": "base64", "media_type": "image/jpeg", "data": base64.standard_b64encode(JPEG_BYTES).decode()}
+    assert content[1]["source"]["media_type"] == "image/png"
+    prompt = content[2]["text"]
+    assert "지시가 아니다" in prompt and "지어내지 않는다" in prompt and "title은 요리 이름만" in prompt
+
+
+@pytest.mark.parametrize("response, error", AI_FAILURES)
+def test_extract_recipe_from_images_failures_raise_ai_error(app, fake_anthropic, response, error):
+    fake_anthropic(response=response, error=error)
+    app.config["ANTHROPIC_API_KEY"] = "test-key"
+    with app.app_context(), pytest.raises(ai.AiError):
+        ai.extract_recipe_from_images([(JPEG_BYTES, "image/jpeg")])
+
+
+def test_import_photos_sample_mode(client, login, app, monkeypatch):
+    assert import_photos(client, JPEG_BYTES).status_code == 401
+    login()
+    monkeypatch.setattr(ai, "extract_recipe_from_images", fail_if_called)
+    res = import_photos(client, JPEG_BYTES, PNG_BYTES)
+    body = res.get_json()
+    assert res.status_code == 200
+    assert (body["title"], body["source"], body["source_url"], body["source_card"], body["sample"]) == ("제육볶음", "photo", None, None, True)
+    assert len(body["ingredients"]) == 11
+    assert ai_calls(app) == []
+
+
+def test_import_photos_real_call_logs_tokens(client, login, app, monkeypatch):
+    user = login()
+    live(app)
+    seen = []
+    monkeypatch.setattr(ai, "extract_recipe_from_images", lambda images: seen.append(images) or found("잡채", ("당면", "시금치")))
+    res = import_photos(client, JPEG_BYTES, PNG_BYTES, JPEG_BYTES)
+    body = res.get_json()
+    assert res.status_code == 200
+    assert seen == [[(JPEG_BYTES, "image/jpeg"), (PNG_BYTES, "image/png"), (JPEG_BYTES, "image/jpeg")]]
+    assert (body["title"], body["source"], body["source_url"], body["source_card"], body["sample"]) == ("잡채", "photo", None, None, False)
+    assert [i["name"] for i in body["ingredients"]] == ["당면", "시금치"]
+    assert ai_calls(app) == [(user.id, "recipe_photo")]
+    assert ai_call_costs(app) == [("claude-sonnet-5-answered", 1500, 120)]
+
+    # 저장은 POST /api/recipes source photo
+    saved = client.post("/api/recipes", json={**{k: body[k] for k in ("title", "servings", "ingredients", "steps")}, "source": "photo", "source_url": None})
+    assert saved.status_code == 201
+    assert client.get(f"/api/recipes/{saved.get_json()['id']}").get_json()["source"] == "photo"
+
+
+def test_import_photos_not_found_is_422_and_counted(client, login, app, monkeypatch):
+    user = login()
+    live(app)
+    monkeypatch.setattr(ai, "extract_recipe_from_images", lambda images: ({"found": False, "recipe": None}, USAGE))
+    res = import_photos(client, JPEG_BYTES)
+    assert (res.status_code, res.get_json()) == (422, {"error": PHOTO_NOT_FOUND, "need_text": True})
+    monkeypatch.setattr(ai, "extract_recipe_from_images", lambda images: found(names=()))  # 찾았다지만 쓸 재료가 없다
+    res = import_photos(client, JPEG_BYTES)
+    assert (res.status_code, res.get_json()) == (422, {"error": PHOTO_NOT_FOUND, "need_text": True})
+    assert ai_calls(app) == [(user.id, "recipe_photo"), (user.id, "recipe_photo")]
+
+
+def test_import_photos_ai_failure_502_counted(client, login, app, monkeypatch):
+    user = login()
+    live(app)
+
+    def broken(images):
+        raise ai.AiError("timeout")
+
+    monkeypatch.setattr(ai, "extract_recipe_from_images", broken)
+    res = import_photos(client, JPEG_BYTES)
+    assert (res.status_code, res.get_json()) == (502, {"error": IMPORT_FAIL})
+    assert ai_calls(app) == [(user.id, "recipe_photo")]
+    assert ai_call_costs(app) == [("claude-sonnet-5", None, None)]
+
+
+def test_import_photos_share_recipe_limit(client, login, app, monkeypatch):
+    user = login()
+    live(app)
+    _, now = fix_clock(monkeypatch)
+    with app.app_context():
+        kinds = ["recipe"] * 3 + ["link"] * 3 + ["meal"] * 3
+        db.session.add_all([AiCall(user_id=user.id, kind=k, created_at=now - timedelta(hours=1)) for k in kinds])
+        db.session.commit()
+    monkeypatch.setattr(ai, "extract_recipe_from_images", lambda images: found())
+    assert import_photos(client, JPEG_BYTES).status_code == 200  # 10번째
+    assert client.get("/api/ai-usage").get_json()["recipe"] == {"used": 10, "limit": 10}
+    monkeypatch.setattr(ai, "extract_recipe_from_images", fail_if_called)
+    monkeypatch.setattr(ai, "extract_recipe", fail_if_called)
+    for res in (import_photos(client, JPEG_BYTES), import_(client, text=RECIPE_TEXT)):
+        assert (res.status_code, res.get_json()) == (429, {"error": RECIPE_LIMIT})
+    assert len(ai_calls(app)) == 10
+
+
+def test_import_photos_validates_files_before_counting(client, login, app, monkeypatch):
+    login()
+    live(app)
+    monkeypatch.setattr(ai, "extract_recipe_from_images", fail_if_called)
+    cases = [
+        (import_photos(client), 400, "사진을 올려주세요."),
+        (import_photos(client, b""), 400, "사진을 올려주세요."),
+        (import_photos(client, JPEG_BYTES, b""), 400, "사진을 올려주세요."),
+        (import_photos(client, *[JPEG_BYTES] * 4), 400, "사진은 3장까지 올려주세요."),
+        (import_photos(client, JPEG_BYTES, b"GIF89a-not-allowed"), 415, "사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요."),
+        (import_photos(client, b"x" * (10 * 1024 * 1024 + 1)), 413, "파일이 너무 커요. 10MB 이하로 올려주세요."),
+    ]
+    for res, status, error in cases:
+        assert (res.status_code, res.get_json()) == (status, {"error": error})
+    assert ai_calls(app) == []
+
+
+def test_import_photos_off_in_production_is_503(client, login, app, monkeypatch):
+    login()
+    app.config["DEV_MODE"] = False
+    monkeypatch.setattr(ai, "extract_recipe_from_images", fail_if_called)
+    res = import_photos(client, JPEG_BYTES)
+    assert (res.status_code, res.get_json()) == (503, {"error": "레시피 가져오기를 지금은 쓸 수 없어요."})
+    assert ai_calls(app) == []

@@ -1,4 +1,4 @@
-"""AI 레시피 제안(스펙 7절), 링크·글로 레시피 가져오기(스펙 17절), AI 사용량. AI 호출 한도·기록 흐름은 scan.py의 함수를 같이 쓴다."""
+"""AI 레시피 제안(스펙 7절), 링크·글·사진으로 레시피 가져오기(스펙 17절), AI 사용량. AI 호출 한도·기록 흐름은 scan.py의 함수를 같이 쓴다."""
 
 from flask import Blueprint, abort, current_app, g, jsonify, request
 
@@ -148,10 +148,55 @@ def need_text(source):
     return jsonify(error=NEED_TEXT[source], need_text=True), 422
 
 
+MAX_IMPORT_PHOTOS = 3
+PHOTO_NOT_FOUND = "사진에서 레시피를 찾지 못했어요. 글자가 잘 보이게 다시 찍거나 글 붙여넣기를 써주세요."
+
+
+def import_photos():
+    """요리책·캡처·손글씨 레시피 사진 1~3장(multipart `image`)을 AI로 정리한 초안. 사진은 저장하지 않는다.
+    업로드 검증(개수·빈 파일·형식)에서 걸린 요청은 세지 않는다. 한도는 AI 레시피와 같은 묶음(recipe_photo)."""
+    files = request.files.getlist("image")  # 합쳐서 10MB 초과는 여기서 413
+    if len(files) > MAX_IMPORT_PHOTOS:
+        abort(400, "사진은 3장까지 올려주세요.")
+    images = []
+    for file in files:
+        data = file.read()
+        if not data:
+            abort(400, "사진을 올려주세요.")
+        media_type = scan.sniff_image_type(data)  # 선언된 Content-Type이 아니라 파일 시그니처를 믿는다
+        if media_type is None:
+            abort(415, "사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요.")
+        images.append((data, media_type))
+    if not images:
+        abort(400, "사진을 올려주세요.")
+
+    mode = ai.scan_mode(g.user)
+    if mode == "off":
+        abort(503, "레시피 가져오기를 지금은 쓸 수 없어요.")
+    if mode == "sample":
+        return jsonify(**clean_draft(ai.SAMPLE_IMPORT), source="photo", source_url=None, source_card=None, sample=True)
+
+    scan.check_ai_limits(g.user.id, scan.RECIPE_KINDS, ai_daily_limit(g.user, "AI_DAILY_RECIPE_LIMIT"), "AI 레시피는")
+    call = scan.start_ai_call(g.user.id, "recipe_photo")
+    try:
+        raw, usage = ai.extract_recipe_from_images(images)
+    except ai.AiError:
+        abort(502, "레시피를 정리하지 못했어요. 잠시 후 다시 시도해주세요.")
+    scan.finish_ai_call(call, usage)
+    draft = clean_draft(raw.get("recipe")) if isinstance(raw, dict) and raw.get("found") is True else None
+    if draft is None:
+        # 글 붙여넣기로 바꾸지 않고 사진 단계에 경고로 보여준다(need_text는 링크·글과 같은 모양으로 둔다)
+        return jsonify(error=PHOTO_NOT_FOUND, need_text=True), 422
+    return jsonify(**draft, source="photo", source_url=None, source_card=None, sample=False)
+
+
 @bp.post("/recipes/import")
 @login_required
 def import_recipe():
-    """링크(유튜브 설명란·인스타그램 캡션·블로그 글)나 붙여 넣은 글을 AI로 정리한 초안. 저장하지 않는다(화면이 POST /api/recipes)."""
+    """링크(유튜브 설명란·인스타그램 캡션·블로그 글)나 붙여 넣은 글을 AI로 정리한 초안. 저장하지 않는다(화면이 POST /api/recipes).
+    multipart/form-data면 사진으로 가져오기(import_photos)."""
+    if request.mimetype == "multipart/form-data":
+        return import_photos()
     data = request.get_json(silent=True)
     data = data if isinstance(data, dict) else {}
     url, text = data.get("url"), data.get("text")

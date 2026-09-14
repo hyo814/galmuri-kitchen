@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ApiError, api, type ScanKind, type ScanResult, type StorageLocation } from "../api";
 import { resizeImage } from "../image";
 import Icon, { type IconName } from "./Icon";
@@ -17,14 +17,20 @@ const UNREADABLE_FORMAT = "이 사진 형식은 읽을 수 없어요. 카메라 
 const HEIF_HINT = "카메라 설정에서 HEIF를 끄거나 스크린샷으로 올려주세요.";
 const READABLE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
-/** 사진을 긴 변 1568px로 줄여 kind로 읽는다(재고 사진으로 추가·장보기 메모). 10MB 넘거나 못 읽는 사진은 보내지 않고 Error.
- *  memo는 다시 그리지 못한 사진을 모두 뺀다(메모 사진 올리기와 같은 규칙 — 원본의 위치 같은 사진 정보를 보내지 않게) */
-export async function uploadScan(kind: ScanKind, file: Blob, signal: AbortSignal): Promise<ScanResult> {
+/** 사진을 긴 변 1568px로 줄여 보낼 준비를 한다(재고 사진·장보기 메모·레시피 사진). 10MB 넘거나 못 읽는 사진은 Error.
+ *  strict면 다시 그리지 못한 사진을 모두 뺀다(메모 사진 올리기와 같은 규칙 — 원본의 위치 같은 사진 정보를 보내지 않게) */
+export async function preparePhoto(file: Blob, strict = false): Promise<Blob> {
   const blob = await resizeImage(file);
-  signal.throwIfAborted();
   if (blob.size > 10 * 1024 * 1024) throw new Error(TOO_BIG);
   // 리사이즈가 원본 그대로 떨어졌다(디코딩 실패) + 원래도 못 읽는 형식이면 서버에 보내 봐야 415만 받는다
-  if (blob === file && (kind === "memo" || !READABLE_TYPES.includes(file.type))) throw new Error(UNREADABLE_FORMAT);
+  if (blob === file && (strict || !READABLE_TYPES.includes(file.type))) throw new Error(UNREADABLE_FORMAT);
+  return blob;
+}
+
+/** 사진을 줄여 kind로 읽는다(재고 사진으로 추가·장보기 메모). memo는 다시 그리지 못한 사진을 모두 뺀다 */
+export async function uploadScan(kind: ScanKind, file: Blob, signal: AbortSignal): Promise<ScanResult> {
+  const blob = await preparePhoto(file, kind === "memo");
+  signal.throwIfAborted();
   const form = new FormData();
   form.append("image", blob, "photo.jpg");
   return api<ScanResult>(`/api/scan?kind=${kind}`, { method: "POST", body: form, signal });
@@ -50,7 +56,7 @@ export function useStepFocus(rootRef: RefObject<HTMLElement | null>, step: strin
   }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-export function ScanWait({ title, photo, onCancel }: { title: string; photo: string; onCancel: () => void }) {
+export function ScanWait({ title, photo, onCancel }: { title: string; photo: ReactNode; onCancel: () => void }) {
   return (
     <>
       <div className="scan-wait">

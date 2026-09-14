@@ -63,14 +63,14 @@ export function resetRecipeDraft() {
   storeDraft(null);
 }
 
-/** 링크·글에서 가져온 초안을 `가져온 레시피 확인` 폼으로 연다 */
+/** 링크·글·사진에서 가져온 초안을 `가져온 레시피 확인` 폼으로 연다 */
 export function openDraft(draft: RecipeDraft, { replace = false } = {}) {
   pendingDraft = draft;
   navigate("/recipes/new", { replace });
   history.replaceState({ ...(history.state as object | null), draft: true }, ""); // 이 칸으로 돌아오면 되살린다
 }
 
-const SOURCE_NAME: Record<RecipeDraft["source"], string> = { youtube: "유튜브", instagram: "인스타그램", blog: "블로그", text: "" };
+const SOURCE_NAME: Record<RecipeDraft["source"], string> = { youtube: "유튜브", instagram: "인스타그램", blog: "블로그", text: "", photo: "" };
 
 /** 가져온 링크의 출처 카드: 썸네일(외부 사진이라 리퍼러 없이, 저장하지 않음) · 제목 · `유튜브 · 채널명` · 원본 */
 function SourceCardView({ draft }: { draft: RecipeDraft }) {
