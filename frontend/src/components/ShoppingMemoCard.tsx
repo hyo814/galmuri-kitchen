@@ -43,11 +43,16 @@ function openRef(ref: Ref, replace = false) {
 
 export const openMemo = (note: ViewNote) => openRef(refOf(note));
 
-/** `#/shopping/memos/new`에서: 빈 메모를 만들고 그 자리를 메모 화면으로 바꾼다(오프라인에서도) */
-export function newMemo(act: Shopping["act"]) {
+/** `#/shopping/memos/new`에서: 빈 메모를 기기에 넣은 뒤 그 자리를 메모 화면으로 바꾼다(오프라인에서도).
+ *  메모 화면은 나갈 때 빈 메모를 지우는데, 메모가 기기에 들어가기 전에 열었다 나가면 메모를 못 봐서 빈 메모가 남았다.
+ *  그래서 넣은 뒤에 연다. 그사이 이 화면을 나갔으면(here가 false) 연 적 없는 빈 메모이니 지운다(아직 안 보낸 추가면 요청 없이 사라진다) */
+export function newMemo(act: Shopping["act"], here: () => boolean) {
   const client_id = newClientId();
-  void act({ op: "note_add", client_id, fields: { place: null, body: "" }, at: new Date().toISOString() });
-  openRef({ client_id }, true);
+  const open = () => here() && openRef({ client_id }, true);
+  void act({ op: "note_add", client_id, fields: { place: null, body: "" }, at: new Date().toISOString() }).then(
+    () => (here() ? open() : act({ op: "note_delete", ref: { client_id }, at: new Date().toISOString() })),
+    open, // 기기에 못 넣었으면 전처럼 메모 화면이 `메모를 찾을 수 없어요`를 보여준다
+  );
 }
 
 /** 기기에 있는 사진(없으면 서버에서 받아 기기에 남긴다)을 보여준다 */

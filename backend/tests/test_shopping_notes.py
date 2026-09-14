@@ -278,3 +278,37 @@ def test_user_delete_cascades(client, login, app):
         db.session.commit()
         assert db.session.get(ShoppingNote, note_id) is None
         assert ShoppingNotePhoto.query.count() == 0
+
+
+def backdate(app, note_id, hours):
+    """만든 시각(서버)·저장 시각을 hours시간 전으로."""
+    with app.app_context():
+        note = db.session.get(ShoppingNote, note_id)
+        note.created_at = note.updated_at = datetime.now(timezone.utc) - timedelta(hours=hours)
+        db.session.commit()
+
+
+def test_snapshot_removes_empty_notes_older_than_a_day(client, login, app):
+    owner = login()
+    old_empty = add_note(client, body="", place="  ").get_json()["id"]
+    old_blank = add_note(client, body=" \n ").get_json()["id"]
+    young_empty = add_note(client, body="").get_json()["id"]
+    offline_empty = add_note(client, body="", edited_at=ago(48)).get_json()["id"]  # 오프라인에서 이틀 전에 만들어 방금 보낸 메모
+    place_only = add_note(client, body="", place="이마트").get_json()["id"]
+    body_only = add_note(client, body="  두부 ").get_json()["id"]
+    with_photo = add_note(client, body="").get_json()["id"]
+    assert upload(client, with_photo).status_code == 201
+    for note_id in (old_empty, old_blank, place_only, body_only, with_photo):
+        backdate(app, note_id, 25)
+    backdate(app, young_empty, 23)
+
+    login("other")
+    others_empty = add_note(client, body="").get_json()["id"]
+    backdate(app, others_empty, 25)
+
+    as_user(client, owner)
+    ids = {n["id"] for n in client.get("/api/shopping").get_json()["notes"]}
+    assert ids == {young_empty, offline_empty, place_only, body_only, with_photo}
+    with app.app_context():
+        assert db.session.get(ShoppingNote, old_empty) is None and db.session.get(ShoppingNote, old_blank) is None
+        assert db.session.get(ShoppingNote, others_empty) is not None  # 남의 빈 메모는 그대로

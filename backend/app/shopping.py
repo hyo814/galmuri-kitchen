@@ -29,6 +29,7 @@ MAX_STOCKED_ITEMS = 300  # 산 것은 따로 사용자당 300개, 재고에 넣�
 BULK_MAX = 50
 SOURCES = ("manual", "recipe", "staple", "urgent", "meal_plan", "memo")
 STOCKED_KEEP_DAYS = 7
+EMPTY_NOTE_KEEP = timedelta(days=1)  # 빈 메모는 다른 기기(오프라인)에서 채우는 중일 수 있어 하루 둔다
 STALE_BEFORE_CREATED = timedelta(days=1)  # 항목을 만들기 하루 전보다 이른 체크 시각은 틀린 기기 시계로 보고 무시한다
 FUTURE_SKEW = timedelta(minutes=10)
 LOCK_KEY = zlib.crc32(b"shopping_items") & 0x7FFFFFFF
@@ -226,6 +227,15 @@ def snapshot():
     _lock_user_items(g.user.id)  # 재고에 넣기·산 것으로 옮기기와 같은 잠금 순서(사용자 잠금 → 행)
     # ponytail: 7일 지난 산 것은 이 요청 때 지운다(크론 없음). 오래 안 열면 그만큼 남아 있지만 보이지 않는다.
     ShoppingItem.query.filter(ShoppingItem.user_id == g.user.id, ShoppingItem.stocked_at < cutoff).delete(synchronize_session=False)
+    # ponytail: 아무것도 안 쓴 메모(장소·글이 비었고 사진 없음)도 만든 지·고친 지 하루 지나면 이 요청 때 지운다(스펙 19절).
+    # 같은 사용자 잠금 안이라 사진 올리기와 겹치지 않는다. 사진이 없으니 storage.delete도 필요 없다.
+    stale = utcnow() - EMPTY_NOTE_KEEP
+    empty = ShoppingNote.query.filter(
+        ShoppingNote.user_id == g.user.id, ShoppingNote.created_at < stale, ShoppingNote.updated_at < stale, ~ShoppingNote.photos.any()
+    )
+    for note in empty:
+        if not (note.place or "").strip() and not note.body.strip():  # 화면(trim)과 같게 줄바꿈만 있는 글도 빈 글
+            db.session.delete(note)
     db.session.commit()
     rows = ShoppingItem.query.options(joinedload(ShoppingItem.location)).filter_by(user_id=g.user.id)
     items = rows.filter(ShoppingItem.stocked_at.is_(None)).order_by(ShoppingItem.created_at, ShoppingItem.id).all()
