@@ -73,6 +73,9 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
       {options && options.providers.length === 0 && !options.dev_login && !options.demo_login && (
         <p className="center muted">아직 로그인 방법이 설정되지 않았어요.</p>
       )}
+      <p className="legal-links">
+        <a href="/terms.html">이용약관</a> · <a href="/privacy.html">개인정보처리방침</a>
+      </p>
     </main>
   );
 }

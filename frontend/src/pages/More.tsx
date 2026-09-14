@@ -395,6 +395,9 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
           {logoutError}
         </p>
       )}
+      <p className="legal-links">
+        <a href="/terms.html">이용약관</a> · <a href="/privacy.html">개인정보처리방침</a>
+      </p>
 
       {panel === "locations" && (
         <LoadedSheet<StorageLocation[]> url="/api/locations" title="위치 관리" onClose={() => setPanel(null)}>

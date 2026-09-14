@@ -1,0 +1,44 @@
+/* 개인정보처리방침·이용약관 정적 페이지(privacy.html, terms.html). 앱 색은 styles.css의 토큰과 같다 */
+:root {
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --text: #17191c;
+  --text-2: #5b616b;
+  --line: #eef0f2;
+  --accent: #0b7a4c;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e0f11;
+    --surface: #1a1c20;
+    --text: #f1f2f4;
+    --text-2: #a6acb5;
+    --line: #2a2d32;
+    --accent: #2fc07f;
+    color-scheme: dark;
+  }
+}
+body {
+  margin: 0;
+  padding-inline: 20px;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.7 "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  word-break: keep-all;
+}
+.legal { max-width: 680px; margin: 0 auto; padding-block: 24px 48px; }
+.legal-home { display: inline-block; padding-block: 10px; font-size: 15px; }
+h1 { margin: 12px 0 0; font-size: 26px; line-height: 34px; letter-spacing: -0.5px; }
+h2 { margin: 32px 0 8px; font-size: 18px; line-height: 26px; }
+p, ul { margin: 8px 0; }
+ul { padding-left: 20px; }
+li + li { margin-top: 4px; }
+a { color: var(--accent); }
+.legal-date { color: var(--text-2); font-size: 14px; }
+.legal-table { overflow-x: auto; margin: 12px 0; background: var(--surface); border-radius: 12px; }
+table { width: 100%; min-width: 560px; border-collapse: collapse; font-size: 14px; line-height: 1.5; }
+th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--text-2); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+.legal-foot { margin-top: 32px; }
