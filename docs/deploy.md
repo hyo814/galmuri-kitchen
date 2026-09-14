@@ -66,7 +66,7 @@
 | `AI_DAILY_SCAN_LIMIT` / `AI_DAILY_RECIPE_LIMIT` | 선택 | 사진 인식 / AI 레시피 하루 한도(기본 10, 서울 날짜) | 직접 설정 |
 | `FOODSAFETY_API_KEY` | 선택 | 3단계 레시피 추천. 배포 후 한 번 `flask sync-public-recipes`(없으면 `flask seed-sample-recipes` 예시 레시피) | 식약처 공공데이터포털(COOKRCP01) |
 | `FOOD_NUTRITION_API_KEY` | 선택 | 영양 계산기 구현 후 | 식약처 공공데이터포털(식품영양성분 DB) |
-| `YOUTUBE_API_KEY` | 선택 | 레시피 영상 연동 후 | Google Cloud Console(YouTube Data API v3) |
+| `YOUTUBE_API_KEY` | 선택 | 3단계 요리 채널 영상·유튜브 링크 가져오기(없으면 개발 모드는 예시 영상, 운영은 영상 칸 숨김). 설정은 아래 5-2 | Google Cloud Console(YouTube Data API v3) |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | 선택 | 사진 업로드 구현 후 | Cloudflare 대시보드 R2 |
 | `DEV_MODE` | 로컬 전용 | 로컬 개발 | 운영(Render)에는 **넣지 않는다** |
 
@@ -127,6 +127,14 @@
 6. 한 번 발급한 네이버 앱(Client ID)은 바꾸지 않는다. 네이버 사용자 id는 앱마다 달라서, 바꾸면 기존 회원이 새 계정으로 생긴다.
 
 환경변수를 바꾼 뒤에는 Render에서 Manual Deploy → Deploy latest commit.
+
+## 5-2. 유튜브 영상 (요리 채널)
+1. https://console.cloud.google.com → 프로젝트 선택 → API 및 서비스 → 라이브러리 → **YouTube Data API v3** 사용 설정
+2. 사용자 인증 정보 → 사용자 인증 정보 만들기 → **API 키**
+3. 키 수정 → API 제한사항 → **키 제한 → YouTube Data API v3만** 선택(다른 API에 쓰이지 않게)
+4. Render 환경변수 `YOUTUBE_API_KEY`에 넣고 다시 배포
+5. 기본 채널이 확정되면 `backend/app/data/default_channels.json`에 `[{"channel_id": "UC…", "name": "메모용 이름"}]` 모양으로 적고 배포한 뒤 Render Shell에서 `flask seed-default-channels`(목록에서 뺀 채널은 기본 채널에서 꺼진다). **지금 파일은 사용자 확정 전이라 빈 목록(`[]`)이다.**
+6. 사용량: 무료 한도 하루 10,000 units. 채널 하나 새로 받기 3 units(channels·playlistItems·videos 각 1), 채널당 6시간마다·요청당 3채널까지, 채널 추가 3 units, 유튜브 링크 가져오기 1 unit. 전체 검색(search.list, 100 units)은 쓰지 않는다.
 
 ## 6. 폰에 앱처럼 설치 (갤럭시)
 1. Chrome에서 `https://<도메인>` 열기

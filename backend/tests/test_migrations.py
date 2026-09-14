@@ -175,6 +175,31 @@ def test_seasonings_migration_adds_and_removes_table(app):
         assert "seasonings" not in tables
 
 
+def test_youtube_videos_migration_adds_and_removes_tables(app):
+    tables = {"youtube_channels", "user_channels", "youtube_videos"}
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="b2b2c2d2e2f2")
+        with db.engine.connect() as conn:
+            inspector = sa.inspect(conn)
+            assert tables <= set(inspector.get_table_names())
+            uniques = {
+                table: {tuple(u["column_names"]) for u in inspector.get_unique_constraints(table)} for table in tables
+            }
+            user_fks = {fk["referred_table"]: fk["options"].get("ondelete") for fk in inspector.get_foreign_keys("user_channels")}
+            video_fks = {fk["referred_table"]: fk["options"].get("ondelete") for fk in inspector.get_foreign_keys("youtube_videos")}
+            video_indexes = {ix["name"] for ix in inspector.get_indexes("youtube_videos")}
+        assert ("channel_id",) in uniques["youtube_channels"]
+        assert ("user_id", "channel_id") in uniques["user_channels"]
+        assert ("video_id",) in uniques["youtube_videos"]
+        assert user_fks == {"users": "CASCADE", "youtube_channels": "CASCADE"}
+        assert video_fks == {"youtube_channels": "CASCADE"}
+        assert {"ix_youtube_videos_channel_id", "ix_youtube_videos_published_at"} <= video_indexes
+
+        downgrade(directory=MIGRATIONS, revision="b1b1c1d1e1f1")
+        with db.engine.connect() as conn:
+            assert not tables & set(sa.inspect(conn).get_table_names())
+
+
 def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)
@@ -191,5 +216,8 @@ def test_upgrade_to_head_and_back_to_base(app):
             "public_recipes",
             "recipes",
             "seasonings",
+            "youtube_channels",
+            "user_channels",
+            "youtube_videos",
         } <= tables
         downgrade(directory=MIGRATIONS, revision="base")

@@ -76,6 +76,7 @@ def create_app(test_config=None):
     from .seasonings import bp as seasonings_bp
     from .staples import bp as staples_bp
     from .tools import bp as tools_bp
+    from .videos import bp as videos_bp
 
     init_oauth(app)
     app.register_blueprint(auth_bp)
@@ -89,6 +90,7 @@ def create_app(test_config=None):
     app.register_blueprint(seasonings_bp)
     app.register_blueprint(staples_bp)
     app.register_blueprint(tools_bp)
+    app.register_blueprint(videos_bp)
 
     @app.before_request
     def require_fetch_header():
