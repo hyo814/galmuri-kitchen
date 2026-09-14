@@ -149,7 +149,8 @@ function Calculator({ seasoning: s }: { seasoning: Seasoning }) {
         <Icon name="spoon" size={16} />
         <span>1큰술은 15ml예요. 밥숟가락은 집마다 달라서 대략으로 보여줘요. 입맛에 맞게 조절해주세요.</span>
       </div>
-      {s.source === "default" && s.source_note && <p className="hint r3-cite">출처: {s.source_note}</p>}
+      {/* `임시값`은 개발용 자리 표시라 출처로 보여주지 않는다 */}
+      {s.source === "default" && s.source_note && !s.source_note.includes("임시값") && <p className="hint r3-cite">출처: {s.source_note}</p>}
 
       {error && (
         <p className="error" role="alert">
@@ -159,7 +160,7 @@ function Calculator({ seasoning: s }: { seasoning: Seasoning }) {
 
       <div className="rc-actions">
         {s.source === "default" ? (
-          <button className="btn outline" onClick={() => openSeasoningDraft(s)}>
+          <button className="btn outline" onClick={() => openSeasoningDraft({ ...s, name: `${s.name} (내 비율)`.slice(0, 30) })}>
             <Icon name="pencil" />이 비율 고쳐서 내 비율로
           </button>
         ) : (

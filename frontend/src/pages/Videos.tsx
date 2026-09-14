@@ -64,7 +64,8 @@ export default function Videos({ sample }: { sample: boolean }) {
   const { items, loading, error, hasMore, multiPage, loadMore, reload } = useInfiniteList<Video>(fetchPage, ["videos", channel, q]);
   const settled = !loading && !hasMore && !error;
 
-  const noMatch = `제목에 「${q}」${withJosa(q, "이", "가").slice(q.length)} 들어간 영상이 없어요.`;
+  const quoted = `'${q}'${withJosa(q, "이", "가").slice(q.length)}`;
+  const noMatch = channel !== null ? `이 채널에는 ${quoted} 들어간 영상이 없어요.` : `${quoted} 들어간 영상이 없어요.`;
   let status = "";
   if (q && !loading && !error) status = items.length ? "영상을 찾았어요" : noMatch;
 
@@ -155,6 +156,11 @@ export default function Videos({ sample }: { sample: boolean }) {
                   ? "채널을 추가하면 새 영상을 모아 보여줘요."
                   : "아직 모아 둔 영상이 없어요."}
             </p>
+            {q && channel !== null && (
+              <button type="button" className="btn secondary inline r3-all-channels" onClick={() => setSelected(null)}>
+                전체 채널에서 찾기
+              </button>
+            )}
           </section>
         )
       ) : (

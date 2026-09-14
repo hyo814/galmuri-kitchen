@@ -80,6 +80,19 @@ export function navigate(path: string, { replace = false } = {}) {
   window.dispatchEvent(new HashChangeEvent("hashchange"));
 }
 
+// ponytail: 나가기 확인은 지금 떠 있는 폼 하나만 등록한다(화면은 한 번에 하나). 폰 뒤로가기(popstate)는 막을 수 없다.
+let leaveGuard: (() => boolean) | null = null;
+
+/** 작성 중인 폼이 `나갈까요?` 확인을 등록한다(true를 돌려주면 나가도 된다). 폼이 사라지면 null로 */
+export function setLeaveGuard(guard: (() => boolean) | null) {
+  leaveGuard = guard;
+}
+
+/** 탭 바·뒤로 링크가 화면을 떠나기 전에 부른다. 등록된 폼이 없으면 바로 true */
+export function confirmLeave(): boolean {
+  return leaveGuard ? leaveGuard() : true;
+}
+
 /** 앱 안에서 들어왔으면 뒤로가기(히스토리·스크롤 유지), 주소로 바로 열었으면 fallback으로 이동 */
 export function goBack(fallback: string) {
   if ((history.state as { from?: string } | null)?.from) history.back();
