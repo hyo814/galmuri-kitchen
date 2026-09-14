@@ -547,7 +547,7 @@ export default function ShoppingMemo({ id, user }: { id?: string; user: User }) 
                 scanAlbumRef.current?.click();
               }}
             >
-              <Icon name="file" />
+              <Icon name="file" size={18} />
               앨범에서 고르기
             </button>
             <button
@@ -558,7 +558,7 @@ export default function ShoppingMemo({ id, user }: { id?: string; user: User }) 
                 scanCameraRef.current?.click();
               }}
             >
-              <Icon name="camera" />
+              <Icon name="camera" size={18} />
               카메라로 찍기
             </button>
           </div>

@@ -217,22 +217,22 @@ export default function ScanSheet({ mode, limit, locations, onAdded, onManual, o
               {kind === "order" ? (
                 <>
                   <button type="button" className="btn secondary" onClick={() => cameraRef.current?.click()}>
-                    <Icon name="camera" />
+                    <Icon name="camera" size={18} />
                     카메라로 찍기
                   </button>
                   <button type="button" className="btn primary" onClick={() => albumRef.current?.click()}>
-                    <Icon name="file" />
+                    <Icon name="file" size={18} />
                     앨범에서 고르기
                   </button>
                 </>
               ) : (
                 <>
                   <button type="button" className="btn secondary" onClick={() => albumRef.current?.click()}>
-                    <Icon name="file" />
+                    <Icon name="file" size={18} />
                     앨범에서 고르기
                   </button>
                   <button type="button" className="btn primary" onClick={() => cameraRef.current?.click()}>
-                    <Icon name="camera" />
+                    <Icon name="camera" size={18} />
                     카메라로 찍기
                   </button>
                 </>
