@@ -110,6 +110,13 @@ def test_create_list_get_update_delete(client, login):
     assert [r["title"] for r in list_recipes(client)["items"]] == ["볶음밥"]
 
 
+def test_egg_synonym_marks_have(client, login):
+    login()
+    add_ingredient(client, "달걀 10구")
+    ingredients = create(client).get_json()["ingredients"]
+    assert ingredients[1] == {"name": "계란", "amount": "2개", "have": True, "matched_name": "달걀 10구"}
+
+
 @pytest.mark.parametrize(
     "fields, error",
     [

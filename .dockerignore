@@ -3,6 +3,7 @@
 **/__pycache__
 backend/instance
 backend/.env
+backend/uploads
 frontend/dist
 .git
 .idea

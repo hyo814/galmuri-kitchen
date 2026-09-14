@@ -147,13 +147,14 @@
 3. 막는 장치(`backend/app/demo.py`):
    - 같은 IP(IPv6는 /64 대역)에서 1시간에 3개, 24시간에 10개. IP는 저장하지 않고 `SECRET_KEY`에서 뽑은 키로 서명한 해시 앞 16자만 계정 식별값에 붙인다.
    - 체험 계정 전체 5,000개. 가득 차면 거절하지 않고 가장 오래된 체험 계정부터 지우고 새로 만든다(한 번에 50개까지, 그래도 차 있으면 거절).
+   - 체험 계정의 메모 사진은 계정당 20MB까지(일반 사용자 200MB).
    - 체험 계정의 사진 인식·AI 레시피(링크 가져오기 포함) 하루 한도는 각각 3번. 체험 계정 전체가 24시간에 `DEMO_AI_GLOBAL_DAILY`(기본 300)번을 쓰면 AI를 부르지 않고 예시 결과를 보여 준다.
    - 영상 칸은 유튜브 할당량을 쓰지 않게 체험 계정에는 늘 예시 목록이다(채널 추가·새로 받기 없음).
 4. **지우기 Cron Job:** New → **Cron Job** → 같은 GitHub 저장소, Language **Docker**, Region Singapore
    - Schedule: `0 * * * *` (한 시간마다)
    - Command: `flask --app app purge-demo-users`
-   - Environment Variables: 웹 서비스와 같은 `SECRET_KEY`·`DATABASE_URL`(Environment Group으로 묶으면 편하다)
-   - 24시간 지난 체험 계정과 그 데이터(재고·레시피 등, `ON DELETE CASCADE`)를 지운다. AI 호출 기록(`ai_calls`)은 원가·체험 예산 계산을 위해 사용자 칸만 비우고 남는다(`SET NULL`). Cron Job이 없어도 체험하기를 누를 때마다 만료 계정을 50개씩 함께 지운다.
+   - Environment Variables: 웹 서비스와 같은 `SECRET_KEY`·`DATABASE_URL`·`R2_ACCOUNT_ID`·`R2_ACCESS_KEY_ID`·`R2_SECRET_ACCESS_KEY`·`R2_BUCKET`(Environment Group으로 묶으면 편하다). R2 값이 없으면 체험 계정의 메모 사진 파일이 R2에 남는다(행만 지워짐)
+   - 24시간 지난 체험 계정과 그 데이터(재고·레시피 등, `ON DELETE CASCADE`)와 메모 사진 파일(커밋 뒤 R2에서)을 지운다. AI 호출 기록(`ai_calls`)은 원가·체험 예산 계산을 위해 사용자 칸만 비우고 남는다(`SET NULL`). Cron Job이 없어도 체험하기를 누를 때마다 만료 계정을 50개씩 함께 지운다.
 5. **IP 한도 확인(배포 후 한 번):** IP 한도는 `X-Forwarded-For`의 뒤에서 `TRUSTED_PROXY_HOPS`(기본 1)번째 값을 접속 주소로 본다.
    - **꾸민 헤더가 통하지 않는지:** 같은 컴퓨터에서 앞쪽 값만 바꿔 네 번 보낸다. 네 번째가 `429`면 정상이다(꾸민 값이 무시되고 같은 주소로 셈). 넷 다 `200`이면 앞쪽 값을 믿고 있는 것이니 `TRUSTED_PROXY_HOPS`를 줄인다. 확인 뒤 만든 체험 계정은 24시간 뒤 지워진다.
      ```

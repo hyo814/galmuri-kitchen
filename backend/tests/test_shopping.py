@@ -230,7 +230,7 @@ def test_bulk_skips_listed_duplicates_and_in_request_duplicates(client, login, a
         json={
             "source": "recipe",
             "source_label": "두부조림",
-            "items": [{"name": "대파 1단"}, {"name": "두부", "quantity": 2, "unit": "모"}, {"name": "양파"}, {"name": " 양파 "}],
+            "items": [{"name": "대파 (국산)"}, {"name": "두부", "quantity": 2, "unit": "모"}, {"name": "양파"}, {"name": " 양파 "}],
         },
     )
     assert res.status_code == 201
@@ -239,8 +239,25 @@ def test_bulk_skips_listed_duplicates_and_in_request_duplicates(client, login, a
         ("두부", 2, "모", "recipe", "두부조림"),
         ("양파", 1, "개", "recipe", "두부조림"),
     ]
-    assert body["skipped"] == ["대파 1단", "양파"]
+    assert body["skipped"] == ["대파 (국산)", "양파"]
     assert [i["name"] for i in snapshot(client)["items"]] == ["대파", "두부", "양파"]
+
+
+def test_bulk_skips_only_same_normalized_name(client, login):
+    login()
+    for name in ("국간장", "대파", "계란"):
+        add(client, name=name)
+    res = client.post(
+        "/api/shopping/items/bulk",
+        json={"source": "recipe", "items": [{"name": "간장"}, {"name": "대파"}, {"name": "대파 1단"}, {"name": "달걀"}]},
+    )
+    assert res.status_code == 201
+    body = res.get_json()
+    # 국간장이 있어도 간장은 담는다(부분 매칭 아님). 대파 1단은 이름이 달라 담고, 달걀은 계란과 같은 재료라 건너뛴다
+    assert ([i["name"] for i in body["created"]], body["skipped"]) == (["간장", "대파 1단"], ["대파", "달걀"])
+    # 영수증 match는 그대로 부분 매칭이다
+    matched = client.post("/api/shopping/items/match", json={"names": ["간장"]}).get_json()["items"]
+    assert [i["name"] for i in matched] == ["국간장", "간장"]
 
 
 def test_bulk_all_or_nothing_with_index_errors(client, login, app):

@@ -6,6 +6,7 @@ from app.matching import head_is, keyword_in, names_match, normalize, tokens
 def test_normalize_drops_parentheses_spaces_and_case():
     assert normalize(" 진 간장 (500ml) ") == "진간장"
     assert normalize("Egg 10구") == "egg10구"
+    assert normalize("계란 (특란)") == "달걀"  # 동의어는 한 표기로
 
 
 @pytest.mark.parametrize(
@@ -29,6 +30,9 @@ def test_normalize_drops_parentheses_spaces_and_case():
         ("돼지고기", "돼지고기 앞다리살", True),
         ("대파", "대파(국산)1단", True),
         ("대파", "대파1단", True),
+        ("계란", "달걀", True),
+        ("달걀", "유정란 계란 (특란) 10구", True),
+        ("계란말이", "달걀말이", True),
     ],
 )
 def test_names_match(a, b, expected):
@@ -60,7 +64,7 @@ def test_keyword_in_is_one_way():
 
 
 def test_tokens_split_words_without_parentheses():
-    assert tokens("유정란 계란 (특란) 10구") == ["유정란", "계란", "10구"]
+    assert tokens("유정란 계란 (특란) 10구") == ["유정란", "달걀", "10구"]  # 동의어는 한 표기로
     assert tokens("[컬리] 무농약 대파/1단") == ["컬리", "무농약", "대파", "1단"]
     assert tokens("대파(국산)1단") == ["대파", "1단"]
 

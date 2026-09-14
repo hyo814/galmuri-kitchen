@@ -17,7 +17,6 @@ from .auth import login_required
 from .ingredients import SEOUL, seoul_today
 from .models import AiCall, Ingredient, Recipe, Seasoning, ShoppingItem, ShoppingNote, db
 from .shopping import STOCKED_KEEP_DAYS
-from .validation import iso_datetime
 
 bp = Blueprint("export", __name__, url_prefix="/api/export")
 
@@ -46,13 +45,19 @@ SPOOL_BYTES = 5_000_000  # 이보다 크면 메모리 대신 임시 파일에 zi
 BATCH = 200
 
 
-def seoul_date(value):
-    """UTC(또는 tz 없는 SQLite) datetime → 서울 날짜. 없으면 빈 칸."""
+def seoul_time(value):
+    """UTC(또는 tz 없는 SQLite) datetime → 서울 시각 `YYYY-MM-DD HH:MM`. 없으면 빈 칸."""
     if value is None:
         return ""
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
-    return value.astimezone(SEOUL).date()
+    return f"{value.astimezone(SEOUL):%Y-%m-%d %H:%M}"
+
+
+def shopping_rows():
+    """shopping.csv에 담는 장보기 항목: 목록 + 7일 안에 산 것(요약 개수와 같게)."""
+    cutoff = scan.utcnow() - timedelta(days=STOCKED_KEEP_DAYS)
+    return owned(ShoppingItem).filter(or_(ShoppingItem.stocked_at.is_(None), ShoppingItem.stocked_at >= cutoff))
 
 
 @bp.before_request
@@ -97,7 +102,7 @@ def summary():
         ingredients=owned(Ingredient).count(),
         recipes=owned(Recipe).count(),
         seasonings=owned(Seasoning).count(),
-        shopping=owned(ShoppingItem).filter(ShoppingItem.stocked_at.is_(None)).count(),
+        shopping=shopping_rows().count(),
         memos=owned(ShoppingNote).count(),
         limit=DAILY_LIMIT,
         remaining=remaining(),
@@ -127,11 +132,9 @@ def export():
     )
     recipes = owned(Recipe).order_by(Recipe.updated_at.desc(), Recipe.id.desc()).yield_per(BATCH)
     seasonings = owned(Seasoning).order_by(Seasoning.id).yield_per(BATCH)
-    stocked_cutoff = scan.utcnow() - timedelta(days=STOCKED_KEEP_DAYS)
     shopping_items = (
-        owned(ShoppingItem)
+        shopping_rows()
         .options(joinedload(ShoppingItem.location))
-        .filter(or_(ShoppingItem.stocked_at.is_(None), ShoppingItem.stocked_at >= stocked_cutoff))
         .order_by(ShoppingItem.created_at, ShoppingItem.id)
         .yield_per(BATCH)
     )
@@ -198,10 +201,10 @@ def export():
                     i.planned_on or "",
                     i.location.name if i.location_id else "",
                     "예" if i.done_at else "",
-                    seoul_date(i.stocked_at),
+                    seoul_time(i.stocked_at),
                     SHOPPING_SOURCE_LABELS.get(i.source, i.source),
                     i.source_label or "",
-                    seoul_date(i.created_at),
+                    seoul_time(i.created_at),
                 ]
                 for i in shopping_items
             ),
@@ -216,7 +219,7 @@ def export():
                     n.body,
                     len(n.photos),
                     "; ".join(os.path.basename(p.photo_key) for p in n.photos),
-                    iso_datetime(n.updated_at),
+                    seoul_time(n.updated_at),
                 ]
                 for n in shopping_notes
             ),
