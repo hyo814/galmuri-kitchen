@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import io
+import os
 from datetime import datetime, time, timedelta, timezone
 
 import pytest
@@ -19,6 +20,7 @@ from app.models import (
     db,
     utcnow,
 )
+from tests.test_shopping_notes import add_note, photo_path, upload
 
 USER_TABLES = (Ingredient, StorageLocation, ItemRule, Staple, Recipe, Seasoning, AiCall)
 
@@ -303,3 +305,38 @@ def test_demo_login_purges_expired_on_the_way(demo_app):
         assert User.query.count() == 1
     # 이전 세션의 사용자가 지워져도 새로 로그인한 세션은 그대로 쓴다
     assert c.get("/api/me").get_json()["provider"] == "demo"
+
+
+def demo_photo(app, ip):
+    """체험 계정을 만들고 메모 사진 한 장을 올린다(DEV_MODE 로컬 저장소). (사용자 id, 사진 파일 경로)"""
+    c = new_client(app, ip)
+    me = c.post("/api/demo-login").get_json()
+    photo = upload(c, add_note(c).get_json()["id"]).get_json()
+    path = photo_path(app, photo["url"])
+    assert os.path.exists(path)
+    return me["id"], path
+
+
+def test_purge_deletes_demo_photo_files(make_app):
+    app = make_app(DEMO_LOGIN=True, DEV_MODE=True)
+    old_id, old_path = demo_photo(app, "10.0.0.1")
+    _, fresh_path = demo_photo(app, "10.0.0.2")
+    with app.app_context():
+        db.session.get(User, old_id).created_at = utcnow() - timedelta(hours=25)
+        db.session.commit()
+    result = app.test_cli_runner().invoke(args=["purge-demo-users"])
+    assert result.exit_code == 0 and "1개" in result.output
+    assert not os.path.exists(old_path)
+    assert os.path.exists(fresh_path)
+
+
+def test_demo_login_recycle_and_expiry_delete_photo_files(make_app, monkeypatch):
+    app = make_app(DEMO_LOGIN=True, DEV_MODE=True)
+    _, expired_path = demo_photo(app, "10.0.0.1")
+    age_demo_users(app, hours=25)
+    _, oldest_path = demo_photo(app, "10.0.0.2")
+    monkeypatch.setattr(demo, "MAX_ACTIVE", 1)
+    _, kept_path = demo_photo(app, "10.0.0.3")  # 만료 계정은 지나가며, 가장 오래된 계정은 재활용으로 지운다
+    assert not os.path.exists(expired_path)
+    assert not os.path.exists(oldest_path)
+    assert os.path.exists(kept_path)

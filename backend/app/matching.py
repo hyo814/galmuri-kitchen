@@ -3,17 +3,25 @@ import re
 # ponytail: 이름 매칭은 규칙 기반이다. 오탐·누락이 문제되면 동의어 사전이나 AI 매칭으로 교체 (스펙 4절)
 _PARENS = re.compile(r"\([^)]*\)")
 _TOKEN_SPLIT = re.compile(r"[\s,/·\[\]*+&]+")
+# ponytail: 같은 재료의 다른 이름은 앞 표기를 뒤 표기로 바꿔 비교한다(부분 문자열 치환 — 계란말이 → 달걀말이). 늘어나면 여기에 더한다.
+SYNONYMS = {"계란": "달걀"}
+
+
+def _canonical(text):
+    for word, canonical in SYNONYMS.items():
+        text = text.replace(word, canonical)
+    return text
 
 
 def normalize(name):
-    """괄호와 그 안 내용 제거 → 공백 제거 → 소문자."""
-    return re.sub(r"\s+", "", _PARENS.sub("", name)).lower()
+    """괄호와 그 안 내용 제거 → 공백 제거 → 소문자 → 동의어를 한 표기로(계란 → 달걀)."""
+    return _canonical(re.sub(r"\s+", "", _PARENS.sub("", name)).lower())
 
 
 def tokens(name):
     """괄호와 그 안 내용을 공백으로 치환하고 숫자 앞에도 공백을 넣은 뒤 공백·구분 기호로 나눈 소문자 단어들.
-    "유정란 계란 (특란) 10구" → ["유정란", "계란", "10구"], "대파(국산)1단" → ["대파", "1단"], "대파1단" → ["대파", "1단"]"""
-    spaced = re.sub(r"(\d+)", r" \1", _PARENS.sub(" ", name)).lower()
+    동의어는 normalize와 같이 바꾼다. "유정란 계란 (특란) 10구" → ["유정란", "달걀", "10구"], "대파(국산)1단" → ["대파", "1단"], "대파1단" → ["대파", "1단"]"""
+    spaced = _canonical(re.sub(r"(\d+)", r" \1", _PARENS.sub(" ", name)).lower())
     return [t for t in _TOKEN_SPLIT.split(spaced) if t]
 
 

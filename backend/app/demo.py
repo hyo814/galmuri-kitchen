@@ -1,6 +1,6 @@
 """체험하기 계정(심사·둘러보기용). DEMO_LOGIN=1일 때만 켜진다(DEV_MODE와 무관, 운영에서도 켤 수 있다).
 누를 때마다 예시 재고가 든 새 사용자를 만들고, 24시간 지나면 `flask purge-demo-users`(와 체험하기 요청 때 조금씩)로 지운다.
-사용자 데이터는 모두 users.id에 ON DELETE CASCADE로 묶여 있어 users 행만 지우면 된다."""
+사용자 데이터는 모두 users.id에 ON DELETE CASCADE로 묶여 있어 users 행만 지우면 된다. 메모 사진 파일만 커밋 뒤 storage.delete로 따로 지운다."""
 
 import hashlib
 import hmac
@@ -14,10 +14,11 @@ import click
 from flask import Blueprint, abort, current_app, jsonify, request
 from sqlalchemy import text
 
+from . import storage
 from .auth import login_user, user_json
 from .defaults import seed_user_defaults
 from .ingredients import seoul_today
-from .models import Ingredient, Recipe, Seasoning, Staple, StorageLocation, User, db, utcnow
+from .models import Ingredient, Recipe, Seasoning, ShoppingNote, ShoppingNotePhoto, Staple, StorageLocation, User, db, utcnow
 from .public_recipes import SAMPLE_FILE
 
 bp = Blueprint("demo", __name__, cli_group=None)  # 명령은 `flask purge-demo-users`
@@ -110,15 +111,19 @@ def seed_demo_data(user_id):
 
 
 def delete_demo_users(query, limit=None):
-    """query(User.id를 고른 체험 계정, 지울 순서대로)의 앞 limit개를 지운다(데이터는 CASCADE, AI 호출 기록은 남음). commit은 호출 측에서."""
+    """query(User.id를 고른 체험 계정, 지울 순서대로)의 앞 limit개를 지운다(데이터는 CASCADE, AI 호출 기록은 남음).
+    (지운 수, 메모 사진 키)를 돌려준다. commit은 호출 측에서, 사진 파일은 커밋 뒤 storage.delete(키)로(DB가 파일을 지우지 않는다)."""
     ids = [user_id for (user_id,) in (query.limit(limit) if limit else query)]
+    keys = []
     if ids:
+        photos = db.session.query(ShoppingNotePhoto.photo_key).join(ShoppingNote).filter(ShoppingNote.user_id.in_(ids))
+        keys = [key for (key,) in photos]
         User.query.filter(User.id.in_(ids)).delete(synchronize_session=False)
-    return len(ids)
+    return len(ids), keys
 
 
 def purge_expired(limit=None):
-    """24시간 지난 체험 계정을 지운다. 지운 수를 돌려준다."""
+    """24시간 지난 체험 계정을 지운다. (지운 수, 메모 사진 키)를 돌려준다."""
     query = db.session.query(User.id).filter(User.provider == PROVIDER, User.created_at < utcnow() - TTL).order_by(User.id)
     return delete_demo_users(query, limit)
 
@@ -130,7 +135,7 @@ def demo_login():
     if db.session.get_bind().dialect.name == "postgresql":
         # 동시에 눌러도 IP 한도·전체 상한을 함께 넘지 않게 체험 계정 만들기를 한 줄로 세운다(커밋 때 풀린다).
         db.session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": zlib.crc32(b"demo-login") & 0x7FFFFFFF})
-    purge_expired(PURGE_BATCH)
+    _, keys = purge_expired(PURGE_BATCH)
     now = utcnow()
     key = ip_key(request.remote_addr)
     demo_users = User.query.filter(User.provider == PROVIDER)
@@ -140,19 +145,24 @@ def demo_login():
         or mine.filter(User.created_at >= now - TTL).count() >= IP_DAILY_LIMIT
     ):
         db.session.commit()  # 지운 만료 계정은 남긴다
+        storage.delete(keys)
         abort(429, "체험하기를 너무 많이 눌렀어요. 잠시 후 다시 시도해주세요.")
     over = demo_users.count() - MAX_ACTIVE + 1
     if over > 0:
         # 가득 차도 심사하는 분이 막히지 않게 가장 오래된 체험 계정부터 지운다. 한 번에 PURGE_BATCH개까지만 지우고, 그래도 차 있으면 거절한다(상한 유지).
         oldest = db.session.query(User.id).filter(User.provider == PROVIDER).order_by(User.created_at, User.id)
-        if delete_demo_users(oldest, min(over, PURGE_BATCH)) < over:
+        removed, recycled = delete_demo_users(oldest, min(over, PURGE_BATCH))
+        keys += recycled
+        if removed < over:
             db.session.commit()
+            storage.delete(keys)
             abort(503, "지금은 체험하는 분이 많아요. 잠시 후 다시 시도해주세요.")
     user = User(provider=PROVIDER, provider_id=f"{key}.{secrets.token_hex(16)}", nickname=NICKNAME, created_at=now)
     db.session.add(user)
     db.session.flush()
     seed_demo_data(user.id)
     db.session.commit()
+    storage.delete(keys)  # 커밋 뒤에 — 커밋이 실패하면 파일은 남아 있어야 한다
     login_user(user)
     return user_json(user)
 
@@ -160,6 +170,7 @@ def demo_login():
 @bp.cli.command("purge-demo-users")
 def purge_demo_users():
     """24시간 지난 체험 계정과 그 데이터를 지운다. Render Cron Job으로 한 시간마다 돌린다(docs/deploy.md)."""
-    removed = purge_expired()
+    removed, keys = purge_expired()
     db.session.commit()
+    storage.delete(keys)
     click.echo(f"체험 계정 {removed}개를 지웠어요.")

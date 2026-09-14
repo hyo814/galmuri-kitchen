@@ -64,6 +64,12 @@ def seoul_noon(delta=0):
     return datetime.combine(seoul_today() - timedelta(days=delta), time(12), tzinfo=SEOUL).astimezone(timezone.utc)
 
 
+def kst(value):
+    """UTC(SQLite는 tz 없음) → 서울 `YYYY-MM-DD HH:MM`."""
+    value = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return f"{value.astimezone(SEOUL):%Y-%m-%d %H:%M}"
+
+
 def test_requires_login(client):
     assert client.get("/api/export").status_code == 401
     assert client.get("/api/export/summary").status_code == 401
@@ -78,7 +84,7 @@ def test_requires_fetch_header_and_uses_no_quota(client, login, app):
     assert client.get("/api/export/summary").get_json()["remaining"] == 5
 
 
-def test_summary_counts_only_my_data(client, login):
+def test_summary_counts_only_my_data(client, login, app):
     login("other")
     client.post("/api/recipes", json=RECIPE)
     client.post("/api/ingredients", json={"name": "남의 두부", "purchased_on": day()})
@@ -93,11 +99,18 @@ def test_summary_counts_only_my_data(client, login):
     client.post("/api/shopping/items", json={"name": "두부"})
     client.post("/api/shopping/items", json={"name": "대파"})
     client.post("/api/shopping/notes", json={"body": "메모"})
-    assert client.get("/api/export/summary").get_json() == {
+    me = user_id(app)
+    with app.app_context():  # 7일 안에 산 것은 shopping.csv에 들어가므로 센다, 7일 지난 것은 세지 않는다
+        db.session.add(ShoppingItem(user_id=me, name="계란", stocked_at=seoul_noon(3)))
+        db.session.add(ShoppingItem(user_id=me, name="오래된 양파", stocked_at=seoul_noon(10)))
+        db.session.commit()
+    summary = client.get("/api/export/summary").get_json()
+    assert summary["shopping"] == len(read_zip(client.get("/api/export"))["shopping.csv"]) - 1
+    assert summary == {
         "ingredients": 1,
         "recipes": 2,
         "seasonings": 1,
-        "shopping": 2,
+        "shopping": 3,
         "memos": 1,
         "limit": 5,
         "remaining": 5,
@@ -192,16 +205,20 @@ def test_export_zip_contents(client, login, app):
         ["'=제육 양념", "주재료 무게", "600", "g", "돼지고기", "고추장 2큰술; 설탕 0.125큰술"],
         ["간장조림", "인분", "2", "인분", "", "간장 3큰술"],
     ]
+    with app.app_context():
+        added = {i.name: kst(i.created_at) for i in ShoppingItem.query.filter_by(user_id=me)}
+    noon = f"{day(3)} 12:00"  # 시각은 서울 기준 `YYYY-MM-DD HH:MM`
     assert files["shopping.csv"] == [  # created_at 순: 3일 전 만든 계란이 먼저, 10일 전 산 양파는 7일이 지나 빠진다
         SHOPPING_HEADER,
-        ["계란", "1", "판", "", "", "", "", day(3), "레시피", "계란말이", day(3)],
-        ["두부", "1", "개", "", "", "", "", "", "직접 담음", "", day()],
-        ["'-대파", "3", "단", "", day(1), "김치냉장고", "예", "", "필수품", "", day()],
-        ["휴지", "1", "롤", "예", "", "", "", "", "직접 담음", "", day()],
+        ["계란", "1", "판", "", "", "", "", noon, "레시피", "계란말이", noon],
+        ["두부", "1", "개", "", "", "", "", "", "직접 담음", "", added["두부"]],
+        ["'-대파", "3", "단", "", day(1), "김치냉장고", "예", "", "필수품", "", added["-대파"]],
+        ["휴지", "1", "롤", "예", "", "", "", "", "직접 담음", "", added["휴지"]],
     ]
+    assert added["두부"].startswith(day() + " ")
     assert files["shopping_memos.csv"] == [
         MEMO_HEADER,
-        ["이마트", "'=SUM(A1)", "2", "abc.jpg; def.png", note["updated_at"]],
+        ["이마트", "'=SUM(A1)", "2", "abc.jpg; def.png", kst(datetime.fromisoformat(note["updated_at"]))],
     ]
 
     with app.app_context():

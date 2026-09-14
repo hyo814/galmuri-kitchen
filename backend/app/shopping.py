@@ -40,6 +40,7 @@ MAX_NOTES = 20  # 사용자당
 MAX_PHOTOS = 10  # 메모당(시안 `사진 2 / 10`)
 MAX_PHOTO_BYTES = 3 * 1024 * 1024  # 한 장. 화면은 긴 변 1568px로 줄여 올린다(19절)
 MAX_USER_PHOTO_BYTES = 200 * 1024 * 1024  # 사용자당 메모 사진 합계
+MAX_DEMO_PHOTO_BYTES = 20 * 1024 * 1024  # 체험 계정(24시간 뒤 지워짐)은 사용자당 20MB
 MAX_BODY = 2000
 MAX_PLACE = 30
 NOTE_CONFLICT = "다른 기기에서 먼저 고친 메모가 있어요."
@@ -274,7 +275,8 @@ def create_item():
 @bp.post("/items/bulk")
 @login_required
 def create_items_bulk():
-    """레시피 없는 재료·메모 사진 결과를 한 번에 담는다. 목록에 있는 이름·요청 안에서 겹치는 이름은 건너뛰고,
+    """레시피 없는 재료·메모 사진 결과를 한 번에 담는다. 목록에 있는 이름·요청 안에서 겹치는 이름(normalize가 같을 때만 —
+    국간장이 있어도 간장은 담는다. 영수증 match의 부분 매칭과 다르다)은 건너뛰고,
     하나라도 틀리면 아무것도 만들지 않는다."""
     data = _json_object()
     source, source_label = _source(data)
@@ -294,14 +296,14 @@ def create_items_bulk():
 
     _lock_user_items(g.user.id)
     listed = db.session.query(ShoppingItem.name).filter(ShoppingItem.user_id == g.user.id, ShoppingItem.stocked_at.is_(None))
-    seen = [prepare(name) for (name,) in listed.all()]
+    seen = {normalize(name) for (name,) in listed.all()}
     created, skipped = [], []
     for fields in rows:
-        key = prepare(fields["name"])
-        if any(match_prepared(key, other) for other in seen):
+        key = normalize(fields["name"])
+        if key and key in seen:  # "(국산)"처럼 괄호뿐인 이름은 비교하지 않는다
             skipped.append(fields["name"])
             continue
-        seen.append(key)
+        seen.add(key)
         created.append(ShoppingItem(user_id=g.user.id, source=source, source_label=source_label, **fields))
     _check_cap(g.user.id, len(created))
     db.session.add_all(created)
@@ -451,7 +453,7 @@ def upload_photo(note_id):
         .filter(ShoppingNote.user_id == g.user.id)
         .scalar()
     )
-    if used + len(data) > MAX_USER_PHOTO_BYTES:
+    if used + len(data) > (MAX_DEMO_PHOTO_BYTES if g.user.provider == "demo" else MAX_USER_PHOTO_BYTES):
         abort(400, "사진 저장 공간이 가득 찼어요. 오래된 메모 사진을 지워주세요.")
     # ponytail: 서버는 EXIF(촬영 위치 등)를 지우지 않고 받은 바이트 그대로 둔다. 화면(Task 10)이 캔버스로 다시 인코딩해 올리므로
     # 메타데이터가 빠진다. 다른 경로로 올린 원본이 문제되면 서버에서 Pillow로 다시 저장하는 것을 더한다.

@@ -109,6 +109,6 @@ def test_parse_servings(text, expected):
 
 
 def test_ingredient_key_is_lowercase_words_without_parentheses():
-    assert ingredient_key("유정란 계란 (특란)") == "유정란 계란"
+    assert ingredient_key("유정란 계란 (특란)") == "유정란 달걀"  # 동의어는 한 표기로(matching.SYNONYMS)
     assert ingredient_key("Egg/Milk") == "egg milk"
     assert ingredient_key("대파1대") == "대파 1대"

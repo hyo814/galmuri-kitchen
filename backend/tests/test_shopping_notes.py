@@ -197,6 +197,22 @@ def test_user_total_photo_bytes_cap(client, login, monkeypatch):
     assert upload(client, first).status_code == 201
 
 
+def test_demo_user_photo_bytes_cap_is_smaller(client, login, app, monkeypatch):
+    assert (shopping.MAX_DEMO_PHOTO_BYTES, shopping.MAX_USER_PHOTO_BYTES) == (20 * 1024 * 1024, 200 * 1024 * 1024)
+    monkeypatch.setattr(shopping, "MAX_DEMO_PHOTO_BYTES", len(JPEG))
+    demo_user = login("demo-1")
+    with app.app_context():
+        db.session.get(User, demo_user.id).provider = "demo"
+        db.session.commit()
+    note_id = add_note(client).get_json()["id"]
+    assert upload(client, note_id).status_code == 201
+    res = upload(client, note_id)
+    assert (res.status_code, res.get_json()) == (400, {"error": "사진 저장 공간이 가득 찼어요. 오래된 메모 사진을 지워주세요."})
+    login("normal")  # 일반 사용자는 200MB 그대로
+    note_id = add_note(client).get_json()["id"]
+    assert [upload(client, note_id).status_code for _ in range(2)] == [201, 201]
+
+
 def test_delete_photo_removes_file(client, login, app):
     login()
     note_id = add_note(client).get_json()["id"]
