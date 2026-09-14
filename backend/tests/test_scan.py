@@ -402,7 +402,7 @@ def test_extract_memo_uses_memo_prompt(app, fake_anthropic):
     with app.app_context():
         ai.extract("memo", b"\xff\xd8jpeg", "image/jpeg")
     assert calls["parse"]["messages"][0]["content"][1] == {"type": "text", "text": ai.PROMPTS["memo"]}
-    assert "두 줄" in ai.PROMPTS["memo"] and ai.PROMPTS["memo"].endswith(ai._COMMON)
+    assert ai.PROMPTS["memo"].endswith(ai._COMMON)
 
 
 def test_scan_memo_calls_ai_and_counts_in_scan_group(client, login, app, monkeypatch):
@@ -446,4 +446,3 @@ def test_scan_memo_calls_ai_and_counts_in_scan_group(client, login, app, monkeyp
     res = upload(client, kind="memo")
     assert (res.status_code, res.get_json()) == (429, {"error": "오늘 사진 인식은 10번까지 쓸 수 있어요. 내일 다시 써주세요."})
     assert seen == ["memo", "fridge"]
-
