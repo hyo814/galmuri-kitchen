@@ -21,11 +21,11 @@ interface DraftStore {
   checked: Record<string, boolean>;
 }
 
-// ponytail: 만드는 중·확인·오류는 모듈 변수(뒤로가기·탭 이동 뒤에도 그대로, 새로고침하면 사라짐). 다른 식단의 확인 화면은 버린다.
-// 만드는 중에 화면을 떠나도 요청은 끊지 않는다(서버가 이미 횟수를 셌다) — `취소`만 끊는다. RecipeAi와 같은 방식.
-let draftStore: DraftStore | null = null;
-let running: { planId: number; weekStart: string; meals: MealKind[]; ctrl: AbortController } | null = null;
-let draftError: { planId: number; message: string } | null = null;
+// ponytail: 만드는 중·확인·오류는 식단별 모듈 Map(뒤로가기·탭 이동 뒤에도 그대로, 새로고침하면 사라짐).
+// 만드는 중에 화면을 떠나거나 다른 식단에서 만들어도 요청은 끊지 않는다(서버가 이미 횟수를 셌다) — 그 식단의 `취소`만 끊는다. RecipeAi와 같은 방식.
+const drafts = new Map<number, DraftStore>();
+const running = new Map<number, { weekStart: string; meals: MealKind[]; ctrl: AbortController }>();
+const errors = new Map<number, string>();
 let generation = 0; // 로그아웃 뒤에 도착한 옛 응답을 버리는 번호
 let version = 0;
 const listeners = new Set<() => void>();
@@ -40,52 +40,53 @@ const subscribe = (listener: () => void) => {
   };
 };
 
-/** 로그아웃·넣기 뒤: 모두 버린다(resetMealsView가 부른다) */
+/** 로그아웃: 모든 식단의 초안·요청을 버린다(resetMealsView가 부른다) */
 export function forgetMealDraft() {
   generation++;
-  running?.ctrl.abort();
-  running = null;
-  draftStore = null;
-  draftError = null;
+  running.forEach(({ ctrl }) => ctrl.abort());
+  running.clear();
+  drafts.clear();
+  errors.clear();
   emit();
 }
 
 /** 만들기·다시 만들기. 이전 초안은 새 초안이 올 때까지 둔다(다시 만들기를 취소하면 그대로 돌아간다) */
 function startDraft(planId: number, weekStart: string, meals: MealKind[], body: object) {
-  running?.ctrl.abort();
+  if (running.has(planId)) return; // 만드는 중에는 버튼이 없다 — 같은 식단 요청을 두 번 보내지 않는다
   const ctrl = new AbortController();
   const id = generation;
-  running = { planId, weekStart, meals, ctrl };
-  draftError = null;
+  running.set(planId, { weekStart, meals, ctrl });
+  errors.delete(planId);
   emit();
+  const mine = () => id === generation && running.get(planId)?.ctrl === ctrl;
   api<MealDraft>(`/api/meal-plans/${planId}/ai-draft`, { method: "POST", body, signal: ctrl.signal }).then(
     (draft) => {
-      if (id !== generation || running?.ctrl !== ctrl) return;
-      running = null;
-      draftStore = {
+      if (!mine()) return;
+      running.delete(planId);
+      drafts.set(planId, {
         planId,
         weekStart,
         meals,
         draft,
         choice: Object.fromEntries(draft.slots.map((s) => [keyOf(s), s.options[0]])),
         checked: Object.fromEntries(draft.slots.map((s) => [keyOf(s), true])),
-      };
+      });
       forgetResources("/api/meal-plans"); // 목표 두 칸은 서버가 식단에 저장했다
       emit();
     },
     (e: unknown) => {
-      if (id !== generation || running?.ctrl !== ctrl) return;
-      running = null;
-      draftError = { planId, message: (e as Error).message };
+      if (!mine()) return;
+      running.delete(planId);
+      errors.set(planId, (e as Error).message);
       forgetResources("/api/meal-plans");
       emit();
     },
   );
 }
 
-function cancelDraft() {
-  running?.ctrl.abort();
-  running = null;
+function cancelDraft(planId: number) {
+  running.get(planId)?.ctrl.abort();
+  running.delete(planId);
   emit();
 }
 
@@ -126,9 +127,9 @@ export default function MealAiDraft({ id, user }: { id: string; user: User }) {
 function Draft({ plan }: { plan: MealPlan }) {
   const today = localToday();
   useSyncExternalStore(subscribe, () => version);
-  const store = draftStore?.planId === plan.id ? draftStore : null;
-  const loading = running?.planId === plan.id ? running : null;
-  const error = draftError?.planId === plan.id ? draftError.message : "";
+  const store = drafts.get(plan.id) ?? null;
+  const loading = running.get(plan.id);
+  const error = errors.get(plan.id) ?? "";
   const viewed = currentWeekOf(plan.id);
   const week = loading?.weekStart ?? store?.weekStart ?? (viewed && weekStarts(plan).includes(viewed) ? viewed : initialWeek(plan, today));
   const dates = weekDates(week, plan);
@@ -139,26 +140,19 @@ function Draft({ plan }: { plan: MealPlan }) {
   const stock = useResource<Ingredient[]>("/api/ingredients");
   const ids = { meals: useId(), kcal: useId(), kcalErr: useId() };
 
-  // 다른 식단의 초안은 버린다
-  useEffect(() => {
-    if (draftStore && draftStore.planId !== plan.id) draftStore = null;
-  }, [plan.id]);
   const phase = loading ? "loading" : store ? "review" : "input";
   // 단계가 바뀌면 누른 버튼이 사라져 포커스를 잃는다 → 맨 위 제목으로
   const shownPhase = useRef(phase);
+  const reloadUsage = usage.reload;
   useEffect(() => {
     if (shownPhase.current === phase) return;
+    if (shownPhase.current === "loading") void reloadUsage(); // 만들기가 끝나거나 취소하면 남은 횟수를 다시 받는다
     shownPhase.current = phase;
     window.scrollTo(0, 0);
     const h1 = document.querySelector<HTMLElement>("main.page h1");
     if (!h1 || (document.activeElement && document.activeElement !== document.body)) return;
     h1.tabIndex = -1;
     h1.focus({ preventScroll: true });
-  }, [phase]);
-  // 만들기가 끝나거나 취소하면 남은 횟수를 다시 받는다
-  const reloadUsage = usage.reload;
-  useEffect(() => {
-    if (phase !== "loading") void reloadUsage();
   }, [phase, reloadUsage]);
 
   // 곧 먹어야 할 재료: 임박·지남, 유통기한 빠른 순 4개(같은 이름은 하나)
@@ -182,7 +176,7 @@ function Draft({ plan }: { plan: MealPlan }) {
         <header className="topbar">
           <h1>{TITLE}</h1>
         </header>
-        <Loading urgent={urgent.map((i) => i.name)} onCancel={cancelDraft} />
+        <Loading urgent={urgent.map((i) => i.name)} onCancel={() => cancelDraft(plan.id)} />
       </>
     );
 
@@ -194,7 +188,7 @@ function Draft({ plan }: { plan: MealPlan }) {
         store={store}
         regenerateError={error}
         onChange={(next) => {
-          draftStore = next;
+          drafts.set(plan.id, next);
           emit();
         }}
         onRegenerate={generate}
@@ -404,7 +398,9 @@ function Review({ plan, today, store, regenerateError, onChange, onRegenerate }:
       const created = res.created_recipes ? `새 레시피 ${res.created_recipes}개를 내 레시피에 저장했어요` : "";
       showMealsNotice(plan.id, [res.filled ? `${res.filled}칸을 넣었어요` : "", kept, created].filter(Boolean).join(" · "));
       navigate("/meals", { replace: true });
-      forgetMealDraft(); // 화면을 옮긴 뒤에 비워야 입력 화면이 잠깐 보이지 않는다
+      drafts.delete(plan.id); // 화면을 옮긴 뒤에 비워야 입력 화면이 잠깐 보이지 않는다(다른 식단 초안·요청은 그대로)
+      errors.delete(plan.id);
+      emit();
     });
 
   return (
