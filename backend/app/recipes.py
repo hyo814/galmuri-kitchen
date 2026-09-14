@@ -382,7 +382,9 @@ def recipe_choices():
     summaries = [(r, match_summary(r.ingredients, prepared_stock, urgent)) for r in candidates]
 
     def score(summary):
-        return summary["have_count"] / summary["total_count"] + 0.1 * len(summary["urgent_names"])
+        # 재료가 0개인 레시피(공공 레시피 저장·동기화가 빈 RCP_PARTS_DTLS를 그대로 둘 수 있다)도 0/0으로 죽지 않게.
+        rate = summary["have_count"] / summary["total_count"] if summary["total_count"] else 0
+        return rate + 0.1 * len(summary["urgent_names"])
 
     ranked = sorted(summaries, key=lambda pair: -score(pair[1]))[:CHOICES_MAX]
     return jsonify(items=[{"id": r.id, "title": r.title, "servings": r.servings, **summary} for r, summary in ranked])

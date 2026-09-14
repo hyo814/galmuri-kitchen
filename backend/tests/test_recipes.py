@@ -538,3 +538,17 @@ def test_recipe_choices_sorted_by_match_and_filtered(client, login, app):
 
     login("other")
     assert client.get("/api/recipes/choices?q=찌개").get_json()["items"] == []
+
+
+def test_recipe_choices_handles_recipe_with_no_ingredients(client, login, app):
+    # fix round 1: 공공 레시피 저장·동기화는 빈 RCP_PARTS_DTLS를 ingredients=[]로 그대로 둘 수 있다(POST /recipes API는
+    # 1개 이상을 요구해 막지만, save/sync 경로는 검증을 거치지 않는다) — 0/0 점수 계산이 500을 내면 안 된다.
+    user = login()
+    with app.app_context():
+        db.session.add(Recipe(user_id=user.id, title="재료 없음", servings=1, ingredients=[], steps=[]))
+        db.session.commit()
+
+    res = client.get("/api/recipes/choices")
+    assert res.status_code == 200
+    item = res.get_json()["items"][0]
+    assert (item["title"], item["have_count"], item["total_count"], item["urgent_names"]) == ("재료 없음", 0, 0, [])
