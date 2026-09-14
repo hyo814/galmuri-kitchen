@@ -1,0 +1,127 @@
+{
+  "artboards": [
+    {
+      "file": "RecommendAI.dc.html",
+      "title": "1 · 추천 칸 맨 위에 AI 레시피 입구",
+      "x": 0,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "AILoading.dc.html",
+      "title": "2 · 만드는 중",
+      "x": 464,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "AIResult.dc.html",
+      "title": "3 · AI 레시피 3개",
+      "x": 928,
+      "y": 0,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "AddSheet.dc.html",
+      "title": "4 · 레시피 추가 → 방법 고르기",
+      "x": 0,
+      "y": 1000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "LinkSheet.dc.html",
+      "title": "5 · 링크 붙여넣기",
+      "x": 464,
+      "y": 1000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "LinkFail.dc.html",
+      "title": "5-실패 · 링크로 못 읽었을 때",
+      "x": 928,
+      "y": 1000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "ImportReview.dc.html",
+      "title": "6 · 가져온 레시피 확인",
+      "x": 1392,
+      "y": 1000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "Videos.dc.html",
+      "title": "7 · 영상 칸",
+      "x": 0,
+      "y": 2000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "VideoPlay.dc.html",
+      "title": "8 · 영상 보기",
+      "x": 464,
+      "y": 2000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "Channels.dc.html",
+      "title": "9 · 요리 채널 관리",
+      "x": 928,
+      "y": 2000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "SeasoningList.dc.html",
+      "title": "10 · 양념 비율 칸",
+      "x": 0,
+      "y": 3000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "SeasoningCalc.dc.html",
+      "title": "11 · 양념 계산",
+      "x": 464,
+      "y": 3000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "SeasoningForm.dc.html",
+      "title": "12 · 내 비율 만들기",
+      "x": 928,
+      "y": 3000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "AIResultDark.dc.html",
+      "title": "13 · AI 레시피 · 다크",
+      "x": 0,
+      "y": 4000,
+      "w": 384,
+      "h": 832
+    },
+    {
+      "file": "SeasoningCalcDark.dc.html",
+      "title": "14 · 양념 계산 · 다크",
+      "x": 464,
+      "y": 4000,
+      "w": 384,
+      "h": 832
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

@@ -50,7 +50,7 @@ recipe-ai/
 
 - `users`: id, provider(`kakao`|`google`), provider_id, nickname, created_at. UNIQUE(provider, provider_id)
 - `ingredients`: id, user_id, name, quantity(float, 기본 1), unit(str, 기본 `개`), purchased_on(date, 필수), expires_on(date, 선택), price(원, 선택), created_at
-- `recipes`: id, user_id, title(1~60자), servings(1~20, 기본 2), ingredients(JSON `[{name, amount}]` 1~50개), steps(JSON `[str]` 0~30개), source(`mine`|`public`|`ai`|`youtube`|`instagram`|`text`), source_url(선택), public_recipe_id(선택, SET NULL), image_url(선택), created_at, updated_at. UNIQUE(user_id, public_recipe_id)
+- `recipes`: id, user_id, title(1~60자), servings(1~20, 기본 2), ingredients(JSON `[{name, amount}]` 1~50개), steps(JSON `[str]` 0~30개), source(`mine`|`public`|`ai`|`youtube`|`instagram`|`blog`|`text`), source_url(선택), public_recipe_id(선택, SET NULL), image_url(선택, AI 레시피는 비슷한 공공 레시피 사진 17절), created_at, updated_at. UNIQUE(user_id, public_recipe_id)
 - `public_recipes`: id, rcp_seq(UNIQUE), title, category(RCP_PAT2), method(RCP_WAY2), kcal(INFO_ENG), servings(원문 `N인분`, 없으면 2), ingredients_text(원문), ingredients(JSON `[{name, amount}]`, 파싱), ingredient_keys(JSON, ingredients와 같은 순서의 매칭용 이름), steps(JSON), image_url, is_sample(키 없을 때 넣는 예시 레시피), updated_at. 사용자 소유 아님.
 - `cook_logs`: id, user_id, recipe_id(선택, SET NULL), title, cooked_on(date), rating(1~5, 선택), memo(선택), photo_key(선택), created_at
 - `ai_calls`: id, user_id, kind(`fridge`|`receipt`|`order`|`memo`|`recipe`|`link`), model, input_tokens, output_tokens, created_at(인덱스). 토큰은 원가 계산용(25절)이다. model은 성공하면 실제로 답한 모델, 실패하면 요청한 모델이다. AI 호출이 AiError로 끝나면(오류·타임아웃·거절·max_tokens·스키마 불일치) 토큰은 비워 둔다. 새 AI 기능도 같은 방식으로 남긴다.
@@ -79,12 +79,16 @@ recipe-ai/
 | POST | `/api/ingredients/bulk` | 스캔 확인 후 일괄 생성 `{items:[{name, quantity, unit, purchased_on, expires_on?, price?, location_id?}]}` 1~50개. 하나라도 틀리면 아무것도 만들지 않고 400 `{error: "N번째 재료: …", errors:[{index, error}]}` |
 | PATCH/DELETE | `/api/ingredients/<id>` | 수정 / 삭제 |
 | POST | `/api/scan?kind=fridge\|receipt\|order` | multipart `image` → `{items:[{name, quantity, unit, location_kind, price}], purchased_on, sample}` |
-| GET/POST | `/api/recipes` | 목록(생성일 아님, `updated_at`·id 내림차순 커서 페이지 25절) / 생성. 목록 `?limit=1~50(기본 30)&cursor=` → `{items:[...], next_cursor}` |
+| GET/POST | `/api/recipes` | 목록(생성일 아님, `updated_at`·id 내림차순 커서 페이지 25절) / 생성. 목록 `?limit=1~50(기본 30)&cursor=` → `{items:[...], next_cursor}`. 생성 body의 `source`는 `mine`(기본)·`ai`·`youtube`·`instagram`·`blog`·`text`만 받고(`public`은 저장 API로만), `image_url`은 식약처 https 사진 주소만 받는다(AI 레시피 저장용) (2026-09-14, 시안 승인) |
 | GET/PUT/DELETE | `/api/recipes/<id>` | 상세 / 수정 / 삭제. 상세의 `ingredients`는 `[{name, amount, have, matched_name}]`(현재 재고 기준) |
 | GET | `/api/public-recipes/<id>` | 공공 레시피 상세(같은 `ingredients` 모양) |
 | POST | `/api/public-recipes/<id>/save` | 내 레시피로 복사(source `public`) 201. 이미 저장했으면 그 레시피 200 |
 | GET | `/api/recommendations?section=all\|public&offset=0&limit=20` | 점수 순(25절: `section=all` 기본은 내 레시피 상위 10개 + 공공 레시피 한 페이지, `section=public`은 공공 레시피만). `{mine:[...10개], mine_total, public:[...], public_total, next_offset, sample, inventory_count}`(`section=public`이면 `mine`·`mine_total` 없음). 카드 항목: kind, id, title, image_url, servings, match_rate, have_count, total_count, missing(최대 5, 화면 표시용 이름), urgent_used, urgent_names, score(= match_rate + 0.1 × urgent_used) |
-| POST | `/api/recommendations/ai` | AI 레시피 3개 생성(저장 안 함) |
+| POST | `/api/recommendations/ai` | AI 레시피 3개 생성(저장 안 함). `{recipes:[{title, servings, minutes, ingredients:[{name, amount, have, matched_name}], steps, urgent_names, image_url}], urgent_first, sample}`. 저장은 화면이 `POST /api/recipes`(source `ai`, image_url)로 한다 (2026-09-14, 시안 승인) |
+| POST | `/api/recipes/import` | 링크·글 → 레시피 초안(저장 안 함, 17절). 저장은 확인 화면에서 `POST /api/recipes` |
+| GET | `/api/ai-usage` | 오늘(서울) `{scan:{used, limit}, recipe:{used, limit}}` — `오늘 N번 남음`·더보기 AI 사용량 |
+| GET | `/api/videos`, `/api/videos/<id>` | 요리 채널 영상(17절) |
+| GET/POST | `/api/channels` · PATCH/DELETE `/api/channels/<id>` | 채널 목록·추가 / 기본 채널 숨기기·내 채널 빼기(17절) |
 | GET/POST | `/api/cook-logs` | 기록 목록 / 생성(multipart: 필드 + 사진 + `usages` JSON) |
 | DELETE | `/api/cook-logs/<id>` | 기록 삭제(재고 복원 안 함) |
 | GET | `/api/photos/<key>` | 소유자 확인 후 presigned URL로 302(로컬은 파일 전송) |
@@ -94,13 +98,14 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 ## 6. 화면 흐름
 
 하단 탭(사용자 결정 2026-09-13): **재고 · 레시피 · 장보기 · 식단 · 더보기**. 다섯 탭을 모두 노출하고, 아직 기능이 없는 탭은 앞으로 들어올 기능을 안내하는 `준비 중` 화면을 보여 준다(사용자 결정 2026-09-13). 각 단계에서 진짜 화면으로 교체한다. 첫 탭 제목은 `내 재고`.
-더보기: 27절 구성을 따른다(기록·우리 부엌·나·앱·도움말·계정). 레시피 탭에 추천(보유 재료)·내 레시피·링크 가져오기.
+더보기: 27절 구성을 따른다(기록·우리 부엌·나·앱·도움말·계정). 레시피 탭은 칸 `추천 · 내 레시피 · 영상 · 양념 비율`(17·22절). 링크 가져오기는 칸이 아니라 `내 레시피`의 `레시피 추가` 시트 안에 있다(17절) (2026-09-14, 시안 승인).
 화면 전환은 해시 경로(`#/`, `#/more`, `#/tools` …)로 하여 폰 뒤로가기가 동작한다. 비로그인 시 로그인 화면.
 
 1. **로그인**: 카카오/네이버/구글 버튼.
 2. **냉장고**: 임박 순 목록 + 배지. `+ 직접 추가`(이름, 수량, 단위, 구입일[기본 오늘], 유통기한). 항목 탭 → 수정/삭제.
    `사진으로 추가`(냉장고 사진 · 영수증 · 온라인 주문 캡처, 카메라·갤러리는 폰이 고르게 함) → 브라우저에서 긴 변 1568px JPEG로 축소 → `/api/scan` → 확인 화면(체크, 행을 펼쳐 이름·수량·단위·보관 위치 수정, 구입일 일괄 입력; 영수증·주문은 인식된 날짜로 프리필) → `/api/ingredients/bulk`. 시안 `docs/design/scan-2/`.
-3. **추천**: 내 레시피 / 공공 DB 섹션(일치율 순, 부족 재료 표시). `AI에게 물어보기` 버튼 → AI 제안 3개. 카드 → 상세.
+3. **추천**: 내 레시피 / 공공 DB 섹션(일치율 순, 부족 재료 표시). 카드 → 상세.
+   AI 입구 (2026-09-14, 시안 승인): 추천 칸 맨 위 한 줄 카드 `내 재고로 새 레시피` · `AI가 3개 만들어줘요 · 오늘 N번 남음` · `만들기` → 별도 화면 `#/recipes/ai`. 만드는 중 화면(다람이, `빨리 먹어야 할 두부·대파를 먼저 넣어볼게요.` `10초쯤 걸려요.`) → 결과 카드 3개(사진·임박 배지·제목·`2인분 · 20분`·일치 막대, `자세히`/`저장` 버튼, 저장하면 초록 `저장했어요`), 안내 `AI가 만든 레시피예요. 간과 익힘은 맛보면서 조절해주세요.`, 아래 `다시 만들기 · 오늘 N번 남음`. 시안 `docs/design/recipes-3b3c/`.
 4. **레시피 상세**(공통): 재료(보유 여부 표시), 단계. `내 레시피로 저장`(public/ai일 때), `요리했어요`.
 5. **레시피 탭**: 내 레시피 목록, 등록/수정/삭제 폼(재료 행 추가, 단계 행 추가).
 6. **요리했어요 폼**: 냉장고와 매칭된 재료 목록 + 사용량(기본 전량), 날짜(기본 오늘), 별점, 메모, 사진 → 저장.
@@ -110,14 +115,15 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 
 - **스캔**: Claude Messages API에 이미지(base64) + 종류별 프롬프트, 구조화 출력(JSON 스키마)으로
   `{items:[{name, quantity, unit, location_kind, price}], purchased_on: "YYYY-MM-DD"|null}`. 영수증·주문에서 식재료가 아닌 항목(봉투, 세제 등)은 제외하도록 지시. 서버가 결과를 정리한다(최대 50개, 이름 50자·단위 10자, 수량이 0 이하·숫자 아님 → 1, 미래 구입일·냉장고 사진의 구입일 → null). price는 품목별 결제 금액(원, 할인 반영)이며 숫자가 아니거나 0보다 크고 10,000,000원 이하가 아니면 null(직접 입력은 0원도 허용), 냉장고 사진은 항상 null.
-- **AI 레시피**: 보유 재료 목록(임박 표시 포함)을 전달, 구조화 출력으로 `[{title, ingredients:[{name, amount}], steps:[str]}]` 3개. 임박 재료 우선 사용 지시.
+- **AI 레시피**: 보유 재료 목록(임박 표시 포함)을 전달, 구조화 출력으로 `[{title, servings, minutes, ingredients:[{name, amount}], steps:[str]}]` 3개. 임박 재료 우선 사용 지시.
+  - **사진 (2026-09-14, 시안 승인)(사용자 선택 "비슷한 공공 레시피 사진 쓰기"):** 이미지를 만들지 않는다. 각 AI 레시피 이름으로 `public_recipes` 중 사진이 있는 가장 비슷한 요리를 찾아 그 `image_url`을 쓴다(정규화 이름 같음 → 한쪽이 다른 쪽 포함(짧은 쪽 3자 이상) → 토큰 겹침 Jaccard 0.5 이상). 없으면 사진 없이 반짝이 자리 표시. 화면에는 `비슷한 요리 사진`(대체 텍스트·상세 캡션)으로 밝힌다. 저장할 때 `recipes.image_url`로 남긴다. 조리 시간(minutes)은 결과 화면에만 보이고 저장하지 않는다.
 - **조리 기록 저장**: 한 트랜잭션에서 `usages=[{ingredient_id, amount}]` 각각 소유 확인 → quantity 차감 → 0 이하면 삭제 → cook_log 생성. 사진 업로드 실패 시 전체 롤백.
-- **AI 일일 한도**: 요청 전 오늘(서버 기준 Asia/Seoul) 해당 사용자의 `ai_calls` 수를 kind 그룹(scan: fridge+receipt+order+memo / recipe)별로 센다. 서울 하루를 UTC 구간으로 바꿔 created_at으로 센다.
-  한도 `AI_DAILY_SCAN_LIMIT`(기본 10), `AI_DAILY_RECIPE_LIMIT`(기본 10) 초과 시 429. AI로 보낸 호출은 성공·실패와 관계없이 센다(실패도 비용이 들어 남용을 막기 위해). 업로드 검증에서 걸린 요청은 세지 않는다. 짧은 연속 호출은 `AI_SCAN_BURST_LIMIT`(기본 3, 60초)로 별도 429.
+- **AI 일일 한도**: 요청 전 오늘(서버 기준 Asia/Seoul) 해당 사용자의 `ai_calls` 수를 kind 그룹(scan: fridge+receipt+order+memo / recipe: recipe+link (2026-09-14, 시안 승인))별로 센다. 서울 하루를 UTC 구간으로 바꿔 created_at으로 센다.
+  한도 `AI_DAILY_SCAN_LIMIT`(기본 10), `AI_DAILY_RECIPE_LIMIT`(기본 10, AI 레시피와 링크·글 가져오기를 합산) 초과 시 429. AI로 보낸 호출은 성공·실패와 관계없이 센다(실패도 비용이 들어 남용을 막기 위해). 업로드 검증에서 걸린 요청은 세지 않는다. 짧은 연속 호출은 `AI_SCAN_BURST_LIMIT`(기본 3, 60초)로 별도 429.
 
 ## 8. 에러 처리
 
-- AI 실패/타임아웃/스키마 불일치 → 502 `{"error": "인식에 실패했어요. 직접 입력해 주세요."}`, 프론트는 수기 입력 폼으로 이동.
+- AI 실패/타임아웃/스키마 불일치 → 502 `{"error": "인식에 실패했어요. 직접 입력해주세요."}`(코드·문구 규칙대로 붙여 씀 (2026-09-14, 시안 승인)), 프론트는 수기 입력 폼으로 이동.
 - 업로드: `MAX_CONTENT_LENGTH` 10MB(413), 파일 시그니처로 판별해 JPEG·PNG·WEBP 외 415(선언된 Content-Type은 신뢰하지 않는다). 스캔 한도 초과 429, 키 없는 운영 503.
 - 남의 리소스 id → 404.
 - 입력 검증: name 1~50자, quantity > 0, rating 1~5, 날짜 ISO 형식. 위반 시 400.
@@ -225,18 +231,22 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - 구매 완료: 체크 시 재료로 등록(구입일 기본 오늘·수정 가능, 위치 선택). 주문 캡처/영수증 스캔 결과로 장보기 항목 일괄 체크.
 
 ## 17. 3단계 추가: 링크로 레시피 가져오기
-- `POST /api/recipes/import` `{url}` 또는 `{text}` → Claude 구조화 출력 `{title, ingredients:[{name, amount}], steps:[str]}` → 확인 후 저장(`source`: `youtube`|`instagram`|`text`, `source_url`).
-- 유튜브: 영상 설명란 + 자막(자동 자막 포함)을 가져와 정리. 데이터센터 IP 차단 등으로 실패하면 설명란만 사용하거나 텍스트 붙여넣기로 안내.
+- `POST /api/recipes/import` `{url}` 또는 `{text}` → Claude 구조화 출력 `{title, servings, ingredients:[{name, amount}], steps:[str]}` → 확인 후 저장(`source`: `youtube`|`instagram`|`blog`|`text`, `source_url`). 응답 `{title, servings, ingredients, steps, source, source_url, source_card:{title, author, thumbnail_url}|null, sample}`, 저장하지 않는다. source_card(영상 제목·채널명·썸네일)는 확인 화면 표시용이고 저장하지 않는다(25절 링크·요약만).
+- **입구·흐름 (2026-09-14, 시안 승인):** `내 레시피` 칸 `레시피 추가` → 시트 `레시피 추가 / 어떻게 넣을지 골라주세요`에 `링크로 가져오기(유튜브·인스타그램·블로그 주소)` · `글 붙여넣기(메모나 게시물 설명을 복사해서)` · `직접 쓰기(재료와 만드는 법을 하나씩)`, 아래 `링크·글은 AI가 정리해요 · 오늘 N번 남음`. 링크를 못 읽으면(422 `need_text`) 같은 시트가 `글 붙여넣기`로 바뀌고 경고 상자에 이유(예: `인스타그램 링크에서는 레시피를 읽지 못했어요. 게시물 설명을 길게 눌러 복사한 뒤 아래에 붙여 넣어주세요.`)를 보여준다. 확인 화면은 기존 레시피 폼에 초안을 채운 `가져온 레시피 확인`(보조 `AI가 정리했어요. 틀린 곳을 고친 뒤 저장해주세요`, 출처 카드 `썸네일 · 제목 · 유튜브 · 채널명 · 원본`, 재료 `양은 비워도 괜찮아요`). 영상 보기의 `레시피로 가져오기`도 같은 확인 화면으로 간다.
+- 유튜브: `videos.list`(1 unit)로 **영상 설명란만** 가져와 정리한다. ~~자막(자동 자막 포함)~~ — 다른 사람 영상의 자막 내려받기는 공식 API(captions.download)가 영상 주인 인증을 요구해 쓸 수 없고 비공식 추출은 약관·차단 위험이 있어 쓰지 않는다 (2026-09-14, 시안 승인). `YOUTUBE_API_KEY`가 없거나 실패하면 글 붙여넣기로 안내한다.
+- 블로그 등 일반 링크 (2026-09-14, 시안 승인): https 주소만, 서버가 요청하기 전에 DNS 결과가 모두 공인 IP인지 보고 연결된 소켓의 상대 주소도 다시 확인한다(사설·루프백·링크로컬 거부), 리다이렉트는 매번 같은 검사로 최대 3번, 응답은 `text/html`·1MB·8초 이내. 네이버 블로그는 모바일 주소로 바꿔 읽는다. 사진은 받지 않는다.
 - 인스타그램: 공식적으로 타인 게시물 본문 조회 불가 → 링크 미리보기(og:description) 시도, 부족하면 캡션 붙여넣기 안내. 링크만으로 항상 성공을 약속하지 않는다.
 - AI 일일 한도에 `link` 포함(recipe 그룹).
 
 ### 요리 채널 영상 (추가: 2026-09-14, 사용자 제안·선택)
 유튜브를 따로 검색하지 않고 앱 안에서 요리 영상을 보고 바로 레시피로 가져온다. **유튜브 전체가 아니라 고른 요리 채널만** 다룬다.
 - **위치:** 레시피 탭 칸 `추천 · 내 레시피 · 영상 · 양념 비율`(사용자 결정). 3b에서 링크 가져오기와 함께 만든다.
-- **채널:** 기본 채널(운영자가 고른 한국 요리 전문 채널 몇 개, 구현 시 채널 정책·콘텐츠 확인 후 확정) + 사용자가 채널 링크를 붙여 추가·삭제하는 **내 채널**(최대 30개). `youtube_channels`(id, channel_id UNIQUE, title, thumbnail_url, is_default, fetched_at), `user_channels`(user_id, channel_id, created_at, UNIQUE(user_id, channel_id)). 기본 채널은 사용자가 숨길 수 있다(`hidden`).
-- **목록:** 채널 업로드 재생목록을 `playlistItems.list`(1 unit)로 최근 영상 30개씩 가져와 서버에 캐시(채널별 6시간, `youtube_videos`: video_id UNIQUE, channel_id, title, thumbnail_url, published_at, fetched_at). 화면은 내 채널 + 기본 채널 영상을 최신순으로 합쳐 무한 스크롤(26절). **전체 검색(`search.list`, 100 units)은 쓰지 않고** 캐시된 제목 안에서만 찾는다(무료 한도 하루 10,000 units 보호). 20절 "유튜브 인기 레시피"도 이 채널 캐시를 쓰도록 바꾼다.
+- **채널:** 기본 채널(운영자가 고른 한국 요리 전문 채널 몇 개, 구현 시 채널 정책·콘텐츠 확인 후 확정) + 사용자가 채널 링크를 붙여 추가·삭제하는 **내 채널**(최대 30개). `youtube_channels`(id, channel_id UNIQUE, title, thumbnail_url, is_default, fetched_at), `user_channels`(user_id, channel_id, hidden(bool, 기본 false), created_at, UNIQUE(user_id, channel_id)). 기본 채널은 사용자가 숨길 수 있다: 기본 채널을 숨기면 `hidden=true` 행을 만들고, `hidden=false` 행은 사용자가 추가한 채널이다 (2026-09-14, 시안 승인). `youtube_channels`에 `uploads_playlist_id`, `video_count`(`영상 248개`)도 둔다.
+- **목록:** 채널 업로드 재생목록을 `playlistItems.list`(1 unit)로 최근 영상 30개씩 가져와 서버에 캐시(채널별 6시간, `youtube_videos`: video_id UNIQUE, channel_id, title, thumbnail_url, duration_seconds, description(앞 500자), published_at, fetched_at). 새로 받을 때 `channels.list`·`playlistItems.list`·`videos.list`(길이·설명) 각 1 unit, 요청당 오래된 채널 최대 3개. 화면은 내 채널 + 기본 채널 영상을 최신순으로 합쳐 무한 스크롤(26절). **전체 검색(`search.list`, 100 units)은 쓰지 않고** 캐시된 제목 안에서만 찾는다(무료 한도 하루 10,000 units 보호). 20절 "유튜브 인기 레시피"도 이 채널 캐시를 쓰도록 바꾼다(20절 반영함).
+- **영상 칸 화면 (2026-09-14, 시안 승인):** 검색 칸 `영상 제목에서 찾기`(캐시된 제목만), 채널 칩 줄(맨 앞 `채널` 설정 칩 → 요리 채널 화면, `전체`, 채널별 칩으로 거르기), 목록은 작은 썸네일 한 줄 행(128×72, 길이 배지, `채널 · 3일 전`).
+- **요리 채널 화면 (2026-09-14, 시안 승인):** 시트가 아닌 별도 화면 `#/recipes/channels`(`요리 채널 / 고른 채널의 새 영상만 보여줘요`): 채널 링크 붙여넣기 + `추가`, `내 채널 N / 30`(행마다 연빨강 배경·테두리 `빼기`), `기본 채널`(행마다 숨기기 스위치 `보여줘요`/`숨겼어요`).
 - **보기:** 영상을 누르면 유튜브 공식 삽입 플레이어(IFrame, `youtube-nocookie.com`)로 앱 안에서 재생한다. 영상 파일·자막은 저장하지 않는다. 화면에 YouTube 출처 표시.
-- **가져오기:** 플레이어 아래 `레시피로 가져오기` → 17절 링크 가져오기(`videos.list` 설명란, 1 unit)로 확인 화면 → 내 레시피 저장(source `youtube`, source_url).
+- **가져오기:** 영상 보기 화면(제목·채널·설명 앞부분) 하단 주 버튼 `레시피로 가져오기` → 17절 링크 가져오기(`videos.list` 설명란, 1 unit)로 `가져온 레시피 확인` → 내 레시피 저장(source `youtube`, source_url) (2026-09-14, 시안 승인).
 - **정책:** YouTube API 서비스 약관에 따라 저장한 메타데이터(제목·썸네일)는 주기적으로 새로 받고(30일 넘기지 않음), 채널이 삭제·비공개되면 목록에서 뺀다. `YOUTUBE_API_KEY`가 없으면 개발 모드에서는 예시 영상 목록(썸네일 없이 제목만), 운영에서는 영상 칸을 숨긴다.
 
 ## 18. 1c단계: 주방 도구 (추가: 2026-09-13)
@@ -269,8 +279,8 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **셀프**: 달력(주 보기 기본, 월 보기)에서 칸을 눌러 내 레시피·저장된 링크 레시피·자유 입력으로 채움. 주 단위 복사, N주 반복.
 - **다이어트 AI 초안**: 목표(하루 kcal, 단백질 위주 등 메모)와 기간 → Claude가 보유·임박 재료를 우선 써서 끼니별 레시피 초안(구조화 출력, 끼니별 추정 kcal). 확인 화면에서 칸별 수락/교체. kcal은 **AI 추정치**라고 화면에 명시.
   정확한 영양성분(식약처 식품영양성분 DB 연동)은 범위 밖, 필요해지면 추가. AI 일일 한도 recipe 그룹.
-- **유튜브 인기 레시피**: YouTube Data API v3 `search.list`(q=`레시피`, regionCode=KR, order=viewCount, publishedAfter=최근 30일, type=video) 결과를 목록으로 보여주고,
-  고른 영상은 17절 링크 가져오기로 레시피화해 식단 칸에 넣는다(`YOUTUBE_API_KEY`, 결과 1시간 캐시로 쿼터 절약).
+- **유튜브 인기 레시피**: ~~YouTube Data API v3 `search.list`(q=`레시피`, regionCode=KR, order=viewCount, publishedAfter=최근 30일, type=video)~~ → 17절 요리 채널 영상 캐시(최신순·제목 검색)를 쓴다(`search.list` 100 units는 쓰지 않음) (2026-09-14, 시안 승인). 결과를 목록으로 보여주고,
+  고른 영상은 17절 링크 가져오기로 레시피화해 식단 칸에 넣는다(`YOUTUBE_API_KEY`, 채널 캐시를 그대로 쓴다).
   인스타그램·틱톡은 인기 목록 공개 API가 없어 링크 공유로만 추가(17절).
 - **장보기 자동 생성**: 식단 기간의 레시피 재료 합산 → 냉장고 재고와 이름 매칭(4절)해 없는 것만 → `shopping_items`(source `meal_plan`, planned_on=해당 끼니 전날) 미리보기 후 추가.
 - 순서: 4단계(장보기) 다음, 5단계(조리 기록) 앞.
@@ -297,14 +307,17 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 
 ## 22. 3단계 추가: 양념 비율 계산기 (추가: 2026-09-13)
 - 레시피 탭 안 `양념 비율` 칸(추천 · 내 레시피 · 영상 · 양념 비율). 불고기·제육볶음·간장조림·초고추장·쌈장·갈비 양념 등 기본 양념을 제공하고 사용자가 추가·수정("내 비율").
-- `seasonings`: id, user_id(NULL이면 기본 제공), name, basis(`main_weight`|`servings`|`yield`), basis_amount(예: 100), basis_unit(`g`|`인분`|`컵`|`ml`), main_ingredient(선택, 예: `돼지고기`), source(`default`|`user`), source_note(기본 비율 출처), created_at.
-- `seasoning_items`: id, seasoning_id(CASCADE), name, amount(float), unit(`큰술`|`작은술`|`컵`|`ml`|`g`|`개`|`꼬집`), sort_order.
+- `seasonings`(사용자 "내 비율"만): id, user_id(NOT NULL, CASCADE), name(1~30자, UNIQUE(user_id, name)), basis(`main_weight`|`servings`|`yield`), basis_amount(예: 600), basis_unit(`g`|`인분`|`컵`|`ml`), main_ingredient(선택, `main_weight`일 때만, 예: `돼지고기`), items(JSON `[{name, amount(float), unit(`큰술`|`작은술`|`컵`|`ml`|`g`|`개`|`꼬집`)}]` 1~30개, 순서 = 표시 순서), created_at, updated_at. 사용자당 100개 (2026-09-14, 시안 승인).
+- **기본 양념은 DB가 아니라 화면 데이터 파일**(`frontend/src/data/seasoningPresets.ts`, 출처 메모 포함) (2026-09-14, 시안 승인). ~~user_id NULL 기본 행, `source`·`source_note` 칸, `seasoning_items` 테이블~~ — 운영자가 바꾸는 고정값이라 시드·마이그레이션이 필요 없고, 줄은 3a `recipes.ingredients`처럼 JSON이 단순하다. 기본 양념을 고치려면 `이 비율 고쳐서 내 비율로`(복사).
+- API: `GET/POST /api/seasonings`, `GET/PUT/DELETE /api/seasonings/<id>`.
 - 기준(사용자 결정, 모두 지원): 주재료 무게당(예: 고기 100g당), 인분(예: 2인분), 완성량(예: 양념장 1컵).
 - 계산: 입력량 ÷ basis_amount 배율로 각 재료 양을 늘리고 줄인다.
 - **숟가락 단위(사용자 강조):** 기준은 계량스푼(1큰술 15ml, 1작은술 5ml, 1컵 200ml). 결과는 실제로 뜰 수 있는 분수로 반올림해 표시(¼·⅓·½·⅔·¾, 예: `3½큰술`, `⅓작은술`), 큰술이 너무 작으면 작은술로 자동 환산(1큰술 = 3작은술).
-  집에서 쓰는 **밥숟가락 환산을 함께 표시**(예: `3큰술 (밥숟가락 약 4개)`) — 밥숟가락 1개 용량 기준치는 구현 시 출처를 확인해 정한다.
+  집에서 쓰는 **밥숟가락 환산을 함께 표시** — 밥숟가락 1개 용량 기준치는 구현 시 출처를 확인해 정한다(확인 전 12ml).
+  표시 (2026-09-14, 시안 승인): 계량 양을 굵게, 그 아래 회색 줄에 `밥숟가락 약 4개`(정수 반올림). 결과가 작은술이면 회색 줄에 큰술 환산(`1½작은술` / `½큰술`). ½컵(100ml) 이상은 컵, ¼작은술 미만은 `약간`.
 - 기본 비율 수치는 레시피마다 차이가 크므로 구현 시 신뢰할 수 있는 출처 여러 곳을 비교해 정하고 `source_note`에 남긴다. "취향에 따라 조절" 안내.
-- 연결: 레시피 재료로 가져오기, 없는 양념 재료는 장보기 목록에 담기(4단계).
+- **화면 (2026-09-14, 시안 승인):** 목록은 `내 비율`이 `기본 양념` 위, 보조 줄에 기준(`돼지고기 600g 기준 · 재료 6개`, `2인분 기준`, `완성 ½컵 기준`), 아래 `내 비율 만들기`. 계산 화면은 `돼지고기 얼마나 써요?` + 배율 배지(`×1.5`) + −/+ 스테퍼 + 빠른 칩(`300g · 600g · 900g · 1kg · 1.2kg`), `양념 · 계량스푼 기준` 목록, 안내 `1큰술은 15ml예요. 밥숟가락은 집마다 달라서 대략으로 보여줘요. 입맛에 맞게 조절해주세요.`, 버튼 `이 비율 고쳐서 내 비율로`. 폼은 이름, `무엇을 기준으로 할까요?`(주재료 무게·인분·완성량), 기준 재료·양, 양념 줄(이름·양·단위 고르기·빼기), `재료 추가`, 하단 `취소`/`저장`.
+- 연결: 레시피 재료로 가져오기(시안에 없어 3c 뒤로 미룸), 없는 양념 재료는 장보기 목록에 담기(4단계).
 
 ## 23. 사용성 점검 반영 — 인분·차감·장보기 수량 (추가: 2026-09-13, 사용자 선택)
 주부(4인 가족)·1인 가구 페르소나 점검(발견 D1~D5)에서 사용자가 설계 반영을 고른 항목. 이 절이 4·16·20절의 해당 내용보다 우선한다.
