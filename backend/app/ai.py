@@ -13,7 +13,7 @@ _COMMON = (
     "재료 이름은 한국어 일반 명칭으로 짧게 쓴다(브랜드·용량·광고 문구는 빼되, 알아보기 쉬운 이름은 남긴다. 예: 'CJ 햇반 210g' → '햇반'). "
     "quantity는 숫자, unit은 개·g·ml·팩·봉·병·모·단 같은 짧은 단위로 쓴다. "
     "location_kind는 이 재료를 보관해야 하는 곳이다: 냉장 보관은 fridge, 냉동식품은 freezer, 상온 보관(쌀·라면·햇반·양파·감자 등)은 room. "
-    "음식 재료가 하나도 없으면 items를 빈 배열로 둔다."
+    "고를 것이 하나도 없으면 items를 빈 배열로 둔다."
 )
 
 PROMPTS = {
@@ -35,7 +35,8 @@ PROMPTS = {
         "price는 그 상품의 결제 금액(원, 정수, 할인 반영)이다. 알 수 없으면 null. " + _COMMON
     ),
     "memo": (
-        "장을 보려고 손으로 쓴 메모, 마트 전단지, 상품 사진이다. 사야 할 식품 이름을 뽑아라. "
+        "장을 보려고 손으로 쓴 메모, 마트 전단지, 상품 사진이다. 사야 할 식품과 생활용품(휴지·세제·수세미·치약 등) 이름을 뽑아라. "
+        "household는 생활용품이면 true, 식품이면 false다. 생활용품의 location_kind는 room. "
         "메모에 수량이 있으면 quantity·unit으로, 없으면 1과 '개'. 전단지는 가격·할인·광고 문구를 빼고 상품 이름만. "
         "지워진 줄(두 줄 긋기)은 뺀다. 전단지에 동그라미·체크 표시가 있으면 표시된 것만 고른다. "
         "'1+1', '500g' 같은 묶음·용량 표기는 수량으로 쓰지 않는다. "
@@ -75,6 +76,7 @@ SAMPLES = {
         ("계란", 1, "판", "fridge"),
         ("참기름", 1, "병", "room"),
         ("양파", 3, "개", "room"),
+        ("수세미", 1, "개", "room"),  # 생활용품(household는 clean_result가 이름으로 채운다)
     ],
 }
 
@@ -93,6 +95,15 @@ class ScanItem(BaseModel):
 
 class ScanResult(BaseModel):
     items: list[ScanItem]
+    purchased_on: str | None
+
+
+class MemoScanItem(ScanItem):
+    household: bool  # 생활용품(장보기에는 담고 재고에는 넣지 않음)
+
+
+class MemoScanResult(BaseModel):
+    items: list[MemoScanItem]
     purchased_on: str | None
 
 
@@ -161,7 +172,7 @@ def extract(kind, image_bytes, media_type):
         {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image}},
         {"type": "text", "text": PROMPTS[kind]},
     ]
-    return _parse(content, ScanResult, 4096, f"scan {kind}")
+    return _parse(content, MemoScanResult if kind == "memo" else ScanResult, 4096, f"scan {kind}")
 
 
 class DraftIngredient(BaseModel):

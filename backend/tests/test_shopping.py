@@ -465,10 +465,10 @@ def test_stock_draft_only_checked_unstocked_with_location_reason(client, login, 
     assert res.get_json() == {
         "purchased_on": today.isoformat(),
         "items": [
-            {"id": with_location["id"], "name": "배추", "quantity": 1, "unit": "개", "location_id": locs["냉동실"], "location_reason": "item"},
-            {"id": same_name["id"], "name": "우유", "quantity": 2, "unit": "L", "location_id": locs["냉동실"], "location_reason": "same_name"},
-            {"id": scallion["id"], "name": "대파", "quantity": 1, "unit": "개", "location_id": locs["실온"], "location_reason": "same_name"},
-            {"id": fallback["id"], "name": "두부", "quantity": 1, "unit": "개", "location_id": locs["냉장실"], "location_reason": "default"},
+            {"id": with_location["id"], "name": "배추", "quantity": 1, "unit": "개", "household": False, "location_id": locs["냉동실"], "location_reason": "item"},
+            {"id": same_name["id"], "name": "우유", "quantity": 2, "unit": "L", "household": False, "location_id": locs["냉동실"], "location_reason": "same_name"},
+            {"id": scallion["id"], "name": "대파", "quantity": 1, "unit": "개", "household": False, "location_id": locs["실온"], "location_reason": "same_name"},
+            {"id": fallback["id"], "name": "두부", "quantity": 1, "unit": "개", "household": False, "location_id": locs["냉장실"], "location_reason": "default"},
         ],
     }
 
@@ -657,6 +657,57 @@ def test_mark_stocked_trims_past_300(client, login, app):
     stocked = {i["id"] for i in snapshot(client)["stocked"]}
     assert len(stocked) == 300
     assert set(ids) <= stocked and not oldest & stocked
+
+
+def test_household_defaults_from_name_and_can_be_overridden(client, login):
+    login()
+    assert add(client, name="주방세제").get_json()["household"] is True
+    assert add(client, name="두부").get_json()["household"] is False
+    assert add(client, name="수세미오이", household=False).get_json()["household"] is False
+    item = add(client, name="대나무 바구니", household=True).get_json()
+    assert item["household"] is True
+    assert add(client, name="휴지", household="yes").get_json() == {"error": "잘못된 요청이에요."}
+
+    url = f"/api/shopping/items/{item['id']}"
+    assert client.patch(url, json={"household": False}).get_json()["household"] is False
+    assert client.patch(url, json={"name": "휴지"}).get_json()["household"] is False  # 고치기는 보낸 때만 바꾼다
+    assert client.patch(url, json={"household": 1}).status_code == 400
+    assert client.patch(url, json={"household": True, "done": True, "changed_at": iso(datetime.now(timezone.utc))}).status_code == 400
+
+    res = client.post("/api/shopping/items/bulk", json={"source": "memo", "items": [{"name": "치약"}, {"name": "양파"}, {"name": "행주", "household": False}]})
+    assert [(i["name"], i["household"]) for i in res.get_json()["created"]] == [("치약", True), ("양파", False), ("행주", False)]
+    assert {i["name"]: i["household"] for i in snapshot(client)["items"]}["치약"] is True
+
+
+def test_stock_skip_rows_only_mark_stocked(client, login, app):
+    user = login()
+    locs = locations_by_name(client)
+    tofu = checked(client, "두부")
+    sponge = checked(client, "수세미")
+    tissue = checked(client, "휴지")
+    draft = client.get("/api/shopping/stock-draft").get_json()["items"]
+    assert [(i["name"], i["household"]) for i in draft] == [("두부", False), ("수세미", True), ("휴지", True)]
+
+    assert stock(client, stock_row(tofu), {"id": sponge["id"], "skip": "yes"}).status_code == 400
+    res = stock(client, stock_row(tofu, location_id=locs["냉장실"]), {"id": sponge["id"], "skip": True}, {"id": tissue["id"], "skip": True})
+    assert (res.status_code, res.get_json()) == (201, {"created": 1})
+    assert [i["name"] for i in client.get("/api/ingredients").get_json()] == ["두부"]
+    assert {i["id"] for i in snapshot(client)["stocked"]} == {tofu["id"], sponge["id"], tissue["id"]}
+
+    bad = checked(client, "우유")
+    soap = checked(client, "비누")
+    res = stock(client, {"id": soap["id"], "skip": True}, stock_row(bad, quantity=0))
+    assert res.get_json()["errors"] == [{"index": 1, "error": "수량은 0보다 커야 해요."}]  # 틀리면 산 것으로도 안 옮긴다
+    with app.app_context():
+        assert db.session.get(ShoppingItem, soap["id"]).stocked_at is None
+        assert Ingredient.query.filter_by(user_id=user.id).count() == 1
+        Ingredient.query.filter_by(user_id=user.id).delete()
+        StorageLocation.query.filter_by(user_id=user.id).delete()
+        db.session.commit()
+    assert stock(client, {"id": soap["id"], "skip": True}).status_code == 201  # 산 것으로만 옮기면 보관 위치가 없어도 된다
+    with app.app_context():
+        assert db.session.get(ShoppingItem, soap["id"]).stocked_at is not None
+        assert Ingredient.query.filter_by(user_id=user.id).count() == 0
 
 
 def test_stock_without_any_location(client, login, app):

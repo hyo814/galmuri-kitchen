@@ -137,6 +137,7 @@ class ShoppingItem(db.Model):
     location = db.relationship("StorageLocation")
     source = db.Column(db.String(10), nullable=False, default="manual")  # manual | recipe | staple | urgent | meal_plan | memo
     source_label = db.Column(db.String(60))  # 태그용(레시피 이름 등)
+    household = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())  # 생활용품: 재고에 넣지 않고 산 것으로만
     done_at = db.Column(db.DateTime(timezone=True))
     done_changed_at = db.Column(db.DateTime(timezone=True))  # 체크·해제를 마지막으로 바꾼 기기 시각(스펙 19절)
     stocked_at = db.Column(db.DateTime(timezone=True))

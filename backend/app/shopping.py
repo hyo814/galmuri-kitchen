@@ -12,6 +12,7 @@ from werkzeug.exceptions import BadRequest
 
 from . import storage
 from .auth import get_owned_or_404, login_required
+from .household import is_household
 from .ingredients import check_ingredient_cap, seoul_today
 from .ingredients import parse_fields as ingredient_fields
 from .locations import choose_location, owned_location, user_locations
@@ -44,7 +45,7 @@ MAX_PLACE = 30
 NOTE_CONFLICT = "다른 기기에서 먼저 고친 메모가 있어요."
 
 LIST_CHANGED = "목록이 방금 바뀌었어요. 다시 불러와주세요."
-EDIT_KEYS = ("name", "quantity", "unit", "planned_on", "location_id")
+EDIT_KEYS = ("name", "quantity", "unit", "planned_on", "location_id", "household")
 STOCK_KEYS = ("name", "quantity", "unit", "location_id")
 NO_LOCATIONS = "보관 위치를 먼저 만들어주세요."  # 시안 StockIn에 유통기한·가격 칸이 없어 받지 않는다
 CHECK_KEYS = ("done", "changed_at")
@@ -93,6 +94,7 @@ def item_json(item):
         "location_name": item.location.name if item.location_id else None,
         "source": item.source,
         "source_label": item.source_label,
+        "household": item.household,
         "done_at": _iso(item.done_at),
         "done_changed_at": _iso(item.done_changed_at),
         "stocked_at": _iso(item.stocked_at),
@@ -143,7 +145,8 @@ def _trim_stocked(user_id):
 
 
 def parse_fields(data, creating, locations=None):
-    """추가·일괄 담기·고치기 공통 칸. 고치기(creating=False)는 보낸 칸만 바꾸고, planned_on·location_id는 null로 비운다."""
+    """추가·일괄 담기·고치기 공통 칸. 고치기(creating=False)는 보낸 칸만 바꾸고, planned_on·location_id는 null로 비운다.
+    household(생활용품)는 참/거짓, 추가할 때 안 보내면 이름으로 짐작한다(고치기는 보낸 때만 바꾼다)."""
     if not isinstance(data, dict):
         abort(400, BAD_REQUEST)
     fields = {}
@@ -181,6 +184,12 @@ def parse_fields(data, creating, locations=None):
         else:
             location = choose_location(locations, value) if locations is not None else owned_location(value)
             fields["location_id"] = location.id
+    if "household" in data:
+        if not isinstance(data["household"], bool):
+            abort(400, BAD_REQUEST)
+        fields["household"] = data["household"]
+    elif creating:
+        fields["household"] = is_household(fields["name"])
     return fields
 
 
@@ -507,7 +516,15 @@ def stock_draft():
         else:
             location_id, reason = fallback, "default" if fallback is not None else "none"
         result.append(
-            {"id": item.id, "name": item.name, "quantity": item.quantity, "unit": item.unit, "location_id": location_id, "location_reason": reason}
+            {
+                "id": item.id,
+                "name": item.name,
+                "quantity": item.quantity,
+                "unit": item.unit,
+                "household": item.household,
+                "location_id": location_id,
+                "location_reason": reason,
+            }
         )
     res = jsonify(purchased_on=seoul_today().isoformat(), items=result)
     res.headers["Cache-Control"] = "no-store"
@@ -517,13 +534,14 @@ def stock_draft():
 @bp.post("/items/stock")
 @login_required
 def stock_items():
-    """체크한 항목을 재고로 옮긴다. 재료 생성과 stocked_at 기록은 한 트랜잭션이고, 하나라도 틀리면 아무것도 하지 않는다."""
+    """체크한 항목을 재고로 옮긴다. 재료 생성과 stocked_at 기록은 한 트랜잭션이고, 하나라도 틀리면 아무것도 하지 않는다.
+    `{id, skip: true}` 줄은 재료를 만들지 않고 산 것으로만 옮긴다(생활용품 등)."""
     data = _json_object()
     rows = data.get("items")
     # 체크한 항목은 목록 상한(300개)까지 있을 수 있어 한 번에 모두 받는다(재료 2000개 상한은 그대로).
     if not isinstance(rows, list) or not 1 <= len(rows) <= MAX_SHOPPING_ITEMS:
         abort(400, f"재료를 1~{MAX_SHOPPING_ITEMS}개 보내주세요.")
-    if not all(isinstance(row, dict) for row in rows):
+    if not all(isinstance(row, dict) and isinstance(row.get("skip", False), bool) for row in rows):
         abort(400, BAD_REQUEST)
     ids = _ids_or_400([row.get("id") for row in rows], MAX_SHOPPING_ITEMS)
     if len(set(ids)) != len(ids):
@@ -548,10 +566,12 @@ def stock_items():
         abort(400, LIST_CHANGED)
 
     locations = user_locations(g.user.id)
-    if not locations:
+    if not locations and not all(row.get("skip") for row in rows):
         abort(400, NO_LOCATIONS)
     parsed, errors = [], []
     for index, row in enumerate(rows):
+        if row.get("skip"):
+            continue
         body = {key: row[key] for key in STOCK_KEYS if key in row}
         try:
             parsed.append(ingredient_fields({**body, "purchased_on": purchased_on.isoformat()}, creating=True, locations=locations))

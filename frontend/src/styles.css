@@ -3345,6 +3345,32 @@ button.row-btn > svg {
   pointer-events: none;
 }
 
+/* 생활용품 태그와 줄마다 `재고에 넣기` 켜기·끄기(끄면 산 것으로만 옮김) */
+.badge.sh-in-tag {
+  align-self: flex-start;
+  height: 22px;
+  margin-top: 2px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.sh-in-toggle {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+/* `2개 넣기 · 1개는 산 것으로만`이 두 줄이 돼도 낱말 가운데서 끊지 않는다 */
+.btn.sh-in-submit {
+  word-break: keep-all;
+  line-height: 22px;
+}
+
 .sh-in-row .rc-err {
   grid-column: 1 / -1;
   margin: 0;

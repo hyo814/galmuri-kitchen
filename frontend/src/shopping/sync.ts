@@ -20,6 +20,8 @@ export type Ref = { id: number } | { client_id: string };
 export interface ItemFields {
   name: string; quantity: number; unit: string; planned_on: string | null; location_id?: number | null;
   source?: ShoppingSource; source_label?: string | null;
+  /** 생활용품. 안 보내면 서버가 이름으로 짐작한다 */
+  household?: boolean;
 }
 /** 고치기(PATCH)는 source를 받지 않는다 */
 export type EditFields = Partial<Omit<ItemFields, "source" | "source_label">>;
@@ -148,10 +150,10 @@ export function applyQueue(snapshot: ShoppingSnapshot, queue: Op[]): ShoppingVie
     switch (op.op) {
       case "add": // 보냈지만 응답을 못 받은 add는 서버 항목이 이미 있으니 다시 만들지 않는다
         if (!items.some((i) => i.client_id === op.client_id)) {
-          const { name, quantity, unit, planned_on, location_id, source, source_label } = op.fields;
+          const { name, quantity, unit, planned_on, location_id, source, source_label, household } = op.fields;
           items.push({
             client_id: op.client_id, name, quantity, unit, planned_on, location_id: location_id ?? null, location_name: null,
-            source: source ?? "manual", source_label: source_label ?? null,
+            source: source ?? "manual", source_label: source_label ?? null, household: household ?? false, // ponytail: 안 보낸 추가는 서버 짐작 전이라 false
             done_at: null, done_changed_at: null, stocked_at: null, created_at: op.at, pending: true,
           });
         }
@@ -335,6 +337,12 @@ export function parseQuantityText(text: string): { quantity: number; unit: strin
 
 /** 1,"모" → "1모", 0.5,"봉" → "½봉", 12.5,"g" → "12.5g" (parseQuantityText로 되돌리면 같은 값) */
 export const quantityText = (quantity: number, unit: string) => amountInputText(quantity) + unit;
+
+/** 재고에 넣기 버튼: 재료로 넣을 개수와 산 것으로만 옮길 개수 */
+export function stockButtonText(stock: number, skip: number): string {
+  if (!skip) return `${stock}개 넣기`;
+  return stock ? `${stock}개 넣기 · ${skip}개는 산 것으로만` : `${skip}개 산 것으로 옮기기`;
+}
 
 /** 시안 ShoppingList 태그(.sh-tag + tone 클래스). 직접 담은 항목은 태그 없음 */
 export function sourceTag(item: { source: string; source_label: string | null }): { text: string; tone: "" | "info" | "warn" } | null {
