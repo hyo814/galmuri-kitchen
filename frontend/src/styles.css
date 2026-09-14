@@ -1860,3 +1860,224 @@ button.row-btn > svg {
   max-width: 480px;
   margin: 0 auto;
 }
+
+/* ---- 3c단계 양념 비율 (시안 docs/design/recipes-3b3c/Seasoning*.dc.html, r3- 접두사) ---- */
+.r3-sechead {
+  margin: 24px 20px 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.r3-sechead + .list {
+  margin-top: 8px;
+}
+
+.r3-calc-head {
+  padding-top: 28px;
+}
+
+.r3-basis {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+/* 스테퍼 가운데 칸: 값을 눌러 바로 입력한다("900 g") */
+.r3-amount {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: text;
+  font-variant-numeric: tabular-nums;
+}
+
+.r3-amount:focus-within {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.r3-amount input {
+  min-width: 2ch;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  font-size: 17px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  field-sizing: content;
+}
+
+.r3-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.r3-quick button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--field);
+  color: var(--chip-text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* 보이는 높이는 시안 36px, 누르는 영역은 위아래로 늘려 44px */
+.r3-quick button::after {
+  content: "";
+  position: absolute;
+  inset: -4px 0;
+}
+
+.r3-quick button[aria-pressed="true"] {
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.r3-ratio {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 7px;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.r3-sitems {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.r3-sitems li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  border-top: 1px solid var(--line);
+}
+
+.r3-sitems li:first-child {
+  border-top: 0;
+}
+
+.r3-sname {
+  font-size: 17px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.r3-samt {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.r3-samt b {
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.r3-samt span {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-3);
+}
+
+.r3-sec-msg {
+  margin: 12px 0 0;
+  color: var(--text-2);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.r3-note {
+  display: flex;
+  gap: 8px;
+  margin: 12px 20px 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--neutral-tint);
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 21px;
+  word-break: keep-all;
+}
+
+.r3-note svg {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.r3-cite {
+  margin: 8px 20px 0;
+  padding: 0 14px;
+}
+
+/* 폼 */
+.r3-basis-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.r3-unit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px 92px 44px;
+  align-items: center;
+  gap: 6px;
+}
+
+.r3-unit-row .input {
+  height: 52px;
+  padding: 0 12px;
+  font-size: 16px;
+}
+
+.r3-unit-row input:nth-child(2) {
+  text-align: center;
+}
+
+.r3-sel {
+  position: relative;
+  display: block;
+}
+
+.r3-sel select {
+  appearance: none;
+  padding-right: 28px;
+}
+
+.r3-sel svg {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  color: var(--text-3);
+  transform: translateY(-50%) rotate(90deg);
+  pointer-events: none;
+}
+
+.r3-unit-row .icon-btn {
+  color: var(--text-3);
+}

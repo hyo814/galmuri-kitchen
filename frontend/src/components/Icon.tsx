@@ -106,6 +106,12 @@ const PATHS = {
       <path d="M9 21h6M9.5 3.5c-.9 1.2.9 2.3 0 3.5M14.5 3.5c-.9 1.2.9 2.3 0 3.5" />
     </>
   ),
+  spoon: (
+    <>
+      <ellipse cx="12" cy="7" rx="4" ry="4.5" />
+      <path d="M12 11.5V21" />
+    </>
+  ),
   bookmark: <path d="M6.5 3.5h11v17L12 16.5l-5.5 4z" />,
   trash: (
     <>

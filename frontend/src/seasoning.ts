@@ -73,7 +73,7 @@ export function basisLabel(s: Pick<Seasoning, "basis" | "basis_amount" | "basis_
 /** 계산 화면 배지: 1.5 → "×1.5", 1 → "×1", 1/3 → "×0.33" */
 export const ratioLabel = (factor: number) => `×${Number(factor.toFixed(2))}`;
 
-/** 폼 양 입력: "½"·"1½"·"1/2"·"1 1/2"·"0.5"·"3" → 숫자, 비었거나 0 이하·10000 초과·틀린 모양·"1/0" → null */
+/** 폼 양 입력: "½"·"1½"·"1/2"·"1 1/2"·"0.5"·"3" → 숫자, 비었거나 0.01 미만·10000 초과·틀린 모양·"1/0" → null (서버 검사와 같은 범위) */
 export function parseAmountInput(text: string): number | null {
   const match = text.trim().match(/^(?:(\d+(?:\.\d+)?)|(\d+)?\s*([¼⅓½⅔¾])|(?:(\d+)\s+)?(\d+)\/(\d+))$/);
   if (!match) return null;
@@ -81,5 +81,12 @@ export function parseAmountInput(text: string): number | null {
   const value = decimal !== undefined ? Number(decimal)
     : symbol !== undefined ? Number(symbolWhole ?? 0) + SNAPS.find(([, s]) => s === symbol)![0]
     : Number(mixedWhole ?? 0) + Number(num) / Number(denom);
-  return value > 0 && value <= 10000 ? value : null;
+  return value >= 0.01 && value <= 10000 ? value : null;
+}
+
+/** 입력칸에 채울 양: 분수로 적어도 값이 거의 그대로면 분수(0.5 → "½", ⅔ → "⅔"), 아니면 숫자 그대로(12.5 → "12.5", 0.03 → "0.03") */
+export function amountInputText(value: number): string {
+  const text = formatAmountNumber(value);
+  const back = parseAmountInput(text);
+  return back !== null && Math.abs(back - value) < 0.01 ? text : String(value);
 }
