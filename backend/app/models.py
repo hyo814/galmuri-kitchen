@@ -157,3 +157,21 @@ class Recipe(db.Model):
     image_url = db.Column(db.String(500))
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class Seasoning(db.Model):
+    """사용자 "내 비율"(스펙 22절). 기본 양념은 화면 데이터 파일(frontend/src/data/seasoningPresets.ts)에 있다."""
+
+    __tablename__ = "seasonings"
+    __table_args__ = (db.UniqueConstraint("user_id", "name"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = db.Column(db.String(30), nullable=False)
+    basis = db.Column(db.String(20), nullable=False)  # main_weight | servings | yield
+    basis_amount = db.Column(db.Float, nullable=False)
+    basis_unit = db.Column(db.String(10), nullable=False)  # g | 인분 | 컵 | ml
+    main_ingredient = db.Column(db.String(50))  # main_weight일 때만
+    items = db.Column(db.JSON, nullable=False, default=list)  # [{name, amount, unit}], 순서 = 표시 순서
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)

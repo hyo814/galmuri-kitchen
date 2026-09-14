@@ -157,6 +157,24 @@ def test_ingredient_price_migration_adds_and_removes_column(app):
         assert "price" not in columns
 
 
+def test_seasonings_migration_adds_and_removes_table(app):
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="b1b1c1d1e1f1")
+        with db.engine.connect() as conn:
+            inspector = sa.inspect(conn)
+            fks = {fk["referred_table"]: fk["options"].get("ondelete") for fk in inspector.get_foreign_keys("seasonings")}
+            uniques = {tuple(u["column_names"]) for u in inspector.get_unique_constraints("seasonings")}
+            index_names = {ix["name"] for ix in inspector.get_indexes("seasonings")}
+        assert fks == {"users": "CASCADE"}
+        assert ("user_id", "name") in uniques
+        assert "ix_seasonings_user_id" in index_names
+
+        downgrade(directory=MIGRATIONS, revision="a8b8c8d8e8f8")
+        with db.engine.connect() as conn:
+            tables = set(sa.inspect(conn).get_table_names())
+        assert "seasonings" not in tables
+
+
 def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)
@@ -172,5 +190,6 @@ def test_upgrade_to_head_and_back_to_base(app):
             "ai_calls",
             "public_recipes",
             "recipes",
+            "seasonings",
         } <= tables
         downgrade(directory=MIGRATIONS, revision="base")

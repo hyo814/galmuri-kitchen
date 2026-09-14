@@ -2,7 +2,7 @@ import base64
 import binascii
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from urllib.parse import urlparse
 
 from flask import Blueprint, abort, g, jsonify, request
@@ -15,7 +15,7 @@ from .ingredients import seasoning_names, seoul_today, status_of, user_rules
 from .matching import match_prepared, prepare
 from .models import Ingredient, PublicRecipe, Recipe, db
 from .recipe_parse import ingredient_key
-from .validation import integer, text
+from .validation import integer, iso_datetime, text
 
 bp = Blueprint("recipes", __name__, url_prefix="/api")
 
@@ -45,10 +45,6 @@ def annotate(ingredients, keys, stock):
         matched, have = _match_key_fast(prepare(key), prepared_stock)
         rows.append({"name": item["name"], "amount": item["amount"], "have": have, "matched_name": matched})
     return rows
-
-
-def _iso(value):
-    return (value if value.tzinfo else value.replace(tzinfo=timezone.utc)).isoformat()  # SQLite는 tz 없이 돌려준다
 
 
 def recipe_json(recipe, stock):
@@ -91,7 +87,7 @@ def list_json(recipe):
         "source": recipe.source,
         "image_url": recipe.image_url,
         "ingredient_count": len(recipe.ingredients),
-        "updated_at": _iso(recipe.updated_at),
+        "updated_at": iso_datetime(recipe.updated_at),
     }
 
 
@@ -234,10 +230,10 @@ def _rank_cache_signature(user_id, stock):
         tuple(sorted(stock)),
         mine_count,
         mine_max_id,
-        _iso(mine_max_updated) if mine_max_updated else None,
+        iso_datetime(mine_max_updated) if mine_max_updated else None,
         public_count,
         public_max_id,
-        _iso(public_max_updated) if public_max_updated else None,
+        iso_datetime(public_max_updated) if public_max_updated else None,
     )
 
 
@@ -340,7 +336,7 @@ def recommendations():
 
 
 def _encode_cursor(recipe):
-    return base64.urlsafe_b64encode(f"{_iso(recipe.updated_at)}|{recipe.id}".encode()).decode()
+    return base64.urlsafe_b64encode(f"{iso_datetime(recipe.updated_at)}|{recipe.id}".encode()).decode()
 
 
 def _decode_cursor(value):
