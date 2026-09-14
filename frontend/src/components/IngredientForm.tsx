@@ -338,7 +338,7 @@ export default function IngredientForm({
       {deleting && initial && (
         <Sheet
           title={`${withJosa(initial.name, "을", "를")} 삭제할까요?`}
-          description="왜 지우는지 고르면 이번 달 리포트에 반영해요. 안 골라도 괜찮아요."
+          description="왜 지우는지 고르면 이번 달 집밥 리포트에 반영해요. 안 골라도 괜찮아요."
           onClose={() => setDeleting(null)}
         >
           <div className="mo-chips" role="group" aria-label="지우는 이유 (선택)">
