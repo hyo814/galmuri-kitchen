@@ -166,8 +166,9 @@ def parse_recipe(data):
     return fields
 
 
-def _check_recipe_cap():
-    if Recipe.query.filter_by(user_id=g.user.id).count() >= MAX_RECIPES_PER_USER:
+def check_recipe_cap(adding=1):
+    """adding개를 더 저장하면 상한을 넘는지(AI 식단 초안 넣기는 새 요리 여러 개를 한 번에 만든다)."""
+    if Recipe.query.filter_by(user_id=g.user.id).count() + adding > MAX_RECIPES_PER_USER:
         abort(400, f"레시피는 {MAX_RECIPES_PER_USER}개까지 저장할 수 있어요.")
 
 
@@ -418,7 +419,7 @@ def create_recipe():
     if source not in SOURCES:
         abort(400, "잘못된 요청이에요.")
     fields.update(source=source, image_url=_image_url(data.get("image_url"), source))
-    _check_recipe_cap()
+    check_recipe_cap()
     recipe = Recipe(user_id=g.user.id, **fields)
     db.session.add(recipe)
     db.session.commit()
@@ -463,7 +464,7 @@ def save_public_recipe(recipe_id):
     existing = Recipe.query.filter_by(user_id=g.user.id, public_recipe_id=public.id).first()
     if existing:
         return jsonify(recipe_json(existing, inventory(g.user.id)))
-    _check_recipe_cap()
+    check_recipe_cap()
     recipe = Recipe(
         user_id=g.user.id,
         title=public.title[:60].strip(),
