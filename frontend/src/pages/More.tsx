@@ -1,12 +1,34 @@
 import { useState } from "react";
+import type { AiUsage, User } from "../api";
 import Icon from "../components/Icon";
 import Sheet from "../components/Sheet";
 import { useInstallPrompt } from "../install";
 import { navigate } from "../useHashRoute";
+import { useResource } from "../useResource";
 
 export const MORE_ITEMS = [{ path: "/tools", label: "주방 도구", desc: "프라이팬 코팅 점검 같은 도구 관리" }];
 
-export default function More() {
+/** 오늘 AI 사용량(스펙 27절). 키가 없는 운영 설정(scan off)에서는 쓸 수 없으니 보이지 않는다 */
+function AiUsageRow() {
+  const { data } = useResource<AiUsage>("/api/ai-usage");
+  return (
+    <li>
+      <div className="row-btn">
+        <Icon name="sparkle" size={20} color="var(--text-2)" />
+        <span className="row-main">
+          <span className="row-title">AI 사용량</span>
+          <span className="row-sub">
+            {data
+              ? `오늘 사진 인식 ${data.scan.used}/${data.scan.limit}회 · AI 레시피 ${data.recipe.used}/${data.recipe.limit}회`
+              : "불러오는 중…"}
+          </span>
+        </span>
+      </div>
+    </li>
+  );
+}
+
+export default function More({ user }: { user: User }) {
   const { canPrompt, installed, prompt } = useInstallPrompt();
   const [showInstallHelp, setShowInstallHelp] = useState(false);
 
@@ -52,6 +74,7 @@ export default function More() {
             </a>
           </li>
         ))}
+        {user.scan !== "off" && <AiUsageRow />}
       </ul>
 
       {showInstallHelp && (

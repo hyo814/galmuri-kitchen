@@ -1,5 +1,5 @@
-import { Fragment, useState, type FormEvent } from "react";
-import { api, type MyRecipe, type RecipeInput } from "../api";
+import { Fragment, useEffect, useState, type FormEvent } from "react";
+import { api, type MyRecipe, type RecipeDraft, type RecipeInput } from "../api";
 import Icon from "../components/Icon";
 import { useAsyncAction } from "../useAsyncAction";
 import { goBack, navigate } from "../useHashRoute";
@@ -25,13 +25,54 @@ const newKey = () => ++lastKey;
 
 // U-B1: 만드는 법 textarea가 내용만큼 자란다. field-sizing: content(styles.css)가 안 먹는 브라우저를 위한 JS 보강 —
 // ref(마운트 시)와 onChange(입력마다) 양쪽에서 부른다.
-function autoGrowTextarea(el: HTMLTextAreaElement | null) {
+export function autoGrowTextarea(el: HTMLTextAreaElement | null) {
   if (!el) return;
   el.style.height = "auto";
   el.style.height = `${el.scrollHeight}px`;
 }
 
-function BackLink({ onClick }: { onClick: () => void }) {
+// ponytail: 가져온 초안은 모듈 변수로 폼에 넘긴다(새로고침하면 빈 폼). 문제되면 sessionStorage로.
+let pendingDraft: RecipeDraft | null = null;
+
+/** 링크·글에서 가져온 초안을 `가져온 레시피 확인` 폼으로 연다 */
+export function openDraft(draft: RecipeDraft, { replace = false } = {}) {
+  pendingDraft = draft;
+  navigate("/recipes/new", { replace });
+}
+
+const SOURCE_NAME: Record<RecipeDraft["source"], string> = { youtube: "유튜브", instagram: "인스타그램", blog: "블로그", text: "" };
+
+/** 가져온 링크의 출처 카드: 썸네일(외부 사진이라 리퍼러 없이, 저장하지 않음) · 제목 · `유튜브 · 채널명` · 원본 */
+function SourceCardView({ draft }: { draft: RecipeDraft }) {
+  const card = draft.source_card;
+  if (!card) return null;
+  const sub = [SOURCE_NAME[draft.source], card.author].filter(Boolean).join(" · ");
+  const url = /^https?:\/\//i.test(draft.source_url ?? "") ? draft.source_url : null;
+  return (
+    <div className="r3-source">
+      <span className="r3-source-thumb">
+        {card.thumbnail_url ? (
+          <img src={card.thumbnail_url} alt="" loading="lazy" referrerPolicy="no-referrer" />
+        ) : (
+          <Icon name={draft.source === "youtube" ? "play" : "link"} size={16} />
+        )}
+      </span>
+      <span className="row-main">
+        <span className="row-title">{card.title}</span>
+        {sub && <span className="row-sub">{sub}</span>}
+      </span>
+      {url && (
+        <a href={url} target="_blank" rel="noopener noreferrer">
+          <Icon name="external" size={16} />
+          원본
+          <span className="sr-only"> (새 창에서 열려요)</span>
+        </a>
+      )}
+    </div>
+  );
+}
+
+function BackLink({ onClick, label = "레시피" }: { onClick: () => void; label?: string }) {
   return (
     <a
       className="back-link"
@@ -42,19 +83,24 @@ function BackLink({ onClick }: { onClick: () => void }) {
       }}
     >
       <Icon name="back" size={18} />
-      레시피
+      {label}
     </a>
   );
 }
 
-function RecipeEditor({ initial }: { initial: MyRecipe | null }) {
-  const [title, setTitle] = useState(initial?.title ?? "");
-  const [servings, setServings] = useState(initial?.servings ?? 2);
+function RecipeEditor({ initial, draft = null }: { initial: MyRecipe | null; draft?: RecipeDraft | null }) {
+  const start = initial ?? draft;
+  const [title, setTitle] = useState(start?.title ?? "");
+  const [servings, setServings] = useState(start?.servings ?? 2);
   const [rows, setRows] = useState<IngredientRow[]>(() =>
-    (initial?.ingredients ?? [{ name: "", amount: "" }]).map((item) => ({ key: newKey(), name: item.name, amount: item.amount })),
+    (start?.ingredients.length ? start.ingredients : [{ name: "", amount: "" }]).map((item) => ({
+      key: newKey(),
+      name: item.name,
+      amount: item.amount,
+    })),
   );
   const [steps, setSteps] = useState<StepRow[]>(() =>
-    (initial?.steps.length ? initial.steps : [""]).map((text) => ({ key: newKey(), text })),
+    (start?.steps.length ? start.steps : [""]).map((text) => ({ key: newKey(), text })),
   );
   const [invalidKey, setInvalidKey] = useState<number | null>(null); // 양만 있고 이름이 빈 재료 줄
   const [focusKey, setFocusKey] = useState<number | null>(null); // 방금 추가한 줄에 커서
@@ -69,7 +115,8 @@ function RecipeEditor({ initial }: { initial: MyRecipe | null }) {
     steps: steps.map((step) => step.text.trim()).filter(Boolean),
   });
   const [startJson] = useState(() => JSON.stringify(input()));
-  const dirty = JSON.stringify(input()) !== startJson;
+  // 가져온 초안은 고치지 않았어도 나가면 사라지므로(AI 횟수도 이미 썼다) 늘 확인한다
+  const dirty = !!draft || JSON.stringify(input()) !== startJson;
 
   // ponytail: 앱 안의 뒤로·취소만 확인한다. 폰의 뒤로가기 버튼은 막을 수 없어(popstate는 취소 불가) 그대로 나간다.
   const leave = () => {
@@ -103,7 +150,7 @@ function RecipeEditor({ initial }: { initial: MyRecipe | null }) {
       (invalidInput as HTMLInputElement | null)?.focus();
       return;
     }
-    const body = input();
+    const body = draft ? { ...input(), source: draft.source, source_url: draft.source_url } : input();
     if (body.ingredients.length === 0) {
       setError("재료를 하나 이상 입력해주세요.");
       return;
@@ -121,10 +168,20 @@ function RecipeEditor({ initial }: { initial: MyRecipe | null }) {
 
   return (
     <main className="page">
-      <BackLink onClick={leave} />
+      <BackLink onClick={leave} label={draft ? "내 레시피" : "레시피"} />
       <header className="topbar">
-        <h1>{initial ? "레시피 수정" : "레시피 추가"}</h1>
+        {draft ? (
+          <div>
+            <h1>가져온 레시피 확인</h1>
+            <p className="summary">
+              AI가 정리했어요. 틀린 곳을 고친 뒤 저장해주세요{draft.sample && " · 예시 초안이에요"}
+            </p>
+          </div>
+        ) : (
+          <h1>{initial ? "레시피 수정" : "레시피 추가"}</h1>
+        )}
       </header>
+      {draft && <SourceCardView draft={draft} />}
 
       <form className="rc-page-form" onSubmit={submit}>
         <section className="rc-sec rc-form">
@@ -137,7 +194,7 @@ function RecipeEditor({ initial }: { initial: MyRecipe | null }) {
               required
               maxLength={60}
               placeholder="예: 애호박볶음"
-              autoFocus={!initial}
+              autoFocus={!start}
             />
           </label>
           <div className="field">
@@ -172,7 +229,10 @@ function RecipeEditor({ initial }: { initial: MyRecipe | null }) {
 
         <section className="rc-sec" aria-labelledby="recipe-ingredients">
           <div className="rc-sec-head">
-            <h2 id="recipe-ingredients">재료</h2>
+            <h2 id="recipe-ingredients">
+              재료
+              {draft && <span className="r3-count">{rows.filter((row) => row.name.trim()).length}개</span>}
+            </h2>
             <span className="hint">양은 비워도 괜찮아요</span>
           </div>
           <div className="rc-rows">
@@ -315,6 +375,15 @@ function EditRecipe({ id }: { id: string }) {
 }
 
 /** /recipes/new (id 없음) · /recipes/mine/:id/edit */
+function NewRecipe() {
+  // StrictMode가 초기화 함수를 두 번 불러도 같은 초안을 받게, 비우는 건 effect에서 한다
+  const [draft] = useState(() => pendingDraft);
+  useEffect(() => {
+    pendingDraft = null;
+  }, []);
+  return <RecipeEditor initial={null} draft={draft} />;
+}
+
 export default function RecipeForm({ id }: { id?: string }) {
-  return id ? <EditRecipe id={id} /> : <RecipeEditor initial={null} />;
+  return id ? <EditRecipe id={id} /> : <NewRecipe />;
 }

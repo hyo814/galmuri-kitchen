@@ -6,6 +6,7 @@ import ComingSoon from "./pages/ComingSoon";
 import Fridge from "./pages/Fridge";
 import Login from "./pages/Login";
 import More from "./pages/More";
+import RecipeAi, { RecipeAiDetail, resetAiRecipes } from "./pages/RecipeAi";
 import RecipeDetail from "./pages/RecipeDetail";
 import RecipeForm from "./pages/RecipeForm";
 import SeasoningCalc from "./pages/SeasoningCalc";
@@ -24,18 +25,20 @@ interface PageProps {
 // 경로 → 화면. 새 화면은 useHashRoute의 ROUTES와 여기에 한 줄씩 추가한다.
 const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
   "/": ({ user, onLogout }) => <Fridge user={user} onLogout={onLogout} />,
-  "/recipes": () => <Recipes />,
+  "/recipes": ({ user }) => <Recipes user={user} />,
   "/recipes/new": () => <RecipeForm />,
   "/recipes/mine/:id": ({ route }) => <RecipeDetail kind="mine" id={route.params.id} />,
   "/recipes/mine/:id/edit": ({ route }) => <RecipeForm id={route.params.id} />,
   "/recipes/public/:id": ({ route }) => <RecipeDetail kind="public" id={route.params.id} />,
+  "/recipes/ai": () => <RecipeAi />,
+  "/recipes/ai/:n": ({ route }) => <RecipeAiDetail index={Number(route.params.n)} />,
   "/recipes/seasonings/new": () => <SeasoningForm />,
   "/recipes/seasonings/preset/:id": ({ route }) => <SeasoningCalc kind="preset" id={route.params.id} />,
   "/recipes/seasonings/:id": ({ route }) => <SeasoningCalc kind="mine" id={route.params.id} />,
   "/recipes/seasonings/:id/edit": ({ route }) => <SeasoningForm id={route.params.id} />,
   "/shopping": () => <ComingSoon route="/shopping" />,
   "/meals": () => <ComingSoon route="/meals" />,
-  "/more": () => <More />,
+  "/more": ({ user }) => <More user={user} />,
   "/tools": () => <Tools />,
 };
 
@@ -123,6 +126,7 @@ export default function App() {
     forgetResources();
     resetRecipesSegment();
     resetSeasoningDraft();
+    resetAiRecipes();
     scrollTops.clear();
     setUser(null);
   }, []);

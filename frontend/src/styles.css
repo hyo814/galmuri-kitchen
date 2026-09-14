@@ -2085,3 +2085,359 @@ button.row-btn > svg {
 .r3-items-err {
   margin-top: 10px;
 }
+
+/* ---- 3b단계 AI 레시피·레시피 추가 시트·가져온 레시피 확인 (시안 docs/design/recipes-3b3c, r3- 접두사) ---- */
+.r3-ai {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 12px 20px 0;
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.r3-ai-mark {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+}
+
+.r3-ai .row-main {
+  gap: 0;
+}
+
+.r3-ai .row-title {
+  font-size: 16px;
+  line-height: 23px;
+}
+
+.r3-ai .row-sub {
+  font-size: 13px;
+  word-break: keep-all;
+}
+
+.r3-ai .btn {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: 15px;
+}
+
+.r3-meta {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-3);
+}
+
+.r3-card-actions {
+  display: grid;
+  grid-column: 1 / 3;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.r3-card-actions .btn {
+  min-height: 48px;
+  border-radius: 12px;
+  font-size: 15px;
+}
+
+.r3-card-actions .error {
+  grid-column: 1 / 3;
+}
+
+.btn.saved {
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+}
+
+.btn.saved:disabled {
+  opacity: 1;
+}
+
+.r3-again {
+  margin-top: 16px;
+}
+
+.r3-detail-save {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.r3-detail-save .error {
+  margin-top: 8px;
+}
+
+.r3-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 16px 20px 0;
+  padding: 40px 20px 36px;
+  border-radius: 20px;
+  background: var(--surface);
+  text-align: center;
+}
+
+.r3-loading-title {
+  margin: 16px 0 0;
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 700;
+  word-break: keep-all;
+}
+
+.r3-loading-sub {
+  margin: 4px 0 0;
+  font-size: 15px;
+  word-break: keep-all;
+}
+
+.r3-loading .r3-back {
+  margin-top: 20px;
+}
+
+.r3-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 20px;
+}
+
+.r3-dots i {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--accent);
+  animation: r3-dot 1.2s ease-in-out infinite;
+}
+
+.r3-dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.r3-dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes r3-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.r3-skel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 20px 0;
+}
+
+.r3-skel div {
+  height: 104px;
+  border-radius: 20px;
+  background: var(--surface);
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .r3-dots i {
+    animation: none;
+  }
+
+  .r3-dots i:nth-child(2) {
+    opacity: 0.55;
+  }
+}
+
+/* 상세: AI 레시피 사진 아래 안내, 출처 줄의 원본 보기 */
+.r3-photo-note {
+  margin: 6px 20px 0;
+  padding: 0 4px;
+}
+
+.r3-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 6px;
+}
+
+.r3-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 44px;
+  color: var(--accent-strong);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+/* 레시피 추가 시트 */
+.r3-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.r3-choice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 72px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--field);
+  color: var(--text);
+  text-align: left;
+}
+
+.r3-choice > svg {
+  color: var(--text-3);
+}
+
+.r3-choice-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--accent-strong);
+}
+
+.r3-choice .row-title {
+  font-size: 16px;
+  line-height: 23px;
+}
+
+.r3-choice .row-sub {
+  font-size: 13px;
+  line-height: 19px;
+  word-break: keep-all;
+}
+
+.r3-quota {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+.r3-err-box {
+  display: flex;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--warn-tint);
+  color: var(--warn);
+  font-size: 14px;
+  line-height: 21px;
+  font-weight: 600;
+  word-break: keep-all;
+}
+
+.r3-err-box svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.r3-area {
+  display: block;
+  height: auto;
+  min-height: 148px;
+  max-height: 50dvh;
+  padding: 13px 16px;
+  font: inherit;
+  font-size: 16px;
+  line-height: 24px;
+  resize: vertical;
+  word-break: keep-all;
+  field-sizing: content;
+}
+
+/* 가져온 레시피 확인: 출처 카드 */
+.r3-source {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 20px 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.r3-source-thumb {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 36px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #1f1f1f;
+  color: #fff;
+}
+
+.r3-source-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.r3-source .row-main {
+  gap: 0;
+}
+
+.r3-source .row-title {
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.r3-source .row-sub {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.r3-source a {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 3px;
+  min-width: 44px;
+  min-height: 44px;
+  color: var(--accent-strong);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.r3-count {
+  margin-left: 4px;
+  color: var(--text-3);
+  font-size: 13px;
+  font-weight: 500;
+}

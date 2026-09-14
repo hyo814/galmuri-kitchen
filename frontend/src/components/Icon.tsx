@@ -1,4 +1,29 @@
 const PATHS = {
+  sparkle: (
+    <>
+      <path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1-5.1-1.9 5.1-1.9z" />
+      <path d="M19 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" />
+    </>
+  ),
+  play: <path d="M8 5.5v13l10.5-6.5z" fill="currentColor" />,
+  external: (
+    <>
+      <path d="M14 4h6v6M20 4l-9 9" />
+      <path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+    </>
+  ),
+  link: (
+    <>
+      <path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1" />
+      <path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1" />
+    </>
+  ),
+  clipboard: (
+    <>
+      <rect x="6" y="4" width="12" height="17" rx="2" />
+      <path d="M9.5 4V3h5v1M9.5 10h5M9.5 14h5" />
+    </>
+  ),
   plus: <path d="M12 5v14M5 12h14" />,
   chevron: <path d="M9 6l6 6-6 6" />,
   alert: (

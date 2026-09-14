@@ -9,6 +9,8 @@ export const ROUTES = [
   "/recipes/mine/:id",
   "/recipes/mine/:id/edit",
   "/recipes/public/:id",
+  "/recipes/ai",
+  "/recipes/ai/:n",
   "/recipes/seasonings/new",
   "/recipes/seasonings/preset/:id",
   "/recipes/seasonings/:id",

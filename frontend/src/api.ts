@@ -50,6 +50,7 @@ export interface User {
   nickname: string;
   scan: ScanMode;
   scan_limit: number;
+  recipe_limit: number;
 }
 
 export type ScanKind = "fridge" | "receipt" | "order";
@@ -110,7 +111,44 @@ export interface RecipeInput {
   steps: string[];
 }
 
-export type RecipeSource = "mine" | "public" | "ai" | "youtube" | "instagram" | "text";
+export type RecipeSource = "mine" | "public" | "ai" | "youtube" | "instagram" | "blog" | "text";
+
+/** POST /api/recommendations/ai 의 레시피 한 개(저장 전). image_url은 이름이 비슷한 공공 레시피 사진 */
+export interface AiRecipe {
+  title: string;
+  servings: number;
+  minutes: number | null;
+  ingredients: RecipeIngredientStatus[];
+  steps: string[];
+  urgent_names: string[];
+  image_url: string | null;
+}
+
+export interface AiSuggestions {
+  recipes: AiRecipe[];
+  urgent_first: string[];
+  sample: boolean;
+}
+
+/** 가져온 링크의 제목·채널(사이트) 이름·썸네일. 썸네일은 외부 주소라 화면에만 보이고 저장하지 않는다 */
+export interface SourceCard {
+  title: string;
+  author: string | null;
+  thumbnail_url: string | null;
+}
+
+/** POST /api/recipes/import 결과(저장 전 초안) */
+export interface RecipeDraft extends RecipeInput {
+  source: "youtube" | "instagram" | "blog" | "text";
+  source_url: string | null;
+  source_card?: SourceCard | null;
+  sample?: boolean;
+}
+
+export interface AiUsage {
+  scan: { used: number; limit: number };
+  recipe: { used: number; limit: number };
+}
 
 export interface RecipeSummary {
   id: number;
@@ -183,6 +221,8 @@ export class ApiError extends Error {
     public status: number,
     message: string,
     public errors?: { index: number; error: string }[],
+    /** 오류 JSON 본문 전체(예: 422 need_text) */
+    public body?: Record<string, unknown>,
   ) {
     super(message);
   }
@@ -222,6 +262,7 @@ export async function api<T>(
       res.status,
       data.error ?? "문제가 생겼어요. 잠시 후 다시 시도해주세요.",
       Array.isArray(data.errors) ? data.errors : undefined,
+      data,
     );
   }
   return data as T;
