@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from flask import Blueprint, abort, g, jsonify, request
 from sqlalchemy import text as sql
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 from werkzeug.exceptions import BadRequest
 
@@ -19,9 +20,12 @@ from .validation import commit_or_duplicate, iso_date, iso_datetime, text
 bp = Blueprint("shopping", __name__, url_prefix="/api/shopping")
 
 MAX_SHOPPING_ITEMS = 300  # 사용자당, 산 것(stocked_at 있음) 제외
+# ponytail: 산 것은 이 태스크에서 만드는 API가 없어 세지 않는다. Task 2 재고에 넣기에서 넘으면 오래된 산 것부터 지운다.
+MAX_STOCKED_ITEMS = 300
 BULK_MAX = 50
 SOURCES = ("manual", "recipe", "staple", "urgent", "meal_plan", "memo")
 STOCKED_KEEP_DAYS = 7
+STALE_BEFORE_CREATED = timedelta(days=1)  # 항목을 만들기 하루 전보다 이른 체크 시각은 틀린 기기 시계로 보고 무시한다
 FUTURE_SKEW = timedelta(minutes=10)
 LOCK_KEY = zlib.crc32(b"shopping_items") & 0x7FFFFFFF
 BAD_REQUEST = "잘못된 요청이에요."
@@ -130,7 +134,7 @@ def _source(data):
     label = data.get("source_label")
     if label is None or (isinstance(label, str) and not label.strip()):
         return source, None
-    return source, text(label, "레시피 이름은", 60)
+    return source, text(label, "출처 이름은", 60)
 
 
 def _changed_at(value):
@@ -143,6 +147,7 @@ def _changed_at(value):
     except (TypeError, ValueError, OverflowError):
         abort(400, BAD_REQUEST)
     now = utcnow()
+    # ponytail: 미래로 틀린 기기의 체크는 서버 시각으로 잘려, 그 뒤 몇 분 안에 제대로 된 기기가 한 더 이른 시각의 변경을 이긴다(허용).
     return now if when > now + FUTURE_SKEW else when
 
 
@@ -157,12 +162,14 @@ def snapshot():
     rows = ShoppingItem.query.options(joinedload(ShoppingItem.location)).filter_by(user_id=g.user.id)
     items = rows.filter(ShoppingItem.stocked_at.is_(None)).order_by(ShoppingItem.created_at, ShoppingItem.id).all()
     stocked = rows.filter(ShoppingItem.stocked_at.is_not(None)).order_by(ShoppingItem.stocked_at.desc(), ShoppingItem.id.desc()).all()
-    return jsonify(
+    res = jsonify(
         items=[item_json(i) for i in items],
         stocked=[item_json(i) for i in stocked],
         notes=[],
         today=seoul_today().isoformat(),
     )
+    res.headers["Cache-Control"] = "no-store"
+    return res
 
 
 @bp.post("/items")
@@ -177,6 +184,13 @@ def create_item():
         existing = ShoppingItem.query.filter_by(user_id=g.user.id, client_id=client_id).first()
         if existing is not None:  # 오프라인에서 다시 보낸 추가
             return jsonify(item_json(existing))
+    location_id = data.get("location_id")
+    if client_id is not None and location_id is not None:
+        # 오프라인에서 담은 뒤 그 위치가 지워졌어도 담은 것은 잃지 않는다(위치만 비운다). 온라인 요청은 400 그대로.
+        try:
+            owned_location(location_id)
+        except BadRequest:
+            data = {**data, "location_id": None}
     fields = parse_fields(data, creating=True)
     source, source_label = _source(data)
     _check_cap(g.user.id, 1)
@@ -220,7 +234,11 @@ def create_items_bulk():
         created.append(ShoppingItem(user_id=g.user.id, source=source, source_label=source_label, **fields))
     _check_cap(g.user.id, len(created))
     db.session.add_all(created)
-    db.session.flush()  # 커밋 전에 응답을 만들어 커밋 후 만료로 인한 N+1 조회를 피한다
+    try:
+        db.session.flush()  # 커밋 전에 응답을 만들어 커밋 후 만료로 인한 N+1 조회를 피한다
+    except IntegrityError:  # 불러온 뒤 지워진 보관 위치
+        db.session.rollback()
+        abort(400, LOCATION_CHANGED)
     result = [item_json(i) for i in created]
     commit_or_duplicate(LOCATION_CHANGED)
     return jsonify(created=result, skipped=skipped), 201
@@ -230,14 +248,21 @@ def create_items_bulk():
 @login_required
 def update_item(item_id):
     """고치기({name, quantity, …}, 도착 순서대로 덮어씀) 또는 체크({done, changed_at}, 마지막 변경 우선). 섞으면 400."""
-    item = get_owned_or_404(ShoppingItem, item_id)
     data = _json_object()
-    if any(k in data for k in CHECK_KEYS):
+    checking = any(k in data for k in CHECK_KEYS)
+    # 체크는 행을 잠가(PostgreSQL FOR UPDATE, SQLite는 무시) 동시에 온 두 체크가 같은 옛 값을 보고 비교하지 않게 한다.
+    item = db.session.get(ShoppingItem, item_id, with_for_update=checking) if item_id <= 2**31 - 1 else None
+    if item is None or item.user_id != g.user.id or item.stocked_at is not None:  # 산 것은 고치지 않는다
+        abort(404, "찾을 수 없어요.")
+    if checking:
         if any(k in data for k in EDIT_KEYS) or not isinstance(data.get("done"), bool):
             abort(400, BAD_REQUEST)
         changed_at = _changed_at(data.get("changed_at"))
         # ponytail: 기기 시계 차이만큼 순서가 틀릴 수 있다(한 사용자·기기 몇 대라 허용). 문제되면 서버 수신 순서로 바꾼다.
-        if item.done_changed_at is None or changed_at >= _utc(item.done_changed_at):
+        stale = changed_at < _utc(item.created_at) - STALE_BEFORE_CREATED or (
+            item.done_changed_at is not None and changed_at < _utc(item.done_changed_at)
+        )
+        if not stale:  # 같은 시각이면 나중에 도착한 것을 따른다
             item.done_at = changed_at if data["done"] else None
             item.done_changed_at = changed_at
     else:
