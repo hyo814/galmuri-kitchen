@@ -144,6 +144,7 @@ def _image_url(value, source):
         source != "ai"
         or not isinstance(value, str)
         or not 0 < len(value) <= 500
+        or "\x00" in value  # PostgreSQL은 NUL 문자열 비교에서 오류를 낸다
         or db.session.query(PublicRecipe.id).filter_by(image_url=value).first() is None
     ):
         abort(400, "잘못된 요청이에요.")

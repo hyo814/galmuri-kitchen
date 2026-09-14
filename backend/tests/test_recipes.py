@@ -177,6 +177,7 @@ def test_create_recipe_accepts_import_sources_and_image(client, login, app):
         "https://u:p@www.foodsafetykorea.go.kr/uploadimg/cook/10_00100_2.jpg",
         "https://www.foodsafetykorea.go.kr.evil.example/uploadimg/cook/10_00100_2.jpg",
         "https://[",
+        photo + "\x00",
         "",
         photo + "a" * 500,
         [photo],

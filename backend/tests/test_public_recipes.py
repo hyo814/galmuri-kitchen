@@ -111,6 +111,7 @@ def test_row_fields_maps_cookrcp01_row():
         ("https://u:p@www.foodsafetykorea.go.kr/x.png", None),
         ("https://www.foodsafetykorea.go.kr/x y.png", None),
         ("https://[", None),
+        ("https://www.foodsafetykorea.go.kr/x\x00.png", None),  # PostgreSQL이 저장을 거부해 동기화 전체가 실패한다
         ("javascript:alert(1)", None),
         ("ftp://www.foodsafetykorea.go.kr/x.png", None),
         ("", None),

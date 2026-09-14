@@ -36,7 +36,7 @@ def _image_url(value):
     if not isinstance(value, str):
         return None
     value = value.strip()
-    if not value or "\\" in value or any(char.isspace() for char in value):
+    if not value or "\\" in value or "\x00" in value or any(char.isspace() for char in value):
         return None
     try:
         parsed = urlparse(value)
