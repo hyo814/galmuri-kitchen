@@ -560,24 +560,39 @@ def shopping_rows(needs, stock, listed, today):
             "have": [{"quantity": round(value, 2), "unit": unit} for unit, value in have.items()],
         }
 
+        def fallback():
+            """need 첫 단위·그 양(반올림), 비었으면 1개(manual의 빈 need와 같은 기본값).
+            Task 9 MealShoppingRow(quantity·unit 필수, null 아님)를 지키려고 skip 행도 실제 값을 담는다."""
+            if not need:
+                return 1, "개"
+            first_unit = next(iter(need))
+            return round(need[first_unit], 2), first_unit
+
         def add(bucket, quantity, unit, reason):
             row["quantity"], row["unit"], row["reason"] = quantity, unit, reason
             buckets[bucket].append((planned_on.isoformat(), index, row))
 
         if normalize(name) in listed_norm:
-            add("skip", None, None, "listed")
+            quantity, unit = fallback()
+            add("skip", quantity, unit, "listed")
         elif not need:
-            add("skip", None, None, "enough") if has_stock else add("manual", 1, "개", None)
+            quantity, unit = fallback()  # need가 비어 있으니 항상 (1, "개")
+            add("skip", quantity, unit, "enough") if has_stock else add("manual", quantity, unit, None)
         elif len(need) >= 2:
-            first_unit = next(iter(need))
-            add("manual", round(need[first_unit], 2), first_unit, None)
+            quantity, unit = fallback()
+            add("manual", max(quantity, 0.01), unit, None)  # 인분 배율로 반올림하면 0이 될 수 있어 최소값을 둔다
         else:
             (unit, amount_needed), = need.items()
             if unit not in have and have:
-                add("manual", round(amount_needed, 2), unit, None)
+                quantity, _ = fallback()
+                add("manual", max(quantity, 0.01), unit, None)
             else:
-                short = amount_needed - have.get(unit, 0)
-                add("buy", round(short, 2), unit, None) if short > 0.001 else add("skip", None, None, "enough")
+                short = round(amount_needed - have.get(unit, 0), 2)  # 반올림 먼저: 문턱값 오차로 0짜리 buy가 생기지 않게
+                if short > 0:
+                    add("buy", short, unit, None)
+                else:
+                    quantity, _ = fallback()
+                    add("skip", quantity, unit, "enough")
 
     return {
         bucket: [entry_row for _, _, entry_row in sorted(entries, key=lambda entry: (entry[0], entry[1]))]

@@ -63,6 +63,7 @@ def test_skip_listed():
     result = shopping_rows(needs, [], ["양파"], TODAY)
     row = by_name(result["skip"], "양파")
     assert row["reason"] == "listed"
+    assert (row["quantity"], row["unit"]) == (2, "개")  # Task 9 계약: quantity·unit은 null 아님
     assert result["buy"] == [] and result["manual"] == []
 
 
@@ -71,6 +72,18 @@ def test_skip_enough():
     stock = [("김치", 1, "포기")]
     row = by_name(shopping_rows(needs, stock, [], TODAY)["skip"], "김치")
     assert row["reason"] == "enough"
+    assert (row["quantity"], row["unit"]) == (0.5, "포기")
+
+
+def test_skip_enough_tiny_fraction_not_buy_zero():
+    # 1모 × 1/3 인분 배율(0.3333...) − 재고 0.33모 = 반올림하면 0이라 buy 0.0 대신 skip enough
+    needs = [("두부", "1모", 1 / 3, date(2026, 9, 16))]
+    stock = [("두부", 0.33, "모")]
+    result = shopping_rows(needs, stock, [], TODAY)
+    assert result["buy"] == []
+    row = by_name(result["skip"], "두부")
+    assert row["reason"] == "enough"
+    assert (row["quantity"], row["unit"]) == (0.33, "모")
 
 
 def test_planned_on_today_when_meal_already_passed():
@@ -104,6 +117,16 @@ def test_spoon_unit_with_stock_skips_enough():
     assert row["reason"] == "enough"
     assert row["need"] == []
     assert row["need_extra"] == ["2큰술"]
+    assert (row["quantity"], row["unit"]) == (1, "개")  # need가 비었을 때 기본값(manual과 같은 폴백)
+
+
+def test_manual_tiny_scaled_amount_clamped_to_min():
+    # 1판 × 0.001 인분 배율 → 반올림하면 0이라 최소 0.01로 올린다(bulk 담기 400 방지)
+    needs = [("달걀", "1판", 0.001, date(2026, 9, 16))]
+    stock = [("계란", 1, "개")]  # 단위가 달라 manual로 간다
+    row = by_name(shopping_rows(needs, stock, [], TODAY)["manual"], "달걀")
+    assert (row["quantity"], row["unit"], row["reason"]) == (0.01, "판", None)
+    assert row["quantity"] >= 0.01
 
 
 def test_uncountable_without_stock_is_manual_with_extra():
