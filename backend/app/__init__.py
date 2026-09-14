@@ -9,6 +9,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from .models import db
 
 DEFAULT_FRONTEND_DIST = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))
+DEFAULT_UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads"))
 
 DEFAULT_MESSAGES = {
     400: "잘못된 요청이에요.",
@@ -50,6 +51,11 @@ def create_app(test_config=None):
         AI_DAILY_RECIPE_LIMIT=int(os.environ.get("AI_DAILY_RECIPE_LIMIT") or 10),
         FOODSAFETY_API_KEY=os.environ.get("FOODSAFETY_API_KEY") or None,
         YOUTUBE_API_KEY=os.environ.get("YOUTUBE_API_KEY") or None,
+        UPLOAD_DIR=DEFAULT_UPLOAD_DIR,  # R2가 없을 때 개발용 사진 폴더(스펙 3절, gitignore)
+        R2_ACCOUNT_ID=os.environ.get("R2_ACCOUNT_ID") or None,
+        R2_ACCESS_KEY_ID=os.environ.get("R2_ACCESS_KEY_ID") or None,
+        R2_SECRET_ACCESS_KEY=os.environ.get("R2_SECRET_ACCESS_KEY") or None,
+        R2_BUCKET=os.environ.get("R2_BUCKET") or None,
         COUPANG_PARTNERS_ID=os.environ.get("COUPANG_PARTNERS_ID") or None,  # 제휴 링크(스펙 16·25절), 없으면 일반 검색 링크
     )
     if test_config:
@@ -71,6 +77,7 @@ def create_app(test_config=None):
     from .ingredients import bp as ingredients_bp
     from .item_rules import bp as item_rules_bp
     from .locations import bp as locations_bp
+    from .photos import bp as photos_bp
     from .public_recipes import bp as public_recipes_bp
     from .recipe_ai import bp as recipe_ai_bp
     from .recipes import bp as recipes_bp
@@ -87,6 +94,7 @@ def create_app(test_config=None):
     app.register_blueprint(ingredients_bp)
     app.register_blueprint(item_rules_bp)
     app.register_blueprint(locations_bp)
+    app.register_blueprint(photos_bp)
     app.register_blueprint(public_recipes_bp)
     app.register_blueprint(recipe_ai_bp)
     app.register_blueprint(recipes_bp)

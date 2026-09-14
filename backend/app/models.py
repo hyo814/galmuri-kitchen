@@ -143,6 +143,36 @@ class ShoppingItem(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
 
+class ShoppingNote(db.Model):
+    """장보기 메모(스펙 19절). updated_at은 기기가 보낸 저장 시각(edited_at)이라 다시 보내도 같다."""
+
+    __tablename__ = "shopping_notes"
+    __table_args__ = (db.UniqueConstraint("user_id", "client_id"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    client_id = db.Column(db.String(36))
+    place = db.Column(db.String(30))
+    body = db.Column(db.Text, nullable=False, default="")
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    photos = db.relationship("ShoppingNotePhoto", order_by="ShoppingNotePhoto.id", cascade="all, delete-orphan", passive_deletes=True)
+
+
+class ShoppingNotePhoto(db.Model):
+    """메모 사진. 파일은 storage(photo_key)에 있고, 행이 지워져도 DB가 파일을 지우지 않으므로 지우는 곳에서 storage.delete."""
+
+    __tablename__ = "shopping_note_photos"
+    __table_args__ = (db.UniqueConstraint("note_id", "client_id"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    note_id = db.Column(db.Integer, db.ForeignKey("shopping_notes.id", ondelete="CASCADE"), nullable=False, index=True)
+    client_id = db.Column(db.String(36))
+    photo_key = db.Column(db.String(200), nullable=False, unique=True)
+    size = db.Column(db.Integer, nullable=False)  # 바이트, 사용자별 저장 공간 상한용
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
 class AiCall(db.Model):
     __tablename__ = "ai_calls"
 
