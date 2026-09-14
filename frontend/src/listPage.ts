@@ -33,7 +33,7 @@ export function applyPage<T extends { id: number | string }>(
   replace: boolean,
 ): ListState<T> {
   if (gen !== currentGen) return state;
-  const multiPage = state.multiPage || page.next !== null;
+  const multiPage = (!replace && state.multiPage) || page.next !== null;
   if (replace) return { items: page.items, cursor: page.next, hasMore: page.next !== null, multiPage };
   const known = new Set(state.items.map((item) => item.id));
   const items = [...state.items, ...page.items.filter((item) => !known.has(item.id))];

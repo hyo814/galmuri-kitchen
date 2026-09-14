@@ -14,6 +14,7 @@ export function forgetResources(prefix = "") {
 /** 저장·삭제·재고 변경 뒤 상세(useResource)뿐 아니라 추천·목록(useInfiniteList)도 새로 받게 한다 (I1) */
 export function forgetRecipeCaches() {
   forgetResources("/api/rec"); // /api/recommendations, /api/recipes/:id
+  forgetResources("/api/public-recipes"); // 공공 레시피 상세의 보유 표시
   forgetResources("list:"); // 추천 공공 목록·recs-meta·내 레시피 목록
 }
 

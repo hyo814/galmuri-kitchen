@@ -212,10 +212,10 @@ function RecommendList({ onShowMine }: { onShowMine: () => void }) {
           )}
         </section>
       )}
-      {(meta.mine.length > 0 || items.length > 0) && (
+      {/* M6: 공공 레시피가 하나도 없으면(내 레시피만 있을 때) 빈 섹션 자체를 그리지 않는다 */}
+      {items.length > 0 && (
         <section aria-label={meta.sample ? "예시 레시피" : "식약처 레시피"}>
-          {/* M6: 공공 레시피가 하나도 없으면(내 레시피만 있을 때) 빈 섹션 제목을 보여주지 않는다 */}
-          {items.length > 0 && <h2 className="section-label rc-group">{meta.sample ? "예시 레시피" : "식약처 레시피"}</h2>}
+          <h2 className="section-label rc-group">{meta.sample ? "예시 레시피" : "식약처 레시피"}</h2>
           <ul className="rc-cards">
             {items.map((card) => (
               <li key={`public-${card.id}`}>
