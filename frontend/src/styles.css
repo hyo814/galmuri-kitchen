@@ -8,6 +8,7 @@
   --placeholder: #63697a;
   --line: #eef0f2;
   --chip-text: #3a3f46;
+  --chip-line: #c9ced5;
   --handle: #e1e4e8;
   --accent: #0b7a4c;
   --accent-strong: #086a41;
@@ -43,6 +44,7 @@
     --placeholder: #8a9099;
     --line: #2a2d32;
     --chip-text: #d3d7dc;
+    --chip-line: #4a4e55;
     --handle: #3a3d43;
     --accent: #2fc07f;
     --accent-strong: #5bd39c;
@@ -73,6 +75,7 @@
   --placeholder: #8a9099;
   --line: #2a2d32;
   --chip-text: #d3d7dc;
+  --chip-line: #4a4e55;
   --handle: #3a3d43;
   --accent: #2fc07f;
   --accent-strong: #5bd39c;
@@ -4210,15 +4213,15 @@ button.sh-offline svg:last-child {
   font-variant-numeric: tabular-nums;
 }
 
-/* 채운 칸은 줄 전체가 버튼(칸 상세), 빈 칸은 줄 안의 + 버튼 */
+/* 시안 B: 채운 끼니만 줄(줄 전체가 버튼 → 칸 상세), 빈 끼니는 카드 맨 아래 칩 한 줄 */
 .ml-slot {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) auto;
+  grid-template-columns: 36px minmax(0, 1fr);
   align-items: center;
   column-gap: 8px;
   width: 100%;
   min-height: 52px;
-  padding: 4px 16px;
+  padding: 6px 16px;
   border: 0;
   border-top: 1px solid var(--line);
   background: none;
@@ -4233,7 +4236,6 @@ button.sh-offline svg:last-child {
 }
 
 .ml-slot .row-main {
-  gap: 3px;
   align-items: flex-start;
 }
 
@@ -4244,23 +4246,52 @@ button.sh-offline svg:last-child {
   overflow-wrap: anywhere;
 }
 
-.ml-serv {
-  font-size: 14px;
-  color: var(--text-2);
+.ml-sub {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-3);
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
-.ml-plus {
-  grid-column: 2 / 4;
+.ml-use {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.ml-add-chips {
   display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px 8px;
+  border-top: 1px solid var(--line);
+}
+
+/* 32px로 보이지만 위아래 6px씩 넓혀 누르는 곳은 44px(4개가 한 줄에 들어가 줄이 겹치지 않는다) */
+.ml-add-chip {
+  position: relative;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  height: 44px;
+  gap: 2px;
+  height: 32px;
+  padding: 0 12px 0 9px;
   border: 0;
-  border-radius: 12px;
-  background: var(--field);
+  border-radius: 16px;
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--chip-line);
   color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ml-add-chip::before {
+  content: "";
+  position: absolute;
+  inset: -6px 0;
+}
+
+.ml-add-chip svg {
+  flex: none;
+  color: var(--accent-strong);
 }
 
 .ml-serv-field .stepper .input {
