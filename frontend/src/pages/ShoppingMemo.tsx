@@ -84,10 +84,16 @@ export function ShoppingMemos() {
 export function NewShoppingMemo() {
   const { act } = useShopping();
   const created = useRef(false); // StrictMode 이중 실행에 두 개 만들지 않게
+  const here = useRef(false); // StrictMode의 가짜 언마운트는 곧바로 다시 true가 된다(기기에 넣기는 그보다 늦게 끝난다)
   useEffect(() => {
-    if (created.current) return;
-    created.current = true;
-    newMemo(act);
+    here.current = true;
+    if (!created.current) {
+      created.current = true;
+      newMemo(act, () => here.current);
+    }
+    return () => {
+      here.current = false;
+    };
   }, [act]);
   return (
     <main className="page">
