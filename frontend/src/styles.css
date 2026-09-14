@@ -4044,3 +4044,8 @@ button.sh-offline svg:last-child {
 .btn.mo-scan-all {
   align-self: flex-end;
 }
+
+/* 소셜 로그인 로고(ProviderLogo): 버튼 글자 앞, 더보기 계정 줄 동그라미 안 */
+.provider-logo {
+  flex: none;
+}

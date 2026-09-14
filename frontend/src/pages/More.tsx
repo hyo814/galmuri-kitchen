@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { ApiError, api, type AiUsage, type ExportSummary, type ItemRule, type Staple, type StorageLocation, type User } from "../api";
 import Icon from "../components/Icon";
 import LocationsSheet from "../components/LocationsSheet";
+import ProviderLogo from "../components/ProviderLogo";
 import RulesSheet from "../components/RulesSheet";
 import Sheet from "../components/Sheet";
 import StaplesSheet from "../components/StaplesSheet";
@@ -20,9 +21,9 @@ const THEMES: { value: Theme; label: string; short: string; sub?: string }[] = [
 ];
 
 const PROVIDERS: Partial<Record<string, { mark: ReactNode; label: string }>> = {
-  kakao: { mark: "K", label: "카카오로 로그인했어요" },
-  naver: { mark: "N", label: "네이버로 로그인했어요" },
-  google: { mark: "G", label: "구글로 로그인했어요" },
+  kakao: { mark: <ProviderLogo name="kakao" />, label: "카카오로 로그인했어요" },
+  naver: { mark: <ProviderLogo name="naver" />, label: "네이버로 로그인했어요" },
+  google: { mark: <ProviderLogo name="google" />, label: "구글로 로그인했어요" },
   dev: { mark: <Icon name="settings" />, label: "개발용 계정으로 로그인했어요" },
   demo: { mark: <Icon name="sparkle" />, label: "체험 계정으로 둘러보는 중이에요" },
 };

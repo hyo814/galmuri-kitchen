@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type AuthOptions, type User } from "../api";
+import ProviderLogo from "../components/ProviderLogo";
 
 export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const [options, setOptions] = useState<AuthOptions | null>(null);
@@ -44,16 +45,19 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
       )}
       {options?.providers.includes("kakao") && (
         <a className="btn kakao" href="/auth/login/kakao">
+          <ProviderLogo name="kakao" />
           카카오 로그인
         </a>
       )}
       {options?.providers.includes("naver") && (
         <a className="btn naver" href="/auth/login/naver">
+          <ProviderLogo name="naver" />
           네이버 로그인
         </a>
       )}
       {options?.providers.includes("google") && (
         <a className="btn google" href="/auth/login/google">
+          <ProviderLogo name="google" />
           Google로 계속하기
         </a>
       )}
