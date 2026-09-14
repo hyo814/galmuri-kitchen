@@ -453,13 +453,16 @@ YOUTUBE = "https://youtu.be/dQw4w9WgXcQ?si=x"
 YOUTUBE_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 INSTAGRAM = "https://www.instagram.com/reel/C1a2B3c4D5e/?igsh=1"
 BLOG = "https://blog.naver.com/cook/2231"
+WEB = "https://recipe.example.com/a"
 RECIPE_TEXT = "제육볶음\n재료: 돼지고기 600g, 양파 1개\n1. 볶아요."
 NEED_YOUTUBE = "유튜브 링크에서는 레시피를 읽지 못했어요. 영상 설명을 복사한 뒤 아래에 붙여 넣어주세요."
 NEED_INSTAGRAM = "인스타그램 링크에서는 레시피를 읽지 못했어요. 게시물 설명을 길게 눌러 복사한 뒤 아래에 붙여 넣어주세요."
 NEED_WEB = "이 링크에서는 레시피를 읽지 못했어요. 글을 복사한 뒤 아래에 붙여 넣어주세요."
 NEED_TEXT = "레시피를 찾지 못했어요. 재료와 만드는 법이 담긴 글을 붙여 넣어주세요."
 IMPORT_FAIL = "레시피를 정리하지 못했어요. 잠시 후 다시 시도해주세요."
+RECIPE_LIMIT = "오늘 AI 레시피는 10번까지 쓸 수 있어요. 내일 다시 써주세요."
 SNIPPET = {"title": "제육볶음 황금레시피", "description": "재료: 돼지고기 앞다리살 600g", "channel_title": "집밥 연구소", "thumbnail_url": "https://i.ytimg.com/vi/x/hq.jpg"}
+NO_TOKENS = (None, None, None)
 
 
 def import_(client, **body):
@@ -482,6 +485,10 @@ def no_network(monkeypatch):
     monkeypatch.setattr(ai, "extract_recipe", fail_if_called)
 
 
+def page(text=RECIPE_TEXT, url="https://m.blog.naver.com/cook/2231?final=1"):
+    return {"title": "제육볶음 만들기", "site_name": "요리 블로그", "text": text, "url": url}
+
+
 def test_import_validates_input(client, login, app, monkeypatch):
     assert import_(client, text=RECIPE_TEXT).status_code == 401
     login()
@@ -492,6 +499,7 @@ def test_import_validates_input(client, login, app, monkeypatch):
         ({"url": YOUTUBE, "text": RECIPE_TEXT}, both),
         ({}, both),
         ({"url": "", "text": ""}, both),
+        ({"url": "  ", "text": " \n "}, both),
         ({"text": "   짧은 글   "}, "글은 10~10,000자로 붙여 넣어주세요."),
         ({"text": "가" * 10_001}, "글은 10~10,000자로 붙여 넣어주세요."),
         ({"text": ["재료가 있는 레시피 글이에요"]}, "글은 10~10,000자로 붙여 넣어주세요."),
@@ -513,7 +521,15 @@ def test_import_sample_mode_uses_no_network(client, login, app, monkeypatch):
     assert body["sample"] is True
     assert (body["title"], body["servings"], body["source"], body["source_url"]) == ("제육볶음", 3, "youtube", YOUTUBE_URL)
     assert body["source_card"] == {"title": "제육볶음 황금레시피, 이렇게만 하세요", "author": "예시 채널", "thumbnail_url": None}
-    assert {"name": "돼지고기 앞다리살", "amount": "600g"} in body["ingredients"] and body["steps"]
+    assert len(body["ingredients"]) == 11  # 시안 ImportReview "재료 11개"
+    assert [(i["name"], i["amount"]) for i in body["ingredients"][:5]] == [
+        ("돼지고기 앞다리살", "600g"),
+        ("양파", "1개"),
+        ("대파", "1대"),
+        ("고추장", "2큰술"),
+        ("고춧가루", "2큰술"),
+    ]
+    assert body["steps"][:2] == ["고기에 고추장, 고춧가루, 간장, 설탕, 다진 마늘을 넣고 버무려요.", "달군 팬에 고기를 넣고 센불에서 볶아요."]
     assert "minutes" not in body
 
     body = import_(client, url=BLOG).get_json()
@@ -565,8 +581,8 @@ def test_import_youtube_with_api_key(client, login, app, monkeypatch):
     }
     assert seen["video"] == ("dQw4w9WgXcQ", "yt-key")
     assert "제육볶음 황금레시피" in seen["text"] and "재료: 돼지고기 앞다리살 600g" in seen["text"]
-    assert ai_calls(app) == [(user.id, "link")]
-    assert ai_call_costs(app) == [("claude-sonnet-5-answered", 1500, 120)]
+    assert ai_calls(app) == [(user.id, "link_fetch"), (user.id, "link")]  # 외부 요청 기록(토큰 없음) + AI 호출
+    assert ai_call_costs(app) == [NO_TOKENS, ("claude-sonnet-5-answered", 1500, 120)]
 
 
 def test_import_youtube_without_api_key_asks_for_text(client, login, app, monkeypatch):
@@ -575,21 +591,21 @@ def test_import_youtube_without_api_key_asks_for_text(client, login, app, monkey
     no_network(monkeypatch)
     res = import_(client, url=YOUTUBE)
     assert (res.status_code, res.get_json()) == (422, {"error": NEED_YOUTUBE, "need_text": True})
-    assert ai_calls(app) == []
+    assert ai_calls(app) == []  # 외부 요청도 하지 않으니 기록도 없다
 
 
 def test_import_youtube_missing_video_404(client, login, app, monkeypatch):
-    login()
+    user = login()
     live(app)
     monkeypatch.setattr(outbound, "video_snippet", lambda video_id, key: None)
     monkeypatch.setattr(ai, "extract_recipe", fail_if_called)
     res = import_(client, url=YOUTUBE)
     assert (res.status_code, res.get_json()) == (404, {"error": "영상을 찾을 수 없어요. 링크를 다시 확인해주세요."})
-    assert ai_calls(app) == []
+    assert ai_calls(app) == [(user.id, "link_fetch")]
 
 
-def test_import_youtube_fetch_error_422_not_counted(client, login, app, monkeypatch):
-    login()
+def test_import_youtube_fetch_error_422_not_counted(client, login, app, monkeypatch, caplog):
+    user = login()
     live(app)
 
     def broken(video_id, key):
@@ -599,12 +615,13 @@ def test_import_youtube_fetch_error_422_not_counted(client, login, app, monkeypa
     monkeypatch.setattr(ai, "extract_recipe", fail_if_called)
     res = import_(client, url=YOUTUBE)
     assert (res.status_code, res.get_json()) == (422, {"error": NEED_YOUTUBE, "need_text": True})
+    assert "import fetch failed: ReadTimeout" in caplog.text and "yt-key" not in caplog.text
 
     # 설명이 거의 비어 있어도 AI를 부르지 않는다
     monkeypatch.setattr(outbound, "video_snippet", lambda video_id, key: {**SNIPPET, "title": "짧", "description": "  "})
     res = import_(client, url=YOUTUBE)
     assert (res.status_code, res.get_json()) == (422, {"error": NEED_YOUTUBE, "need_text": True})
-    assert ai_calls(app) == []
+    assert ai_calls(app) == [(user.id, "link_fetch")] * 2  # AI 호출(link)은 없다
 
 
 def test_import_instagram_without_caption_asks_for_text(client, login, app, monkeypatch):
@@ -620,7 +637,9 @@ def test_import_instagram_without_caption_asks_for_text(client, login, app, monk
 
     monkeypatch.setattr(outbound, "instagram_post", broken)
     assert import_(client, url=INSTAGRAM).get_json() == {"error": NEED_INSTAGRAM, "need_text": True}
-    assert ai_calls(app) == []
+    monkeypatch.setattr(outbound, "instagram_post", lambda code: {"caption": " 맛있어요 ", "title": "cook on Instagram", "thumbnail_url": None})
+    assert import_(client, url=INSTAGRAM).get_json() == {"error": NEED_INSTAGRAM, "need_text": True}  # 캡션 10자 미만
+    assert "link" not in [kind for _, kind in ai_calls(app)]
 
     seen = []
     monkeypatch.setattr(outbound, "instagram_post", lambda code: seen.append(code) or {"caption": RECIPE_TEXT, "title": "cook on Instagram", "thumbnail_url": None})
@@ -634,16 +653,16 @@ def test_import_instagram_without_caption_asks_for_text(client, login, app, monk
     )
 
 
-def test_import_blog_page(client, login, app, monkeypatch):
+def test_import_blog_page(client, login, app, monkeypatch, caplog):
     user = login()
     live(app)
     seen = {}
 
-    def page(url):
+    def fetch(url):
         seen["url"] = url
-        return {"title": "제육볶음 만들기", "site_name": "요리 블로그", "text": RECIPE_TEXT, "url": "https://m.blog.naver.com/cook/2231?final=1"}
+        return page()
 
-    monkeypatch.setattr(outbound, "web_page", page)
+    monkeypatch.setattr(outbound, "web_page", fetch)
     monkeypatch.setattr(ai, "extract_recipe", lambda text: seen.setdefault("text", text) and found())
     body = import_(client, url=BLOG).get_json()
     assert seen["url"] == "https://m.blog.naver.com/cook/2231"
@@ -653,16 +672,26 @@ def test_import_blog_page(client, login, app, monkeypatch):
         "https://m.blog.naver.com/cook/2231?final=1",
         {"title": "제육볶음 만들기", "author": "요리 블로그", "thumbnail_url": None},
     )
-    assert ai_calls(app) == [(user.id, "link")]
+    assert ai_calls(app) == [(user.id, "link_fetch"), (user.id, "link")]
+
+    # 최종 주소가 500자를 넘으면 저장 폼이 받을 수 있게 처음 주소
+    monkeypatch.setattr(outbound, "web_page", lambda url: page(url="https://recipe.example.com/" + "a" * 480))
+    assert import_(client, url=WEB).get_json()["source_url"] == WEB
 
     def broken(url):
         raise outbound.FetchError("PrivateAddress")
 
     monkeypatch.setattr(outbound, "web_page", broken)
     monkeypatch.setattr(ai, "extract_recipe", fail_if_called)
-    res = import_(client, url="https://recipe.example.com/a")
+    res = import_(client, url=WEB)
     assert (res.status_code, res.get_json()) == (422, {"error": NEED_WEB, "need_text": True})
-    assert ai_calls(app) == [(user.id, "link")]
+    assert "import fetch failed: PrivateAddress" in caplog.text and "recipe.example.com" not in caplog.text
+
+    # 제목·본문을 합쳐도 10자 미만이면 AI를 부르지 않는다
+    monkeypatch.setattr(outbound, "web_page", lambda url: {"title": "", "site_name": "s", "text": "짧은 글", "url": url})
+    res = import_(client, url=WEB)
+    assert (res.status_code, res.get_json()) == (422, {"error": NEED_WEB, "need_text": True})
+    assert [kind for _, kind in ai_calls(app)] == ["link_fetch", "link", "link_fetch", "link", "link_fetch", "link_fetch"]
 
 
 def test_import_text_not_a_recipe_is_422_and_counted(client, login, app, monkeypatch):
@@ -677,18 +706,22 @@ def test_import_text_not_a_recipe_is_422_and_counted(client, login, app, monkeyp
     monkeypatch.setattr(outbound, "video_snippet", lambda video_id, key: SNIPPET)
     res = import_(client, url=YOUTUBE)
     assert (res.status_code, res.get_json()) == (422, {"error": NEED_YOUTUBE, "need_text": True})
-    assert ai_calls(app) == [(user.id, "link"), (user.id, "link")]
-    assert ai_call_costs(app) == [("claude-sonnet-5-answered", 1500, 120)] * 2
+    assert ai_calls(app) == [(user.id, "link"), (user.id, "link_fetch"), (user.id, "link")]
+    assert ai_call_costs(app) == [("claude-sonnet-5-answered", 1500, 120), NO_TOKENS, ("claude-sonnet-5-answered", 1500, 120)]
 
 
 def test_import_text_passes_trimmed_text(client, login, app, monkeypatch):
     login()
     live(app)
+    no_network(monkeypatch)
     seen = []
     monkeypatch.setattr(ai, "extract_recipe", lambda text: seen.append(text) or found())
     body = import_(client, text=f"  {RECIPE_TEXT}  ").get_json()
     assert seen == [RECIPE_TEXT]
     assert (body["title"], body["source"], body["source_url"], body["source_card"], body["sample"]) == ("제육볶음", "text", None, None, False)
+    # 링크 칸이 공백뿐이면 비어 있는 것으로 보고 글을 쓴다
+    assert import_(client, url="   ", text=RECIPE_TEXT).get_json()["source"] == "text"
+    assert [kind for _, kind in ai_calls(app)] == ["link", "link"]  # 글은 외부 요청 기록이 없다
 
 
 def test_import_ai_failure_502_counted(client, login, app, monkeypatch):
@@ -713,9 +746,9 @@ def test_import_limit_checked_before_fetch(client, login, app, monkeypatch):
         db.session.add_all([AiCall(user_id=user.id, kind="recipe", created_at=now - timedelta(hours=1)) for _ in range(10)])
         db.session.commit()
     no_network(monkeypatch)
-    for body in ({"url": YOUTUBE}, {"url": "https://recipe.example.com/a"}, {"text": RECIPE_TEXT}):
+    for body in ({"url": YOUTUBE}, {"url": WEB}, {"text": RECIPE_TEXT}):
         res = import_(client, **body)
-        assert (res.status_code, res.get_json()) == (429, {"error": "오늘 AI 레시피는 10번까지 쓸 수 있어요. 내일 다시 써주세요."})
+        assert (res.status_code, res.get_json()) == (429, {"error": RECIPE_LIMIT})
     assert len(ai_calls(app)) == 10
 
 
@@ -728,13 +761,71 @@ def test_import_rechecks_limit_after_fetch(client, login, app, monkeypatch):
         db.session.add_all([AiCall(user_id=user.id, kind="link", created_at=now - timedelta(hours=1)) for _ in range(9)])
         db.session.commit()
 
-    def page(url):
+    def fetch(url):
         with app.app_context():
             db.session.add(AiCall(user_id=user.id, kind="recipe", created_at=now - timedelta(hours=1)))
             db.session.commit()
-        return {"title": "t", "site_name": "s", "text": RECIPE_TEXT, "url": url}
+        return page(url=url)
 
-    monkeypatch.setattr(outbound, "web_page", page)
+    monkeypatch.setattr(outbound, "web_page", fetch)
     monkeypatch.setattr(ai, "extract_recipe", fail_if_called)
-    assert import_(client, url="https://recipe.example.com/a").status_code == 429
-    assert len(ai_calls(app)) == 10
+    assert import_(client, url=WEB).status_code == 429
+    assert [kind for _, kind in ai_calls(app)].count("link") == 9
+
+
+def add_fetches(app, user, when, count):
+    with app.app_context():
+        db.session.add_all([AiCall(user_id=user.id, kind="link_fetch", created_at=when) for _ in range(count)])
+        db.session.commit()
+
+
+def test_import_fetch_burst_limit(client, login, app, monkeypatch):
+    """AI 한도에 세지 않는 외부 요청(실패·레시피 없음)도 60초에 5번까지만."""
+    user = login()
+    live(app)
+    _, now = fix_clock(monkeypatch)
+    add_fetches(app, user, now - timedelta(seconds=59), 4)
+    monkeypatch.setattr(outbound, "web_page", lambda url: {"title": "", "site_name": "s", "text": "짧", "url": url})
+    monkeypatch.setattr(ai, "extract_recipe", fail_if_called)
+    assert import_(client, url=WEB).status_code == 422  # 5번째 외부 요청은 된다(본문이 짧아 AI는 안 부른다)
+    no_network(monkeypatch)
+    for url in (WEB, YOUTUBE, INSTAGRAM):
+        res = import_(client, url=url)
+        assert (res.status_code, res.get_json()) == (429, {"error": "잠시 후 다시 시도해주세요."})
+    monkeypatch.setattr(ai, "extract_recipe", lambda text: found())
+    assert import_(client, text=RECIPE_TEXT).status_code == 200  # 글은 외부 요청이 아니라 막히지 않는다
+    assert [kind for _, kind in ai_calls(app)].count("link_fetch") == 5
+
+
+def test_import_fetch_daily_limit(client, login, app, monkeypatch):
+    user = login()
+    live(app)
+    start, now = fix_clock(monkeypatch)
+    add_fetches(app, user, start - timedelta(seconds=1), 30)  # 서울 어제 → 안 셈
+    add_fetches(app, user, now - timedelta(hours=1), 49)
+    monkeypatch.setattr(outbound, "web_page", lambda url: page(url=url))
+    monkeypatch.setattr(ai, "extract_recipe", lambda text: found())
+    assert import_(client, url=WEB).status_code == 200  # 50번째
+    no_network(monkeypatch)
+    res = import_(client, url=WEB)
+    assert (res.status_code, res.get_json()) == (429, {"error": "오늘 링크 가져오기는 50번까지 쓸 수 있어요. 내일 다시 써주세요."})
+
+
+def test_link_fetch_not_counted_as_ai_use(client, login, app, monkeypatch):
+    """외부 요청 기록은 AI 레시피 하루·연속 한도, AI 사용량, 토큰에 들어가지 않는다."""
+    user = login()
+    live(app)
+    app.config["AI_SCAN_BURST_LIMIT"] = 3
+    start, now = fix_clock(monkeypatch)
+    add_fetches(app, user, now - timedelta(seconds=5), 4)  # AI 연속 한도(3)를 넘는 수
+    add_fetches(app, user, now - timedelta(hours=1), 40)
+    with app.app_context():
+        db.session.add_all([AiCall(user_id=user.id, kind="recipe", created_at=now - timedelta(hours=1)) for _ in range(9)])
+        db.session.commit()
+    assert client.get("/api/ai-usage").get_json()["recipe"] == {"used": 9, "limit": 10}
+    add_ingredient(client, "두부")
+    monkeypatch.setattr(ai, "suggest_recipes", lambda lines: ({"recipes": [draft()]}, USAGE))
+    assert make(client).status_code == 200  # 10번째 AI 레시피
+    with app.app_context():
+        fetch_rows = AiCall.query.filter_by(kind="link_fetch").all()
+        assert {(c.model, c.input_tokens, c.output_tokens) for c in fetch_rows} == {NO_TOKENS}

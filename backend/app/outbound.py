@@ -1,20 +1,23 @@
 """외부 HTTP 요청은 이 파일에서만 한다(스펙 17절).
 
 - 유튜브·인스타그램: 사용자가 보낸 주소를 요청하지 않고 영상 ID·게시물 코드로 고정 호스트 주소를 다시 만든다(fetch_fixed).
-- 블로그 같은 일반 주소: https·443 포트·공인 IP만(DNS 결과 전부 + 연결된 소켓의 상대 주소), 리다이렉트는 매번 다시 검사해 최대 3번,
-  text/html·1MB·8초 이내(fetch_public_page).
-예외 메시지에는 주소·키를 넣지 않는다(FetchError는 예외 이름만 담는다).
+- 블로그 같은 일반 주소: https·443 포트·공인 IP만(DNS 결과 전부 + 검사한 IP 하나에만 연결 + 연결된 소켓의 상대 주소),
+  리다이렉트는 매번 다시 검사해 최대 3번, text/html·1MB(fetch_public_page).
+- 둘 다 프록시 환경변수를 쓰지 않고, 리다이렉트까지 합쳐 8초가 지나면 감시 타이머가 소켓을 끊는다.
+예외 메시지에는 주소·키를 넣지 않는다(FetchError는 예외·이유 이름만 담는다).
 """
 
 import ipaddress
 import json
 import re
 import socket
+import threading
 import time
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, urljoin, urlsplit
 
 import requests
+import urllib3.exceptions
 from requests.adapters import HTTPAdapter
 from urllib3.connection import HTTPSConnection
 from urllib3.connectionpool import HTTPSConnectionPool
@@ -29,10 +32,15 @@ MAX_LABEL = 200  # 출처 카드 제목·채널 이름
 HEADERS = {"User-Agent": "galmuri-kitchen/1.0"}
 FIXED_HOSTS = {"www.googleapis.com", "www.youtube.com", "www.instagram.com"}
 REDIRECT_CODES = {301, 302, 303, 307, 308}
+YOUTUBE_HOSTS = {"youtube.com", "music.youtube.com", "youtube-nocookie.com"}
 YOUTUBE_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 INSTAGRAM_CODE = re.compile(r"[A-Za-z0-9_-]{5,40}")
 NAVER_BLOG_PATH = re.compile(r"/([A-Za-z0-9_-]+)/(\d+)/?")
 VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
+# is_global이어도 안에 IPv4를 담아 사설 주소로 이어질 수 있는 IPv6 대역(NAT64·IPv4 호환·IPv4 변환·사이트 로컬·6to4)
+IPV6_WRAPPERS = [
+    ipaddress.ip_network(n) for n in ("64:ff9b::/96", "64:ff9b:1::/48", "::/96", "::ffff:0:0:0/96", "fec0::/10", "2002::/16")
+]
 
 
 class FetchError(Exception):
@@ -44,17 +52,44 @@ def _is_public(ip):
         address = ipaddress.ip_address(ip.split("%", 1)[0])  # IPv6 zone(%eth0) 제거
     except ValueError:
         return False
-    if address.version == 6 and address.ipv4_mapped:
-        address = address.ipv4_mapped  # ::ffff:127.0.0.1
+    if address.version == 6:
+        if address.ipv4_mapped:
+            address = address.ipv4_mapped  # ::ffff:127.0.0.1
+        elif any(address in network for network in IPV6_WRAPPERS):
+            return False
     return address.is_global and not address.is_multicast
 
 
+def _host_key(host):
+    """requests가 보내는 호스트(IDNA)와 urlsplit 호스트를 같은 모양으로. 맞지 않으면 연결하지 않는다(안전한 쪽)."""
+    host = host.rstrip(".").lower()
+    try:
+        return host.encode("idna").decode("ascii")
+    except UnicodeError:
+        return host
+
+
 class PublicOnlyHTTPSConnection(HTTPSConnection):
-    """연결된 소켓의 상대 주소가 공인 IP가 아니면 TLS·요청 헤더를 보내기 전에 끊는다(DNS 재바인딩 방지).
-    urllib3 2.x의 connect()가 소켓을 만드는 _new_conn()을 감싼다."""
+    """addresses가 있으면 검사한 IP 하나에만 연결한다(DNS를 다시 묻지 않고, A 레코드를 여러 개 돌지 않는다).
+    연결된 소켓의 상대 주소가 공인 IP가 아니면 TLS·요청 헤더를 보내기 전에 끊는다.
+    소켓은 dup해 sockets에 모아 두고, 전체 시간이 지나면 감시 타이머가 shutdown으로 막힌 TLS·읽기를 깨운다.
+    urllib3 2.x에서 connect()가 소켓을 만드는 _new_conn()을 감싼다."""
+
+    addresses = None  # 호스트 키 → 검사한 IP
+    sockets = None
 
     def _new_conn(self):
-        sock = super()._new_conn()
+        if self.addresses is None:
+            sock = super()._new_conn()
+        else:
+            ip = self.addresses.get(_host_key(self.host))
+            if ip is None:
+                raise FetchError("Unchecked")
+            host, self._dns_host = self._dns_host, ip
+            try:
+                sock = super()._new_conn()
+            finally:
+                self._dns_host = host  # TLS 인증서 확인·Host 헤더는 원래 호스트 이름으로
         try:
             public = _is_public(sock.getpeername()[0])
         except OSError:
@@ -62,40 +97,59 @@ class PublicOnlyHTTPSConnection(HTTPSConnection):
         if not public:
             sock.close()
             raise FetchError("PrivateAddress")
+        if self.sockets is not None:
+            self.sockets.append(sock.dup())  # 같은 연결을 가리키는 우리 fd라 다른 스레드에서 shutdown해도 안전하다
         return sock
 
 
-class PublicOnlyPool(HTTPSConnectionPool):
-    ConnectionCls = PublicOnlyHTTPSConnection
-
-
 class PublicOnlyAdapter(HTTPAdapter):
+    """요청 한 번(리다이렉트 포함)에만 쓴다."""
+
+    def __init__(self, addresses=None):
+        self.sockets, self.expired = [], False
+        connection = type("PinnedConnection", (PublicOnlyHTTPSConnection,), {"addresses": addresses, "sockets": self.sockets})
+        self.pool_class = type("PinnedPool", (HTTPSConnectionPool,), {"ConnectionCls": connection})
+        super().__init__()
+
     def init_poolmanager(self, *args, **kwargs):
         super().init_poolmanager(*args, **kwargs)
-        self.poolmanager.pool_classes_by_scheme = {"https": PublicOnlyPool}  # http는 앞에서 거절한다
+        self.poolmanager.pool_classes_by_scheme = {"https": self.pool_class}  # http는 앞에서 거절한다
+
+    def expire(self):
+        self.expired = True
+        for sock in list(self.sockets):
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+    def close(self):
+        super().close()
+        for sock in self.sockets:
+            sock.close()
 
 
-def public_session():
-    session = requests.Session()
-    session.trust_env = False  # 프록시 환경변수·.netrc를 쓰지 않는다
-    session.mount("https://", PublicOnlyAdapter())
-    return session
+def _remaining(deadline):
+    left = deadline - time.monotonic()
+    if left <= 0:
+        raise FetchError("TooSlow")
+    return left
 
 
-def _read(res, started):
-    """본문을 스트리밍으로 읽으며 크기·전체 시간을 확인한다."""
+def _read(res, deadline, adapter):
+    """본문을 작게(read1) 읽으며 크기·남은 시간을 매번 확인한다. 조금씩 흘려 보내는 서버도 제한 시간 안에 끊긴다."""
     chunks, size = [], 0
-    try:
-        for chunk in res.iter_content(8192):
-            size += len(chunk)
-            if size > MAX_BYTES:
-                raise FetchError("TooLarge")
-            if time.monotonic() - started > TOTAL_SECONDS:
-                raise FetchError("TooSlow")
-            chunks.append(chunk)
-    except requests.RequestException as e:
-        raise FetchError(type(e).__name__) from None
-    return b"".join(chunks)
+    while True:
+        _remaining(deadline)
+        chunk = res.raw.read1(8192, decode_content=True)
+        if adapter.expired:
+            raise FetchError("TooSlow")
+        if not chunk:
+            return b"".join(chunks)
+        size += len(chunk)
+        if size > MAX_BYTES:
+            raise FetchError("TooLarge")
+        chunks.append(chunk)
 
 
 def _charset(res):
@@ -103,24 +157,8 @@ def _charset(res):
     return match.group(1) if match else None
 
 
-def fetch_fixed(url, params=None):
-    """정해 둔 호스트(유튜브 API·유튜브·인스타그램)만 요청한다. (본문, charset)."""
-    parts = urlsplit(url)
-    if parts.scheme != "https" or parts.hostname not in FIXED_HOSTS or parts.netloc != parts.hostname:
-        raise FetchError("HostNotAllowed")
-    started = time.monotonic()
-    try:
-        res = requests.get(url, params=params, headers=HEADERS, timeout=(CONNECT_SECONDS, TOTAL_SECONDS), allow_redirects=False, stream=True)
-    except requests.RequestException as e:
-        raise FetchError(type(e).__name__) from None
-    with res:
-        if res.status_code != 200:
-            raise FetchError(f"HTTP{res.status_code}")
-        return _read(res, started), _charset(res)
-
-
 def _check_public_url(url):
-    """https·443·사용자정보 없음·IP 문자열 아님·DNS 결과가 모두 공인 IP. 통과하지 못하면 FetchError."""
+    """https·443·사용자정보 없음·IP 문자열 아님·DNS 결과가 모두 공인 IP. (호스트 키, 연결할 IP). 통과하지 못하면 FetchError."""
     try:
         parts = urlsplit(url)
         port = parts.port
@@ -135,39 +173,65 @@ def _check_public_url(url):
         pass
     else:
         raise FetchError("IpLiteral")
+    # ponytail: getaddrinfo에는 시간 제한이 없어 감시 타이머로도 끊지 못한다. 느린 DNS가 문제면 별도 스레드로 기다린다.
     try:
         infos = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
     except (OSError, UnicodeError) as e:
         raise FetchError(type(e).__name__) from None
     if not infos or not all(_is_public(info[4][0]) for info in infos):
         raise FetchError("PrivateAddress")
+    return _host_key(host), infos[0][4][0]  # 첫 주소 하나에만 연결한다
+
+
+def _fetch(url, params=None, public=False):
+    """(본문, charset, 최종 주소). public이면 매 단계 주소를 검사하고 리다이렉트를 따라간다."""
+    addresses = {} if public else None
+    adapter = PublicOnlyAdapter(addresses)
+    session = requests.Session()
+    session.trust_env = False  # 프록시 환경변수·.netrc를 쓰지 않는다
+    session.mount("https://", adapter)
+    deadline = time.monotonic() + TOTAL_SECONDS
+    watchdog = threading.Timer(TOTAL_SECONDS, adapter.expire)
+    watchdog.daemon = True
+    watchdog.start()
+    try:
+        with session:
+            for _ in range(MAX_REDIRECTS + 1 if public else 1):
+                if public:
+                    host, ip = _check_public_url(url)
+                    addresses[host] = ip
+                timeout = (CONNECT_SECONDS, _remaining(deadline))
+                res = session.get(url, params=params, headers=HEADERS, timeout=timeout, allow_redirects=False, stream=True)
+                with res:
+                    if public and res.status_code in REDIRECT_CODES:
+                        location = res.headers.get("Location")
+                        if not location:
+                            raise FetchError("BadRedirect")
+                        url = urljoin(url, location)
+                        continue
+                    if res.status_code != 200:
+                        raise FetchError(f"HTTP{res.status_code}")
+                    if public and not res.headers.get("Content-Type", "").lower().startswith("text/html"):
+                        raise FetchError("NotHtml")
+                    return _read(res, deadline, adapter), _charset(res), url
+            raise FetchError("TooManyRedirects")
+    except (requests.RequestException, urllib3.exceptions.HTTPError, OSError) as e:
+        raise FetchError("TooSlow" if adapter.expired else type(e).__name__) from None
+    finally:
+        watchdog.cancel()
+
+
+def fetch_fixed(url, params=None):
+    """정해 둔 호스트(유튜브 API·유튜브·인스타그램)만, 리다이렉트 없이 요청한다. (본문, charset)."""
+    parts = urlsplit(url)
+    if parts.scheme != "https" or parts.hostname not in FIXED_HOSTS or parts.netloc != parts.hostname:
+        raise FetchError("HostNotAllowed")
+    return _fetch(url, params)[:2]
 
 
 def fetch_public_page(url):
     """사용자가 준 일반 주소(블로그 등)를 요청한다. (본문, charset, 검사를 통과한 최종 주소)."""
-    started = time.monotonic()
-    with public_session() as session:
-        for _ in range(MAX_REDIRECTS + 1):
-            _check_public_url(url)
-            if time.monotonic() - started > TOTAL_SECONDS:
-                raise FetchError("TooSlow")
-            try:
-                res = session.get(url, headers=HEADERS, timeout=(CONNECT_SECONDS, TOTAL_SECONDS), allow_redirects=False, stream=True)
-            except requests.RequestException as e:
-                raise FetchError(type(e).__name__) from None
-            with res:
-                if res.status_code in REDIRECT_CODES:
-                    location = res.headers.get("Location")
-                    if not location:
-                        raise FetchError("BadRedirect")
-                    url = urljoin(url, location)
-                    continue
-                if res.status_code != 200:
-                    raise FetchError(f"HTTP{res.status_code}")
-                if not res.headers.get("Content-Type", "").lower().startswith("text/html"):
-                    raise FetchError("NotHtml")
-                return _read(res, started), _charset(res), url
-    raise FetchError("TooManyRedirects")
+    return _fetch(url, public=True)
 
 
 def parse_link(value):
@@ -186,10 +250,10 @@ def parse_link(value):
         return None
     bare = host[4:] if host.startswith("www.") else host[2:] if host.startswith("m.") else host
     segments = parts.path.split("/")
-    if bare in ("youtube.com", "youtu.be"):
+    if bare in YOUTUBE_HOSTS or bare == "youtu.be":
         if bare == "youtu.be":
             video_id = segments[1] if len(segments) > 1 else ""
-        elif parts.path == "/watch":
+        elif parts.path.rstrip("/") == "/watch":
             video_id = parse_qs(parts.query).get("v", [""])[0]
         elif len(segments) > 2 and segments[1] in ("shorts", "live", "embed"):
             video_id = segments[2]
@@ -223,56 +287,67 @@ def video_snippet(video_id, key):
         items = json.loads(body)["items"]
         snippet = items[0]["snippet"] if items else None
         thumbnails = snippet.get("thumbnails", {}) if snippet else {}
+        sizes = [thumbnails.get(size) for size in ("high", "medium", "default")]
     except (ValueError, KeyError, TypeError, AttributeError, IndexError):
         raise FetchError("BadResponse") from None
     if snippet is None:
         return None
-    thumbnail = next((thumbnails[size].get("url") for size in ("high", "medium", "default") if isinstance(thumbnails.get(size), dict)), None)
+    thumbnail = next((s["url"] for s in sizes if isinstance(s, dict) and _https(s.get("url"))), None)
     description = snippet.get("description")
     return {
         "title": _label(snippet.get("title")),
         "description": description[:MAX_TEXT] if isinstance(description, str) else "",
         "channel_title": _label(snippet.get("channelTitle")),
-        "thumbnail_url": _https(thumbnail),
+        "thumbnail_url": thumbnail,
     }
 
 
 class _Page(HTMLParser):
-    """og 메타·<title>·본문 글. script·style·noscript·nav·header·footer·form 안의 글은 버린다."""
+    """og 메타·<title>·본문 글. script·style·noscript·nav·header·footer·form 안의 글은 버린다.
+    열린 태그를 쌓아 두고 부모가 닫히면 함께 닫아, 닫히지 않은 <form>·<title>이 나머지 글을 삼키지 않게 한다."""
 
     SKIP = {"script", "style", "noscript", "nav", "header", "footer", "form"}
-    BLOCK = {"p", "div", "br", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6", "section", "article", "ul", "ol", "table", "blockquote"}
+    BLOCK = {"p", "div", "br", "li", "tr", "dd", "dt", "h1", "h2", "h3", "h4", "h5", "h6", "section", "article", "ul", "ol", "table", "blockquote"}
+    CELL = {"td", "th"}
+    VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+    RCDATA_CONTENT_ELEMENTS = ("textarea",)  # <title>을 글자 그대로 읽으면 닫히지 않았을 때 끝까지 삼킨다
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.meta, self.title, self.parts = {}, None, []
-        self._skip, self._title = 0, None
+        self._open, self._title = [], None
+
+    def end_title(self):
+        if self._title is not None:
+            self.title, self._title = "".join(self._title), None
+
+    def _separator(self, tag):
+        self.parts.append("\n" if tag in self.BLOCK else " " if tag in self.CELL else "")
 
     def handle_starttag(self, tag, attrs):
-        if tag in self.SKIP:
-            self._skip += 1
-        elif tag == "meta":
+        self.end_title()
+        if tag == "meta":
             attrs = dict(attrs)
             key, content = attrs.get("property") or attrs.get("name"), attrs.get("content")
             if key in ("og:title", "og:description", "og:image", "og:site_name") and content:
                 self.meta.setdefault(key, content)
         elif tag == "title" and self.title is None:
             self._title = []
-        if tag in self.BLOCK:
-            self.parts.append("\n")
+        if tag not in self.VOID and tag != "title":
+            self._open.append(tag)
+        self._separator(tag)
 
     def handle_endtag(self, tag):
-        if tag in self.SKIP and self._skip:
-            self._skip -= 1
-        elif tag == "title" and self._title is not None:
-            self.title, self._title = "".join(self._title), None
-        if tag in self.BLOCK:
-            self.parts.append("\n")
+        self.end_title()
+        if tag in self._open:
+            while self._open.pop() != tag:
+                pass
+        self._separator(tag)
 
     def handle_data(self, data):
         if self._title is not None:
             self._title.append(data)
-        elif not self._skip:
+        elif not any(tag in self.SKIP for tag in self._open):
             self.parts.append(data)
 
     def text(self):
@@ -289,16 +364,18 @@ def _parse_html(body, encoding):
     page = _Page()
     page.feed(html)
     page.close()
+    page.end_title()
     return page
 
 
 def instagram_post(shortcode):
-    """게시물 링크 미리보기(og:description)에서 캡션을 읽는다. 캡션이 없으면(로그인 화면 등) None."""
+    """게시물 링크 미리보기(og:description)에서 캡션을 읽는다. 게시물 미리보기가 아니면(로그인 화면 등) None."""
     page = _parse_html(*fetch_fixed(f"https://www.instagram.com/p/{shortcode}/"))
+    title = _label(page.meta.get("og:title"))
     caption = page.meta.get("og:description", "").strip()
-    if not caption:
+    if not caption or not any(mark in title for mark in ("on Instagram", "Instagram에서", "Instagram의")):
         return None
-    return {"caption": caption[:MAX_TEXT], "title": _label(page.meta.get("og:title")), "thumbnail_url": _https(page.meta.get("og:image"))}
+    return {"caption": caption[:MAX_TEXT], "title": title, "thumbnail_url": _https(page.meta.get("og:image"))}
 
 
 def web_page(url):
