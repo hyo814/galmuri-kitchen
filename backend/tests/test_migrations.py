@@ -251,7 +251,7 @@ def test_shopping_notes_migration_adds_and_removes_tables(app):
             photo_uniques = {tuple(u["column_names"]) for u in inspector.get_unique_constraints("shopping_note_photos")}
             indexes = {ix["name"] for ix in inspector.get_indexes("shopping_notes") + inspector.get_indexes("shopping_note_photos")}
         assert note_columns == {"id", "user_id", "client_id", "place", "body", "created_at", "updated_at"}
-        assert photo_columns == {"id", "note_id", "client_id", "photo_key", "created_at"}
+        assert photo_columns == {"id", "note_id", "client_id", "photo_key", "size", "created_at"}
         assert note_fks == {"users": "CASCADE"}
         assert photo_fks == {"shopping_notes": "CASCADE"}
         assert ("user_id", "client_id") in note_uniques

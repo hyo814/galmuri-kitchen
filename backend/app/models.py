@@ -169,6 +169,7 @@ class ShoppingNotePhoto(db.Model):
     note_id = db.Column(db.Integer, db.ForeignKey("shopping_notes.id", ondelete="CASCADE"), nullable=False, index=True)
     client_id = db.Column(db.String(36))
     photo_key = db.Column(db.String(200), nullable=False, unique=True)
+    size = db.Column(db.Integer, nullable=False)  # 바이트, 사용자별 저장 공간 상한용
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
 

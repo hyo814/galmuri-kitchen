@@ -8,10 +8,10 @@ from app import storage
 JPEG = b"\xff\xd8\xff\xe0" + b"0" * 20
 
 
-def test_mode_local_off_r2(app, monkeypatch):
+def test_mode_fails_closed_outside_dev(app):
     with app.app_context():
         assert storage.mode() == "local"
-        monkeypatch.setenv("RENDER", "1")
+        app.config["DEV_MODE"] = False  # 운영: R2가 없으면 로컬 디스크에 두지 않는다
         assert storage.mode() == "off"
         app.config.update(R2_ACCOUNT_ID="a", R2_ACCESS_KEY_ID="b", R2_SECRET_ACCESS_KEY="c", R2_BUCKET="d")
         assert storage.mode() == "r2"
@@ -30,7 +30,8 @@ def test_local_put_serves_with_headers_and_delete(app):
             assert res.get_data() == JPEG
             assert res.mimetype == "image/jpeg"
             assert res.headers["X-Content-Type-Options"] == "nosniff"
-            assert res.headers["Cache-Control"] == "private, max-age=86400"
+            assert res.headers["Cache-Control"] == "private, max-age=3600"
+            assert res.headers["Content-Security-Policy"] == "default-src 'none'; sandbox"
             res.close()
         storage.delete([key, "shopping/1/missing.jpg"])  # 없는 키는 조용히 넘어간다
         assert not os.path.exists(path)

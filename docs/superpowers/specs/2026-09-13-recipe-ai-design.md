@@ -101,7 +101,7 @@ recipe-ai/
 | GET/POST | `/api/channels` · PATCH/DELETE `/api/channels/<id>` | 채널 목록·추가 / 기본 채널 숨기기·내 채널 빼기(17절) |
 | GET/POST | `/api/cook-logs` | 기록 목록 / 생성(multipart: 필드 + 사진 + `usages` JSON) |
 | DELETE | `/api/cook-logs/<id>` | 기록 삭제(재고 복원 안 함) |
-| GET | `/api/photos/<key>` | 소유자 확인(내 접두사 + 사진 행) 후 로컬은 파일 전송(`private, max-age=86400`·nosniff), R2는 presigned URL 302 예정 — 연결 전에는 503(28절). 남의 키·지운 사진 404 |
+| GET | `/api/photos/<key>` | 소유자 확인(내 접두사 + 사진 행) 후 로컬은 파일 전송(`private, max-age=3600`·nosniff·`Content-Security-Policy: default-src 'none'; sandbox`), R2는 presigned URL 302 예정 — 연결 전에는 503(28절). 남의 키·지운 사진 404 |
 
 CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를 1,000건 단위로 받아 upsert(`FOODSAFETY_API_KEY` 필요, 받으면 예시 레시피는 지움). `flask seed-sample-recipes` — 키 없이 화면을 확인하는 직접 쓴 예시 레시피 12개(`is_sample`).
 
@@ -491,12 +491,12 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **수량 한 칸(`parseQuantityText`):** `1모`·`30구`·`½봉`·`1/2대`, 숫자만이면 `개`, 단위만이면 1. 숫자 범위는 양념 입력과 같다(0.01~10000), 단위 10자까지. 표시(`quantityText`)는 되읽어도 같은 값.
 
 ### 장보기 메모·사진 (Task 3)
-- 테이블 `shopping_notes`(id, user_id CASCADE, client_id, place ≤30, body Text ≤2000, created_at, updated_at, UNIQUE(user_id, client_id)), `shopping_note_photos`(id, note_id CASCADE, client_id, photo_key UNIQUE, created_at, UNIQUE(note_id, client_id)). 사용자당 메모 20개, 메모당 사진 10장.
+- 테이블 `shopping_notes`(id, user_id CASCADE, client_id, place ≤30, body Text ≤2000, created_at, updated_at, UNIQUE(user_id, client_id)), `shopping_note_photos`(id, note_id CASCADE, client_id, photo_key UNIQUE, size(바이트), created_at, UNIQUE(note_id, client_id)). 사용자당 메모 20개, 메모당 사진 10장, 사진 한 장 3MB, 사용자당 사진 합계 200MB.
 - 메모 모양 `{id, client_id, place, body, updated_at, photos:[{id, client_id, url: "/api/photos/<key>"}]}`.
-- `POST /api/shopping/notes` `{place?, body, client_id?, edited_at?}` → 201(같은 `client_id`면 그 메모 200, 가득 차도). body는 문자열(빈 문자열 허용, 앞뒤 공백 그대로 — 자동 저장 중인 글), place는 앞뒤 공백을 빼고 비면 null. `edited_at`(시간대가 붙은 ISO 시각)을 주면 `updated_at`이 그 시각 — 오프라인에서 만들고 고친 메모가 늦게 도착한 만들기 때문에 409가 나지 않게. 오류: `메모는 20개까지 둘 수 있어요.` · `메모는 2000자까지 쓸 수 있어요.` · `장소는 30자까지 입력해주세요.` · 그 밖의 모양 `잘못된 요청이에요.`
+- `POST /api/shopping/notes` `{place?, body, client_id?, edited_at?}` → 201(같은 `client_id`면 그 메모 200, 가득 차도). body는 문자열(빈 문자열 허용, 앞뒤 공백 그대로 — 자동 저장 중인 글, NUL 글자는 400 — PostgreSQL이 받지 않아 기기가 끝없이 다시 보내지 않게), place는 앞뒤 공백을 빼고 비면 null. `edited_at`(시간대가 붙은 ISO 시각)을 주면 `updated_at`이 그 시각 — 오프라인에서 만들고 고친 메모가 늦게 도착한 만들기 때문에 409가 나지 않게. 오류: `메모는 20개까지 둘 수 있어요.` · `메모는 2000자까지 쓸 수 있어요.` · `장소는 30자까지 입력해주세요.` · 그 밖의 모양 `잘못된 요청이에요.`
 - `PUT /api/shopping/notes/<id>` `{place?, body, edited_at}` → 서버 `updated_at`이 `edited_at`보다 늦으면 409 `{error: "다른 기기에서 먼저 고친 메모가 있어요.", note}`(바꾸지 않음, 기기는 자기 글을 따로 보관 — 19절). 아니면 place·body를 바꾸고 `updated_at = edited_at`(같은 요청을 다시 보내도 200). `edited_at`이 10분 넘게 미래면 서버 시각. 기기 시계 비교라 체크와 같은 한계. 사진 추가·삭제는 `updated_at`을 바꾸지 않는다.
-- `DELETE /api/shopping/notes/<id>` → 204, 커밋 뒤 사진 파일 삭제(실패는 로그만).
-- `POST /api/shopping/notes/<id>/photos` multipart `image`, `client_id?` → 201 사진 모양(같은 `client_id`면 200). 순서: 저장소가 로컬이 아니면 503 `사진을 지금은 올릴 수 없어요.` → 남의/없는 메모 404 → 10MB 초과 413 → 사진 없음 400 `사진을 올려주세요.` → 서명이 JPG·PNG·WEBP 아님 415 `사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요.` → 10장 400 `사진은 메모 하나에 10장까지 넣을 수 있어요.` → 키 `shopping/<user_id>/<uuid4 hex>.<jpg|png|webp>`(확장자는 서명으로) 저장 → 행 커밋(실패하면 방금 저장한 파일 삭제).
+- `DELETE /api/shopping/notes/<id>` → 204. 사진 올리기와 같은 사용자 잠금을 먼저 잡고 사진 목록을 읽어, 커밋 뒤 사진 파일 삭제(실패는 로그만).
+- `POST /api/shopping/notes/<id>/photos` multipart `image`, `client_id?` → 201 사진 모양(같은 `client_id`면 200). 순서: 저장소가 로컬이 아니면 503 `사진을 지금은 올릴 수 없어요.` → 남의/없는 메모 404 → 10MB 초과 413 → 사진 없음 400 `사진을 올려주세요.` → 3MB 초과 413 `사진이 너무 커요.` → 서명이 JPG·PNG·WEBP 아님 415 `사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요.` → 10장 400 `사진은 메모 하나에 10장까지 넣을 수 있어요.` → 사용자 합계 200MB 초과 400 `사진 저장 공간이 가득 찼어요. 오래된 메모 사진을 지워주세요.` → 키 `shopping/<user_id>/<uuid4 hex>.<jpg|png|webp>`(확장자는 서명으로) 저장 → 행 커밋(실패하면 방금 저장한 파일 삭제). EXIF는 서버가 지우지 않는다 — 화면(Task 10)이 캔버스로 다시 인코딩해 올려 빠진다(필요하면 나중에 서버에서 다시 저장).
 - `DELETE /api/shopping/notes/<id>/photos/<photo_id>` → 204, 커밋 뒤 파일 삭제. 다른 메모의 사진 id는 404.
-- 저장소 `app/storage.py`: `mode()` — R2 값 네 개가 모두 있으면 `r2`, 없고 `RENDER`면 `off`, 아니면 `local`(`backend/uploads/`, 키는 `safe_join`으로 `..`·앞 `/` 거부). **R2는 아직 연결하지 않았다(boto3 미설치)** — `r2`·`off` 모두 사진 올리기·보기 503. 운영에서 사진을 쓰기 전에 boto3를 넣고 put/delete/presigned 302를 붙인다.
+- 저장소 `app/storage.py`: `mode()` — R2 값 네 개가 모두 있으면 `r2`, 없고 `DEV_MODE`면 `local`, 아니면 `off`(닫힌 쪽이 기본)(`local`은 `backend/uploads/`, 키는 `safe_join`으로 `..`·앞 `/` 거부). **R2는 아직 연결하지 않았다(boto3 미설치)** — `r2`·`off` 모두 사진 올리기·보기 503. 운영에서 사진을 쓰기 전에 boto3를 넣고 put/delete/presigned 302를 붙인다.
 - 회원 탈퇴 때 `shopping/<user_id>/` 파일을 따로 지운다(27절, 탈퇴 태스크).

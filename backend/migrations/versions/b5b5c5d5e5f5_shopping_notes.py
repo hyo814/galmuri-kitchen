@@ -35,6 +35,7 @@ def upgrade():
         sa.Column("note_id", sa.Integer(), nullable=False),
         sa.Column("client_id", sa.String(length=36), nullable=True),
         sa.Column("photo_key", sa.String(length=200), nullable=False),
+        sa.Column("size", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(
             ["note_id"], ["shopping_notes.id"], name=op.f("fk_shopping_note_photos_note_id_shopping_notes"), ondelete="CASCADE"

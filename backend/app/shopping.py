@@ -37,6 +37,8 @@ CAP_ERROR = f"장보기 목록은 {MAX_SHOPPING_ITEMS}개까지 담을 수 있�
 LOCATION_CHANGED = "선택한 보관 위치가 방금 바뀌었어요. 다시 시도해주세요."
 MAX_NOTES = 20  # 사용자당
 MAX_PHOTOS = 10  # 메모당(시안 `사진 2 / 10`)
+MAX_PHOTO_BYTES = 3 * 1024 * 1024  # 한 장. 화면은 긴 변 1568px로 줄여 올린다(19절)
+MAX_USER_PHOTO_BYTES = 200 * 1024 * 1024  # 사용자당 메모 사진 합계
 MAX_BODY = 2000
 MAX_PLACE = 30
 NOTE_CONFLICT = "다른 기기에서 먼저 고친 메모가 있어요."
@@ -318,6 +320,8 @@ def _note_fields(data):
     place, body = data.get("place"), data.get("body")
     if not isinstance(body, str) or not (place is None or isinstance(place, str)):
         abort(400, BAD_REQUEST)
+    if "\x00" in body or (place and "\x00" in place):  # PostgreSQL이 받지 않아 500이 되고 기기가 계속 다시 보낸다
+        abort(400, BAD_REQUEST)
     if len(body) > MAX_BODY:
         abort(400, f"메모는 {MAX_BODY}자까지 쓸 수 있어요.")
     place = place.strip() if place else None
@@ -373,6 +377,7 @@ def update_note(note_id):
 @bp.delete("/notes/<int:note_id>")
 @login_required
 def delete_note(note_id):
+    _lock_user_items(g.user.id)  # 사진 올리기와 한 줄로: 사진 목록을 읽은 뒤 들어온 사진 파일이 주인 없이 남지 않게
     note = _owned_note(note_id)
     keys = [p.photo_key for p in note.photos]
     db.session.delete(note)
@@ -392,6 +397,8 @@ def upload_photo(note_id):
     data = image.read() if image is not None else b""
     if not data:
         abort(400, "사진을 올려주세요.")
+    if len(data) > MAX_PHOTO_BYTES:
+        abort(413, "사진이 너무 커요.")
     media_type = sniff_image_type(data)  # 선언된 Content-Type이 아니라 파일 서명을 믿는다
     if media_type is None:
         abort(415, "사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요.")
@@ -402,10 +409,20 @@ def upload_photo(note_id):
             return jsonify(photo_json(existing))
     if ShoppingNotePhoto.query.filter_by(note_id=note.id).count() >= MAX_PHOTOS:
         abort(400, f"사진은 메모 하나에 {MAX_PHOTOS}장까지 넣을 수 있어요.")
+    used = (
+        db.session.query(db.func.coalesce(db.func.sum(ShoppingNotePhoto.size), 0))
+        .join(ShoppingNote)
+        .filter(ShoppingNote.user_id == g.user.id)
+        .scalar()
+    )
+    if used + len(data) > MAX_USER_PHOTO_BYTES:
+        abort(400, "사진 저장 공간이 가득 찼어요. 오래된 메모 사진을 지워주세요.")
+    # ponytail: 서버는 EXIF(촬영 위치 등)를 지우지 않고 받은 바이트 그대로 둔다. 화면(Task 10)이 캔버스로 다시 인코딩해 올리므로
+    # 메타데이터가 빠진다. 다른 경로로 올린 원본이 문제되면 서버에서 Pillow로 다시 저장하는 것을 더한다.
     ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[media_type]
     key = f"shopping/{g.user.id}/{uuid.uuid4().hex}.{ext}"
     storage.put(key, data, media_type)
-    photo = ShoppingNotePhoto(note_id=note.id, client_id=client_id, photo_key=key)
+    photo = ShoppingNotePhoto(note_id=note.id, client_id=client_id, photo_key=key, size=len(data))
     db.session.add(photo)
     try:
         db.session.commit()

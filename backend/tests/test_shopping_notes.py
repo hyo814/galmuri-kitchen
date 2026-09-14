@@ -2,10 +2,12 @@ import io
 import os
 from datetime import datetime, timedelta, timezone
 
+from app import shopping
 from app.models import ShoppingNote, ShoppingNotePhoto, User, db
 
 JPEG = b"\xff\xd8\xff\xe0" + b"0" * 20
 PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 20
+WEBP = b"RIFF\x00\x00\x00\x00WEBP" + b"0" * 20
 CONFLICT = "다른 기기에서 먼저 고친 메모가 있어요."
 
 
@@ -53,7 +55,7 @@ def test_create_note_resend_and_validation(client, login):
     assert (empty.get_json()["body"], empty.get_json()["place"]) == ("", None)
     assert add_note(client, body="가" * 2001).get_json() == {"error": "메모는 2000자까지 쓸 수 있어요."}
     assert add_note(client, place="가" * 31).get_json() == {"error": "장소는 30자까지 입력해주세요."}
-    for bad in ({"body": 3}, {"place": 3}, {"client_id": "x" * 37}, {"edited_at": "2026-09-14T00:00:00"}):
+    for bad in ({"body": 3}, {"place": 3}, {"client_id": "x" * 37}, {"edited_at": "2026-09-14T00:00:00"}, {"body": "a\x00b"}, {"place": "이\x00마트"}):
         res = add_note(client, **bad)
         assert (res.status_code, res.get_json()) == (400, {"error": "잘못된 요청이에요."})
 
@@ -95,6 +97,8 @@ def test_put_validation_and_future_clamp(client, login):
     for bad in ({"body": "x"}, {"body": "x", "edited_at": "2026-09-14T00:00:00"}, {"edited_at": ago(0)}):
         assert client.put(url, json=bad).status_code == 400
     assert client.put(url, json={"body": "가" * 2001, "edited_at": ago(0)}).get_json() == {"error": "메모는 2000자까지 쓸 수 있어요."}
+    res = client.put(url, json={"body": "\x00", "edited_at": ago(0)})  # PostgreSQL이 받지 않는 글자 → 500 대신 400
+    assert (res.status_code, res.get_json()) == (400, {"error": "잘못된 요청이에요."})
     future = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
     res = client.put(url, json={"body": "미래", "edited_at": future})
     assert datetime.fromisoformat(res.get_json()["updated_at"]) < datetime.now(timezone.utc) + timedelta(minutes=1)
@@ -126,7 +130,8 @@ def test_upload_photo_serves_to_owner(client, login, app):
     got = client.get(photo["url"])
     assert (got.status_code, got.data, got.mimetype) == (200, JPEG, "image/jpeg")
     assert got.headers["X-Content-Type-Options"] == "nosniff"
-    assert got.headers["Cache-Control"] == "private, max-age=86400"
+    assert got.headers["Cache-Control"] == "private, max-age=3600"
+    assert got.headers["Content-Security-Policy"] == "default-src 'none'; sandbox"
 
     again = upload(client, note_id, client_id="p-1")
     assert (again.status_code, again.get_json()) == (200, photo)
@@ -135,6 +140,20 @@ def test_upload_photo_serves_to_owner(client, login, app):
     png = upload(client, note_id, data=PNG).get_json()
     assert png["url"].endswith(".png")
     assert client.get(png["url"]).mimetype == "image/png"
+    webp = upload(client, note_id, data=WEBP).get_json()
+    assert webp["url"].endswith(".webp")
+    assert client.get(webp["url"]).mimetype == "image/webp"
+
+
+def test_polyglot_jpeg_is_served_as_image_only(client, login):
+    login()
+    note_id = add_note(client).get_json()["id"]
+    polyglot = b"\xff\xd8\xff\xe0<html><script>alert(1)</script></html>"
+    photo = upload(client, note_id, data=polyglot).get_json()
+    got = client.get(photo["url"])
+    assert (got.status_code, got.data, got.mimetype) == (200, polyglot, "image/jpeg")
+    assert got.headers["X-Content-Type-Options"] == "nosniff"
+    assert got.headers["Content-Security-Policy"] == "default-src 'none'; sandbox"
 
 
 def test_upload_photo_errors(client, login, app, monkeypatch):
@@ -148,19 +167,35 @@ def test_upload_photo_errors(client, login, app, monkeypatch):
     assert (res.status_code, res.get_json()) == (415, {"error": "사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요."})
     assert upload(client, note_id, client_id="x" * 37).status_code == 400
     assert upload(client, note_id, data=b"x" * (10 * 1024 * 1024 + 1)).status_code == 413
+    res = upload(client, note_id, data=JPEG[:4] + b"0" * (3 * 1024 * 1024 - 3))  # 한 장 3MB 넘음
+    assert (res.status_code, res.get_json()) == (413, {"error": "사진이 너무 커요."})
+    assert upload(client, note_id, data=JPEG[:4] + b"0" * (3 * 1024 * 1024 - 4)).status_code == 201
     assert upload(client, 999999).status_code == 404
 
-    for _ in range(10):
+    for _ in range(9):
         assert upload(client, note_id).status_code == 201
     res = upload(client, note_id)
     assert (res.status_code, res.get_json()) == (400, {"error": "사진은 메모 하나에 10장까지 넣을 수 있어요."})
 
-    monkeypatch.setenv("RENDER", "1")  # 운영에서 R2가 없으면
+    app.config["DEV_MODE"] = False  # 운영에서 R2가 없으면
     res = upload(client, note_id)
     assert (res.status_code, res.get_json()) == (503, {"error": "사진을 지금은 올릴 수 없어요."})
-    monkeypatch.delenv("RENDER")
     app.config.update(R2_ACCOUNT_ID="a", R2_ACCESS_KEY_ID="b", R2_SECRET_ACCESS_KEY="c", R2_BUCKET="d")
     assert upload(client, note_id).status_code == 503  # R2는 아직 연결 전
+
+
+def test_user_total_photo_bytes_cap(client, login, monkeypatch):
+    login()
+    monkeypatch.setattr(shopping, "MAX_USER_PHOTO_BYTES", len(JPEG) * 3)
+    first, second = add_note(client).get_json()["id"], add_note(client).get_json()["id"]
+    assert upload(client, first).status_code == 201
+    assert upload(client, second).status_code == 201  # 메모를 가로질러 센다
+    photo = upload(client, second).get_json()
+    res = upload(client, first)
+    assert (res.status_code, res.get_json()) == (400, {"error": "사진 저장 공간이 가득 찼어요. 오래된 메모 사진을 지워주세요."})
+    assert upload(client, second, client_id="none-yet").status_code == 400
+    assert client.delete(f"/api/shopping/notes/{second}/photos/{photo['id']}").status_code == 204
+    assert upload(client, first).status_code == 201
 
 
 def test_delete_photo_removes_file(client, login, app):
@@ -201,7 +236,18 @@ def test_other_users_notes_photos_and_keys_are_404(client, login, app):
     # 내 접두사로 바꿔도 행이 없으면 404, 경로 조작도 404
     key = photo["url"].removeprefix("/api/photos/")
     assert client.get(f"/api/photos/shopping/{intruder.id}/{key.rsplit('/', 1)[1]}").status_code == 404
-    assert client.get(f"/api/photos/shopping/{intruder.id}/../{owner.id}/{key.rsplit('/', 1)[1]}").status_code == 404
+    name = key.rsplit("/", 1)[1]
+    for tricky in (
+        f"shopping/{intruder.id}/../{owner.id}/{name}",
+        f"shopping/{intruder.id}/%2e%2e%2f{owner.id}/{name}",
+        f"shopping/{intruder.id}/%2e%2e/{owner.id}/{name}",
+        f"shopping/{intruder.id}/..\\{owner.id}\\{name}",
+        f"shopping/{intruder.id}/..%5c{owner.id}%5c{name}",
+        f"shopping/{intruder.id}//{owner.id}/{name}",
+        f"/shopping/{owner.id}/{name}",
+        f"shopping//{owner.id}/{name}",
+    ):
+        assert client.get(f"/api/photos/{tricky}", follow_redirects=True).status_code == 404, tricky
     assert client.get("/api/shopping").get_json()["notes"][0]["id"] == mine_note
 
     as_user(client, owner)

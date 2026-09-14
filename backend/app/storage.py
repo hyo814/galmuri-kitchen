@@ -4,7 +4,7 @@ import os
 from flask import abort, current_app, send_from_directory
 from werkzeug.security import safe_join
 
-# 사진 저장소(스펙 3절): R2 | 개발용 로컬 폴더(UPLOAD_DIR) | 운영에서 저장소 없음(off → 사진 올리기 503).
+# 사진 저장소(스펙 3절): R2 | 개발용 로컬 폴더(UPLOAD_DIR, DEV_MODE일 때만) | 그 밖에는 off(사진 올리기 503).
 # 키는 서버가 만든다(`shopping/<user_id>/<hex>.<ext>`). 보여주기 전 소유자 확인은 photos.py가 한다.
 R2_KEYS = ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET")
 log = logging.getLogger(__name__)
@@ -13,7 +13,8 @@ log = logging.getLogger(__name__)
 def mode():
     if all(current_app.config.get(k) for k in R2_KEYS):
         return "r2"
-    return "off" if os.environ.get("RENDER") else "local"  # Render 디스크는 배포 때 지워진다
+    # 닫힌 쪽이 기본: 개발 모드가 아니면 로컬 디스크에 두지 않는다(Render 디스크는 배포 때 지워진다).
+    return "local" if current_app.config.get("DEV_MODE") else "off"
 
 
 def _r2_not_connected():
@@ -56,6 +57,7 @@ def photo_response(key):
     if mode() != "local":
         abort(503, "사진을 지금은 볼 수 없어요.")
     res = send_from_directory(current_app.config["UPLOAD_DIR"], key)  # 경로 조작·없는 파일은 404
-    res.headers["Cache-Control"] = "private, max-age=86400"
+    res.headers["Cache-Control"] = "private, max-age=3600"
+    res.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"  # 주소를 직접 열어도 스크립트가 돌지 않게
     res.headers["X-Content-Type-Options"] = "nosniff"
     return res
