@@ -585,3 +585,10 @@ def test_dates_must_be_yyyy_mm_dd(client, login, value):
     assert (res.status_code, res.get_json()) == (400, {"error": "구입일은 YYYY-MM-DD 형식으로 입력해주세요."})
     res = create(client, expires_on=value)
     assert (res.status_code, res.get_json()) == (400, {"error": "유통기한은 YYYY-MM-DD 형식으로 입력해주세요."})
+
+
+def test_huge_integer_quantity_is_400(client, login):
+    login()
+    res = create(client, quantity=10**400, purchased_on=seoul_today().isoformat())
+    assert res.status_code == 400
+    assert res.get_json() == {"error": "수량은 0보다 커야 해요."}

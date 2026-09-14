@@ -2,9 +2,10 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from app import ingredients as ingredients_module
 from app import shopping
 from app.ingredients import seoul_today
-from app.models import ShoppingItem, StorageLocation, User, db
+from app.models import Ingredient, ShoppingItem, StorageLocation, User, db
 
 INVALID_LOCATION = "보관 위치를 다시 선택해주세요."
 CAP_ERROR = "장보기 목록은 300개까지 담을 수 있어요. 필요 없는 항목을 빼주세요."
@@ -408,3 +409,332 @@ def test_user_delete_cascades(client, login, app):
         db.session.delete(db.session.get(User, user.id))
         db.session.commit()
         assert db.session.get(ShoppingItem, item_id) is None
+
+
+# --- 재고에 넣기 (Task 2) ---
+
+LIST_CHANGED = "목록이 방금 바뀌었어요. 다시 불러와주세요."
+
+
+def checked(client, name, **body):
+    item = add(client, name=name, **body).get_json()
+    res = client.patch(f"/api/shopping/items/{item['id']}", json={"done": True, "changed_at": iso(datetime.now(timezone.utc))})
+    return res.get_json()
+
+
+def locations_by_name(client):
+    return {l["name"]: l["id"] for l in client.get("/api/locations").get_json()}
+
+
+def stock_row(item, **overrides):
+    return {"id": item["id"], "name": item["name"], "quantity": item["quantity"], "unit": item["unit"], "location_id": item.get("location_id"), **overrides}
+
+
+def stock(client, *rows, purchased_on=None):
+    return client.post("/api/shopping/items/stock", json={"purchased_on": purchased_on or seoul_today().isoformat(), "items": list(rows)})
+
+
+def test_stock_draft_only_checked_unstocked_with_location_reason(client, login, app):
+    user = login()
+    locs = locations_by_name(client)
+    today = seoul_today()
+    with app.app_context():
+        older = datetime.now(timezone.utc) - timedelta(days=5)
+        db.session.add_all(
+            [
+                Ingredient(user_id=user.id, name="우유", location_id=locs["실온"], purchased_on=today, created_at=older),
+                Ingredient(user_id=user.id, name="우유 (1L)", location_id=locs["냉동실"], purchased_on=today),
+                Ingredient(user_id=user.id, name="대파 (국산)", location_id=locs["실온"], purchased_on=today),
+                ShoppingItem(user_id=user.id, name="계란", done_at=datetime.now(timezone.utc), stocked_at=datetime.now(timezone.utc)),
+            ]
+        )
+        db.session.commit()
+    with_location = checked(client, "배추", location_id=locs["냉동실"])
+    same_name = checked(client, "우유", quantity=2, unit="L")
+    scallion = checked(client, "대파")
+    fallback = checked(client, "두부")
+    add(client, name="양파")  # 체크 안 함
+    login("other")
+    checked(client, "남의 우유")
+    with client.session_transaction() as s:
+        s["user_id"], s["pid"] = user.id, user.provider_id
+
+    res = client.get("/api/shopping/stock-draft")
+    assert res.status_code == 200
+    assert res.headers["Cache-Control"] == "no-store"
+    assert res.get_json() == {
+        "purchased_on": today.isoformat(),
+        "items": [
+            {"id": with_location["id"], "name": "배추", "quantity": 1, "unit": "개", "location_id": locs["냉동실"], "location_reason": "item"},
+            {"id": same_name["id"], "name": "우유", "quantity": 2, "unit": "L", "location_id": locs["냉동실"], "location_reason": "same_name"},
+            {"id": scallion["id"], "name": "대파", "quantity": 1, "unit": "개", "location_id": locs["실온"], "location_reason": "same_name"},
+            {"id": fallback["id"], "name": "두부", "quantity": 1, "unit": "개", "location_id": locs["냉장실"], "location_reason": "default"},
+        ],
+    }
+
+
+def test_stock_creates_ingredients_and_marks_items_stocked_atomically(client, login, app):
+    user = login()
+    locs = locations_by_name(client)
+    scallion = checked(client, "대파", unit="단")
+    milk = checked(client, "우유")
+    onion = add(client, name="양파").get_json()
+    yesterday = (seoul_today() - timedelta(days=1)).isoformat()
+
+    res = stock(client, stock_row(scallion, location_id=locs["냉장실"]), stock_row(milk, name="서울우유", quantity=2, unit="L", location_id=None, expires_on="2026-09-20", price=3000), purchased_on=yesterday)
+    assert res.status_code == 201
+    assert res.get_json() == {"created": 2}
+
+    ingredients = client.get("/api/ingredients").get_json()
+    assert sorted((i["name"], i["quantity"], i["unit"], i["purchased_on"], i["location_name"], i["expires_on"], i["price"]) for i in ingredients) == [
+        ("대파", 1, "단", yesterday, "냉장실", None, None),
+        ("서울우유", 2, "L", yesterday, "냉장실", None, None),
+    ]
+    body = snapshot(client)
+    assert [i["id"] for i in body["items"]] == [onion["id"]]
+    assert {i["id"] for i in body["stocked"]} == {scallion["id"], milk["id"]}
+    assert all(i["stocked_at"] for i in body["stocked"])
+    assert client.get("/api/shopping/stock-draft").get_json()["items"] == []
+    retry = stock(client, stock_row(scallion), stock_row(milk), purchased_on=yesterday)  # 응답을 못 받은 기기가 다시 보냄
+    assert (retry.status_code, retry.get_json()) == (200, {"created": 0})
+    partial = stock(client, stock_row(milk), stock_row(checked(client, "두부")))
+    assert (partial.status_code, partial.get_json()) == (400, {"error": LIST_CHANGED})
+    with app.app_context():
+        assert Ingredient.query.filter_by(user_id=user.id).count() == 2
+
+
+def test_stock_accepts_more_than_50_rows(client, login, app):
+    user = login()
+    with app.app_context():
+        done = datetime.now(timezone.utc)
+        db.session.add_all([ShoppingItem(user_id=user.id, name=f"재료{i:02d}번", done_at=done) for i in range(60)])
+        db.session.commit()
+    draft = client.get("/api/shopping/stock-draft").get_json()["items"]
+    res = stock(client, *[stock_row(item) for item in draft])
+    assert (res.status_code, res.get_json()) == (201, {"created": 60})
+    assert len(client.get("/api/ingredients").get_json()) == 60
+
+
+def test_stock_rejects_unchecked_already_stocked_or_missing_without_creating(client, login, app):
+    user = login()
+    good = checked(client, "대파")
+    unchecked = add(client, name="양파").get_json()
+    with app.app_context():
+        done = datetime.now(timezone.utc)
+        stocked = ShoppingItem(user_id=user.id, name="우유", done_at=done, stocked_at=done)
+        db.session.add(stocked)
+        db.session.commit()
+        stocked_json = {"id": stocked.id, "name": "우유", "quantity": 1, "unit": "개"}
+    for bad in (stock_row(unchecked), stocked_json, {**stock_row(good), "id": 2147483647}):
+        res = stock(client, stock_row(good), bad)
+        assert res.status_code == 400
+        assert res.get_json() == {"error": LIST_CHANGED}
+    with app.app_context():
+        assert Ingredient.query.filter_by(user_id=user.id).count() == 0
+        assert db.session.get(ShoppingItem, good["id"]).stocked_at is None
+
+
+def test_stock_other_users_item_400(client, login, app):
+    login("owner")
+    theirs = checked(client, "대파")
+    login("intruder")
+    res = stock(client, stock_row(theirs))
+    assert res.status_code == 400
+    assert res.get_json() == {"error": LIST_CHANGED}
+    with app.app_context():
+        assert db.session.get(ShoppingItem, theirs["id"]).stocked_at is None
+        assert Ingredient.query.count() == 0
+
+
+def test_stock_index_errors_all_or_nothing(client, login, app):
+    user = login()
+    first, second, third = checked(client, "대파"), checked(client, "우유"), checked(client, "두부")
+    res = stock(client, stock_row(first, quantity=10**400), stock_row(second, name=""), stock_row(third, quantity=0))
+    assert res.status_code == 400
+    assert res.get_json() == {
+        "error": "1번째 재료: 수량은 0보다 커야 해요.",
+        "errors": [
+            {"index": 0, "error": "수량은 0보다 커야 해요."},
+            {"index": 1, "error": "이름은 1~50자로 입력해주세요."},
+            {"index": 2, "error": "수량은 0보다 커야 해요."},
+        ],
+    }
+    with app.app_context():
+        assert Ingredient.query.filter_by(user_id=user.id).count() == 0
+        assert ShoppingItem.query.filter(ShoppingItem.user_id == user.id, ShoppingItem.stocked_at.is_not(None)).count() == 0
+
+
+@pytest.mark.parametrize(
+    "body, error",
+    [
+        ({"purchased_on": "2026/09/14", "items": "ROW"}, "날짜 형식이 올바르지 않아요."),
+        ({"purchased_on": "FUTURE", "items": "ROW"}, "산 날은 오늘보다 뒤일 수 없어요."),
+        ({"purchased_on": "TODAY", "items": []}, "재료를 1~300개 보내주세요."),
+        ({"purchased_on": "TODAY", "items": [{"id": i + 1, "name": "우유"} for i in range(301)]}, "재료를 1~300개 보내주세요."),
+        ({"purchased_on": "TODAY", "items": "우유"}, "재료를 1~300개 보내주세요."),
+        ({"purchased_on": "TODAY", "items": ["우유"]}, "잘못된 요청이에요."),
+        ({"purchased_on": "TODAY", "items": [{"id": "1", "name": "우유"}]}, "잘못된 요청이에요."),
+        ({"purchased_on": "TODAY", "items": [{"id": True, "name": "우유"}]}, "잘못된 요청이에요."),
+        ({"purchased_on": "TODAY", "items": "DUPLICATE"}, "잘못된 요청이에요."),
+        ([], "잘못된 요청이에요."),
+    ],
+)
+def test_stock_rejects_bad_shape(client, login, body, error):
+    login()
+    item = checked(client, "우유")
+    if isinstance(body, dict):
+        today = seoul_today()
+        body = {**body, "purchased_on": {"TODAY": today.isoformat(), "FUTURE": (today + timedelta(days=1)).isoformat()}.get(body["purchased_on"], body["purchased_on"])}
+        if body["items"] == "ROW":
+            body["items"] = [stock_row(item)]
+        elif body["items"] == "DUPLICATE":
+            body["items"] = [stock_row(item), stock_row(item)]
+    res = client.post("/api/shopping/items/stock", json=body)
+    assert res.status_code == 400
+    assert res.get_json() == {"error": error}
+
+
+def test_stock_respects_2000_cap(client, login, app, monkeypatch):
+    monkeypatch.setattr(ingredients_module, "MAX_INGREDIENTS_PER_USER", 3)
+    user = login()
+    fridge = locations_by_name(client)["냉장실"]
+    with app.app_context():
+        db.session.add_all([Ingredient(user_id=user.id, name=f"재료{i}", location_id=fridge, purchased_on=seoul_today()) for i in range(2)])
+        db.session.commit()
+    first, second = checked(client, "대파"), checked(client, "우유")
+    res = stock(client, stock_row(first), stock_row(second))
+    assert res.status_code == 400
+    assert res.get_json() == {"error": "재료는 3개까지 저장할 수 있어요. 다 쓴 재료를 정리해주세요."}
+    with app.app_context():
+        assert Ingredient.query.filter_by(user_id=user.id).count() == 2
+    assert stock(client, stock_row(first)).status_code == 201
+
+
+def test_stock_location_deleted_after_loading_is_400(client, login, app, monkeypatch):
+    login()
+    item = checked(client, "우유")
+    real = shopping.user_locations
+
+    def with_deleted(user_id):
+        return [*real(user_id), StorageLocation(id=2147483000, user_id=user_id, name="없어진 곳", kind="room")]
+
+    monkeypatch.setattr(shopping, "user_locations", with_deleted)
+    res = stock(client, stock_row(item, location_id=2147483000))
+    assert res.status_code == 400
+    assert res.get_json() == {"error": "선택한 보관 위치가 방금 바뀌었어요. 다시 시도해주세요."}
+    assert client.get("/api/ingredients").get_json() == []
+    assert snapshot(client)["stocked"] == []
+
+
+def test_stock_trims_oldest_stocked_over_limit(client, login, app, monkeypatch):
+    monkeypatch.setattr(shopping, "MAX_STOCKED_ITEMS", 3)
+    user = login()
+    now = datetime.now(timezone.utc)
+    with app.app_context():
+        old = [ShoppingItem(user_id=user.id, name=f"산 것{i}", stocked_at=now - timedelta(days=3, hours=i)) for i in range(3)]
+        db.session.add_all(old)
+        db.session.commit()
+        keep_id = old[0].id
+    first, second = checked(client, "대파"), checked(client, "우유")
+    assert stock(client, stock_row(first), stock_row(second)).status_code == 201
+    assert [i["id"] for i in snapshot(client)["stocked"]][:2] == sorted([first["id"], second["id"]], reverse=True)
+    assert [i["id"] for i in snapshot(client)["stocked"]][2:] == [keep_id]
+
+    third = add(client, name="두부").get_json()
+    assert client.post("/api/shopping/items/mark-stocked", json={"ids": [third["id"]]}).status_code == 204
+    assert [i["id"] for i in snapshot(client)["stocked"]] == [third["id"], *sorted([first["id"], second["id"]], reverse=True)]
+
+
+def test_mark_stocked_trims_past_300(client, login, app):
+    user = login()
+    now = datetime.now(timezone.utc)
+    with app.app_context():
+        db.session.add_all([ShoppingItem(user_id=user.id, name=f"산 것{i}", stocked_at=now - timedelta(minutes=i)) for i in range(300)])
+        db.session.commit()
+        oldest = {i.id for i in ShoppingItem.query.filter(ShoppingItem.name.in_(["산 것298", "산 것299"])).all()}
+    ids = [add(client, name=name).get_json()["id"] for name in ("우유", "두부")]
+    assert client.post("/api/shopping/items/mark-stocked", json={"ids": ids}).status_code == 204
+    stocked = {i["id"] for i in snapshot(client)["stocked"]}
+    assert len(stocked) == 300
+    assert set(ids) <= stocked and not oldest & stocked
+
+
+def test_stock_without_any_location(client, login, app):
+    user = login()
+    item = checked(client, "우유")
+    with app.app_context():
+        StorageLocation.query.filter_by(user_id=user.id).delete()
+        db.session.commit()
+    draft = client.get("/api/shopping/stock-draft").get_json()["items"]
+    assert [(i["id"], i["location_id"], i["location_reason"]) for i in draft] == [(item["id"], None, "none")]
+    res = stock(client, stock_row(item, location_id=None))
+    assert (res.status_code, res.get_json()) == (400, {"error": "보관 위치를 먼저 만들어주세요."})
+    with app.app_context():
+        assert db.session.get(ShoppingItem, item["id"]).stocked_at is None
+
+
+def test_match_returns_listed_items_only(client, login, app):
+    user = login()
+    milk = add(client, name="우유").get_json()
+    onion = checked(client, "양파")
+    add(client, name="간장게장")
+    with app.app_context():
+        db.session.add(ShoppingItem(user_id=user.id, name="대파", stocked_at=datetime.now(timezone.utc)))
+        db.session.commit()
+    login("other")
+    add(client, name="양파")
+    with client.session_transaction() as s:
+        s["user_id"], s["pid"] = user.id, user.provider_id
+
+    res = client.post("/api/shopping/items/match", json={"names": ["서울우유 1L", "양파(국산)", "대파 1단", "간장", ""]})
+    assert res.status_code == 200
+    assert res.get_json() == {"items": [{"id": milk["id"], "name": "우유"}, {"id": onion["id"], "name": "양파"}]}
+
+
+@pytest.mark.parametrize("body", [{}, {"names": []}, {"names": "우유"}, {"names": [1]}, {"names": ["가" * 51]}, {"names": ["우유"] * 51}, []])
+def test_match_rejects_bad_shape(client, login, body):
+    login()
+    res = client.post("/api/shopping/items/match", json=body)
+    assert res.status_code == 400
+    assert res.get_json() == {"error": "잘못된 요청이에요."}
+
+
+def test_mark_stocked_ignores_missing_and_others(client, login, app):
+    user = login()
+    milk = add(client, name="우유").get_json()
+    onion = checked(client, "양파")
+    tofu = add(client, name="두부").get_json()
+    earlier = datetime.now(timezone.utc) - timedelta(days=2)
+    with app.app_context():
+        already = ShoppingItem(user_id=user.id, name="대파", stocked_at=earlier)
+        db.session.add(already)
+        db.session.commit()
+        already_id = already.id
+    login("other")
+    theirs = add(client, name="남의 우유").get_json()
+    with client.session_transaction() as s:
+        s["user_id"], s["pid"] = user.id, user.provider_id
+
+    res = client.post("/api/shopping/items/mark-stocked", json={"ids": [milk["id"], onion["id"], already_id, theirs["id"], 2147483647]})
+    assert res.status_code == 204
+    body = snapshot(client)
+    assert [i["id"] for i in body["items"]] == [tofu["id"]]
+    assert {i["id"] for i in body["stocked"]} == {milk["id"], onion["id"], already_id}
+    with app.app_context():
+        assert Ingredient.query.filter_by(user_id=user.id).count() == 0  # 재고는 스캔으로 이미 넣었다
+        assert shopping._utc(db.session.get(ShoppingItem, already_id).stocked_at) == earlier  # 이미 산 것은 그대로
+        assert db.session.get(ShoppingItem, theirs["id"]).stocked_at is None
+
+
+@pytest.mark.parametrize("body", [{}, {"ids": []}, {"ids": [1] * 301}, {"ids": ["1"]}, {"ids": [True]}, {"ids": [0]}, {"ids": [2**31]}, []])
+def test_mark_stocked_rejects_bad_shape(client, login, body):
+    login()
+    res = client.post("/api/shopping/items/mark-stocked", json=body)
+    assert res.status_code == 400
+    assert res.get_json() == {"error": "잘못된 요청이에요."}
+
+
+def test_stock_endpoints_require_login(client):
+    assert client.get("/api/shopping/stock-draft").status_code == 401
+    for path in ("stock", "match", "mark-stocked"):
+        assert client.post(f"/api/shopping/items/{path}", json={}).status_code == 401
