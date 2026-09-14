@@ -385,3 +385,43 @@ export async function api<T>(
 
 /** 오늘 날짜 YYYY-MM-DD, 서울 기준(서버도 서울 기준으로 계산하므로 기기 시간대와 상관없이 맞춘다) */
 export const localToday = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
+
+// ---- 식단(스펙 20절, 4b-1) ----
+export type MealKind = "breakfast" | "lunch" | "dinner" | "snack";
+
+export interface MealPlanSummary {
+  id: number;
+  name: string;
+  start_on: string;
+  end_on: string;
+  days: number;
+  default_servings: number;
+  filled: number;
+  total: number;
+}
+
+/** 식단 한 칸. recipe_id가 있으면 재고 매칭(have_count·total_count·urgent_names), 없으면 null·[] */
+export interface MealSlot {
+  id: number;
+  date: string;
+  meal: MealKind;
+  recipe_id: number | null;
+  title: string;
+  servings: number;
+  est_kcal: number | null;
+  have_count: number | null;
+  total_count: number | null;
+  urgent_names: string[];
+}
+
+export interface MealPlan extends MealPlanSummary {
+  goal_kcal: number | null;
+  goal_note: string | null;
+  slots: MealSlot[];
+}
+
+/** GET /api/meal-plans. default_servings: 마지막으로 만든 식단의 기본 인분(없으면 1) */
+export interface MealPlanList {
+  items: MealPlanSummary[];
+  default_servings: number;
+}

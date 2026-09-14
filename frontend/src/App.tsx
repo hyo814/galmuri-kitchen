@@ -2,9 +2,9 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, ty
 import { ApiError, api, onUnauthorized, type User } from "./api";
 import Splash from "./components/Splash";
 import TabBar from "./components/TabBar";
-import ComingSoon from "./pages/ComingSoon";
 import Fridge from "./pages/Fridge";
 import Login, { rememberLoginProvider } from "./pages/Login";
+import Meals, { resetMealsView } from "./pages/Meals";
 import More from "./pages/More";
 import RecipeAi, { RecipeAiDetail, resetAiRecipes } from "./pages/RecipeAi";
 import RecipeDetail from "./pages/RecipeDetail";
@@ -50,7 +50,7 @@ const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
   "/shopping/memos/new": () => <NewShoppingMemo />,
   "/shopping/memos/local": ({ user }) => <ShoppingMemo user={user} />,
   "/shopping/memos/:id": ({ route, user }) => <ShoppingMemo id={route.params.id} user={user} />,
-  "/meals": () => <ComingSoon route="/meals" />,
+  "/meals": ({ user }) => <Meals user={user} />,
   "/more": ({ user, onLogout }) => <More user={user} onLogout={onLogout} />,
   "/tools": () => <Tools />,
 };
@@ -141,6 +141,7 @@ export default function App() {
     resetSeasoningDraft();
     resetAiRecipes();
     resetRecipeDraft();
+    resetMealsView();
     scrollTops.clear();
     setUser(null);
   }, []);

@@ -1025,27 +1025,6 @@ button.row-btn > svg {
   font-weight: 700;
 }
 
-.soon-list {
-  display: grid;
-  gap: 10px;
-  margin: 20px 0 0;
-  padding: 0;
-  list-style: none;
-  text-align: left;
-}
-
-.soon-list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  line-height: 1.5;
-}
-
-.soon-list svg {
-  flex-shrink: 0;
-  margin-top: 4px;
-}
-
 .splash {
   position: fixed;
   inset: 0;
@@ -4084,4 +4063,270 @@ button.sh-offline svg:last-child {
   font-weight: 700;
   line-height: 18px;
   pointer-events: none;
+}
+
+/* 식단 (4b-1) — 시안 docs/design/meals-4b (MealsEmpty·CreateSheet·WeekView·SlotDetail), ml- 접두사 */
+.ml-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ml-ai-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 14px 0 12px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ml-row2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 12px 20px 0;
+}
+
+.ml-plan {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 0 10px 0 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ml-plan span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ml-plan svg {
+  flex-shrink: 0;
+  color: var(--text-3);
+}
+
+.segmented.ml-seg {
+  grid-template-columns: repeat(2, 60px);
+  background: var(--seg-track);
+}
+
+.ml-seg button[aria-pressed="true"] {
+  background: var(--seg-on);
+}
+
+.ml-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 8px 8px 0;
+}
+
+.ml-nav .icon-btn {
+  color: var(--text-2);
+}
+
+.ml-nav .icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ml-nav b {
+  font-size: 17px;
+  line-height: 25px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ml-days {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 4px 20px 0;
+}
+
+.ml-day {
+  padding: 2px 0 4px;
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.ml-day.today {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.ml-day-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 16px;
+}
+
+.ml-date {
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ml-dow {
+  font-size: 15px;
+  color: var(--text-2);
+}
+
+.ml-day-head .badge {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.ml-count {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 채운 칸은 줄 전체가 버튼(칸 상세), 빈 칸은 줄 안의 + 버튼 */
+.ml-slot {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  padding: 4px 16px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+
+.ml-meal {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.ml-slot .row-main {
+  gap: 3px;
+  align-items: flex-start;
+}
+
+.ml-title {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ml-serv {
+  font-size: 14px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ml-plus {
+  grid-column: 2 / 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--text-2);
+}
+
+.ml-serv-field .stepper .input {
+  font-size: 17px;
+}
+
+.ml-hint {
+  margin: -2px 0 0;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--text-3);
+  word-break: keep-all;
+}
+
+.ml-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.ml-detail-meta .rc-match {
+  width: auto;
+  font-size: 14px;
+}
+
+.ml-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ml-empty {
+  padding: 36px 20px 24px;
+}
+
+.ml-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 20px auto 0;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--field);
+  text-align: left;
+}
+
+.ml-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text);
+  word-break: keep-all;
+}
+
+.ml-steps svg {
+  flex-shrink: 0;
+  color: var(--accent-strong);
+}
+
+.ml-period {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.sh-when.ml-period button {
+  justify-content: center;
+  padding: 0;
+}
+
+.ml-kcal {
+  justify-content: space-between;
 }
