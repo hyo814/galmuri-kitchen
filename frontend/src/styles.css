@@ -4684,3 +4684,195 @@ button.sh-offline svg:last-child {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* AI 식단 초안 (시안 AIDraftInput·AIDraftReview). 시안의 .ml-page는 캔버스 틀이라 옮기지 않는다 */
+.r3-quota.ml-empty-quota {
+  margin-top: 10px;
+}
+
+.ml-ai-form {
+  gap: 16px;
+}
+
+.ml-when {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.sh-when.ml-when button {
+  justify-content: center;
+  padding: 0;
+}
+
+.input-suffix.ml-goal .input {
+  padding-right: 64px;
+}
+
+.input-suffix.ml-goal .suffix {
+  font-size: 16px;
+}
+
+.ml-note.rc-area {
+  min-height: 56px;
+}
+
+.ml-counter {
+  align-self: flex-end;
+  margin-top: -4px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 주 보기의 .ml-use(주황 글자)와 이름이 겹쳐 상자는 -box를 붙인다 */
+.ml-use-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 20px 0;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  word-break: keep-all;
+}
+
+.ml-use-box > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ml-use-box .rc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ml-use-box .badge {
+  height: 26px;
+  padding: 0 8px;
+}
+
+.cta-bar .ml-cta-note {
+  margin-top: 8px;
+}
+
+.cta-bar .ml-cta-error {
+  max-width: 480px;
+  margin: 0 auto 8px;
+}
+
+.ml-daygroup {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 20px 20px 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ml-daygroup span {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.ml-daygroup + .list {
+  margin-top: 8px;
+}
+
+.ml-ai-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 4px;
+  min-height: 72px;
+  padding: 8px 12px 8px 6px;
+  border-top: 1px solid var(--line);
+}
+
+.list > .ml-ai-row:first-child,
+.list > .ml-kept:first-child {
+  border-top: 0;
+}
+
+.ml-ai-row .row-main {
+  gap: 2px;
+  align-items: flex-start;
+}
+
+.ml-ai-row .ml-meal {
+  line-height: 18px;
+}
+
+.ml-ai-row .sh-meta {
+  margin-top: 3px;
+}
+
+.ml-ai-row.off .ml-title {
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.sh-check[aria-checked="true"] i {
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.ml-new {
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--accent-strong);
+  font-weight: 600;
+  word-break: keep-all;
+}
+
+.btn.ml-swap {
+  width: auto;
+  min-height: 44px;
+  padding: 0 10px;
+  gap: 4px;
+  border-radius: 12px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.ml-kept {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 6px 16px 6px 18px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-3);
+  word-break: keep-all;
+}
+
+.ml-kept svg {
+  flex-shrink: 0;
+}
+
+.ml-kept b {
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+/* 1fr 칸에서 `다시 만들기`가 두 줄로 꺾이지 않게 */
+.actions .btn.ml-regen {
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+/* 넣기 실패 문구가 CTA 위에 붙어 높아지면 마지막 줄이 가리지 않게 */
+.page:has(.ml-cta-error) {
+  padding-bottom: calc(200px + var(--tabbar-h) + env(safe-area-inset-bottom));
+}

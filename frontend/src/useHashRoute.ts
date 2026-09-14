@@ -24,6 +24,7 @@ export const ROUTES = [
   "/shopping/memos/local",
   "/shopping/memos/:id",
   "/meals",
+  "/meals/:id/ai",
   "/more",
   "/tools",
 ] as const;
