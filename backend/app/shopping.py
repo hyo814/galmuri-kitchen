@@ -413,6 +413,7 @@ def update_note(note_id):
     data = _json_object()
     fields = _note_fields(data)
     edited_at = _changed_at(data.get("edited_at"))
+    _lock_user_items(g.user.id)  # 목록 받기의 빈 메모 지우기와 한 줄로: 빈 메모로 읽힌 뒤 쓴 글이 같이 지워지지 않게(사용자 잠금 → 행)
     note = _owned_note(note_id, lock=True)
     # ponytail: 기기 시계 비교 — 체크(done_changed_at)와 같은 한계. 시계가 크게 틀린 기기는 순서가 틀릴 수 있다.
     if _utc(note.updated_at) > edited_at:
