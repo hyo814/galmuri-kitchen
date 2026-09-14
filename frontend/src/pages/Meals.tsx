@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { localToday, type MealKind, type MealPlan, type MealPlanList, type MealPlanSummary, type MealSlot, type User } from "../api";
+import { api, localToday, type MealKind, type MealPlan, type MealPlanList, type MealPlanSummary, type MealSlot, type User } from "../api";
 import Icon from "../components/Icon";
 import Mascot from "../components/Mascot";
+import MealCopySheet, { type CopyResult } from "../components/MealCopySheet";
 import MealFillSheet from "../components/MealFillSheet";
 import MealPickerSheet from "../components/MealPickerSheet";
 import MealPlanSheet from "../components/MealPlanSheet";
 import MealSlotSheet from "../components/MealSlotSheet";
-import { dayHead, initialWeek, MEALS, pickPlan, rangeText, slotDateText, weekDates, weekStarts } from "../meals/plan";
+import Sheet from "../components/Sheet";
+import { addDays, withJosa } from "../format";
+import {
+  dayHead, defaultPlanName, initialWeek, MEALS, monthGrid, pickPlan, rangeText, slotDateText, weekDates, weekOf, weekStarts,
+} from "../meals/plan";
+import { useAsyncAction } from "../useAsyncAction";
 import { cache, forgetResources, useResource } from "../useResource";
 import { urgentLabel } from "./Recipes";
 
@@ -63,7 +69,7 @@ export default function Meals({ user }: { user: User }) {
   const current = items && (items.find((p) => p.id === planId) ?? pickPlan(items, today));
 
   const createSheet = sheet === "create" && list.data && (
-    <MealPlanSheet today={today} defaultServings={list.data.default_servings} onCreated={created} onClose={() => setSheet(null)} />
+    <MealPlanSheet today={today} defaultServings={list.data.default_servings} onSaved={created} onClose={() => setSheet(null)} />
   );
 
   if (!items || !current)
@@ -112,6 +118,19 @@ export default function Meals({ user }: { user: User }) {
         user={user}
         onPick={() => setSheet("pick")}
         onChanged={list.reload}
+        onDeleted={async () => {
+          lastPlanId = null;
+          setPlanId(null);
+          forgetResources("/api/meal-plans");
+          await list.reload();
+          // 지운 식단 화면의 메뉴 버튼이 사라져 포커스를 잃는다 → 제목으로
+          setTimeout(() => {
+            const h1 = document.querySelector<HTMLElement>(".topbar h1");
+            if (!h1 || document.activeElement !== document.body) return;
+            h1.tabIndex = -1;
+            h1.focus();
+          });
+        }}
       />
       {sheet === "pick" && (
         <MealPickerSheet
@@ -138,16 +157,26 @@ interface PlanWeekProps {
   onPick: () => void;
   /** 칸을 바꿨다: 목록(식단 고르기의 채운 칸 수)도 다시 받는다 */
   onChanged: () => void;
+  onDeleted: () => Promise<void>;
 }
 
-/** 시안 WeekView: 머리·식단 고르기·주 이동·하루 카드 */
-function PlanWeek({ summary, today, user, onPick, onChanged }: PlanWeekProps) {
-  const { data: plan, error, reload } = useResource<MealPlan>(`/api/meal-plans/${summary.id}`);
+const DOW_HEAD = ["월", "화", "수", "목", "금", "토", "일"];
+
+/** 시안 WeekView·MonthView: 머리·식단 고르기·주|월·주(달) 이동·하루 카드(달력) */
+function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWeekProps) {
+  const url = `/api/meal-plans/${summary.id}`;
+  const { data: plan, error, reload } = useResource<MealPlan>(url);
   const shown = plan ?? summary;
   const weeks = weekStarts(shown);
   const [picked, setPicked] = useState(() => lastWeek[summary.id]);
   const week = picked && weeks.includes(picked) ? picked : initialWeek(shown, today);
   const index = weeks.indexOf(week);
+  const [view, setView] = useState(lastView);
+  /** 월 보기에서 보고 있는 달 "2026-09"(null이면 보고 있는 주의 달) */
+  const [month, setMonth] = useState<string | null>(null);
+  const [sheet, setSheet] = useState<"menu" | "copy" | "edit" | null>(null);
+  /** 이번 주 복사 결과 한 줄 */
+  const [copied, setCopied] = useState("");
   const [openSlot, setOpenSlot] = useState<MealSlot | null>(null);
   const [fill, setFill] = useState<{ date: string; meal: MealKind; current?: MealSlot } | null>(null);
   /** 시트가 열려 있는 동안 바뀐 칸은 닫을 때 한 번에 다시 받는다. 닫은 뒤 늦게 끝난 저장은 바로 다시 받는다 */
@@ -157,6 +186,24 @@ function PlanWeek({ summary, today, user, onPick, onChanged }: PlanWeekProps) {
   useEffect(() => {
     lastWeek[summary.id] = week;
   }, [summary.id, week]);
+
+  const switchView = (next: "week" | "month") => {
+    lastView = next;
+    setView(next);
+    setMonth(null);
+  };
+
+  /** 달력 날짜·카드: 그 날이 든 주 보기로 가고, 누른 버튼이 사라지니 그날 카드로 포커스 */
+  const openDay = (date: string) => {
+    setPicked(weekOf(shown, date) ?? week);
+    switchView("week");
+    setTimeout(() => {
+      const day = document.querySelector<HTMLElement>(`.ml-day[data-date="${date}"]`);
+      if (!day) return;
+      day.tabIndex = -1;
+      day.focus();
+    });
+  };
 
   const closeSlot = async (slot: MealSlot) => {
     sheetOpen.current = false;
@@ -175,13 +222,17 @@ function PlanWeek({ summary, today, user, onPick, onChanged }: PlanWeekProps) {
     });
   };
 
-  /** 채우기 시트에서 넣었다: 받은 칸을 식단에 끼워 넣고 다시 받은 뒤 닫는다(닫자마자 빈 칸이 잠깐 보이지 않게) */
-  const saved = async (slot: MealSlot) => {
-    const url = `/api/meal-plans/${summary.id}`;
+  /** 서버가 돌려준 식단으로 바꾸고 목록(채운 칸 수)도 다시 받는다 */
+  const replacePlan = async (next: MealPlan) => {
     forgetResources("/api/meal-plans"); // 목록의 채운 칸 수도 다시 받게(이 식단 캐시도 지우니 아래에서 다시 넣는다)
-    if (plan) cache.set(url, { ...plan, slots: [...plan.slots.filter((s) => s.date !== slot.date || s.meal !== slot.meal), slot] });
+    cache.set(url, next);
     onChanged();
     await reload();
+  };
+
+  /** 채우기 시트에서 넣었다: 받은 칸을 식단에 끼워 넣고 다시 받은 뒤 닫는다(닫자마자 빈 칸이 잠깐 보이지 않게) */
+  const saved = async (slot: MealSlot) => {
+    if (plan) await replacePlan({ ...plan, slots: [...plan.slots.filter((s) => s.date !== slot.date || s.meal !== slot.meal), slot] });
     setFill(null);
     // 빈 칸의 + 버튼은 채운 칸 줄로 바뀌어 사라진다 → 그 줄로 포커스
     setTimeout(() => {
@@ -190,9 +241,30 @@ function PlanWeek({ summary, today, user, onPick, onChanged }: PlanWeekProps) {
     });
   };
 
+  const copiedWeek = async ({ plan: next, copied: count, kept }: CopyResult) => {
+    await replacePlan(next);
+    setSheet(null);
+    // 모두 이미 채운 칸이면 "0칸을 복사했어요"는 빼고 그대로 둔 칸만 알린다
+    const keptText = kept ? `이미 채운 ${kept}칸은 그대로 뒀어요` : "";
+    setCopied(count ? `${count}칸을 복사했어요${keptText && ` · ${keptText}`}` : keptText);
+  };
+
+  // 고친 기간 밖으로 나간 주는 week 계산이 initialWeek로 돌린다
+  const edited = async (next: MealPlan) => {
+    await replacePlan(next);
+    setSheet(null);
+  };
+
   const move = (step: number) => setPicked(weeks[index + step]);
   const dates = weekDates(week, shown);
   const slots = new Map((plan?.slots ?? []).map((s) => [`${s.date}|${s.meal}`, s]));
+
+  // 월 보기: 식단 기간과 겹치는 달만
+  const firstMonth = shown.start_on.slice(0, 7);
+  const lastMonth = addDays(shown.start_on, shown.days - 1).slice(0, 7);
+  const shownMonth = month && month >= firstMonth && month <= lastMonth ? month : week.slice(0, 7);
+  const [year, monthNo] = shownMonth.split("-").map(Number);
+  const weekFilled = (plan?.slots ?? []).filter((s) => dates.includes(s.date)).length;
 
   return (
     <main className="page">
@@ -203,22 +275,74 @@ function PlanWeek({ summary, today, user, onPick, onChanged }: PlanWeekProps) {
             {shown.total}칸 중 {shown.filled}칸 채웠어요
           </p>
         </div>
+        <div className="ml-head-actions">
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="식단 메뉴"
+            aria-haspopup="dialog"
+            disabled={!plan}
+            onClick={() => {
+              setCopied("");
+              setSheet("menu");
+            }}
+          >
+            <Icon name="more" />
+          </button>
+        </div>
       </header>
+      <p className="ml-copied" role="status">
+        {copied}
+      </p>
       <div className="ml-row2">
         <button type="button" className="ml-plan" aria-haspopup="dialog" onClick={onPick}>
           <span>{shown.name}</span>
           <Icon name="down" size={18} />
         </button>
+        <div className="segmented ml-seg" role="group" aria-label="보기">
+          <button type="button" aria-pressed={view === "week"} onClick={() => switchView("week")}>
+            주
+          </button>
+          <button type="button" aria-pressed={view === "month"} onClick={() => switchView("month")}>
+            월
+          </button>
+        </div>
       </div>
-      <div className="ml-nav">
-        <button type="button" className="icon-btn" aria-label="이전 주" disabled={index <= 0} onClick={() => move(-1)}>
-          <Icon name="back" size={22} />
-        </button>
-        <b aria-live="polite">{rangeText(dates[0], dates[dates.length - 1])}</b>
-        <button type="button" className="icon-btn" aria-label="다음 주" disabled={index >= weeks.length - 1} onClick={() => move(1)}>
-          <Icon name="chevron" size={22} />
-        </button>
-      </div>
+      {view === "week" ? (
+        <div className="ml-nav">
+          <button type="button" className="icon-btn" aria-label="이전 주" disabled={index <= 0} onClick={() => move(-1)}>
+            <Icon name="back" size={22} />
+          </button>
+          <b aria-live="polite">{rangeText(dates[0], dates[dates.length - 1])}</b>
+          <button type="button" className="icon-btn" aria-label="다음 주" disabled={index >= weeks.length - 1} onClick={() => move(1)}>
+            <Icon name="chevron" size={22} />
+          </button>
+        </div>
+      ) : (
+        <div className="ml-nav">
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="지난달"
+            disabled={shownMonth <= firstMonth}
+            onClick={() => setMonth(addDays(`${shownMonth}-01`, -1).slice(0, 7))}
+          >
+            <Icon name="back" size={22} />
+          </button>
+          <b aria-live="polite">
+            {year}년 {monthNo}월
+          </b>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="다음 달"
+            disabled={shownMonth >= lastMonth}
+            onClick={() => setMonth(addDays(`${shownMonth}-01`, 31).slice(0, 7))}
+          >
+            <Icon name="chevron" size={22} />
+          </button>
+        </div>
+      )}
 
       {!plan ? (
         error ? (
@@ -232,6 +356,79 @@ function PlanWeek({ summary, today, user, onPick, onChanged }: PlanWeekProps) {
         ) : (
           <p className="center muted">불러오는 중…</p>
         )
+      ) : view === "month" ? (
+        <>
+          <div className="ml-cal">
+            <div className="ml-wk" aria-hidden="true">
+              {DOW_HEAD.map((d) => (
+                <span key={d}>{d}</span>
+              ))}
+            </div>
+            {monthGrid(year, monthNo).map((row) => (
+              <div key={row[0]} className="ml-wrow">
+                {row.map((date) => {
+                  const inPlan = weekOf(shown, date) !== null;
+                  const cls = ["ml-cell", date.slice(0, 7) !== shownMonth && "dim", inPlan && "in", date === today && "today"]
+                    .filter(Boolean)
+                    .join(" ");
+                  const num = <b>{Number(date.slice(8))}</b>;
+                  // 기간 밖 날짜는 누를 곳이 없어 스크린리더에서도 건너뛴다
+                  if (!inPlan)
+                    return (
+                      <span key={date} className={cls} aria-hidden="true">
+                        {num}
+                        <span className="ml-dots" />
+                      </span>
+                    );
+                  const filled = MEALS.map(([meal]) => slots.has(`${date}|${meal}`));
+                  const head = dayHead(date);
+                  return (
+                    <button
+                      key={date}
+                      type="button"
+                      className={cls}
+                      aria-current={date === today ? "date" : undefined}
+                      aria-label={`${head.day} ${head.dow} · 4끼 중 ${filled.filter(Boolean).length}끼 채움`}
+                      onClick={() => openDay(date)}
+                    >
+                      {num}
+                      <span className="ml-dots">
+                        {filled.map((on, i) => (
+                          <i key={i} className={on ? undefined : "no"} />
+                        ))}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+          <div className="ml-legend">
+            <span>
+              <span className="ml-dots">
+                <i />
+              </span>
+              채운 끼니
+            </span>
+            <span>
+              <span className="ml-dots">
+                <i className="no" />
+              </span>
+              빈 끼니
+            </span>
+            <span>초록 줄 = 이 식단 기간</span>
+          </div>
+          <button type="button" className="ml-plan-card" onClick={() => openDay(week)}>
+            <span className="row-main">
+              <span className="row-title">날짜를 누르면 그 주로 가요</span>
+              <span className="row-sub">
+                {defaultPlanName(week, 7)} · {rangeText(dates[0], dates[dates.length - 1]).replace(/^\d+월 /, "")} ·{" "}
+                {dates.length * 4}칸 중 {weekFilled}칸
+              </span>
+            </span>
+            <Icon name="chevron" size={20} />
+          </button>
+        </>
       ) : (
         <div className="ml-days">
           {dates.map((date) => {
@@ -305,6 +502,13 @@ function PlanWeek({ summary, today, user, onPick, onChanged }: PlanWeekProps) {
           }}
         />
       )}
+      {sheet === "menu" && plan && (
+        <PlanMenuSheet plan={plan} onCopy={() => setSheet("copy")} onEdit={() => setSheet("edit")} onDeleted={onDeleted} onClose={() => setSheet(null)} />
+      )}
+      {sheet === "copy" && plan && <MealCopySheet plan={plan} week={week} onCopied={copiedWeek} onClose={() => setSheet(null)} />}
+      {sheet === "edit" && plan && (
+        <MealPlanSheet today={today} defaultServings={plan.default_servings} plan={plan} onSaved={edited} onClose={() => setSheet(null)} />
+      )}
       {fill && plan && (
         <MealFillSheet
           plan={plan}
@@ -317,5 +521,55 @@ function PlanWeek({ summary, today, user, onPick, onChanged }: PlanWeekProps) {
         />
       )}
     </main>
+  );
+}
+
+interface PlanMenuProps {
+  plan: MealPlan;
+  onCopy: () => void;
+  onEdit: () => void;
+  onDeleted: () => Promise<void>;
+  onClose: () => void;
+}
+
+/** 시안 WeekMenu: 식단 메뉴(이번 주 복사·이름·기간 고치기·식단 지우기) */
+function PlanMenuSheet({ plan, onCopy, onEdit, onDeleted, onClose }: PlanMenuProps) {
+  const { busy, error, run } = useAsyncAction();
+  const remove = () => {
+    if (!confirm(`${withJosa(plan.name, "을", "를")} 지울까요? 채운 칸도 함께 지워져요.`)) return;
+    void run(async () => {
+      await api(`/api/meal-plans/${plan.id}`, { method: "DELETE" });
+      await onDeleted();
+    });
+  };
+  return (
+    <Sheet title={plan.name} description={`${rangeText(plan.start_on, plan.end_on)} · 기본 ${plan.default_servings}인분`} onClose={onClose}>
+      <ul className="plain-list mo-menu ml-menu">
+        {(
+          [
+            ["clipboard", "이번 주 복사", onCopy],
+            ["pencil", "식단 이름·기간 고치기", onEdit],
+          ] as const
+        ).map(([icon, label, onClick]) => (
+          <li key={label}>
+            <button type="button" className="plain-row menu-row" aria-haspopup="dialog" onClick={onClick}>
+              <span className="row-title">
+                <Icon name={icon} size={22} />
+                {label}
+              </span>
+              <Icon name="chevron" size={20} />
+            </button>
+          </li>
+        ))}
+      </ul>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      <button type="button" className="btn danger-text" disabled={busy} onClick={remove}>
+        {busy ? "지우는 중…" : "식단 지우기"}
+      </button>
+    </Sheet>
   );
 }

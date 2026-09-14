@@ -4444,3 +4444,202 @@ button.sh-offline svg:last-child {
 .ml-quota {
   margin-top: -8px;
 }
+
+/* 월 보기·식단 메뉴·이번 주 복사 (시안 MonthView·WeekMenu·CopyWeek) */
+/* 이번 주 복사 결과 한 줄(머리 부제 아래, 넓게 쓰려고 머리 밖에 둔다) */
+.ml-copied {
+  margin: 6px 20px 0;
+  font-size: 14px;
+  line-height: 21px;
+  font-weight: 600;
+  color: var(--accent-strong);
+  word-break: keep-all;
+}
+
+.ml-copied:empty {
+  margin: 0;
+}
+
+.ml-cal {
+  margin: 4px 20px 0;
+  padding: 8px 8px 10px;
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.ml-wk,
+.ml-wrow {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.ml-wk span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.ml-wrow {
+  margin-top: 2px;
+}
+
+.ml-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-height: 60px;
+  padding: 5px 0 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+}
+
+/* 식단 기간인 날만 연초록 띠, 띠의 양 끝만 둥글게 */
+.ml-cell.in {
+  background: var(--accent-tint);
+}
+
+.ml-cell.in:first-child,
+.ml-cell:not(.in) + .ml-cell.in {
+  border-top-left-radius: 14px;
+  border-bottom-left-radius: 14px;
+}
+
+.ml-cell.in:last-child,
+.ml-cell.in:has(+ .ml-cell:not(.in)) {
+  border-top-right-radius: 14px;
+  border-bottom-right-radius: 14px;
+}
+
+.ml-cell b {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  font-size: 15px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.ml-cell.dim b {
+  color: var(--text-3);
+  font-weight: 400;
+}
+
+.ml-cell.today b {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 700;
+}
+
+.ml-cell:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 14px;
+}
+
+.ml-dots {
+  display: flex;
+  gap: 3px;
+  height: 6px;
+}
+
+.ml-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.ml-dots i.no {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.25px var(--control-line);
+}
+
+.ml-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  margin: 12px 24px 0;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.ml-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ml-legend .ml-dots {
+  height: auto;
+}
+
+.ml-plan-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: calc(100% - 40px);
+  margin: 12px 20px 0;
+  padding: 12px 12px 12px 16px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+}
+
+.ml-plan-card .row-title {
+  font-size: 16px;
+  line-height: 23px;
+}
+
+.ml-plan-card > svg {
+  flex-shrink: 0;
+}
+
+.ml-menu .row-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ml-menu .row-title svg {
+  color: var(--text-2);
+}
+
+.mo-note.ok svg {
+  color: var(--accent-strong);
+}
+
+.mo-note.warn svg {
+  color: var(--danger);
+}
+
+.ml-preview-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: 14px;
+  background: var(--field);
+  font-size: 15px;
+  color: var(--text-2);
+}
+
+.ml-preview-line b {
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

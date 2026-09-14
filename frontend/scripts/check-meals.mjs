@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import {
   defaultPlanName, weekStarts, weekDates, initialWeek, rangeText, dayHead, slotDateText, monthGrid,
-  copyMaxWeeks, copyTarget, pickPlan, daysBetween, dateWithDow, planEnd,
+  copyMaxWeeks, copyTarget, pickPlan, daysBetween, dateWithDow, planEnd, slotsOutside, weekOf,
 } from "../src/meals/plan.ts";
 
 // 식단 이름: 월요일 시작 주, 1일이 든 주가 첫째. 28일 이상은 "N월 식단"
@@ -48,6 +48,20 @@ assert.equal(copyMaxWeeks({ start_on: "2026-09-14" }, "2026-09-21"), 2);
 assert.equal(copyMaxWeeks({ start_on: "2026-09-14" }, "2026-10-05"), 0);
 assert.deepEqual(copyTarget({ start_on: "2026-09-14", days: 7 }, "2026-09-14", 2), { start: "2026-09-21", end: "2026-10-04", extendedDays: 21 });
 assert.deepEqual(copyTarget({ start_on: "2026-09-14", days: 14 }, "2026-09-14", 1), { start: "2026-09-21", end: "2026-09-27", extendedDays: null });
+
+// 기간을 바꾸면 밖으로 나가는 채운 칸(결정 1): 앞·뒤·안
+const S = (date) => ({ date });
+assert.equal(slotsOutside([S("2026-09-13"), S("2026-09-14"), S("2026-09-20"), S("2026-09-21")], "2026-09-14", 7), 2);
+assert.equal(slotsOutside([S("2026-09-14"), S("2026-09-27")], "2026-09-14", 14), 0);
+assert.equal(slotsOutside([S("2026-09-14")], "2026-09-15", 7), 1);
+
+// 날짜가 든 주 페이지: 시작일·8일째·밖
+const plan21 = { start_on: "2026-09-14", days: 21 };
+assert.equal(weekOf(plan21, "2026-09-14"), "2026-09-14");
+assert.equal(weekOf(plan21, "2026-09-21"), "2026-09-21");
+assert.equal(weekOf(plan21, "2026-09-20"), "2026-09-14");
+assert.equal(weekOf(plan21, "2026-10-05"), null);
+assert.equal(weekOf(plan21, "2026-09-13"), null);
 
 // 처음 보여줄 식단
 const P = (id, start_on, end_on) => ({ id, name: "", start_on, end_on, days: 7, default_servings: 1, filled: 0, total: 28 });

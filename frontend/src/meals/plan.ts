@@ -19,6 +19,14 @@ export function defaultPlanName(start: string, days: number): string {
   return `${month}월 ${ORDINALS[Math.floor((day - 1 + firstOffset) / 7)]} 주`;
 }
 export const planEnd = (start: string, days: number) => addDays(start, days - 1);
+/** 기간을 바꾸면 밖으로 나가는 채운 칸 수(결정 1) */
+export const slotsOutside = (slots: { date: string }[], start: string, days: number) =>
+  slots.filter((s) => s.date < start || s.date > planEnd(start, days)).length;
+/** 날짜 → 그 날짜가 든 주 페이지 시작일(식단 밖이면 null) */
+export function weekOf(plan: Pick<MealPlanSummary, "start_on" | "days">, iso: string): string | null {
+  if (iso < plan.start_on || iso > planEnd(plan.start_on, plan.days)) return null;
+  return addDays(plan.start_on, Math.floor(daysBetween(plan.start_on, iso) / 7) * 7);
+}
 /** 주 보기 페이지: 시작일부터 7일씩 */
 export const weekStarts = (plan: Pick<MealPlanSummary, "start_on" | "days">) =>
   Array.from({ length: Math.ceil(plan.days / 7) }, (_, i) => addDays(plan.start_on, i * 7));
