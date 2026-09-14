@@ -1,43 +1,46 @@
 import { useId, useState, type FormEvent } from "react";
 import { api, type MealPlan } from "../api";
-import { dateWithDow, defaultPlanName, PERIODS, planEnd, rangeText } from "../meals/plan";
+import { dateWithDow, defaultPlanName, PERIODS, planEnd, rangeText, slotsOutside } from "../meals/plan";
 import { useAsyncAction } from "../useAsyncAction";
 import Icon from "./Icon";
 import Sheet from "./Sheet";
 
 interface Props {
   today: string;
-  /** 목록의 default_servings(마지막으로 만든 식단의 기본 인분) */
+  /** 목록의 default_servings(마지막으로 만든 식단의 기본 인분). 고치기에서는 식단 값을 쓴다 */
   defaultServings: number;
-  onCreated: (plan: MealPlan) => Promise<void>;
+  /** 있으면 고치기(시안 CreateSheet와 같은 칸, 제목 `식단 고치기`) */
+  plan?: MealPlan;
+  onSaved: (plan: MealPlan) => Promise<void>;
   onClose: () => void;
 }
 
-/** 시안 CreateSheet: 식단 만들기 */
-export default function MealPlanSheet({ today, defaultServings, onCreated, onClose }: Props) {
-  const [start, setStart] = useState(today);
-  const [period, setPeriod] = useState<number | null>(7);
-  const [days, setDays] = useState(7);
-  const [servings, setServings] = useState(defaultServings);
-  /** 사용자가 이름을 고치기 전까지는 시작일·기간을 따라 바뀐다 */
-  const [typedName, setTypedName] = useState<string | null>(null);
+/** 시안 CreateSheet: 식단 만들기·고치기 */
+export default function MealPlanSheet({ today, defaultServings, plan, onSaved, onClose }: Props) {
+  const [start, setStart] = useState(plan?.start_on ?? today);
+  const [days, setDays] = useState(plan?.days ?? 7);
+  const [period, setPeriod] = useState<number | null>(PERIODS.some(([, v]) => v === days) ? days : null);
+  const [servings, setServings] = useState(plan?.default_servings ?? defaultServings);
+  /** 사용자가 이름을 고치기 전까지는 시작일·기간을 따라 바뀐다(고치기는 지금 이름으로 시작) */
+  const [typedName, setTypedName] = useState<string | null>(plan?.name ?? null);
   const { busy, error, run } = useAsyncAction();
   const servingsLabel = useId();
   const name = typedName ?? defaultPlanName(start, days);
+  const outside = plan ? slotsOutside(plan.slots, start, days) : 0;
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     run(async () => {
-      const plan = await api<MealPlan>("/api/meal-plans", {
-        method: "POST",
+      const saved = await api<MealPlan>(plan ? `/api/meal-plans/${plan.id}` : "/api/meal-plans", {
+        method: plan ? "PATCH" : "POST",
         body: { name: name.trim(), start_on: start, days, default_servings: servings },
       });
-      await onCreated(plan);
+      await onSaved(saved);
     });
   };
 
   return (
-    <Sheet title="식단 만들기" focusTitle onClose={onClose}>
+    <Sheet title={plan ? "식단 고치기" : "식단 만들기"} focusTitle onClose={onClose}>
       <form className="form" onSubmit={submit}>
         <label className="field">
           <span className="field-label">이름</span>
@@ -125,6 +128,12 @@ export default function MealPlanSheet({ today, defaultServings, onCreated, onClo
           <p className="ml-hint">새 칸에 먼저 넣을 인분이에요. 처음엔 1인분, 다음 식단부터는 마지막으로 고른 값으로 시작해요</p>
         </div>
 
+        {outside > 0 && (
+          <p className="mo-note warn" role="alert">
+            <Icon name="alert" size={16} />
+            <span>기간 밖에 채운 칸 {outside}개는 지워져요.</span>
+          </p>
+        )}
         {error && (
           <p className="error" role="alert">
             {error}
@@ -135,7 +144,7 @@ export default function MealPlanSheet({ today, defaultServings, onCreated, onClo
             취소
           </button>
           <button className="btn primary" disabled={busy}>
-            {busy ? "만드는 중…" : "만들기"}
+            {plan ? (busy ? "저장하는 중…" : "저장") : busy ? "만드는 중…" : "만들기"}
           </button>
         </div>
       </form>
