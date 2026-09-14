@@ -50,6 +50,7 @@ def create_app(test_config=None):
         AI_DAILY_RECIPE_LIMIT=int(os.environ.get("AI_DAILY_RECIPE_LIMIT") or 10),
         FOODSAFETY_API_KEY=os.environ.get("FOODSAFETY_API_KEY") or None,
         YOUTUBE_API_KEY=os.environ.get("YOUTUBE_API_KEY") or None,
+        COUPANG_PARTNERS_ID=os.environ.get("COUPANG_PARTNERS_ID") or None,  # 제휴 링크(스펙 16·25절), 없으면 일반 검색 링크
     )
     if test_config:
         app.config.update(test_config)

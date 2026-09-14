@@ -91,6 +91,8 @@ def user_json(user):
         scan_limit=current_app.config["AI_DAILY_SCAN_LIMIT"],
         recipe_limit=current_app.config["AI_DAILY_RECIPE_LIMIT"],
         videos=video_mode(),
+        # 쇼핑몰 링크는 화면(storeLinks.ts)에서 만들므로 제휴 ID를 넘긴다. 값 있는 것만(스펙 16절)
+        shop_affiliates={k: v for k, v in {"coupang": current_app.config["COUPANG_PARTNERS_ID"]}.items() if v},
     )
 
 

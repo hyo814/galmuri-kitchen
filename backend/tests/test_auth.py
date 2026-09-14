@@ -134,3 +134,16 @@ def test_me_includes_videos_mode(client, app):
     assert client.get("/api/me").get_json()["videos"] == "on"
     app.config.update(YOUTUBE_API_KEY=None, DEV_MODE=False)
     assert client.get("/api/me").get_json()["videos"] == "off"
+
+
+def test_me_includes_shop_affiliates(client, app):
+    assert client.post("/api/dev-login").get_json()["shop_affiliates"] == {}
+    app.config["COUPANG_PARTNERS_ID"] = "AF123"
+    assert client.get("/api/me").get_json()["shop_affiliates"] == {"coupang": "AF123"}
+
+
+def test_coupang_partners_id_from_env(make_app, monkeypatch):
+    monkeypatch.setenv("COUPANG_PARTNERS_ID", "")
+    assert make_app().config["COUPANG_PARTNERS_ID"] is None
+    monkeypatch.setenv("COUPANG_PARTNERS_ID", "AF123")
+    assert make_app().config["COUPANG_PARTNERS_ID"] == "AF123"
