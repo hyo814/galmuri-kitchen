@@ -68,10 +68,11 @@
 | `FOODSAFETY_API_KEY` | 선택 | 3단계 레시피 추천. 배포 후 한 번 `flask sync-public-recipes`(없으면 `flask seed-sample-recipes` 예시 레시피) | 식약처 공공데이터포털(COOKRCP01) |
 | `FOOD_NUTRITION_API_KEY` | 선택 | 영양 계산기 구현 후 | 식약처 공공데이터포털(식품영양성분 DB) |
 | `YOUTUBE_API_KEY` | 선택 | 3단계 요리 채널 영상·유튜브 링크 가져오기(없으면 개발 모드는 예시 영상, 운영은 영상 칸 숨김). 설정은 아래 5-2 | Google Cloud Console(YouTube Data API v3) |
-| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | 선택 | 장보기 메모 사진. **R2 연결은 아직 안 됨** — 지금 운영에서는 값이 있든 없든 사진 올리기·보기가 503(`DEV_MODE`가 아니면 로컬 디스크에 두지 않는다 — Render 디스크는 배포 때 지워진다). 연결할 때: 비공개 버킷, 네 값 설정, 오프라인 사진 보관을 위해 버킷 CORS에 앱 주소 GET 허용. 로컬 개발은 값 없이 `backend/uploads/`(gitignore) | Cloudflare 대시보드 R2 |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | 선택(운영에서 사진을 쓰려면 필수) | 장보기 메모 사진. 네 값이 모두 있으면 R2(비공개 버킷, 토큰은 해당 버킷만 "개체 읽기 및 쓰기")에 올리고, 보기는 `/api/photos/<key>`가 소유자 확인 뒤 R2에서 받아 앱 주소로 흘려보낸다(버킷 공개·CORS 필요 없음). 하나라도 비면 운영에서는 사진 올리기·보기 503(`DEV_MODE`가 아니면 로컬 디스크에 두지 않는다 — Render 디스크는 배포 때 지워진다). 로컬 개발은 값 없이 `backend/uploads/`(gitignore). 발급 순서는 `backend/.env.example` | Cloudflare 대시보드 R2 |
 | `DEMO_LOGIN` | 선택 | `1`이면 로그인 화면에 `로그인 없이 체험하기`(심사·둘러보기용). 누를 때마다 예시 재고가 든 새 계정을 만들고 24시간 뒤 지운다. 설정은 아래 5-3 | 직접 설정 |
 | `DEMO_AI_GLOBAL_DAILY` | 선택 | 체험 계정 전체의 사진 인식·AI 레시피 호출 24시간 예산(기본 300). 넘으면 체험 계정은 예시 결과로 동작 | 직접 설정 |
 | `TRUSTED_PROXY_HOPS` | 선택 | `X-Forwarded-For`를 붙이는 앞단 프록시 수(기본 1, Render). 체험 계정 IP 한도가 이 값으로 접속 주소를 고른다. 확인은 아래 5-3 | 직접 설정 |
+| `COUPANG_PARTNERS_ID` | 선택 | 쿠팡 제휴 ID(`/api/me`의 `shop_affiliates`). 없으면 일반 검색 링크. 제휴 링크 형식을 아직 채우지 않아 지금은 넣어도 링크가 바뀌지 않는다 | 쿠팡 파트너스 |
 | `DEV_MODE` | 로컬 전용 | 로컬 개발 | 운영(Render)에는 **넣지 않는다** |
 
 키가 비어 있으면 개발 모드에서는 샘플 데이터로 동작(각 기능 구현 시 적용), 운영에서는 해당 기능을 숨긴다.

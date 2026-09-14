@@ -425,8 +425,8 @@ def delete_note(note_id):
 @bp.post("/notes/<int:note_id>/photos")
 @login_required
 def upload_photo(note_id):
-    if storage.mode() != "local":
-        abort(503, "사진을 지금은 올릴 수 없어요.")
+    if storage.mode() == "off":
+        abort(503, storage.UPLOAD_UNAVAILABLE)
     note = _owned_note(note_id)
     image = request.files.get("image")  # 10MB 초과는 여기서 413
     client_id = _client_id(request.form.get("client_id"))
