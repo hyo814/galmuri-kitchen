@@ -26,8 +26,6 @@ bp = Blueprint("demo", __name__, cli_group=None)  # 명령은 `flask purge-demo-
 PROVIDER = "demo"
 NICKNAME = "체험 사용자"
 TTL = timedelta(hours=24)
-IP_HOURLY_LIMIT = 3  # 같은 IP(IPv6는 /64)에서 1시간에 만들 수 있는 체험 계정 수
-IP_DAILY_LIMIT = 10  # 같은 IP에서 24시간에 만들 수 있는 체험 계정 수(체험 계정이 24시간 살아 있어 그대로 센다)
 MAX_ACTIVE = 5000  # 체험 계정 전체 상한. 차면 가장 오래된 계정부터 지우고(재활용) 새로 만든다
 PURGE_BATCH = 50  # 체험하기 요청 한 번에 함께 지우는 만료·재활용 계정 수 상한
 
@@ -141,8 +139,8 @@ def demo_login():
     demo_users = User.query.filter(User.provider == PROVIDER)
     mine = demo_users.filter(User.provider_id.startswith(f"{key}."))
     if (
-        mine.filter(User.created_at >= now - timedelta(hours=1)).count() >= IP_HOURLY_LIMIT
-        or mine.filter(User.created_at >= now - TTL).count() >= IP_DAILY_LIMIT
+        mine.filter(User.created_at >= now - timedelta(hours=1)).count() >= current_app.config["DEMO_IP_HOURLY_LIMIT"]
+        or mine.filter(User.created_at >= now - TTL).count() >= current_app.config["DEMO_IP_DAILY_LIMIT"]  # 체험 계정이 24시간 살아 있어 그대로 센다
     ):
         db.session.commit()  # 지운 만료 계정은 남긴다
         storage.delete(keys)

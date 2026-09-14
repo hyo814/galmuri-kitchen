@@ -46,6 +46,18 @@ interface Row extends DraftItem {
   stock: boolean;
 }
 
+/** 고정 CTA 바의 실제 높이(안내 줄·큰 글씨로 줄바꿈 포함)만큼 화면 아래 여백을 잡아 마지막 항목이 가려지지 않게 한다 */
+function reserveCtaSpace(bar: HTMLDivElement | null) {
+  const page = bar?.closest<HTMLElement>(".page");
+  if (!bar || !page) return;
+  const observer = new ResizeObserver(() => page.style.setProperty("--sh-cta-h", `${bar.offsetHeight}px`));
+  observer.observe(bar);
+  return () => {
+    observer.disconnect();
+    page.style.removeProperty("--sh-cta-h");
+  };
+}
+
 function BackLink({ onClick }: { onClick: () => void }) {
   return (
     <a
@@ -228,7 +240,7 @@ export default function ShoppingStock() {
   const stockCount = rows.filter((r) => r.stock).length;
   const skipCount = rows.length - stockCount;
   return (
-    <main className="page">
+    <main className="page sh-in-page">
       <BackLink onClick={leave} />
       <header className="topbar">
         <div>
@@ -350,7 +362,7 @@ export default function ShoppingStock() {
           </p>
         )}
 
-        <div className="cta-bar">
+        <div className="cta-bar" ref={reserveCtaSpace}>
           {skipCount > 0 && stockCount > 0 && (
             <p className="sh-in-hint">
               {rows.every((r) => r.stock || r.household) ? "생활용품 " : ""}

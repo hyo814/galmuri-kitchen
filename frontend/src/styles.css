@@ -2314,6 +2314,17 @@ button.row-btn > svg {
 }
 
 /* 상세: AI 레시피 사진 아래 안내, 출처 줄의 원본 보기 */
+.rc-source {
+  margin: 24px 20px 0;
+  padding: 0 4px;
+  word-break: keep-all;
+}
+
+.rc-source a {
+  color: inherit;
+  text-underline-offset: 2px;
+}
+
 .r3-photo-note {
   margin: 6px 20px 0;
   padding: 0 4px;
@@ -3095,6 +3106,34 @@ button.row-btn > svg {
   font-variant-numeric: tabular-nums;
 }
 
+.mo-credits {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mo-credits li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  word-break: keep-all;
+}
+
+.mo-credits b {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+}
+
+.mo-credits span {
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--text-3);
+}
+
 .mo-note {
   display: flex;
   gap: 8px;
@@ -3398,9 +3437,9 @@ button.row-btn > svg {
   word-break: keep-all;
 }
 
-/* 한 줄(26px)만큼 CTA가 높아지니 마지막 내용이 가려지지 않게 */
-.page:has(.sh-in-hint) {
-  padding-bottom: calc(138px + var(--tabbar-h) + env(safe-area-inset-bottom));
+/* CTA 바 높이(안내 줄·줄바꿈 포함)는 ShoppingStock이 재서 --sh-cta-h로 넣는다. 재기 전에는 기본 여백 */
+.page.sh-in-page {
+  padding-bottom: calc(var(--sh-cta-h, 112px) + 16px + var(--tabbar-h) + env(safe-area-inset-bottom));
 }
 
 /* 버튼 글자는 짧지만 큰 글씨 설정에서도 낱말 가운데서 끊지 않는다 */

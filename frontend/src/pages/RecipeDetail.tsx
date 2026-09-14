@@ -191,7 +191,7 @@ export default function RecipeDetail({ kind, id }: { kind: "mine" | "public"; id
     <main className="page">
       <BackLink />
       {src && <img className="rc-hero" src={src} alt="" />}
-      {src && similarPhoto && <p className="hint r3-photo-note">비슷한 요리 사진이에요</p>}
+      {src && similarPhoto && <p className="hint r3-photo-note">비슷한 요리 사진이에요 · 사진: 식품안전나라</p>}
       <header className="rc-head">
         <h1>{recipe.title}</h1>
         <p className="summary r3-summary">
@@ -210,6 +210,16 @@ export default function RecipeDetail({ kind, id }: { kind: "mine" | "public"; id
       </header>
 
       <RecipeBody title={recipe.title} servings={recipe.servings} ingredients={recipe.ingredients} steps={recipe.steps} />
+
+      {recipe.kind === "public" && !recipe.is_sample && (
+        <p className="hint rc-source">
+          출처:{" "}
+          <a href="https://www.foodsafetykorea.go.kr" target="_blank" rel="noopener noreferrer">
+            식품의약품안전처 식품안전나라 조리식품 레시피 DB
+            <span className="sr-only"> (새 창에서 열려요)</span>
+          </a>
+        </p>
+      )}
 
       {actionError && (
         <p className="error" role="alert">

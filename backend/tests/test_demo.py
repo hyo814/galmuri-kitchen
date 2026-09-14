@@ -27,7 +27,8 @@ USER_TABLES = (Ingredient, StorageLocation, ItemRule, Staple, Recipe, Seasoning,
 
 @pytest.fixture
 def demo_app(make_app):
-    return make_app(DEMO_LOGIN=True, DEV_MODE=False)
+    # IP 한도는 설정값(기본 30·100). 테스트는 작게 잡아 경계를 확인한다
+    return make_app(DEMO_LOGIN=True, DEV_MODE=False, DEMO_IP_HOURLY_LIMIT=3, DEMO_IP_DAILY_LIMIT=10)
 
 
 def new_client(app, ip="10.0.0.1"):
@@ -211,6 +212,19 @@ def test_demo_login_per_ip_hourly_and_daily_limit(demo_app):
     assert (res.status_code, res.get_json()) == TOO_MANY
     age_demo_users(demo_app, hours=25)  # 하루 지나면(만료 계정도 지워지고) 다시 된다
     assert same.post("/api/demo-login").status_code == 200
+
+
+def test_demo_ip_limits_come_from_env(make_app, monkeypatch):
+    monkeypatch.delenv("DEMO_IP_HOURLY_LIMIT", raising=False)
+    monkeypatch.delenv("DEMO_IP_DAILY_LIMIT", raising=False)
+    app = make_app(DEMO_LOGIN=True, DEV_MODE=False)
+    assert (app.config["DEMO_IP_HOURLY_LIMIT"], app.config["DEMO_IP_DAILY_LIMIT"]) == (30, 100)  # 한 사무실 주소 뒤 여러 심사위원
+    assert [new_client(app, "10.0.0.7").post("/api/demo-login").status_code for _ in range(4)] == [200] * 4
+    monkeypatch.setenv("DEMO_IP_HOURLY_LIMIT", "1")
+    monkeypatch.setenv("DEMO_IP_DAILY_LIMIT", "2")
+    app = make_app(DEMO_LOGIN=True, DEV_MODE=False)
+    assert (app.config["DEMO_IP_HOURLY_LIMIT"], app.config["DEMO_IP_DAILY_LIMIT"]) == (1, 2)
+    assert [new_client(app, "10.0.0.7").post("/api/demo-login").status_code for _ in range(2)] == [200, 429]
 
 
 def test_ipv6_is_limited_per_64(demo_app):
