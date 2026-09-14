@@ -112,3 +112,17 @@ def test_ingredient_key_is_lowercase_words_without_parentheses():
     assert ingredient_key("유정란 계란 (특란)") == "유정란 달걀"  # 동의어는 한 표기로(matching.SYNONYMS)
     assert ingredient_key("Egg/Milk") == "egg milk"
     assert ingredient_key("대파1대") == "대파 1대"
+
+
+def test_unclosed_bracket_does_not_swallow_the_line():
+    # 식약처 원문 "갯벌의 여왕 모시조개의 달콤한 유혹": 괄호가 닫히지 않아 재료 10개가 한 개로 읽혔다
+    text = "바지락(모시조개( 200g(30개), 양파 15g(2*4cm), 마늘 10g(2쪽), 후추 약간, 바질 약간"
+    assert pairs(text) == [("바지락(모시조개)", "200g(30개)"), ("양파", "15g(2*4cm)"), ("마늘", "10g(2쪽)"), ("후추", "약간"), ("바질", "약간")]
+
+
+def test_drops_pieces_without_letters():
+    assert pairs(".") == [] and pairs("대파 1대, ., -") == [("대파", "1대")]
+
+
+def test_bracket_typo_before_amount():
+    assert pairs("소금( 0.2g), 버터(10g") == [("소금", "0.2g"), ("버터(10g", "")]
