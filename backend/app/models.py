@@ -229,6 +229,44 @@ class Recipe(db.Model):
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 
 
+class MealPlan(db.Model):
+    """식단(스펙 20절, 4b-1). 칸은 slots 관계로."""
+
+    __tablename__ = "meal_plans"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = db.Column(db.String(30), nullable=False)
+    start_on = db.Column(db.Date, nullable=False)
+    days = db.Column(db.Integer, nullable=False)  # 1~31
+    default_servings = db.Column(db.Integer, nullable=False, default=1)  # 1~20 (23절 D5)
+    goal_kcal = db.Column(db.Integer)  # 하루 목표, 500~5000
+    goal_note = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+    slots = db.relationship(
+        "MealSlot", order_by="(MealSlot.date, MealSlot.id)", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class MealSlot(db.Model):
+    """식단 칸(끼니 하나). recipe_id가 있으면 레시피 칸, 레시피를 지우면(SET NULL) 제목만 남은 직접 쓰기 칸처럼 된다."""
+
+    __tablename__ = "meal_slots"
+    __table_args__ = (db.UniqueConstraint("plan_id", "date", "meal"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    plan_id = db.Column(db.Integer, db.ForeignKey("meal_plans.id", ondelete="CASCADE"), nullable=False, index=True)
+    date = db.Column(db.Date, nullable=False)
+    meal = db.Column(db.String(10), nullable=False)  # breakfast | lunch | dinner | snack
+    recipe_id = db.Column(db.Integer, db.ForeignKey("recipes.id", ondelete="SET NULL"), index=True)
+    title = db.Column(db.String(60), nullable=False)
+    servings = db.Column(db.Integer, nullable=False, default=1)  # 1~20
+    est_kcal = db.Column(db.Integer)  # 1인분 추정치, AI 초안으로 채운 칸만
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    recipe = db.relationship("Recipe")
+
+
 class Seasoning(db.Model):
     """사용자 "내 비율"(스펙 22절). 기본 양념은 화면 데이터 파일(frontend/src/data/seasoningPresets.ts)에 있다."""
 

@@ -319,6 +319,34 @@ def test_shopping_items_household_migration(app):
         assert "household" not in columns
 
 
+def test_meal_plans_migration_adds_and_removes_tables(app):
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="d1m1e1a1l1s1")
+        with db.engine.connect() as conn:
+            inspector = sa.inspect(conn)
+            plan_columns = {c["name"] for c in inspector.get_columns("meal_plans")}
+            slot_columns = {c["name"] for c in inspector.get_columns("meal_slots")}
+            plan_fks = {fk["referred_table"]: fk["options"].get("ondelete") for fk in inspector.get_foreign_keys("meal_plans")}
+            slot_fks = {fk["referred_table"]: fk["options"].get("ondelete") for fk in inspector.get_foreign_keys("meal_slots")}
+            slot_uniques = {tuple(u["column_names"]) for u in inspector.get_unique_constraints("meal_slots")}
+            index_names = {ix["name"] for ix in inspector.get_indexes("meal_plans") + inspector.get_indexes("meal_slots")}
+        assert plan_columns == {
+            "id", "user_id", "name", "start_on", "days", "default_servings", "goal_kcal", "goal_note", "created_at", "updated_at",
+        }
+        assert slot_columns == {
+            "id", "plan_id", "date", "meal", "recipe_id", "title", "servings", "est_kcal", "created_at",
+        }
+        assert plan_fks == {"users": "CASCADE"}
+        assert slot_fks == {"meal_plans": "CASCADE", "recipes": "SET NULL"}
+        assert ("plan_id", "date", "meal") in slot_uniques
+        assert {"ix_meal_plans_user_id", "ix_meal_slots_plan_id", "ix_meal_slots_recipe_id"} <= index_names
+
+        downgrade(directory=MIGRATIONS, revision="c2h2o2u2s2e2")
+        with db.engine.connect() as conn:
+            tables = set(sa.inspect(conn).get_table_names())
+        assert not {"meal_plans", "meal_slots"} & tables
+
+
 def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)
@@ -342,5 +370,7 @@ def test_upgrade_to_head_and_back_to_base(app):
             "shopping_items",
             "shopping_notes",
             "shopping_note_photos",
+            "meal_plans",
+            "meal_slots",
         } <= tables
         downgrade(directory=MIGRATIONS, revision="base")

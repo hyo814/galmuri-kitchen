@@ -500,3 +500,41 @@ def test_recipe_detail_annotate_is_fast_with_large_inventory(client, login, app)
     assert res.status_code == 200
     assert all(row["have"] for row in res.get_json()["ingredients"])
     assert elapsed < 0.15, f"{elapsed:.3f}s"
+
+
+# --- 4b-1 Task 1: stock_context/match_summary, /api/recipes/choices ---
+
+
+def test_match_summary_counts_and_urgent_names(client, login, app):
+    user = login()
+    add_ingredient(client, "두부", expires_on=seoul_today().isoformat())
+    add_ingredient(client, "대파")
+    ingredients = [{"name": "두부", "amount": "1모"}, {"name": "대파", "amount": "1대"}, {"name": "돼지고기", "amount": "200g"}]
+    with app.app_context():
+        prepared_stock, urgent = recipes_module.stock_context(user.id)
+        summary = recipes_module.match_summary(ingredients, prepared_stock, urgent)
+    assert summary == {"have_count": 2, "total_count": 3, "urgent_names": ["두부"]}
+
+
+def test_recipe_choices_sorted_by_match_and_filtered(client, login, app):
+    login()
+    add_ingredient(client, "대파")
+    add_ingredient(client, "두부")
+    full = create(client, title="김치찌개", ingredients=[{"name": "대파", "amount": "1대"}, {"name": "두부", "amount": "1모"}]).get_json()
+    half = create(client, title="된장찌개", ingredients=[{"name": "대파", "amount": "1대"}, {"name": "소고기", "amount": "200g"}]).get_json()
+    none_match = create(client, title="볶음밥", ingredients=[{"name": "당근", "amount": "1개"}, {"name": "양파", "amount": "1개"}]).get_json()
+
+    body = client.get("/api/recipes/choices").get_json()
+    ids = [item["id"] for item in body["items"]]
+    assert ids == [full["id"], half["id"], none_match["id"]]
+    by_id = {item["id"]: item for item in body["items"]}
+    assert (by_id[full["id"]]["have_count"], by_id[full["id"]]["total_count"]) == (2, 2)
+    assert (by_id[none_match["id"]]["have_count"], by_id[none_match["id"]]["total_count"]) == (0, 2)
+
+    filtered = client.get("/api/recipes/choices?q=찌개").get_json()["items"]
+    assert {item["id"] for item in filtered} == {full["id"], half["id"]}
+
+    assert client.get(f"/api/recipes/choices?q={'가' * 51}").status_code == 200
+
+    login("other")
+    assert client.get("/api/recipes/choices?q=찌개").get_json()["items"] == []
