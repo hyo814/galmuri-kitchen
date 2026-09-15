@@ -483,9 +483,9 @@ def test_recipe_list_cursor_id_out_of_range_is_400(client, login):
 
 def test_recipe_detail_annotate_is_fast_with_large_inventory(client, login, app):
     # M7: annotate가 추천과 같은 준비된 재고(_prepared_stock) + 빠른 매칭(_match_key_fast)을 쓰는지.
-    # 맞는 재고를 뒤쪽(1950~1999, 재고 순서 앞쪽)에만 두고 나머지 1,950개는 안 맞는 채움 이름으로 둔다 — 앞쪽에
+    # 맞는 재고 50개를 뒤쪽(1950~1999, id가 커서 매칭 순서도 맨 뒤)에만 두고 앞 1,950개는 안 맞는 채움 이름으로 둔다 — 앞쪽에
     # 바로 맞으면 미준비 구현(비교마다 정규식으로 다시 prepare)도 우연히 빨리 끝나 회귀를 못 잡는다(리뷰 minor).
-    # 이렇게 하면 재료 50개 × 재고 최대 2,000개를 거의 다 훑어야 해서, 미준비 구현은 실측 18초까지 걸렸다.
+    # 이렇게 하면 재료 50개 × 재고 최대 2,000개를 거의 다 훑어야 한다(약 98,000번 비교). 미준비 구현은 이 테스트에서 약 0.42초(재리뷰 실측).
     words = ["대파", "양파", "두부", "계란", "감자", "당근", "애호박", "돼지고기", "소고기", "닭가슴살",
              "김치", "콩나물", "시금치", "표고버섯", "고추", "마늘", "간장", "고추장", "된장", "설탕"]
     user = login()
@@ -509,7 +509,7 @@ def test_recipe_detail_annotate_is_fast_with_large_inventory(client, login, app)
     assert res.status_code == 200
     assert all(row["have"] for row in res.get_json()["ingredients"])
     # 0.3초: 상세가 이제 cooked 계산으로 인덱스된 COUNT 쿼리 하나를 더 한다(29절 결정 26, Task 5) —
-    # 그래도 이 테스트가 잡으려는 회귀(위 18초)에 비하면 여전히 넉넉히 빠르다.
+    # 준비된 구현은 이 안에 들어오고, 미준비 구현(약 0.42초)은 걸린다.
     assert elapsed < 0.3, f"{elapsed:.3f}s"
 
 

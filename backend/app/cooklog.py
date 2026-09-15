@@ -454,7 +454,7 @@ def delete_cook_log(log_id):
 
 def _relocked_cook_log(log_id):
     """사용자 잠금을 잡은 뒤 다시 읽는다(populate_existing — 이미 세션에 있는 옛 값을 돌려주지 않게).
-    그사이 지워졌으면 예외 없이 None(리뷰 I1: db.session.refresh는 지워진 행에서 StaleDataError를 던진다)."""
+    그사이 지워졌으면 예외 없이 None(리뷰 I1: db.session.refresh는 지워진 행에서 InvalidRequestError를 던진다)."""
     cook_log = db.session.get(CookLog, log_id, populate_existing=True)
     if cook_log is None or cook_log.user_id != g.user.id:
         return None
