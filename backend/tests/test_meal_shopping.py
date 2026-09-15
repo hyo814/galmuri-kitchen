@@ -228,7 +228,8 @@ def test_preview_uses_servings_ratio_and_today_onward(client, login, app, monkey
     assert row["planned_on"] == "2026-09-15"
 
 
-def test_preview_only_this_users_stock_and_listed(client, login, app):
+def test_preview_only_this_users_stock_and_listed(client, login, app, monkeypatch):
+    monkeypatch.setattr(meals_module, "seoul_today", lambda: TODAY)
     login("owner")
     recipe = add_recipe(client, "두부조림", [{"name": "두부", "amount": "1모"}], servings=1)
     plan = make_plan(client, start_on="2026-09-15", days=7).get_json()
