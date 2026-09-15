@@ -96,7 +96,7 @@ def test_blank_ai_env_values_fall_back_to_defaults(monkeypatch):
 
     assert app.config["ANTHROPIC_API_KEY"] is None
     assert app.config["CLAUDE_MODEL"] == "claude-sonnet-5"
-    assert app.config["AI_DAILY_SCAN_LIMIT"] == 10
+    assert app.config["AI_DAILY_SCAN_LIMIT"] == 20
     assert app.config["AI_SCAN_BURST_LIMIT"] == 3
 
     with app.app_context():
@@ -105,7 +105,7 @@ def test_blank_ai_env_values_fall_back_to_defaults(monkeypatch):
             client = app.test_client()
             client.environ_base["HTTP_X_REQUESTED_WITH"] = "fetch"
             dev = client.post("/api/dev-login").get_json()
-            assert (dev["scan"], dev["scan_limit"]) == ("sample", 10)
+            assert (dev["scan"], dev["scan_limit"]) == ("sample", 20)
         finally:
             db.session.remove()
             db.engine.dispose()

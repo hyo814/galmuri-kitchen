@@ -167,7 +167,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - OAuth state 검증(Authlib).
 - CSRF: 상태 변경 요청에 커스텀 헤더 요구.
 - 사진: 비공개 버킷, 소유자 확인 후 만료 5분 presigned URL.
-- 체험하기 계정(추가: 2026-09-14, 사용자 결정 "체험 계정 + 카카오 로그인"): `DEMO_LOGIN=1`일 때만 `POST /api/demo-login`이 열린다. 누를 때마다 새 계정(`provider=demo`)과 예시 데이터를 만들고 24시간 뒤 `flask purge-demo-users`로 지운다. IP(IPv6는 /64)별 1시간 3개·하루 10개, 전체 5,000개(차면 오래된 체험 계정부터 재활용), IP는 `SECRET_KEY`에서 뽑은 키의 HMAC 해시만 남긴다. 체험 계정 AI 하루 한도 3번, 체험 전체 AI 24시간 예산(`DEMO_AI_GLOBAL_DAILY`)을 넘으면 예시 결과, 영상은 늘 예시 목록. 세션은 `user_id`와 `provider_id`가 함께 맞아야 한다. `ai_calls`는 사용자를 지워도 남는다(`SET NULL`, `demo` 표시).
+- 체험하기 계정(추가: 2026-09-14, 사용자 결정 "체험 계정 + 카카오 로그인"): `DEMO_LOGIN=1`일 때만 `POST /api/demo-login`이 열린다. 누를 때마다 새 계정(`provider=demo`)과 예시 데이터를 만들고 24시간 뒤 `flask purge-demo-users`로 지운다. IP(IPv6는 /64)별 1시간 3개·하루 10개, 전체 5,000개(차면 오래된 체험 계정부터 재활용), IP는 `SECRET_KEY`에서 뽑은 키의 HMAC 해시만 남긴다. 체험 계정 AI 하루 한도 5번(2026-09-15 3→5, 사용자 결정), 체험 전체 AI 24시간 예산(`DEMO_AI_GLOBAL_DAILY`)을 넘으면 예시 결과, 영상은 늘 예시 목록. 세션은 `user_id`와 `provider_id`가 함께 맞아야 한다. `ai_calls`는 사용자를 지워도 남는다(`SET NULL`, `demo` 표시).
 - 비밀값(ANTHROPIC_API_KEY, FOODSAFETY_API_KEY, FOOD_NUTRITION_API_KEY, KAKAO_CLIENT_ID/SECRET, NAVER_CLIENT_ID/SECRET, GOOGLE_CLIENT_ID/SECRET, R2_*, DATABASE_URL, SECRET_KEY)은 환경변수. `.env`는 gitignore.
 
 ## 10. 테스트
@@ -566,7 +566,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **구독 결제** — 매주 쓰는 사용자가 생기면 붙인다.
   - 무료/유료 경계는 **AI 한도**(스캔·AI 레시피·식단 AI 횟수)로 둔다. 비용이 드는 곳이 경계다. 레시피 등록 개수 제한은 원가가 거의 없고 초기 사용자를 떠나게 해서 쓰지 않는다.
   - 유료 후보: AI 한도 상향, 식단 AI 초안·1달 달력(4b), 가족 공유 냉장고(13절 범위 밖에서 승격).
-  - 가격은 `ai_calls` 토큰으로 사용자당 월 AI 원가를 잰 뒤 정한다. 무료 한도(지금 스캔·레시피 하루 10회)도 그때 다시 정한다.
+  - 가격은 `ai_calls` 토큰으로 사용자당 월 AI 원가를 잰 뒤 정한다. 무료 한도(지금 스캔·레시피 하루 20회, 2026-09-15 10→20 사용자 결정)도 그때 다시 정한다.
   - 웹(PWA) 결제대행(토스페이먼츠·포트원 등)이라 앱스토어 수수료가 없다. 필요: 사업자등록, 통신판매업 신고, 환불 규정, 개인정보처리방침.
 - **식품 브랜드 협찬 레시피** — 사용자가 더 모이면 제안한다. 추천 목록에 `광고` 표시를 달고 섞는다.
 - 하지 않음: 배너 광고(수익 적고 디자인 방향과 안 맞음), 사용자 재고·식습관 데이터 판매.

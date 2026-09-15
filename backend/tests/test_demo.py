@@ -58,7 +58,7 @@ def test_demo_login_creates_seeded_user_and_session(demo_app):
     c = new_client(demo_app)
     assert c.get("/api/auth-options").get_json()["demo_login"] is True
     me = c.post("/api/demo-login").get_json()
-    assert (me["nickname"], me["provider"], me["scan_limit"], me["recipe_limit"]) == ("체험 사용자", "demo", 3, 3)
+    assert (me["nickname"], me["provider"], me["scan_limit"], me["recipe_limit"]) == ("체험 사용자", "demo", 5, 5)
     assert c.get("/api/me").get_json()["id"] == me["id"]
 
     items = c.get("/api/ingredients").get_json()
@@ -187,7 +187,7 @@ def test_demo_ai_limits_are_lower(demo_app, monkeypatch):
     c = new_client(demo_app)
     user_id = c.post("/api/demo-login").get_json()["id"]
     demo_app.config.update(ANTHROPIC_API_KEY="test-key", AI_DAILY_RECIPE_LIMIT=10, AI_DAILY_SCAN_LIMIT=10)
-    assert c.get("/api/ai-usage").get_json() == {"scan": {"used": 0, "limit": 3}, "recipe": {"used": 0, "limit": 3}}
+    assert c.get("/api/ai-usage").get_json() == {"scan": {"used": 0, "limit": 5}, "recipe": {"used": 0, "limit": 5}}
 
     fixed_today = seoul_today()
     fixed_now = datetime.combine(fixed_today, time(12), tzinfo=SEOUL).astimezone(timezone.utc)
@@ -195,10 +195,10 @@ def test_demo_ai_limits_are_lower(demo_app, monkeypatch):
     monkeypatch.setattr(scan, "utcnow", lambda: fixed_now)
     monkeypatch.setattr(ai, "suggest_recipes", lambda *args: pytest.fail("AI를 부르면 안 돼요"))
     with demo_app.app_context():
-        db.session.add_all(AiCall(user_id=user_id, kind="recipe", created_at=fixed_now - timedelta(hours=i + 1)) for i in range(3))
+        db.session.add_all(AiCall(user_id=user_id, kind="recipe", created_at=fixed_now - timedelta(hours=i + 1)) for i in range(5))
         db.session.commit()
     res = c.post("/api/recommendations/ai")
-    assert (res.status_code, res.get_json()) == (429, {"error": "오늘 AI 레시피는 3번까지 쓸 수 있어요. 내일 다시 써주세요."})
+    assert (res.status_code, res.get_json()) == (429, {"error": "오늘 AI 레시피는 5번까지 쓸 수 있어요. 내일 다시 써주세요."})
 
 
 def use_demo_budget(app, count):
