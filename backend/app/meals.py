@@ -95,6 +95,7 @@ def slot_json(slot, prepared_stock, urgent, results):
         "total_count": total_count,
         "urgent_names": urgent_names,
         "nutrition": slot_nutrition(slot, results.get(slot.recipe_id)),
+        "eaten_log_id": slot.food_log.id if slot.food_log is not None else None,
     }
 
 
@@ -113,7 +114,10 @@ def _owned_plan_with_slots(plan_id):
     """plan_json용: 칸 목록은 레시피까지 selectinload로 한 번에(N+1 방지)."""
     abort_if_id_too_big(plan_id)
     plan = (
-        MealPlan.query.options(selectinload(MealPlan.slots).selectinload(MealSlot.recipe))
+        MealPlan.query.options(
+            selectinload(MealPlan.slots).selectinload(MealSlot.recipe),
+            selectinload(MealPlan.slots).selectinload(MealSlot.food_log),
+        )
         .filter_by(id=plan_id, user_id=g.user.id)
         .first()
     )
@@ -266,6 +270,8 @@ def put_meal_slot(plan_id):
     if slot is None:
         slot = MealSlot(plan_id=plan.id, date=date, meal=meal)
         db.session.add(slot)
+    else:
+        slot.food_log = None  # 결정 6: 다른 요리로 바꾸면 연결만 끊고 기록은 남긴다
     slot.recipe_id = recipe_id
     slot.title = title
     slot.servings = servings
@@ -345,6 +351,25 @@ def delete_meal_slot(slot_id):
     db.session.delete(_owned_slot(slot_id))
     db.session.commit()
     return "", 204
+
+
+@bp.post("/meal-slots/<int:slot_id>/eaten")
+@login_required
+def mark_slot_eaten(slot_id):
+    """결정 6: 칸의 날짜·끼니·요리를 1인분·집밥으로 먹은 기록에 남긴다. 이미 남겼으면 그 기록 200."""
+    from .food_logs import BAD_REQUEST, FoodLog, create_log, log_json  # food_logs가 meals를 import해서 함수 안에서
+
+    slot = _owned_slot(slot_id)
+    if slot.food_log is not None:
+        return jsonify(log_json(slot.food_log))
+    # 칸에서 날짜·끼니·제목·레시피를 가져오고 미래 400·하루 상한·스냅숏은 create_log(apply_fields)가 POST와 같은 규칙으로 한다. servings 기본 1
+    log = create_log({"meal_slot_id": slot.id, "place": "home"})
+    if log is None:  # 같은 칸을 동시에 두 번 눌렀다(create_log가 rollback함)
+        existing = FoodLog.query.filter_by(meal_slot_id=slot_id).one_or_none()
+        if existing is None:
+            abort(400, BAD_REQUEST)
+        return jsonify(log_json(existing))
+    return jsonify(log_json(log)), 201
 
 
 AI_DRAFT_FAIL = "식단 초안을 만들지 못했어요. 잠시 후 다시 시도해주세요."
