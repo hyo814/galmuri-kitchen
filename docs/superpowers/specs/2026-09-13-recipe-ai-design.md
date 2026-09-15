@@ -173,7 +173,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 ## 11. 배포
 
 - Render Web Service(Docker) + Render PostgreSQL + Cloudflare R2.
-- 시작 명령: `flask db upgrade && gunicorn -w 2 --threads 4 -k gthread --timeout 120 -b 0.0.0.0:$PORT "app:create_app()"` (gthread 워커는 요청 처리 중에도 계속 heartbeat를 보내므로 gunicorn --timeout이 긴 AI 호출을 끊지 않는다. Claude 호출 타임아웃 45초 × 최대 2회 시도 사이에 SDK가 retry-after(최대 60초)를 기다릴 수 있어 최악의 경우 약 150초까지 걸릴 수 있고, 사용자는 화면에서 취소할 수 있다. 스레드 워커로 동시 요청 처리).
+- 시작 명령: `flask db upgrade && gunicorn -w 2 --threads 8 -k gthread --timeout 120 -b 0.0.0.0:$PORT "app:create_app()"` (gthread 워커는 요청 처리 중에도 계속 heartbeat를 보내므로 gunicorn --timeout이 긴 AI 호출을 끊지 않는다. Claude 호출 타임아웃 45초 × 최대 2회 시도 사이에 SDK가 retry-after(최대 60초)를 기다릴 수 있어 최악의 경우 약 150초까지 걸릴 수 있고, 사용자는 화면에서 취소할 수 있다. 스레드 워커로 동시 요청 처리. 2026-09-15: AI 식단 초안이 스레드를 오래 잡아 스레드 8개로).
 - 단계 1 완료 시 `docs/deploy.md`: OAuth 앱 등록(카카오 개발자, Google Cloud), 식약처 API 키, R2 버킷, Render 환경변수 설정 절차.
 
 ## 12. 로컬 개발 & 폰 확인 (추가: 2026-09-13)
