@@ -576,15 +576,65 @@ def test_web_page_image_candidates(monkeypatch):
     ]
 
 
-IMAGE = b"\xff\xd8\xff" + b"j" * 40  # 테스트에서는 MIN_IMAGE_BYTES를 20으로 줄인다
+def jpeg(width, height, sof=0xC0):
+    """APP0·DHT(SOF 아님) 뒤에 SOFn이 있는 작은 JPEG 머리."""
+    app0 = b"\xff\xe0" + (16).to_bytes(2, "big") + b"JFIF\0" + b"\0" * 9
+    dht = b"\xff\xc4" + (5).to_bytes(2, "big") + b"\0" * 3
+    frame = b"\xff" + bytes([sof]) + (17).to_bytes(2, "big") + b"\x08" + height.to_bytes(2, "big") + width.to_bytes(2, "big") + b"\x03" + b"\0" * 9
+    return b"\xff\xd8" + app0 + dht + b"\xff\xff" + frame  # 마커 앞 채움 0xFF도 건너뛴다
+
+
+def png(width, height):
+    return b"\x89PNG\r\n\x1a\n" + (13).to_bytes(4, "big") + b"IHDR" + width.to_bytes(4, "big") + height.to_bytes(4, "big") + b"\x08\x02\0\0\0"
+
+
+def webp(chunk, payload):
+    return b"RIFF" + (len(payload) + 12).to_bytes(4, "little") + b"WEBP" + chunk + len(payload).to_bytes(4, "little") + payload
+
+
+def webp_lossy(width, height):
+    return webp(b"VP8 ", b"\0\0\0" + b"\x9d\x01\x2a" + width.to_bytes(2, "little") + height.to_bytes(2, "little"))
+
+
+def webp_lossless(width, height):
+    bits = (width - 1) | ((height - 1) << 14)
+    return webp(b"VP8L", b"\x2f" + bits.to_bytes(4, "little"))
+
+
+def webp_extended(width, height):
+    return webp(b"VP8X", b"\0" * 4 + (width - 1).to_bytes(3, "little") + (height - 1).to_bytes(3, "little"))
+
+
+@pytest.mark.parametrize(
+    "data, size",
+    [
+        (jpeg(1000, 1333), (1000, 1333)),
+        (jpeg(640, 8000, sof=0xC2), (640, 8000)),  # 프로그레시브
+        (png(1200, 900), (1200, 900)),
+        (webp_lossy(800, 600), (800, 600)),
+        (webp_lossless(8000, 1), (8000, 1)),
+        (webp_extended(16383, 12000), (16383, 12000)),
+        (b"\xff\xd8\xff" + b"j" * 40, None),  # SOF가 없다
+        (jpeg(10, 10)[:30], None),  # 머리가 잘렸다
+        (b"\x89PNG\r\n\x1a\n" + b"p" * 40, None),
+        (webp(b"ALPH", b"\0" * 10), None),
+        (webp_lossy(800, 600)[:25], None),
+        (b"GIF89a" + b"\0" * 20, None),
+    ],
+)
+def test_image_size_reads_file_header(data, size):
+    assert outbound.image_size(data) == size
+
+
+IMAGE = jpeg(1000, 1333)  # 테스트에서는 MIN_IMAGE_BYTES를 20으로 줄인다
 
 
 def test_page_images_filters_and_skips_failures(monkeypatch):
     monkeypatch.setattr(outbound, "MIN_IMAGE_BYTES", 20)
     monkeypatch.setattr(outbound, "MAX_BYTES", 100)
     fake_dns(monkeypatch, {"recipe.example.com": ["93.184.216.34"], "internal.example": ["10.0.0.9"]})
-    png = b"\x89PNG\r\n\x1a\n" + b"p" * 40
-    webp = b"RIFF" + b"\0" * 4 + b"WEBP" + b"w" * 40
+    png = globals()["png"](1200, 900)
+    webp = webp_extended(800, 600) + b"w" * 10
     sent = fake_send(
         monkeypatch,
         [
@@ -609,6 +659,20 @@ def test_page_images_filters_and_skips_failures(monkeypatch):
     url, kwargs, headers = sent[0]
     assert (url, kwargs["allow_redirects"], kwargs["proxies"], headers["User-Agent"]) == (urls[0], False, {}, "galmuri-kitchen/1.0")
     assert kwargs["timeout"][1] <= 10
+
+
+def test_page_images_skip_oversize_and_unreadable(monkeypatch):
+    """AI API는 한 변이 8000px를 넘는 사진을 거절한다(502면 하루 한도만 쓴다). 넘거나 머리를 읽지 못하면 건너뛴다."""
+    monkeypatch.setattr(outbound, "MIN_IMAGE_BYTES", 20)
+    fake_dns(monkeypatch, {"recipe.example.com": ["93.184.216.34"]})
+    ok = [jpeg(8000, 8000), png(1, 8000), webp_lossless(640, 480)]
+    bad = [jpeg(1000, 8001), png(8001, 10), webp_extended(640, 9000), b"\xff\xd8\xff" + b"j" * 40]
+    fake_send(monkeypatch, [response(200, data, {}) for data in (bad[0], ok[0], bad[1], ok[1], bad[2], bad[3], ok[2])])
+    urls = [f"https://recipe.example.com/{i}.jpg" for i in range(7)]
+    assert outbound.page_images(urls) == [(ok[0], "image/jpeg"), (ok[1], "image/png"), (ok[2], "image/webp")]
+
+    fake_send(monkeypatch, [response(200, data, {}) for data in bad])
+    assert outbound.page_images(urls[:4]) == []  # 모두 걸러지면 빈 목록 → 가져오기는 글만 보낸다
 
 
 def test_page_images_stop_at_five(monkeypatch):

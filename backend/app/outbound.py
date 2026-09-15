@@ -41,6 +41,8 @@ MAX_IMAGE_CANDIDATES = 8  # 블로그 본문 사진 후보(요청은 차례로)
 MAX_PAGE_IMAGES = 5  # AI에 함께 보내는 본문 사진
 MIN_IMAGE_BYTES = 15_000  # 이보다 작으면 아이콘·여백 이미지로 본다
 IMAGE_TOTAL_SECONDS = 10  # 사진 요청 전체(페이지 요청 8초와 따로)
+MAX_IMAGE_SIDE = 8000  # AI API가 한 변이 이보다 긴 사진을 거절한다
+JPEG_SOF = {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
 # ponytail: 파일 이름·경로 규칙으로 꾸밈 이미지를 거른다. 엉뚱한 사진이 자주 섞이면 본문 영역(article·가장 긴 글 블록) 안의 <img>만 고르거나 크기(width·height) 속성을 본다.
 # loading은 요청 목록 밖에서 더했다: eggiscoming.com 게시판은 본문 사진보다 앞에 15KB가 넘는 로딩 문구 PNG 4장이 있다.
 DECOR_IMAGE = re.compile(r"logo|icon|btn|button|banner|sprite|profile|emoji|avatar|loading", re.I)
@@ -274,9 +276,43 @@ def fetch_public_page(url):
     return _fetch(url, public=True)
 
 
+def image_size(data):
+    """파일 머리에서 (가로, 세로)를 읽는다(JPEG SOFn · PNG IHDR · WEBP VP8/VP8L/VP8X). 읽지 못하면 None."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return (int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")) if data[12:16] == b"IHDR" and len(data) >= 24 else None
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        chunk, body = data[12:16], data[20:]
+        if chunk == b"VP8 " and body[3:6] == b"\x9d\x01\x2a" and len(body) >= 10:
+            return int.from_bytes(body[6:8], "little") & 0x3FFF, int.from_bytes(body[8:10], "little") & 0x3FFF
+        if chunk == b"VP8L" and body[:1] == b"\x2f" and len(body) >= 5:
+            bits = int.from_bytes(body[1:5], "little")
+            return (bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1
+        if chunk == b"VP8X" and len(body) >= 10:
+            return int.from_bytes(body[4:7], "little") + 1, int.from_bytes(body[7:10], "little") + 1
+        return None
+    if data[:2] != b"\xff\xd8":
+        return None
+    i = 2
+    while i + 4 <= len(data):  # 마커(0xFF xx)와 길이(2바이트)를 따라 SOFn까지 건너뛴다
+        if data[i] != 0xFF:
+            return None
+        marker = data[i + 1]
+        if marker == 0xFF:  # 채움 바이트
+            i += 1
+            continue
+        if marker in (0x01, *range(0xD0, 0xD9)):  # 길이 없는 마커
+            i += 2
+            continue
+        if marker in JPEG_SOF:
+            return (int.from_bytes(data[i + 7 : i + 9], "big"), int.from_bytes(data[i + 5 : i + 7], "big")) if i + 9 <= len(data) else None
+        i += 2 + int.from_bytes(data[i + 2 : i + 4], "big")
+    return None
+
+
 def page_images(urls):
     """블로그 본문 사진 후보 주소를 앞에서부터 8개까지 차례로 받아 [(bytes, media_type)] 최대 5장.
-    페이지와 같은 공인 주소 검사·리다이렉트 3번·3MB. JPEG·PNG·WEBP 시그니처이고 15KB 이상만. 실패한 사진은 건너뛴다.
+    페이지와 같은 공인 주소 검사·리다이렉트 3번·3MB. JPEG·PNG·WEBP 시그니처이고 15KB 이상, 머리에서 읽은 가로·세로가 8000px 이하만.
+    실패한 사진은 건너뛴다(모두 걸러지면 빈 목록 → 글만 보낸다).
     사진 요청 전체가 10초를 넘기지 않게 한 장마다 남은 시간만 준다. 사진은 저장하지 않는다."""
     images, deadline = [], time.monotonic() + IMAGE_TOTAL_SECONDS
     for url in urls[:MAX_IMAGE_CANDIDATES]:
@@ -287,8 +323,8 @@ def page_images(urls):
             data = _fetch(url, public=True, image=True, seconds=left)[0]
         except FetchError:
             continue
-        media_type = sniff_image_type(data)
-        if media_type and len(data) >= MIN_IMAGE_BYTES:
+        media_type, size = sniff_image_type(data), image_size(data)
+        if media_type and len(data) >= MIN_IMAGE_BYTES and size and 0 < min(size) and max(size) <= MAX_IMAGE_SIDE:
             images.append((data, media_type))
     return images
 
