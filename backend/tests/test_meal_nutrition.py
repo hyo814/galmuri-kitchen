@@ -107,3 +107,19 @@ def test_nutrition_off_mode_only_est_kcal(client, login, app):
     ai_slot = next(s for s in body["slots"] if s["date"] == "2026-09-16")
     assert (ai_slot["nutrition"]["kcal"], ai_slot["nutrition"]["source"]) == (500, "ai")
     assert body["nutrition_pending_recipe_ids"] == []
+
+
+def test_same_recipe_in_many_slots_is_calculated_once(client, login, app, monkeypatch):
+    """M1: 같은 레시피 칸이 여럿이어도 레시피 영양은 한 번만 계산한다."""
+    from app.nutrition import NutritionContext
+
+    login()
+    recipe = add_recipe(client, "두부조림", [{"name": "두부", "amount": "100g"}])
+    plan = make_plan(client).get_json()
+    for date in ("2026-09-15", "2026-09-16", "2026-09-17"):
+        put_slot(client, plan["id"], date=date, recipe_id=recipe["id"])
+    calls = []
+    real = NutritionContext.recipe
+    monkeypatch.setattr(NutritionContext, "recipe", lambda self, r: calls.append(r.id) or real(self, r))
+    assert len(get_plan(client, plan["id"]).get_json()["slots"]) == 3
+    assert calls == [recipe["id"]]
