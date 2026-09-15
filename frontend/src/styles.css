@@ -5624,7 +5624,15 @@ button.sh-offline svg:last-child {
   padding: 0 6px;
 }
 
-/* 날짜 상세 시트(Task 8, 시안 DAY) */
+/* 날짜 상세 시트(Task 8, 시안 DAY). 시안은 시트 자체 gap 12px에 막대가 옆 여백 없이 꽉 차므로 이 시트에서만 좁힌다(fix round 1) */
+.sheet.fl-day .sheet-body {
+  gap: 12px;
+}
+
+.sheet.fl-day .nt-dmeter {
+  margin: 0;
+}
+
 .fl-meal {
   display: grid;
   gap: 6px;
@@ -5719,7 +5727,6 @@ button.sh-offline svg:last-child {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 40px;
   min-height: 44px;
   padding: 0 12px;
   border: 0;

@@ -71,8 +71,14 @@ const dayLogs = [
 const dayT = dayTotals(dayLogs);
 assert.equal(dayT.kcal, 1190);
 assert.equal(dayT.approx, true);
+assert.equal(dayT.sugars_g, 22);
+assert.equal(dayT.sodium_mg, 2380);
 assert.equal(dayDescription(dayLogs, 1294), "약 1,190 / 목표 1,294kcal · 당류 22g · 나트륨 2,380mg");
 assert.equal(dayDescription(dayLogs, null), "약 1,190kcal · 당류 22g · 나트륨 2,380mg");
+
+// nutrition이 없는 기록은 approx가 true여도 합계·약에서 아예 빠진다(사진 기록의 남은 approx 값을 실수로 쓰지 않는다, fix round 1)
+assert.equal(dayTotals([{ nutrition: null, approx: true }]), null);
+assert.equal(mealKcalText([{ nutrition: null, approx: true, title: null }]), "");
 
 // 사진만 먼저: 토스트 + 이름 없는 사진 기록
 assert.equal(
@@ -86,6 +92,7 @@ assert.equal(dayDescription([], null), "아직 남긴 기록이 없어요");
 assert.equal(dayDescription([{ title: "샐러드", nutrition: null, approx: false }], null), "kcal을 계산할 수 있는 기록이 없어요");
 
 assert.equal(mealKcalText([]), "");
+assert.equal(mealKcalText([{ nutrition: { kcal: 400, carbs_g: 30, protein_g: 20, fat_g: 15, sugars_g: 11, sodium_mg: 820 }, approx: true, title: "제육덮밥" }]), "약 400kcal");
 
 // 인분 글자
 assert.equal(servingsText(0.5), "½인분");

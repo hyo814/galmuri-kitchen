@@ -161,7 +161,7 @@ function MonthBody({
 export default function FoodLogPage({ user }: { user: User }) {
   const [month, setMonth] = useState(() => (pendingOpen ? monthOf(pendingOpen.date) : (viewMonth ?? monthOf(localToday()))));
   const [selected, setSelected] = useState<string | null>(() => pendingOpen?.date ?? null);
-  const [open, setOpen] = useState(() => pendingOpen !== null);
+  const [open, setOpen] = useState(() => pendingOpen !== null); // pendingOpen.logId는 아직 읽지 않는다 — Task 9가 시트를 열 때 그 기록을 찾아 연다
   // Task 9가 이 값으로 고치기·추가 시트를 그린다
   const [editing, setEditing] = useState<{ meal: MealKind; log?: FoodLog; day: FoodLogDay } | null>(null);
   // 서버 today(개정 1 P14) — 받기 전엔 기기 시계로 `다음 달` 막기를 어림하고, 어느 달이든 한 번 받으면 그 값으로 굳힌다
