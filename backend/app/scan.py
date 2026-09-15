@@ -19,6 +19,7 @@ bp = Blueprint("scan", __name__, url_prefix="/api/scan")
 UPLOAD_KINDS = ("fridge", "receipt", "order", "memo")
 SCAN_KINDS = ("fridge", "receipt", "order", "memo")  # 일일 한도를 함께 세는 kind (memo는 장보기 메모 사진)
 RECIPE_KINDS = ("recipe", "link", "recipe_photo", "meal")  # AI 레시피 제안 + 링크·글·사진 가져오기 + AI 식단 초안(스펙 20절)
+NUTRITION_KINDS = ("nutrition",)  # 영양 채우기 AI 단위 무게·영양 추정(스펙 21절). AI 레시피 한도·체험 전체 AI 예산과 따로, /api/ai-usage에는 안 보인다
 FETCH_KINDS = ("link_fetch",)  # 링크 가져오기의 외부 요청(AI 호출 아님, 토큰 없음). AI 한도·사용량에는 세지 않는다
 MAX_ITEMS = 50
 MAX_PHOTOS = 5  # 한 번에 읽는 사진 수(AI 호출은 한 번)
