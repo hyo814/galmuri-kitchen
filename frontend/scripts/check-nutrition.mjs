@@ -193,7 +193,7 @@ assert.deepEqual(ingredientNote(row({ status: "unmatched", name: "두부" })), {
 // unknown_amount·trace·pending·no_estimate·AI 추정 식품
 assert.deepEqual(ingredientNote(row({ status: "unknown_amount" })), { text: "양을 알 수 없어 계산에서 뺐어요", action: null });
 assert.deepEqual(ingredientNote(row({ status: "trace" })), { text: "조금이라 계산에서 뺐어요", action: null });
-assert.deepEqual(ingredientNote(row({ status: "pending" })), { text: "계산하는 중이에요", action: null });
+assert.deepEqual(ingredientNote(row({ status: "pending" })), { text: "계산하는 중이에요", action: "고르기" });
 assert.deepEqual(ingredientNote(row({ status: "no_estimate", name: "설탕" })), { text: "설탕 · 추정할 수 없어요", action: "고르기" });
 assert.deepEqual(
   ingredientNote(row({ status: "needs_weight", name: "양파", food: { food_code: "z", name: "양파", group: "원재료성", kcal: 34 } })),

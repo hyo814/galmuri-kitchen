@@ -46,6 +46,11 @@ export function resetMealsView() {
   forgetMealDraft();
 }
 
+/** 레시피를 고쳐 저장했을 때(RecipeForm): 모든 식단에서 그 레시피를 시도 목록에서 빼 새 재료를 다시 채우게 한다 */
+export function forgetMealNutritionFill(recipeId: number) {
+  for (const key of attempted) if (key.endsWith(`|${recipeId}`)) attempted.delete(key);
+}
+
 /** AI 초안 넣기 뒤: 그 식단을 열고 머리에 결과 한 줄을 한 번 보여준다 */
 export function showMealsNotice(planId: number, text: string) {
   lastPlanId = planId;
