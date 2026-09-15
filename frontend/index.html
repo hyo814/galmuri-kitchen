@@ -29,6 +29,8 @@
       .boot-splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: #f3f4f6; color: #17191c; font: 700 24px/1.4 "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; letter-spacing: -0.4px; }
       @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .boot-splash { background: #0e0f11; color: #f1f2f4; } }
       :root[data-theme="dark"] .boot-splash { background: #0e0f11; color: #f1f2f4; }
+      /* PC(1024px 이상): styles.css가 불리기 전이라 틀 자리 값을 직접 쓴다(styles.css --col-x·--frame-h와 같게) */
+      @media (min-width: 1024px) { .boot-splash { inset: calc((100dvh - min(calc(100dvh - 48px), 940px)) / 2) auto auto calc(50% + 42px); width: 420px; height: min(calc(100dvh - 48px), 940px); border-radius: 28px; } }
       .pitch { display: none; }
     </style>
     <!-- 화면 테마: 첫 화면을 그리기 전에 적용해 깜빡이지 않게 한다. 같은 동작을 더보기(applyTheme)에서도 한다 -->
