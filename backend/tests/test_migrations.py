@@ -403,6 +403,27 @@ def test_food_tables_migration_adds_and_removes_tables(app):
             assert not tables & set(sa.inspect(conn).get_table_names())
 
 
+def test_food_serving_grams_migration(app):
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="f2f2o2o2d2s2")
+        with db.engine.begin() as conn:
+            conn.execute(sa.text(
+                "INSERT INTO food_searches (id, query_key, total, searched_at) VALUES (1, '두부', 1, '2026-09-15 00:00:00+00:00')"
+            ))
+
+        upgrade(directory=MIGRATIONS, revision="g1s1e1r1v1n1")
+        with db.engine.connect() as conn:
+            columns = {c["name"] for c in sa.inspect(conn).get_columns("food_nutrients")}
+            searched_at = conn.execute(sa.text("SELECT searched_at FROM food_searches WHERE id = 1")).scalar_one()
+        assert "serving_g" in columns
+        assert str(searched_at).startswith("2000-01-01")
+
+        downgrade(directory=MIGRATIONS, revision="f2f2o2o2d2s2")
+        with db.engine.connect() as conn:
+            columns = {c["name"] for c in sa.inspect(conn).get_columns("food_nutrients")}
+        assert "serving_g" not in columns
+
+
 def test_ingredients_purchased_on_nullable_migration(app):
     def purchased_on_nullable(conn):
         return {c["name"]: c for c in sa.inspect(conn).get_columns("ingredients")}["purchased_on"]["nullable"]

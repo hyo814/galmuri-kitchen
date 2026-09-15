@@ -48,6 +48,7 @@ def test_row_fields_normal_row():
     assert result == {
         "food_code": "F1", "name": "두부", "name_key": "두부", "group_name": "원재료성",
         "kcal": 84.0, "carbs_g": None, "protein_g": None, "fat_g": None, "sugars_g": None, "sodium_mg": 7.0,
+        "serving_g": None,
     }
 
 

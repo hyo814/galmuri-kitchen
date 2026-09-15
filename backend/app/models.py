@@ -348,6 +348,7 @@ class FoodNutrient(db.Model):
     fat_g = db.Column(db.Float)
     sugars_g = db.Column(db.Float)
     sodium_mg = db.Column(db.Float)
+    serving_g = db.Column(db.Float)  # 식품중량(1인분 g, 음식 행에만 있음, 없으면 NULL). foods.FIELDS["serving"]
     source = db.Column(db.String(10), nullable=False)
     fetched_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
