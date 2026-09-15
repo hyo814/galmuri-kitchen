@@ -174,7 +174,7 @@ def create_app(test_config=None):
             return res
         if path and os.path.isfile(os.path.join(dist, path)):
             res = send_from_directory(dist, path)
-            if path.startswith("assets/"):  # Vite가 내용 해시를 이름에 넣어 내용이 바뀌면 주소도 바뀐다
+            if os.path.normpath(path).startswith("assets" + os.sep):  # Vite가 내용 해시를 이름에 넣어 내용이 바뀌면 주소도 바뀐다
                 res.headers["Cache-Control"] = "public, max-age=31536000, immutable"
             return res
         return send_from_directory(dist, "index.html")

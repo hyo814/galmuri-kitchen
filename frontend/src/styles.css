@@ -1189,6 +1189,7 @@ button.row-btn > svg {
 .scan-quota {
   display: flex;
   align-items: center;
+  word-break: keep-all;
   justify-content: center;
   gap: 6px;
   margin-top: -4px;
@@ -1336,6 +1337,7 @@ button.row-btn > svg {
 
 .scan-sample {
   align-self: flex-start;
+  word-break: keep-all;
   gap: 4px;
   height: auto;
   min-height: 28px;
@@ -1559,12 +1561,18 @@ button.row-btn > svg {
 
 .rc-sample {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  word-break: keep-all;
   gap: 6px;
   margin: 12px 20px 0;
   color: var(--text-3);
   font-size: 14px;
   line-height: 20px;
+}
+
+.rc-sample svg {
+  margin-top: 2px;
+  flex-shrink: 0;
 }
 
 .rc-group {
