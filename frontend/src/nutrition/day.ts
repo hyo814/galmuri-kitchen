@@ -1,5 +1,6 @@
-// 주 보기 kcal·하루 목표 막대·하루 영양 시트 순수 로직 (4b-2 Task 7)
-import type { MealSlot, SlotNutrition } from "../api";
+// 주 보기 kcal·하루 목표 막대·하루 영양 시트 순수 로직 (4b-2 Task 7), 레시피 상세 영양·식품 고르기 시트 (Task 8)
+import type { MealSlot, NutritionIngredient, SlotNutrition } from "../api";
+import { withJosa } from "../format.ts";
 import { kcalNumber } from "./body.ts";
 
 export const SUGARS_DAILY_G = 100; // 식품 표시 1일 영양성분기준치(하루 2,000kcal)
@@ -102,4 +103,61 @@ export function fillTargets(
         .map((s) => s.recipe_id!),
     ),
   ].slice(0, 31);
+}
+
+// ---- 레시피 상세 영양·식품 고르기 시트 (4b-2 Task 8) ----
+
+export const GROUP_LABEL: Record<string, string> = { 원재료성: "원재료", 가공식품: "가공식품", 음식: "음식" };
+
+/** 후보 한 줄 설명 "원재료 · 100g당 84kcal" */
+export const candidateSub = (group: string, kcal: number) => `${GROUP_LABEL[group] ?? group}${group ? " · " : ""}100g당 ${kcalNumber(kcal)}kcal`;
+
+/** 공백·괄호를 뺀 이름이 검색어와 같으면 `가장 비슷` */
+export const sameName = (a: string, b: string) => a.replace(/\([^)]*\)/g, "").replace(/\s+/g, "") === b.replace(/\([^)]*\)/g, "").replace(/\s+/g, "");
+
+/** 시트 제목 "‘두부’는 어떤 식품인가요?" */
+export const pickTitle = (name: string) => `‘${name}’${withJosa(name, "은", "는").slice(name.length)} 어떤 식품인가요?`;
+
+/** 재료 줄 오른쪽: ok "198", estimated "약 45", trace "0", 나머지 "—" */
+export function ingredientKcalText(row: NutritionIngredient): string {
+  if (row.status === "trace") return "0";
+  if (row.kcal_per_serving === null) return "—";
+  return `${row.status === "estimated" ? "약 " : ""}${kcalNumber(row.kcal_per_serving)}`;
+}
+
+/** 재료 줄 작은 글자와 `고르기`/`바꾸기` 링크(시안 RECIPE NUTRITION) */
+export function ingredientNote(row: NutritionIngredient): { text: string; action: "고르기" | "바꾸기" | null } {
+  const label = row.food?.name ?? row.name;
+  switch (row.status) {
+    case "ok":
+      return { text: label, action: "바꾸기" };
+    case "estimated":
+      return row.estimate_food
+        ? { text: `${row.name} · AI로 추정했어요`, action: "바꾸기" }
+        : { text: `${label} · ${row.amount} ≈ ${kcalNumber(row.grams ?? 0)}g으로 추정`, action: "바꾸기" };
+    case "unmatched":
+      return { text: `${row.name} · 맞는 식품을 골라주세요`, action: "고르기" };
+    case "needs_weight":
+      return { text: `${label} · 무게를 알려주세요`, action: "고르기" };
+    case "no_estimate":
+      return { text: `${row.name} · 추정할 수 없어요`, action: "고르기" };
+    case "unknown_amount":
+      return { text: "양을 알 수 없어 계산에서 뺐어요", action: null };
+    case "trace":
+      return { text: "조금이라 계산에서 뺐어요", action: null };
+    default:
+      return { text: "계산하는 중이에요", action: null };
+  }
+}
+
+/** 무게 칸 시작값: 1/2모 × 300g → "150", 모르면 "" */
+export const gramsFieldValue = (row: Pick<NutritionIngredient, "quantity" | "unit_grams">) =>
+  row.quantity !== null && row.unit_grams !== null ? String(Math.round(row.quantity * row.unit_grams * 10) / 10) : "";
+
+/** 입력한 g → 한 단위 g(서버 0.1~5000). 틀리면 null */
+export function unitGramsFrom(grams: string, quantity: number | null): number | null {
+  const g = Number(grams.replace(",", "."));
+  if (!quantity || !Number.isFinite(g) || g <= 0) return null;
+  const unit = Math.round((g / quantity) * 10) / 10;
+  return unit >= 0.1 && unit <= 5000 ? unit : null;
 }

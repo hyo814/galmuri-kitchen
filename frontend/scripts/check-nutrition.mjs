@@ -2,7 +2,8 @@
 import assert from "node:assert/strict";
 import { ageOf, dailyTarget, kcalNumber, parseProfileInput, targetNote } from "../src/nutrition/body.ts";
 import {
-  dailyValue, daySum, dayHeadText, fillTargets, goalFor, macroSplit, meterPercent, slotKcalText, sodiumDay, sugarDay,
+  candidateSub, dailyValue, daySum, dayHeadText, fillTargets, goalFor, gramsFieldValue, ingredientKcalText, ingredientNote,
+  macroSplit, meterPercent, pickTitle, sameName, slotKcalText, sodiumDay, sugarDay, unitGramsFrom,
 } from "../src/nutrition/day.ts";
 
 const TODAY = "2026-09-15";
@@ -159,5 +160,65 @@ assert.equal(mixedDay.sugars_g, 20);
 // 전체 kcal로 나누면 6%(WHO 기준 안전으로 잘못 보임), calcKcal로 나누면 40%(실제로는 초과)
 assert.equal(sugarDay(mixedDay.sugars_g, mixedDay.kcal).warn, false);
 assert.deepEqual(sugarDay(mixedDay.sugars_g, mixedDay.calcKcal), { text: "총 에너지의 40% · WHO 10% 미만", percent: 100, warn: true });
+
+// ---- day.ts (4b-2 Task 8: 레시피 상세 영양·식품 고르기 시트) ----
+const row = (over) => ({
+  name: "", amount: "", key: "", status: "ok", pending_reason: null, countable: false,
+  quantity: null, unit: null, grams: null, unit_grams: null, unit_grams_source: null,
+  food: null, estimate_food: false, kcal_per_serving: null,
+  ...over,
+});
+
+assert.equal(ingredientKcalText(row({ status: "ok", kcal_per_serving: 198 })), "198");
+assert.equal(ingredientKcalText(row({ status: "estimated", kcal_per_serving: 45 })), "약 45");
+assert.equal(ingredientKcalText(row({ status: "trace", kcal_per_serving: null })), "0");
+assert.equal(ingredientKcalText(row({ status: "unmatched", kcal_per_serving: null })), "—");
+
+// 시안 RECIPE NUTRITION 세 줄
+assert.deepEqual(
+  ingredientNote(row({ status: "ok", food: { food_code: "x", name: "돼지고기, 앞다리, 생것", group: "원재료성", kcal: 132 } })),
+  { text: "돼지고기, 앞다리, 생것", action: "바꾸기" },
+);
+assert.deepEqual(
+  ingredientNote(
+    row({
+      status: "estimated", estimate_food: false, name: "김치", amount: "1/4포기", grams: 250,
+      food: { food_code: "y", name: "배추김치", group: "가공식품", kcal: 32 },
+    }),
+  ),
+  { text: "배추김치 · 1/4포기 ≈ 250g으로 추정", action: "바꾸기" },
+);
+assert.deepEqual(ingredientNote(row({ status: "unmatched", name: "두부" })), { text: "두부 · 맞는 식품을 골라주세요", action: "고르기" });
+
+// unknown_amount·trace·pending·no_estimate·AI 추정 식품
+assert.deepEqual(ingredientNote(row({ status: "unknown_amount" })), { text: "양을 알 수 없어 계산에서 뺐어요", action: null });
+assert.deepEqual(ingredientNote(row({ status: "trace" })), { text: "조금이라 계산에서 뺐어요", action: null });
+assert.deepEqual(ingredientNote(row({ status: "pending" })), { text: "계산하는 중이에요", action: null });
+assert.deepEqual(ingredientNote(row({ status: "no_estimate", name: "설탕" })), { text: "설탕 · 추정할 수 없어요", action: "고르기" });
+assert.deepEqual(
+  ingredientNote(row({ status: "needs_weight", name: "양파", food: { food_code: "z", name: "양파", group: "원재료성", kcal: 34 } })),
+  { text: "양파 · 무게를 알려주세요", action: "고르기" },
+);
+assert.deepEqual(
+  ingredientNote(row({ status: "estimated", estimate_food: true, name: "고수" })),
+  { text: "고수 · AI로 추정했어요", action: "바꾸기" },
+);
+
+assert.equal(candidateSub("원재료성", 84), "원재료 · 100g당 84kcal");
+
+assert.equal(sameName("두부 (국산)", "두부"), true);
+assert.equal(sameName("순두부", "두부"), false);
+
+assert.equal(pickTitle("두부"), "‘두부’는 어떤 식품인가요?");
+assert.equal(pickTitle("김치찌개 양념장"), "‘김치찌개 양념장’은 어떤 식품인가요?");
+
+assert.equal(gramsFieldValue({ quantity: 0.5, unit_grams: 300 }), "150");
+assert.equal(gramsFieldValue({ quantity: null, unit_grams: 300 }), "");
+assert.equal(gramsFieldValue({ quantity: 0.5, unit_grams: null }), "");
+
+assert.equal(unitGramsFrom("150", 0.5), 300);
+assert.equal(unitGramsFrom("0", 0.5), null);
+assert.equal(unitGramsFrom("abc", 1), null);
+assert.equal(unitGramsFrom("3000", 0.5), null); // 6000 > 5000
 
 console.log("check-nutrition: ok");

@@ -504,6 +504,10 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
               <span>품목별 기본 소비기한은 이 보고서의 참고값이에요</span>
             </li>
             <li>
+              <b>식품의약품안전처 식품영양성분 DB(공공데이터포털)</b>
+              <span>레시피·식단 영양 계산에 100g당 값을 써요</span>
+            </li>
+            <li>
               <b>YouTube</b>
               <span>영상과 썸네일은 YouTube에서 제공해요</span>
             </li>
@@ -513,7 +517,7 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
             </li>
             <li>
               <b>Anthropic Claude</b>
-              <span>사진 인식과 AI 레시피 만들기에 써요</span>
+              <span>사진 인식·AI 레시피 만들기·재료 무게 추정에 써요</span>
             </li>
           </ul>
           <button className="btn secondary" onClick={() => setPanel(null)}>

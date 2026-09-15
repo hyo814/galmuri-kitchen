@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { api, type MyRecipe, type RecipeDetail as Detail, type RecipeIngredientStatus } from "../api";
+import { useState, type ReactNode } from "react";
+import { api, type MyRecipe, type RecipeDetail as Detail, type RecipeIngredientStatus, type User } from "../api";
 import Icon from "../components/Icon";
+import RecipeNutrition from "../components/RecipeNutrition";
 import ShoppingAddButton from "../components/ShoppingAddButton";
 import { SOURCE_LABEL, imageSrc, scaleAmount, withJosa } from "../format";
 import { recipeQuantity } from "../shopping/sync";
@@ -31,11 +32,14 @@ export function RecipeBody({
   servings: rawBase,
   ingredients,
   steps,
+  afterIngredients,
 }: {
   title: string;
   servings: number;
   ingredients: RecipeIngredientStatus[];
   steps: string[];
+  /** 재료 아래, 만드는 법 위에 그릴 내용(레시피 상세 영양 칸) */
+  afterIngredients?: ReactNode;
 }) {
   const base = Math.max(1, rawBase || 1); // 인분이 0·빈 값이면 비율이 NaN이 되지 않게
   const [servings, setServings] = useState<number | null>(null); // null이면 레시피 기준 인분
@@ -107,6 +111,8 @@ export function RecipeBody({
         )}
       </section>
 
+      {afterIngredients}
+
       {steps.length > 0 && (
         <section className="rc-sec" aria-labelledby="rc-steps">
           <h2 id="rc-steps">만드는 법</h2>
@@ -126,7 +132,7 @@ export function RecipeBody({
   );
 }
 
-export default function RecipeDetail({ kind, id }: { kind: "mine" | "public"; id: string }) {
+export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "public"; id: string; user: User }) {
   const {
     data: recipe,
     error,
@@ -209,7 +215,15 @@ export default function RecipeDetail({ kind, id }: { kind: "mine" | "public"; id
         </p>
       </header>
 
-      <RecipeBody title={recipe.title} servings={recipe.servings} ingredients={recipe.ingredients} steps={recipe.steps} />
+      <RecipeBody
+        title={recipe.title}
+        servings={recipe.servings}
+        ingredients={recipe.ingredients}
+        steps={recipe.steps}
+        afterIngredients={
+          recipe.kind === "mine" && user.nutrition !== "off" && <RecipeNutrition recipeId={recipe.id} user={user} />
+        }
+      />
 
       {recipe.kind === "public" && !recipe.is_sample && (
         <p className="hint rc-source">
