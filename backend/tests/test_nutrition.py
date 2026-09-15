@@ -389,3 +389,35 @@ def test_context_candidate_lookup_batches_and_escapes(app):
         assert context.resolve("재료119")["food"]["food_code"] == "L1"
         assert context.resolve("재료1")["state"] == "unsearched"  # '재료119'는 '재료1' LIKE에 걸리지만 조각이 달라 후보가 아니다
         assert context.resolve("100%주스")["food"]["food_code"] == "L2"
+
+
+def test_candidate_lookup_uses_like_and_skips_remembered_keys(app):
+    """C1: 한국어 이름·소문자 키라 ILIKE(lower 비교) 대신 LIKE. 기억이 있는 재료(와 그 여러 낱말 대체 키)는 후보를 찾지 않는다."""
+    from sqlalchemy import event
+
+    with app.app_context():
+        me = make_user("1")
+        db.session.add_all([cached("T1", "두부"), cached("D1", "파_대파_생것"),
+                            FoodMatch(user_id=me.id, ingredient_key="두부", food_code="T1", unit_grams={}),
+                            FoodMatch(user_id=me.id, ingredient_key="돼지고기앞다리살", food_code=None, unit_grams={})])
+        db.session.commit()
+        seen = []
+
+        def capture(conn, cursor, statement, parameters, context, executemany):
+            if "food_nutrients" in statement and "LIKE" in statement.upper():
+                seen.append((statement, str(parameters)))
+
+        event.listen(db.engine, "before_cursor_execute", capture)
+        try:
+            names = ["두부", "돼지고기 앞다리살", "대파"]
+            context = NutritionContext(me, [SimpleNamespace(servings=1, ingredients=[{"name": n, "amount": "100g"} for n in names])])
+            assert [r["food_code"] for r in foods.search_items("대파")] == ["D1"]
+        finally:
+            event.remove(db.engine, "before_cursor_execute", capture)
+        assert len(seen) == 2
+        for statement, params in seen:
+            assert "ILIKE" not in statement.upper() and "lower(" not in statement.lower()
+        assert "%대파%" in seen[0][1]
+        assert "%두부%" not in seen[0][1] and "돼지고기" not in seen[0][1]
+        assert context.resolve("대파")["food"]["food_code"] == "D1"
+        assert context.resolve("두부")["state"] == "matched"

@@ -297,7 +297,7 @@ def search_items(q):
     escaped = key.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     raw_first = case((FoodNutrient.group_name == "원재료성", 0), else_=1)
     rows = (
-        FoodNutrient.query.filter(FoodNutrient.source != "ai", FoodNutrient.name.ilike(f"%{escaped}%", escape="\\"))
+        FoodNutrient.query.filter(FoodNutrient.source != "ai", FoodNutrient.name.like(f"%{escaped}%", escape="\\"))
         .order_by(raw_first)
         .limit(200)
         .all()

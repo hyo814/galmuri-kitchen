@@ -262,11 +262,15 @@ class NutritionContext:
         codes = {m.food_code for m in self.matches.values() if m.food_code} | {f"ai:{k}" for k in keys}
         for chunk in _chunks(codes, IN_CHUNK):
             self.foods.update((f.food_code, f) for f in FoodNutrient.query.filter(FoodNutrient.food_code.in_(chunk)))
-        # ponytail: '파'처럼 짧은 키는 LIKE가 캐시의 많은 행을 읽는다. 느려지면 name_parts를 따로 저장하는 표로 바꾼다
-        like_keys = (keys | {fb for fb, _ in self.fallbacks.values()}) - ALWAYS_HAVE
+        # 기억이 있는 재료는 resolve가 후보를 보지 않는다 — 그 키와 여러 낱말 대체 키는 찾지 않는다
+        free = keys - self.matches.keys()
+        like_keys = (free | {fb for key, (fb, _) in self.fallbacks.items() if key in free}) - ALWAYS_HAVE
+        # ponytail: 한 묶음(50개 OR LIKE '%키%')마다 food_nutrients 전체를 훑는다(O(행 수), warm --limit이 행 수를 묶는다).
+        # 키는 normalize로 소문자·DB 이름은 한국어라 ILIKE(lower 비교, 6배 느림) 대신 LIKE — 영문 대문자가 섞인 이름은 후보에서 빠진다.
+        # 느려지면 이름 조각 표 food_name_parts(part 색인)를 만들어 조각 = 키로 찾는다
         found = {}  # 한 행이 여러 묶음의 LIKE에 걸릴 수 있다('대파'는 '%대파%'·'%파%') — 코드로 한 번만
         for chunk in _chunks(like_keys, LIKE_CHUNK):
-            patterns = [FoodNutrient.name.ilike("%" + k.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%", escape="\\")
+            patterns = [FoodNutrient.name.like("%" + k.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%", escape="\\")
                         for k in chunk]
             found.update((row.food_code, row) for row in FoodNutrient.query.filter(FoodNutrient.source != "ai", or_(*patterns)))
         for row in found.values():
