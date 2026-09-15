@@ -16,8 +16,8 @@ interface Props {
   id: number;
   today: string;
   user: User;
-  /** 고치기·지우기 뒤 목록·이번 달 카드를 다시 받는다 */
-  onChanged: () => void;
+  /** 고치기 저장 뒤 새 일기, 지우기 뒤 지운 id — 목록이 그 줄만 고친다 */
+  onChanged: (change: CookLogDetail | number) => void;
   onClose: () => void;
 }
 
@@ -34,7 +34,7 @@ export default function CookLogSheet({ id, today, user, onChanged, onClose }: Pr
     void remove.run(async () => {
       await api(`/api/cook-logs/${id}`, { method: "DELETE" });
       forgetCookCaches();
-      onChanged();
+      onChanged(id);
       onClose();
     });
   }
@@ -117,8 +117,8 @@ export default function CookLogSheet({ id, today, user, onChanged, onClose }: Pr
                   </Fragment>
                 ),
             )}
-            {/* 재료비는 저장값 그대로 — 바로 위 줄 값의 합과 같게(R10-14) */}
-            <dt className="ck-tot">재료비 {formatWon(log.ingredient_cost)}</dt>
+            {/* 재료비는 저장값 그대로 — 바로 위 줄 값의 합과 같게(R10-14). 가격 있는 줄이 없으면 0원이 아니라 모름(R10-F7) */}
+            <dt className="ck-tot">재료비 {priced ? formatWon(log.ingredient_cost) : "모름"}</dt>
             <dd className="ck-tot">{total}</dd>
           </dl>
           <p className="nt-src">{excludedNote(log.items)}</p>
@@ -149,7 +149,7 @@ export default function CookLogSheet({ id, today, user, onChanged, onClose }: Pr
           onSaved={(next) => {
             detail.set(next);
             setEditing(false);
-            onChanged();
+            onChanged(next);
           }}
           onClose={() => setEditing(false)}
         />

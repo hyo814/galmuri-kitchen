@@ -76,13 +76,14 @@ export default function CookEditSheet({ log: logProp, today, photos, onSaved, on
         } else if (removePhoto) {
           await api(`/api/cook-logs/${log.id}/photo`, { method: "DELETE" });
           forgetCookCaches();
-          // 지운 뒤 다시 받기가 실패해도 다시 저장할 때 또 지우지 않게 기준에서 사진을 뺀다
-          result = { ...result, photo_url: null };
-          setSavedLog(result);
-          result = await api<CookLogDetail>(`/api/cook-logs/${log.id}`); // DELETE는 빈 응답이라 새로 받아 넘긴다
+          // DELETE는 빈 응답이라 새로 받아 넘긴다. 다시 받기만 실패하면 사진은 빠졌으니 사진 없는 일기로 닫는다(R10-F5)
+          const removed = { ...result, photo_url: null };
+          result = await api<CookLogDetail>(`/api/cook-logs/${log.id}`).catch(() => removed);
         }
       } catch (err) {
-        setPhotoError(`${file ? "사진은 올리지 못했어요" : "사진은 빼지 못했어요"} · ${(err as Error).message}`);
+        // 이번이나 앞선 저장에서 글 칸은 이미 저장됐으면 그렇다고 먼저 알린다(R10-F6)
+        const kept = Object.keys(body).length > 0 || savedLog !== null ? "다른 칸은 저장했어요. " : "";
+        setPhotoError(`${kept}${file ? "사진은 올리지 못했어요" : "사진은 빼지 못했어요"} · ${(err as Error).message}`);
         return;
       }
       onSaved(result);
@@ -135,7 +136,7 @@ export default function CookEditSheet({ log: logProp, today, photos, onSaved, on
         </p>
       )}
       <div className="actions">
-        <button type="button" className="btn secondary" onClick={closeSheet}>
+        <button type="button" className="btn secondary" disabled={save.busy} onClick={closeSheet}>
           취소
         </button>
         <button type="button" className="btn primary" disabled={save.busy} aria-disabled={invalid || undefined} onClick={submit}>

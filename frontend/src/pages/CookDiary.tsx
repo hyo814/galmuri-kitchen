@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, localToday, type CookLogListItem, type CookLogPage, type CookReport, type User } from "../api";
+import { api, localToday, type CookLogDetail, type CookLogListItem, type CookLogPage, type CookReport, type User } from "../api";
 import CookLogSheet from "../components/CookLogSheet";
 import Icon from "../components/Icon";
 import InfiniteSentinel from "../components/InfiniteSentinel";
@@ -26,7 +26,7 @@ export function resetCookDiaryView(): void {
 export default function CookDiary({ user }: { user: User }) {
   const today = localToday();
   const report = useResource<CookReport>(`/api/cook-report?month=${monthOf(today)}`);
-  const { items, loading, error, hasMore, multiPage, loadMore, reload } = useInfiniteList<CookLogListItem>(
+  const { items, loading, error, hasMore, multiPage, loadMore, reload, patch } = useInfiniteList<CookLogListItem>(
     (cursor) =>
       api<CookLogPage>(`/api/cook-logs?limit=20${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`).then((p) => ({ items: p.items, next: p.next_cursor })),
     ["cook-logs"],
@@ -38,26 +38,40 @@ export default function CookDiary({ user }: { user: User }) {
     pendingOpen = null;
   }, []);
 
-  // 고치기·지우기 뒤 목록을 처음부터 다시 받는다(날짜를 바꾸면 순서도 바뀐다). 받는 동안 목록이 비어 맨 위로 튀므로 보던 자리로 돌린다
-  const keepY = useRef<number | null>(null);
-  const onChanged = useCallback(() => {
-    keepY.current = window.scrollY;
-    reload();
-    void report.reload();
-  }, [reload, report.reload]);
-  useEffect(() => {
-    if (loading || keepY.current === null) return;
-    window.scrollTo(0, keepY.current);
-    keepY.current = null;
-  }, [loading]);
+  // 상세를 닫을 때 포커스 갈 곳: undefined면 Sheet가 여는 줄로 돌려준다, id면 그 줄, null이면 제목
+  const focusOnClose = useRef<number | null | undefined>(undefined);
+
+  // 고치기(새 일기)·지우기(지운 id) 뒤: 받아 둔 줄만 고쳐 보던 자리·포커스를 지킨다(R10-F3)
+  const onChanged = useCallback(
+    (change: CookLogDetail | number) => {
+      void report.reload();
+      if (typeof change === "number") {
+        const i = items.findIndex((log) => log.id === change);
+        focusOnClose.current = (items[i + 1] ?? items[i - 1])?.id ?? null; // 지우기 전에 옆 줄을 기억한다
+        patch((logs) => logs.filter((log) => log.id !== change));
+        return;
+      }
+      if (items.find((log) => log.id === change.id)?.cooked_on === change.cooked_on) {
+        focusOnClose.current = change.id; // 앞서 날짜를 바꿔 다시 받았으면 여는 줄이 새 버튼이라 직접 돌린다
+        patch((logs) => logs.map((log) => (log.id === change.id ? change : log)));
+        return;
+      }
+      // ponytail: 날짜가 바뀌면 줄 자리가 달라져(받아 둔 페이지 밖으로 갈 수도) 처음부터 다시 받는다 — 옛 줄은 사라지므로 제목으로
+      focusOnClose.current = null;
+      reload();
+    },
+    [items, patch, reload, report.reload],
+  );
 
   const closeSheet = () => {
-    const id = openId;
+    const target = focusOnClose.current;
+    focusOnClose.current = undefined;
     setOpenId(null);
-    // 다시 받은 목록은 새 버튼이라 Sheet가 여는 버튼으로 포커스를 못 돌린다 — 같은 일기 줄, 지웠으면 제목으로
     requestAnimationFrame(() => {
-      if (document.activeElement !== document.body) return;
-      (document.querySelector<HTMLElement>(`[data-cook-log="${id}"]`) ?? heading.current)?.focus();
+      if (target === undefined && document.activeElement !== document.body) return; // Sheet가 여는 줄로 돌려놨다
+      const row = target ? document.querySelector<HTMLElement>(`[data-cook-log="${target}"]`) : null;
+      if (row) row.focus();
+      else heading.current?.focus({ preventScroll: true });
     });
   };
 
@@ -107,7 +121,7 @@ export default function CookDiary({ user }: { user: User }) {
                     <small>
                       {diaryDateText(log)} · <span className={saved.good ? "ck-save" : undefined}>{saved.text}</span>
                     </small>
-                    {memo && <small>{memo}</small>}
+                    {memo && <small className="ck-memo-line">{memo}</small>}
                   </span>
                   <span className="sr-only"> 일기 보기</span>
                 </button>

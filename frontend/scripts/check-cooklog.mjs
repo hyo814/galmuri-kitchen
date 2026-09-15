@@ -139,6 +139,7 @@ assert.deepEqual(savedRowText({ saved: null, eat_out_price: 9000, excluded_count
 assert.deepEqual(savedRowText({ saved: null, eat_out_price: 9000, excluded_count: 0 }), { text: "재료 가격 모름", good: false });
 
 assert.equal(diaryDateText({ cooked_on: "2026-09-15", servings: 2 }), "9월 15일 · 2인분");
+assert.equal(diaryDateText({ cooked_on: "2026-09-05", servings: 1 }), "9월 5일 · 1인분"); // 앞자리 0 없이
 assert.equal(firstLine("두부 마저 썼어요\n김치가 시어서"), "두부 마저 썼어요");
 assert.equal(firstLine(null), "");
 

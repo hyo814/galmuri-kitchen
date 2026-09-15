@@ -6349,6 +6349,7 @@ body:has(.ck-toast:not(:empty)) .page::after {
   color: inherit;
   font-family: inherit;
   text-align: left;
+  overflow-wrap: anywhere; /* 띄어쓰기 없는 긴 제목·메모(주소)가 384px 화면을 가로로 밀지 않게 */
 }
 
 .ck-list li:first-child .ck-diary {
@@ -6366,6 +6367,13 @@ body:has(.ck-toast:not(:empty)) .page::after {
   line-height: 19px;
   color: var(--text-3);
   word-break: keep-all;
+}
+
+/* 메모는 첫 줄만 한 줄로(시안 3) */
+.ck-diary .ck-memo-line {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .ck-ph,
@@ -6433,9 +6441,10 @@ body:has(.ck-toast:not(:empty)) .page::after {
   color: var(--warn);
 }
 
+/* 오른쪽 칸은 반까지만 — 긴 합계 문구가 재료 줄 폭을 뺏지 않게 */
 .ck-table {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) fit-content(50%);
   gap: 4px 12px;
   margin: 0;
   font-size: 14px;
@@ -6447,6 +6456,10 @@ body:has(.ck-toast:not(:empty)) .page::after {
 .ck-table dt,
 .ck-table dd {
   margin: 0;
+}
+
+.ck-table dt {
+  overflow-wrap: anywhere;
 }
 
 .ck-table dd {
@@ -6464,4 +6477,20 @@ body:has(.ck-toast:not(:empty)) .page::after {
   padding-top: 6px;
   border-top: 1px solid var(--line);
   font-weight: 700;
+}
+
+/* 별점 고르기(StarPicker, 요리했어요·고치기 시트 공용): 점수가 있으면 별 아래 오른쪽에 `별점 빼기` */
+.ck-starpick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+/* `별점 빼기`로 줄이 높아져도 앞 `별점` 이름은 별(44px) 높이에 맞춘다 */
+.ck-row:has(> .ck-starpick) {
+  align-items: flex-start;
+}
+
+.ck-row:has(> .ck-starpick) > b {
+  line-height: 44px;
 }
