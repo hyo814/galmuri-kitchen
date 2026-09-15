@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { api, type DishItem, type DishSearchResult, type FoodLog, type FoodLogDay, type FoodPlace, type MealKind, type RecipeChoice, type RecipeNutrition, type User } from "../api";
+import { api, type DishItem, type DishSearchResult, type FoodLog, type FoodLogDay, type FoodLogPhoto, type FoodPlace, type MealKind, type RecipeChoice, type RecipeNutrition, type User } from "../api";
+import { resizeImage } from "../image.ts";
 import {
   KIND_LABEL,
   MAX_SERVINGS,
@@ -41,8 +42,21 @@ interface Props {
 
 const PLACES: FoodPlace[] = ["home", "out"];
 
-/** 시안 3 · ADD: 먹은 것 추가·고치기. 무엇 네 갈래(식단에서·내 레시피·음식 찾기·직접) → 양 → 어디서 → 만족도 → 메모 */
-export default function FoodLogSheet({ date, meal: initialMeal, day, log, user, onSaved, onDeleted, onClose }: Props) {
+export const MAX_LOG_PHOTOS = 4;
+
+/** 긴 변 1568px JPEG로 줄여 올린다(결정 9). url은 `/api/food-logs/<id>/photos` 또는 `/api/food-logs/photo` */
+export async function uploadFoodPhoto<T>(url: string, file: Blob): Promise<T> {
+  const form = new FormData();
+  form.append("image", await resizeImage(file), "photo.jpg");
+  return api<T>(url, { method: "POST", body: form });
+}
+
+/** 시안 3 · ADD: 먹은 것 추가·고치기. 무엇 네 갈래(식단에서·내 레시피·음식 찾기·직접) → 양 → 어디서 → 만족도 → 메모 → 사진 */
+export default function FoodLogSheet({ date, meal: initialMeal, day, log: logProp, user, onSaved, onDeleted, onClose }: Props) {
+  // 사진만 하나라도 업로드 실패하면 시트를 닫지 않고 고치기 모드로 바꾼다 — 저장된 기록(savedLog)이 생기면 그 뒤로는
+  // 이 컴포넌트 전체가 "고치기"로 동작한다(제목·무엇 칸·지우기 버튼 모두 log 진위값을 따른다, 저장 순서 스펙)
+  const [savedLog, setSavedLog] = useState<FoodLog | null>(null);
+  const log = savedLog ?? logProp;
   const nutritionOn = user.nutrition !== "off";
   const tabs = (Object.keys(KIND_LABEL) as LogKind[]).filter((k) => k !== "food" || nutritionOn);
   const isPhotoLog = log !== undefined && log.title === null;
@@ -66,6 +80,41 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log, user, 
   const [rating, setRating] = useState<number | null>(log?.rating ?? null);
   const [memo, setMemo] = useState(log?.memo ?? "");
   const [whatError, setWhatError] = useState(false);
+
+  // ---- 사진: 이미 올린 것(고치기, 지우기는 바로 DELETE) + 새로 고른 것(아직 안 올림, blob 미리보기) ----
+  const [existingPhotos, setExistingPhotos] = useState<FoodLogPhoto[]>(log?.photos ?? []);
+  const [newPhotos, setNewPhotos] = useState<{ file: Blob; url: string }[]>([]);
+  const [photoHint, setPhotoHint] = useState("");
+  const [photoError, setPhotoError] = useState("");
+  const photoCameraRef = useRef<HTMLInputElement>(null);
+  const photoAlbumRef = useRef<HTMLInputElement>(null);
+  const newPhotosRef = useRef(newPhotos);
+  newPhotosRef.current = newPhotos;
+  useEffect(() => () => newPhotosRef.current.forEach((p) => URL.revokeObjectURL(p.url)), []); // 닫힐 때 안 올린 미리보기 정리
+
+  function addNewPhotos(files: File[]) {
+    const room = MAX_LOG_PHOTOS - existingPhotos.length - newPhotos.length;
+    const picked = files.slice(0, room);
+    setNewPhotos((ps) => [...ps, ...picked.map((file) => ({ file, url: URL.createObjectURL(file) }))]);
+    setPhotoHint(files.length > room ? "사진은 4장까지 넣을 수 있어요" : "");
+  }
+
+  function removeNewPhoto(i: number) {
+    setNewPhotos((ps) => {
+      URL.revokeObjectURL(ps[i].url);
+      return ps.filter((_, idx) => idx !== i);
+    });
+  }
+
+  async function removeExistingPhoto(photo: FoodLogPhoto) {
+    setPhotoError("");
+    try {
+      await api(`/api/food-logs/${log!.id}/photos/${photo.id}`, { method: "DELETE" });
+      setExistingPhotos((ps) => ps.filter((p) => p.id !== photo.id));
+    } catch (e) {
+      setPhotoError((e as Error).message);
+    }
+  }
 
   const save = useAsyncAction();
   const remove = useAsyncAction();
@@ -225,13 +274,31 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log, user, 
       let saved: FoodLog;
       if (log) {
         const body = patchBody(log, form);
-        if (!Object.keys(body).length) return onClose();
-        saved = await api<FoodLog>(`/api/food-logs/${log.id}`, { method: "PATCH", body });
+        saved = Object.keys(body).length ? await api<FoodLog>(`/api/food-logs/${log.id}`, { method: "PATCH", body }) : log;
       } else {
         saved = await api<FoodLog>("/api/food-logs", { method: "POST", body: createBody(date, { ...form, what: what! }) });
       }
       forgetResources("/api/food-logs");
       if (what?.kind === "plan" || log?.meal_slot_id != null) forgetResources("/api/meal-plans");
+      setSavedLog(saved);
+
+      // 저장 순서(결정 9): 기록 성공 → 새 사진을 하나씩. 하나라도 실패하면 남은 사진(실패한 것 포함)을 그대로 두고
+      // 고치기 모드로 남는다 — 시트를 닫지 않는다(다시 저장하면 남은 것만 올린다).
+      const pending = newPhotosRef.current;
+      const uploaded: FoodLogPhoto[] = [];
+      for (let i = 0; i < pending.length; i++) {
+        try {
+          uploaded.push(await uploadFoodPhoto<FoodLogPhoto>(`/api/food-logs/${saved.id}/photos`, pending[i].file));
+        } catch (e) {
+          pending.slice(0, i).forEach((p) => URL.revokeObjectURL(p.url));
+          setExistingPhotos((ps) => [...ps, ...uploaded]);
+          setNewPhotos(pending.slice(i));
+          setPhotoError(`사진 ${pending.length - i}장은 올리지 못했어요 · ${(e as Error).message}`);
+          setChanging(false);
+          return;
+        }
+      }
+      pending.forEach((p) => URL.revokeObjectURL(p.url));
       onSaved(saved);
     });
   }
@@ -586,6 +653,77 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log, user, 
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="field">
+        <span className="field-label" aria-hidden="true">
+          사진 <span className="optional">(선택)</span>
+        </span>
+        <input
+          ref={photoCameraRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) addNewPhotos([file]);
+          }}
+        />
+        <input
+          ref={photoAlbumRef}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            const files = [...(e.target.files ?? [])];
+            e.target.value = "";
+            if (files.length) addNewPhotos(files);
+          }}
+        />
+        <div className="sh-photos">
+          {existingPhotos.map((photo, i) => (
+            <div key={photo.id} className="sh-photo">
+              <img src={photo.url} alt={`사진 ${i + 1}`} />
+              <button type="button" className="fl-photo-x" aria-label={`사진 ${i + 1} 빼기`} onClick={() => void removeExistingPhoto(photo)}>
+                <Icon name="close" size={14} />
+              </button>
+            </div>
+          ))}
+          {newPhotos.map((photo, i) => (
+            <div key={photo.url} className="sh-photo">
+              <img src={photo.url} alt={`사진 ${existingPhotos.length + i + 1}`} />
+              <button
+                type="button"
+                className="fl-photo-x"
+                aria-label={`사진 ${existingPhotos.length + i + 1} 빼기`}
+                onClick={() => removeNewPhoto(i)}
+              >
+                <Icon name="close" size={14} />
+              </button>
+            </div>
+          ))}
+          {existingPhotos.length + newPhotos.length < MAX_LOG_PHOTOS && (
+            <>
+              <button type="button" className="sh-photo add" onClick={() => photoCameraRef.current?.click()}>
+                <Icon name="camera" size={22} />
+                찍기
+              </button>
+              <button type="button" className="sh-photo add" onClick={() => photoAlbumRef.current?.click()}>
+                <Icon name="file" size={22} />
+                앨범
+              </button>
+            </>
+          )}
+        </div>
+        {photoHint && <p className="hint">{photoHint}</p>}
+        {photoError && (
+          <p className="error" role="alert">
+            {photoError}
+          </p>
+        )}
       </div>
 
       <div className="field fl-memo">

@@ -5861,3 +5861,30 @@ button.sh-offline svg:last-child {
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
+
+/* 사진 칸·사진만 먼저(Task 10, 시안 3 · ADD, 4 · PHOTO FIRST) */
+.fl-camera {
+  margin-left: auto;
+}
+
+.fl-photo-x {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: var(--inverse-bg);
+  color: var(--inverse-text);
+}
+
+/* 시각 크기는 28px로 두고 터치 영역만 44px로 넓힌다(::before가 실제로 눌리는 자리) */
+.fl-photo-x::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}
