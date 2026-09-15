@@ -415,8 +415,9 @@ def test_candidate_lookup_uses_like_and_skips_remembered_keys(app):
         finally:
             event.remove(db.engine, "before_cursor_execute", capture)
         assert len(seen) == 2
-        for statement, params in seen:
-            assert "ILIKE" not in statement.upper() and "lower(" not in statement.lower()
+        context_sql, search_sql = seen[0][0], seen[1][0]
+        assert "ILIKE" not in context_sql.upper() and "lower(" not in context_sql.lower()  # 요청마다 도는 후보 찾기는 LIKE만
+        assert "lower(" in search_sql.lower()  # 식품 고르기 검색(키 하나)은 영문 대문자 이름도 찾게 lower
         assert "%대파%" in seen[0][1]
         assert "%두부%" not in seen[0][1] and "돼지고기" not in seen[0][1]
         assert context.resolve("대파")["food"]["food_code"] == "D1"
