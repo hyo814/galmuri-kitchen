@@ -165,14 +165,23 @@ def _parse(content, output_format, max_tokens, label, timeout=45):
     return response.parsed_output.model_dump(), usage
 
 
-def extract(kind, image_bytes, media_type):
-    """사진 한 장에서 재료 목록을 뽑는다. (결과, 토큰 사용량)을 돌려주고, 실패하면 AiError."""
-    image = base64.standard_b64encode(image_bytes).decode("utf-8")
+def extract(kind, images):
+    """사진 [(bytes, media_type)] 1~5장에서 재료 목록을 한 번에 뽑는다. (결과, 토큰 사용량)을 돌려주고, 실패하면 AiError."""
     content = [
-        {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": image}},
-        {"type": "text", "text": PROMPTS[kind]},
+        {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": base64.standard_b64encode(data).decode("utf-8")}}
+        for data, media_type in images
     ]
-    return _parse(content, MemoScanResult if kind == "memo" else ScanResult, 4096, f"scan {kind}")
+    prompt = PROMPTS[kind]
+    if len(images) > 1:
+        prompt += (
+            f" 사진 {len(images)}장은 같은 냉장고·같은 영수증·같은 주문을 나눠 찍은 것일 수 있다. "
+            "여러 사진에 겹쳐 찍힌 같은 물건·같은 영수증 줄은 한 번만 적는다. 다른 물건이면 따로 적는다."
+        )
+        if kind not in NO_PRICE_KINDS:
+            prompt += " purchased_on은 영수증·주문에 찍힌 날짜이고, 여러 날짜가 보이면 가장 늦은 날짜를 쓴다."
+    content.append({"type": "text", "text": prompt})
+    many = len(images) > 1  # 여러 장은 출력이 길어 토큰·제한 시간을 늘린다
+    return _parse(content, MemoScanResult if kind == "memo" else ScanResult, 8192 if many else 4096, f"scan {kind}", timeout=90 if many else 45)
 
 
 class DraftIngredient(BaseModel):

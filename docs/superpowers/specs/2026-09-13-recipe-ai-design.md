@@ -49,7 +49,7 @@ recipe-ai/
 모든 사용자 소유 테이블은 `user_id` FK를 갖고, 모든 조회는 현재 사용자로 한정한다.
 
 - `users`: id, provider(`kakao`|`google`), provider_id, nickname, created_at. UNIQUE(provider, provider_id)
-- `ingredients`: id, user_id, name, quantity(float, 기본 1), unit(str, 기본 `개`), purchased_on(date, 필수), expires_on(date, 선택), price(원, 선택), created_at
+- `ingredients`: id, user_id, name, quantity(float, 기본 1), unit(str, 기본 `개`), purchased_on(date, 선택 — 비우면 구입일 모름 `기억 안 나요` (2026-09-15, 사용자 승인 시안 docs/design/scan-multi/); 만들 때 키는 꼭 보내고 모르면 `null`), expires_on(date, 선택), price(원, 선택), created_at
 - `recipes`: id, user_id, title(1~60자), servings(1~20, 기본 2), ingredients(JSON `[{name, amount}]` 1~50개), steps(JSON `[str]` 0~30개), source(`mine`|`public`|`ai`|`youtube`|`instagram`|`blog`|`text`|`photo`), source_url(선택), public_recipe_id(선택, SET NULL), image_url(선택, AI 레시피는 비슷한 공공 레시피 사진 17절), created_at, updated_at. UNIQUE(user_id, public_recipe_id)
 - `public_recipes`: id, rcp_seq(UNIQUE), title, category(RCP_PAT2), method(RCP_WAY2), kcal(INFO_ENG), servings(원문 `N인분`, 없으면 2), ingredients_text(원문), ingredients(JSON `[{name, amount}]`, 파싱), ingredient_keys(JSON, ingredients와 같은 순서의 매칭용 이름), steps(JSON), image_url, is_sample(키 없을 때 넣는 예시 레시피), updated_at. 사용자 소유 아님.
 - `cook_logs`: id, user_id, recipe_id(선택, SET NULL), title, cooked_on(date), rating(1~5, 선택), memo(선택), photo_key(선택), created_at
@@ -61,6 +61,7 @@ recipe-ai/
 
 - **임박:** `expires_on`이 오늘부터 3일 이내(지난 것 포함)면 `urgent`(빨강).
   `expires_on`이 없고 `purchased_on`이 7일 이상 지났으면 `old`(노랑). 그 외 `ok`.
+  구입일을 모르면(`purchased_on` null) 구입 경과로 보는 규칙(`old`, 14절 품목 규칙)은 쓰지 않는다 — 유통기한이 있을 때만 `urgent`. 응답의 `purchased_on`·`days_since_purchase`는 null, 목록은 같은 상태 안에서 구입일 모름을 맨 뒤(그다음 id 순)에 둔다. (2026-09-15, 사용자 승인 시안 docs/design/scan-multi/)
 - **재료 이름 매칭:** 정규화(공백 제거, 소문자, 괄호 내용 제거) 후 한쪽이 다른 쪽을 포함하면 일치.
   `ponytail:` 부분 문자열 매칭 — "파"가 "파프리카"에 매칭되는 오류 가능. 문제되면 동의어 사전 또는 AI 매칭으로 교체.
 - **일치율:** (보유한 레시피 재료 수 / 레시피 재료 수). 임박 재료를 쓰면 정렬 가산점(+0.1/개). `물`은 늘 있는 것으로 센다. 재고와 겹치는 재료가 없는 레시피는 추천하지 않는다.
@@ -77,9 +78,9 @@ recipe-ai/
 | POST | `/api/logout` | 세션 삭제 |
 | GET | `/api/me` | 현재 사용자 `{id, nickname, scan: "on"\|"sample"\|"off", scan_limit, recipe_limit, videos: "on"\|"sample"\|"off"}` (비로그인 401). `scan`은 사진으로 추가·AI 레시피 입구 표시에 함께 쓴다. `videos`는 영상 칸 표시용(17절). `recipe_limit`은 호환용으로 남겨 두고, 화면의 남은 횟수는 `/api/ai-usage`를 읽는다. 개발용 로그인 응답도 같은 모양 |
 | GET/POST | `/api/ingredients` | 목록(임박 순, status 포함) / 생성 |
-| POST | `/api/ingredients/bulk` | 스캔 확인 후 일괄 생성 `{items:[{name, quantity, unit, purchased_on, expires_on?, price?, location_id?}]}` 1~50개. 하나라도 틀리면 아무것도 만들지 않고 400 `{error: "N번째 재료: …", errors:[{index, error}]}` |
+| POST | `/api/ingredients/bulk` | 스캔 확인 후 일괄 생성 `{items:[{name, quantity, unit, purchased_on(YYYY-MM-DD 또는 null=모름), expires_on?, price?, location_id?}]}` 1~50개. 하나라도 틀리면 아무것도 만들지 않고 400 `{error: "N번째 재료: …", errors:[{index, error}]}` |
 | PATCH/DELETE | `/api/ingredients/<id>` | 수정 / 삭제. 삭제는 `?reason=eaten\|discarded`(선택)를 주면 같은 커밋에 `ingredient_removals` 행을 남긴다. 없거나 비면 기록 없이 지우고, 다른 값이면 400 `잘못된 요청이에요.`(지우지 않음) (27절) |
-| POST | `/api/scan?kind=fridge\|receipt\|order\|memo` | multipart `image` → `{items:[{name, quantity, unit, location_kind, price}], purchased_on, sample}` (fridge·memo는 price·purchased_on 항상 null, memo는 장보기 메모 사진·전단지) |
+| POST | `/api/scan?kind=fridge\|receipt\|order\|memo` | multipart `image` 1~5개(같은 이름으로 여러 번, 순서대로; 0개·빈 파일 400 `사진을 올려주세요.`, 6개 이상 400 `사진은 5장까지 올려주세요.`, 하나라도 사진이 아니면 415, 합계 10MB) (2026-09-15, 사용자 승인 시안 docs/design/scan-multi/) → `{items:[{name, quantity, unit, location_kind, price}], purchased_on, sample}` (fridge·memo는 price·purchased_on 항상 null, memo는 장보기 메모 사진·전단지) |
 | GET/POST | `/api/recipes` | 목록(생성일 아님, `updated_at`·id 내림차순 커서 페이지 25절) / 생성. 목록 `?limit=1~50(기본 30)&cursor=` → `{items:[...], next_cursor}`. 생성 body의 `source`는 `mine`(기본)·`ai`·`youtube`·`instagram`·`blog`·`text`만 받고(`public`은 저장 API로만), `image_url`은 식약처 https 사진 주소만 받는다(AI 레시피 저장용) (2026-09-14, 시안 승인) |
 | GET/PUT/DELETE | `/api/recipes/<id>` | 상세 / 수정 / 삭제. 상세의 `ingredients`는 `[{name, amount, have, matched_name}]`(현재 재고 기준) |
 | GET | `/api/public-recipes/<id>` | 공공 레시피 상세(같은 `ingredients` 모양) |
@@ -138,6 +139,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 
 - **스캔**: Claude Messages API에 이미지(base64) + 종류별 프롬프트, 구조화 출력(JSON 스키마)으로
   `{items:[{name, quantity, unit, location_kind, price}], purchased_on: "YYYY-MM-DD"|null}`. 영수증·주문에서 식재료가 아닌 항목(봉투, 세제 등)은 제외하도록 지시. 서버가 결과를 정리한다(최대 50개, 이름 50자·단위 10자, 수량이 0 이하·숫자 아님 → 1, 미래 구입일·냉장고 사진의 구입일 → null). price는 품목별 결제 금액(원, 할인 반영)이며 숫자가 아니거나 0보다 크고 10,000,000원 이하가 아니면 null(직접 입력은 0원도 허용), 냉장고 사진은 항상 null.
+  - **사진 여러 장** (2026-09-15, 사용자 승인 시안 docs/design/scan-multi/): 1~5장을 한 번의 AI 호출에 순서대로 넣고 한 번만 센다(`ai_calls` 한 줄, kind는 스캔 종류). 2장 이상이면 프롬프트에 `사진 N장은 같은 냉장고·같은 영수증·같은 주문을 나눠 찍은 것일 수 있다. 여러 사진에 겹쳐 찍힌 같은 물건·같은 영수증 줄은 한 번만 적는다. 다른 물건이면 따로 적는다.`를 붙이고(영수증·주문은 여러 날짜면 가장 늦은 날짜), max_tokens 8192. 서버 정리 뒤 이름(정규화, 계란=달걀)·단위·보관 종류가 같은 줄은 하나로 합친다 — 수량은 더하지 않고 큰 쪽, 가격은 처음 나온 값(`ponytail:` 겹쳐 찍힌 경우가 흔해서; 따로 산 같은 물건은 확인 화면에서 고친다). 한 장이면 합치지 않는다. 합친 뒤 최대 50개. 예시 모드는 사진 수와 관계없이 같은 예시.
 - **AI 레시피**: 보유 재료 목록(임박 표시 포함)을 전달, 구조화 출력으로 `[{title, servings, minutes, ingredients:[{name, amount}], steps:[str]}]` 3개. 임박 재료 우선 사용 지시.
   - **사진 (2026-09-14, 시안 승인)(사용자 선택 "비슷한 공공 레시피 사진 쓰기"):** 이미지를 만들지 않는다. 각 AI 레시피 이름으로 `public_recipes` 중 사진이 있는 가장 비슷한 요리를 찾아 그 `image_url`을 쓴다(정규화 이름 같음 → 한쪽이 다른 쪽 포함(짧은 쪽 3자 이상) → 토큰 겹침 Jaccard 0.5 이상). 없으면 사진 없이 반짝이 자리 표시. 화면에는 `비슷한 요리 사진`(대체 텍스트·상세 캡션)으로 밝힌다. 저장할 때 `recipes.image_url`로 남긴다. 조리 시간(minutes)은 결과 화면에만 보이고 저장하지 않는다.
 - **조리 기록 저장**: 한 트랜잭션에서 `usages=[{ingredient_id, amount}]` 각각 소유 확인 → quantity 차감 → 0 이하면 삭제 → cook_log 생성. 사진 업로드 실패 시 전체 롤백.
@@ -206,7 +208,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 
 ### 품목별 경고 규칙
 - `item_rules`: id, user_id, keyword(1~20자, 재료 이름 매칭 4절 규칙), warn_days(int ≥1), danger_days(int > warn_days), source(`mfds`|`user`), created_at. UNIQUE(user_id, keyword).
-- 기준일은 **구입일**. `today - purchased_on >= warn_days` → `old`(노랑), `>= danger_days` → `danger`(빨강, 문구 `섭취 주의`).
+- 기준일은 **구입일**. `today - purchased_on >= warn_days` → `old`(노랑), `>= danger_days` → `danger`(빨강, 문구 `섭취 주의`). 구입일을 모르면 경과일 규칙을 쓰지 않는다(`구입 N일째`도 없음) (2026-09-15, 사용자 승인 시안 docs/design/scan-multi/).
 - 기본 규칙(사용자 생성 시 시드, 모두 수정·삭제 가능):
   - 달걀·계란: warn 25 / danger 30 (사용자 결정 2026-09-13; 식약처 권장 산란일 기준 45일·가정 3~5주 권장을 구입일 기준으로 보수화).
   - 식약처 「식품유형별 소비기한 설정 보고서」 참고값(확인됨: 두부 23일, 발효유 32일, 과채주스 35일, 빵류 31일, 어묵 42일, 소시지 56일, 햄 57일):
@@ -531,7 +533,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **재고 화면 톱니바퀴:** `보관 위치`·`필수품`만 남긴다.
 - **재료 삭제 이유:** 삭제 확인에서 `다 먹었어요`/`버렸어요`를 고른 뒤 지운다(선택, 안 고르면 이유 없이 삭제). 서버는 `DELETE /api/ingredients/<id>?reason=eaten|discarded`로 받아 `ingredient_removals`(4절)에 이름·이유를 남긴다.
 - **내보내기 내용:** 지금은 재고·내 레시피·내 양념 비율·장보기. 먹은 기록·요리 기록은 기능이 생기면 CSV를 추가한다. `GET /api/export/summary`·`GET /api/export`(5절).
-  - `ingredients.csv`: 이름, 수량, 단위, 보관 위치, 구입일, 유통기한, 가격(원)
+  - `ingredients.csv`: 이름, 수량, 단위, 보관 위치, 구입일(모르면 빈 칸, 맨 뒤) (2026-09-15, 사용자 승인 시안 docs/design/scan-multi/), 유통기한, 가격(원)
   - `recipes.csv`(레시피 한 줄): 제목, 인분, 재료(`두부 1모; 대파 1/2대`), 만드는 법(칸 안 줄바꿈 `1. …`), 출처, 출처 링크, 사진 주소(주소만, 사진 파일은 넣지 않음)
   - `seasonings.csv`: 이름, 기준, 기준 양, 기준 단위, 주재료, 양념(`고추장 2큰술; 설탕 0.5큰술`)
   - `shopping.csv`: 이름, 수량, 단위, 생활용품(`예`/빈칸, 2026-09-14 사용자 결정), 살 날, 넣을 위치, 체크, 산 날(재고에 넣은 날), 출처, 출처 이름, 담은 날. 목록(산 것 아님)과 최근 7일 안에 산 것(28절 `STOCKED_KEEP_DAYS`)만 담는다.

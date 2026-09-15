@@ -10,6 +10,7 @@ from .auth import ai_daily_limit, login_required
 from .household import is_household
 from .ingredients import SEOUL, seoul_today
 from .locations import KINDS
+from .matching import normalize
 from .models import AiCall, db, utcnow
 from .validation import iso_date
 
@@ -20,6 +21,7 @@ SCAN_KINDS = ("fridge", "receipt", "order", "memo")  # 일일 한도를 함께 �
 RECIPE_KINDS = ("recipe", "link", "recipe_photo", "meal")  # AI 레시피 제안 + 링크·글·사진 가져오기 + AI 식단 초안(스펙 20절)
 FETCH_KINDS = ("link_fetch",)  # 링크 가져오기의 외부 요청(AI 호출 아님, 토큰 없음). AI 한도·사용량에는 세지 않는다
 MAX_ITEMS = 50
+MAX_PHOTOS = 5  # 한 번에 읽는 사진 수(AI 호출은 한 번)
 MAX_QUANTITY = 9999
 MAX_PRICE = 10_000_000
 BURST_WINDOW_SECONDS = 60
@@ -115,15 +117,14 @@ def _price(value):
     return round(value)
 
 
-def clean_result(kind, raw, today):
+def clean_result(kind, raw, today, merge=False):
     """AI(또는 예시) 결과를 화면에 넘기기 전에 정리한다. 모델 출력은 믿지 않는다.
-    memo만 줄마다 household(생활용품)를 붙인다 — 참/거짓이 아니면 이름으로 짐작한다."""
+    memo만 줄마다 household(생활용품)를 붙인다 — 참/거짓이 아니면 이름으로 짐작한다.
+    merge(사진 여러 장): 이름(normalize)·단위·보관 종류가 같은 줄은 하나로 합친다."""
     raw = raw if isinstance(raw, dict) else {}
     rows = raw.get("items") if isinstance(raw.get("items"), list) else []
-    items = []
+    items, seen = [], {}
     for row in rows:
-        if len(items) == MAX_ITEMS:
-            break
         name = row.get("name") if isinstance(row, dict) else None
         if not isinstance(name, str) or not name.strip():
             continue
@@ -140,6 +141,18 @@ def clean_result(kind, raw, today):
         if kind == "memo":
             household = row.get("household")
             item["household"] = household if isinstance(household, bool) else is_household(name)
+        key = (normalize(name), item["unit"], item["location_kind"])
+        if merge and key in seen:
+            # ponytail: 겹쳐 찍힌 같은 물건이 흔해 수량은 더하지 않고 큰 쪽을 남긴다. 영수증 두 장에 같은 물건을 따로 산 줄이
+            # 있으면 적게 잡힌다 — 확인 화면에서 고친다. 잦으면 AI가 사진 번호를 함께 적게 해 다른 사진끼리만 합친다.
+            kept = seen[key]
+            kept["quantity"] = max(kept["quantity"], item["quantity"])
+            if kept["price"] is None:
+                kept["price"] = item["price"]
+            continue
+        if len(items) == MAX_ITEMS:
+            continue  # 합칠 줄은 끝까지 본다(모델 출력 길이는 max_tokens로 묶여 있다)
+        seen[key] = item
         items.append(item)
     purchased_on = None if kind in ai.NO_PRICE_KINDS else _purchased_on(raw.get("purchased_on"), today)
     return {"items": items, "purchased_on": purchased_on}
@@ -151,15 +164,20 @@ def scan():
     kind = request.args.get("kind")
     if kind not in UPLOAD_KINDS:
         abort(400, "스캔 종류가 올바르지 않아요.")
-    image = request.files.get("image")  # 10MB 초과는 여기서 413
-    if image is None:
+    files = request.files.getlist("image")  # 10MB 초과(모든 사진 합)는 여기서 413
+    if len(files) > MAX_PHOTOS:
+        abort(400, f"사진은 {MAX_PHOTOS}장까지 올려주세요.")
+    images = []
+    for file in files:
+        data = file.read()
+        if not data:
+            abort(400, "사진을 올려주세요.")
+        media_type = sniff_image_type(data)  # 선언된 Content-Type이 아니라 파일 시그니처를 믿는다
+        if media_type is None:
+            abort(415, "사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요.")
+        images.append((data, media_type))
+    if not images:
         abort(400, "사진을 올려주세요.")
-    data = image.read()
-    if not data:
-        abort(400, "사진을 올려주세요.")
-    media_type = sniff_image_type(data)  # 선언된 Content-Type이 아니라 파일 시그니처를 믿는다
-    if media_type is None:
-        abort(415, "사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요.")
 
     today = seoul_today()
     mode = ai.scan_mode(g.user)
@@ -169,11 +187,11 @@ def scan():
         return jsonify(**clean_result(kind, ai.sample_result(kind, today), today), sample=True)
 
     check_ai_limits(g.user.id, SCAN_KINDS, ai_daily_limit(g.user, "AI_DAILY_SCAN_LIMIT"), "사진 인식은")
-    # 업로드 검증(kind·사진 유무·형식)에서 걸린 요청은 세지 않는다.
+    # 업로드 검증(kind·사진 수·사진 유무·형식)에서 걸린 요청은 세지 않는다. 여러 장이어도 한 번 부르고 한 번 센다.
     call = start_ai_call(g.user.id, kind)
     try:
-        raw, usage = ai.extract(kind, data, media_type)
+        raw, usage = ai.extract(kind, images)
     except ai.AiError:
         abort(502, "인식에 실패했어요. 직접 입력해주세요.")
     finish_ai_call(call, usage)
-    return jsonify(**clean_result(kind, raw, today), sample=False)
+    return jsonify(**clean_result(kind, raw, today, merge=len(images) > 1), sample=False)

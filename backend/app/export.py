@@ -129,7 +129,7 @@ def export():
     # ponytail: 행은 BATCH개씩 읽고 zip은 SPOOL_BYTES를 넘으면 임시 파일로 넘긴다. 상한은 재료 2000개·레시피 1000개
     # (재료 50·단계 30×500자)·양념 100개라 최악 수십 MB. 상한을 크게 올리면 비동기 작업·저장소 링크로 바꾼다.
     ingredients = (
-        owned(Ingredient).options(joinedload(Ingredient.location)).order_by(Ingredient.purchased_on, Ingredient.id).yield_per(BATCH)
+        owned(Ingredient).options(joinedload(Ingredient.location)).order_by(Ingredient.purchased_on.asc().nulls_last(), Ingredient.id).yield_per(BATCH)
     )
     recipes = owned(Recipe).order_by(Recipe.updated_at.desc(), Recipe.id.desc()).yield_per(BATCH)
     seasonings = owned(Seasoning).order_by(Seasoning.id).yield_per(BATCH)
@@ -152,7 +152,7 @@ def export():
             "ingredients.csv",
             ["이름", "수량", "단위", "보관 위치", "구입일", "유통기한", "가격(원)"],
             (
-                [i.name, number(i.quantity), i.unit, i.location.name, i.purchased_on, i.expires_on or "", "" if i.price is None else i.price]
+                [i.name, number(i.quantity), i.unit, i.location.name, i.purchased_on or "", i.expires_on or "", "" if i.price is None else i.price]
                 for i in ingredients
             ),
         )
