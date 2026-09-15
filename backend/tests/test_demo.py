@@ -24,7 +24,7 @@ from app.models import (
     db,
     utcnow,
 )
-from tests.test_shopping_notes import add_note, photo_path, upload
+from tests.test_shopping_notes import JPEG, add_note, photo_path, upload
 
 USER_TABLES = (Ingredient, StorageLocation, ItemRule, Staple, Recipe, Seasoning, ShoppingItem, ShoppingNote, MealPlan, AiCall)
 
@@ -447,6 +447,26 @@ def test_purge_deletes_demo_photo_files(make_app):
     assert result.exit_code == 0 and "1개" in result.output
     assert not os.path.exists(old_path)
     assert os.path.exists(fresh_path)
+
+
+def test_purge_deletes_food_log_photo_files(make_app):
+    app = make_app(DEMO_LOGIN=True, DEV_MODE=True)
+    paths = {}
+    for ip in ("10.0.0.1", "10.0.0.2"):
+        c = new_client(app, ip)
+        user_id = c.post("/api/demo-login").get_json()["id"]
+        res = c.post("/api/food-logs/photo", data={"image": (io.BytesIO(JPEG), "a.jpg")}, content_type="multipart/form-data")
+        assert res.status_code == 201
+        paths[user_id] = photo_path(app, res.get_json()["photos"][0]["url"])
+        assert os.path.exists(paths[user_id])
+    old_id, fresh_id = paths
+    with app.app_context():
+        db.session.get(User, old_id).created_at = utcnow() - timedelta(hours=25)
+        db.session.commit()
+    result = app.test_cli_runner().invoke(args=["purge-demo-users"])
+    assert result.exit_code == 0 and "1개" in result.output
+    assert not os.path.exists(paths[old_id])
+    assert os.path.exists(paths[fresh_id])
 
 
 def test_demo_login_recycle_and_expiry_delete_photo_files(make_app, monkeypatch):

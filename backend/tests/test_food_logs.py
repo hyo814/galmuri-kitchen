@@ -51,7 +51,7 @@ def test_create_text_log_and_day_list(client, login):
     assert {k: v for k, v in log.items() if k not in ("id", "created_at")} == {
         "eaten_on": "2026-09-14", "meal": "lunch", "source": "manual", "title": "제육덮밥", "recipe_id": None, "meal_slot_id": None,
         "slot_servings": None, "food_code": None, "servings": 1.0, "grams": None, "place": "out", "rating": 3,
-        "memo": "회사 앞 · 조금 짰어요", "nutrition": None, "approx": False, "nutrition_pending": False,
+        "memo": "회사 앞 · 조금 짰어요", "nutrition": None, "approx": False, "nutrition_pending": False, "photos": [],
     }
 
     res = get_day(client)

@@ -447,6 +447,25 @@ def test_food_logs_migration_adds_and_removes_table(app):
             assert "food_logs" not in set(sa.inspect(conn).get_table_names())
 
 
+def test_food_log_photos_migration_adds_and_removes_table(app):
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="g3f3l3p3h3o3")
+        with db.engine.connect() as conn:
+            inspector = sa.inspect(conn)
+            columns = {c["name"] for c in inspector.get_columns("food_log_photos")}
+            fks = {fk["referred_table"]: fk["options"].get("ondelete") for fk in inspector.get_foreign_keys("food_log_photos")}
+            uniques = {tuple(u["column_names"]) for u in inspector.get_unique_constraints("food_log_photos")}
+            index_names = {ix["name"] for ix in inspector.get_indexes("food_log_photos")}
+        assert columns == {"id", "log_id", "photo_key", "size", "created_at"}
+        assert fks == {"food_logs": "CASCADE"}
+        assert ("photo_key",) in uniques
+        assert "ix_food_log_photos_log_id" in index_names
+
+        downgrade(directory=MIGRATIONS, revision="g2f2o2o2d2l2")
+        with db.engine.connect() as conn:
+            assert "food_log_photos" not in set(sa.inspect(conn).get_table_names())
+
+
 def test_ingredients_purchased_on_nullable_migration(app):
     def purchased_on_nullable(conn):
         return {c["name"]: c for c in sa.inspect(conn).get_columns("ingredients")}["purchased_on"]["nullable"]
