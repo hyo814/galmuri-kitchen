@@ -47,7 +47,8 @@ export default function CookDiary({ user }: { user: User }) {
       void report.reload();
       if (typeof change === "number") {
         const i = items.findIndex((log) => log.id === change);
-        focusOnClose.current = (items[i + 1] ?? items[i - 1])?.id ?? null; // 지우기 전에 옆 줄을 기억한다
+        // 지우기 전에 옆 줄을 기억한다 — 받아 둔 목록에 없는 일기(다른 화면에서 연 것)면 제목으로
+        focusOnClose.current = i === -1 ? null : ((items[i + 1] ?? items[i - 1])?.id ?? null);
         patch((logs) => logs.filter((log) => log.id !== change));
         return;
       }
