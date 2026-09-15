@@ -286,7 +286,7 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log: logPro
     const hasNewPhotos = newPhotosRef.current.length > 0;
     // 바뀐 칸도, 지우기 표시도, 새 사진도 없으면 요청 없이 닫는다(리뷰 fix round 1: 사진만 바뀐 저장을 놓치지 않게 조건을 넓힘)
     if (log && body && !Object.keys(body).length && !hasRemovals && !hasNewPhotos) {
-      onClose();
+      closeSheet(); // 앞선 저장이 서버를 바꿨으면(savedLog) 닫으면서 다시 받는다
       return;
     }
     void save.run(async () => {
