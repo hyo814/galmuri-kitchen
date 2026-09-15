@@ -18,8 +18,15 @@ function focusAfterClose(selector: string) {
   });
 }
 
+interface Props {
+  today: string;
+  todayTotal?: TodayTotal | null;
+  /** 몸 정보를 저장·삭제했다: 이 화면 말고 몸 정보를 따로 불러 쓰는 곳(주 보기 목표 막대)도 다시 받게 알린다 */
+  onProfileChanged?: () => void;
+}
+
 /** 시안 BODY CARD EMPTY / WEEK WITH KCAL: 식단 탭 맨 위 하루 칼로리 목표 카드 + 시트 */
-export default function BodyGoalCard({ today, todayTotal }: { today: string; todayTotal?: TodayTotal | null }) {
+export default function BodyGoalCard({ today, todayTotal, onProfileChanged }: Props) {
   const { data, set } = useResource<BodyProfileResponse>("/api/body-profile");
   const [open, setOpen] = useState(false);
 
@@ -53,10 +60,10 @@ export default function BodyGoalCard({ today, todayTotal }: { today: string; tod
             <span className="muted" style={{ whiteSpace: "nowrap" }}>
               오늘 식단
             </span>
-            <span className="rc-bar" style={{ flex: 1, height: 8 }} aria-hidden="true">
-              <i style={{ width: `${Math.min(todayTotal.percent, 100)}%`, background: todayTotal.over ? "var(--warn)" : undefined }} />
-            </span>
-            <span style={{ fontSize: 14, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{todayTotal.text}</span>
+            <div className={todayTotal.over ? "nt-meter grow warn" : "nt-meter grow"} style={{ height: 10 }} aria-hidden="true">
+              <i style={{ width: `${Math.min(todayTotal.percent, 100)}%` }} />
+            </div>
+            <span className="nt-num">{todayTotal.text}</span>
           </div>
         )}
         {!profile && (
@@ -71,12 +78,14 @@ export default function BodyGoalCard({ today, todayTotal }: { today: string; tod
           profile={profile}
           onSaved={(res) => {
             set(res);
+            onProfileChanged?.();
             setOpen(false);
             // 없음 → 있음으로 바뀌면 열었던 "목표 정하기" 버튼이 사라져 포커스를 잃는다 → 새로 생긴 "고치기"로
             if (!profile) focusAfterClose('[aria-label="하루 칼로리 목표 고치기"]');
           }}
           onDeleted={() => {
             set({ profile: null });
+            onProfileChanged?.();
             setOpen(false);
             // 있음 → 없음으로 바뀌면 열었던 "고치기" 버튼이 사라져 포커스를 잃는다 → 새로 생긴 "목표 정하기"로
             focusAfterClose(".nt-card .btn.secondary");

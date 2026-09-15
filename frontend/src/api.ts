@@ -404,6 +404,27 @@ export interface MealPlanSummary {
   total: number;
 }
 
+export interface Nutrients {
+  kcal: number;
+  carbs_g: number;
+  protein_g: number;
+  fat_g: number;
+  sugars_g: number;
+  sodium_mg: number;
+}
+
+/** 칸 1인분 영양. source ai면 kcal만(AI 초안 추정), 나머지는 null */
+export interface SlotNutrition {
+  kcal: number;
+  carbs_g: number | null;
+  protein_g: number | null;
+  fat_g: number | null;
+  sugars_g: number | null;
+  sodium_mg: number | null;
+  approx: boolean;
+  source: "calc" | "ai";
+}
+
 /** 식단 한 칸. recipe_id가 있으면 재고 매칭(have_count·total_count·urgent_names), 없으면 null·[] */
 export interface MealSlot {
   id: number;
@@ -416,12 +437,14 @@ export interface MealSlot {
   have_count: number | null;
   total_count: number | null;
   urgent_names: string[];
+  nutrition: SlotNutrition | null;
 }
 
 export interface MealPlan extends MealPlanSummary {
   goal_kcal: number | null;
   goal_note: string | null;
   slots: MealSlot[];
+  nutrition_pending_recipe_ids: number[];
 }
 
 /** GET /api/recipes/choices 한 줄: 칸 채우기 시트의 내 레시피(재고 일치) */

@@ -25,6 +25,10 @@
   --scrim: rgb(15 17 20 / 0.48);
   /* WCAG 1.4.11 non-text contrast: #7a7f87 vs --surface #ffffff = 4.03:1, vs --bg #f3f4f6 = 3.66:1 (both ≥3:1) */
   --control-line: #7a7f87;
+  --carb: #d99a2b;
+  --protein: #2f7fd1;
+  --fat: #b45fa8;
+  --track: #e9ecef;
   color-scheme: light dark;
 }
 
@@ -61,6 +65,10 @@
     --scrim: rgb(0 0 0 / 0.6);
     /* #767c86 vs --surface #1a1c20 = 4.06:1, vs --bg #0e0f11 = 4.56:1 (both ≥3:1) */
     --control-line: #767c86;
+    --carb: #e9b04d;
+    --protein: #5aa2ea;
+    --fat: #cf82c3;
+    --track: #2a2d32;
   }
 }
 
@@ -92,6 +100,10 @@
   --scrim: rgb(0 0 0 / 0.6);
   /* #767c86 vs --surface #1a1c20 = 4.06:1, vs --bg #0e0f11 = 4.56:1 (both ≥3:1) */
   --control-line: #767c86;
+  --carb: #e9b04d;
+  --protein: #5aa2ea;
+  --fat: #cf82c3;
+  --track: #2a2d32;
 }
 
 * {
@@ -4226,7 +4238,7 @@ button.sh-offline svg:last-child {
 /* 시안 B: 채운 끼니만 줄(줄 전체가 버튼 → 칸 상세), 빈 끼니는 카드 맨 아래 칩 한 줄 */
 .ml-slot {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-columns: 36px minmax(0, 1fr) auto;
   align-items: center;
   column-gap: 8px;
   width: 100%;
@@ -5235,4 +5247,121 @@ button.sh-offline svg:last-child {
 .nt-invalid {
   word-break: keep-all;
   color: var(--danger);
+}
+
+.nt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nt-meter {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--track);
+}
+
+.nt-meter.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.nt-meter i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent);
+}
+
+.nt-meter.warn i {
+  background: var(--warn);
+}
+
+.nt-dmeter {
+  margin: -4px 16px 8px;
+}
+
+.nt-split {
+  display: flex;
+  height: 10px;
+  gap: 2px;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.nt-split i:nth-child(1) {
+  background: var(--carb);
+}
+
+.nt-split i:nth-child(2) {
+  background: var(--protein);
+}
+
+.nt-split i:nth-child(3) {
+  background: var(--fat);
+}
+
+.nt-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.nt-legend .c::before,
+.nt-legend .p::before,
+.nt-legend .f::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 4px;
+  vertical-align: 1px;
+  background: currentColor;
+}
+
+.nt-legend .c {
+  color: var(--carb);
+}
+
+.nt-legend .p {
+  color: var(--protein);
+}
+
+.nt-legend .f {
+  color: var(--fat);
+}
+
+.nt-legend b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.nt-head-btn {
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  min-height: 44px;
+}
+
+.nt-kcal.warn {
+  color: var(--warn);
+}
+
+.nt-slot-kcal {
+  font-size: 14px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.nt-num {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }

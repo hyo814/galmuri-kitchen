@@ -1,0 +1,88 @@
+// 주 보기 kcal·하루 목표 막대·하루 영양 시트 순수 로직 (4b-2 Task 7)
+import type { MealSlot, SlotNutrition } from "../api";
+import { kcalNumber } from "./body.ts";
+
+export const SUGARS_DAILY_G = 100; // 식품 표시 1일 영양성분기준치(하루 2,000kcal)
+export const SODIUM_DAILY_MG = 2000;
+export const WHO_SUGAR_RATIO = 0.1; // WHO 유리당: 총 에너지의 10% 미만
+
+/** "310kcal" / "약 480kcal", 없으면 "" */
+export const slotKcalText = (n: SlotNutrition | null) => (n ? `${n.approx ? "약 " : ""}${kcalNumber(n.kcal)}kcal` : "");
+
+export interface DaySum {
+  kcal: number;
+  carbs_g: number;
+  protein_g: number;
+  fat_g: number;
+  sugars_g: number;
+  sodium_mg: number;
+  filled: number;
+  counted: number;
+  approx: boolean;
+  hasAi: boolean;
+}
+
+/** 그날 채운 칸의 1인분 값 합(결정 14·15). kcal 있는 칸이 없으면 null. 탄단지·당류·나트륨은 source calc 칸만 더한다 */
+export function daySum(slots: Pick<MealSlot, "nutrition">[]): DaySum | null {
+  const withKcal = slots.filter((s) => s.nutrition);
+  if (!withKcal.length) return null;
+  const sum: DaySum = {
+    kcal: 0,
+    carbs_g: 0,
+    protein_g: 0,
+    fat_g: 0,
+    sugars_g: 0,
+    sodium_mg: 0,
+    filled: slots.length,
+    counted: withKcal.length,
+    approx: withKcal.length < slots.length,
+    hasAi: false,
+  };
+  for (const { nutrition: n } of withKcal) {
+    sum.kcal += n!.kcal;
+    sum.approx ||= n!.approx;
+    if (n!.source === "ai") sum.hasAi = true;
+    else for (const k of ["carbs_g", "protein_g", "fat_g", "sugars_g", "sodium_mg"] as const) sum[k] += n![k] ?? 0;
+  }
+  return sum;
+}
+
+/** 하루 머리 "약 1,190 / 1,294kcal" · "1,520 / 1,294kcal" · "약 1,420kcal" */
+export const dayHeadText = (sum: DaySum, goal: number | null) =>
+  `${sum.approx ? "약 " : ""}${kcalNumber(sum.kcal)}${goal ? ` / ${kcalNumber(goal)}` : ""}kcal`;
+
+/** 막대 너비 0~100 */
+export const meterPercent = (value: number, max: number) => (max > 0 ? Math.max(0, Math.min(100, Math.round((value / max) * 100))) : 0);
+
+/** 탄단지 kcal 비율(4·4·9) 정수 %, 모두 0이면 [0, 0, 0] */
+export function macroSplit(carbs: number, protein: number, fat: number): [number, number, number] {
+  const kcal = [carbs * 4, protein * 4, fat * 9];
+  const total = kcal[0] + kcal[1] + kcal[2];
+  return total ? (kcal.map((k) => Math.round((k / total) * 100)) as [number, number, number]) : [0, 0, 0];
+}
+
+/** 레시피 1인분: "1일 기준치의 86%", warn은 33% 초과(결정 18) */
+export function dailyValue(value: number, daily: number) {
+  const pct = Math.round((value / daily) * 100);
+  return { text: `1일 기준치의 ${pct}%`, percent: Math.min(100, pct), warn: value / daily > 1 / 3 };
+}
+
+/** 하루 당류: "총 에너지의 7% · WHO 10% 미만", 막대는 10% 대비, warn은 10% 이상 */
+export function sugarDay(sugars_g: number, kcal: number) {
+  const ratio = kcal > 0 ? (sugars_g * 4) / kcal : 0;
+  return { text: `총 에너지의 ${Math.round(ratio * 100)}% · WHO 10% 미만`, percent: meterPercent(ratio, WHO_SUGAR_RATIO), warn: ratio >= WHO_SUGAR_RATIO };
+}
+
+/** 하루 나트륨: 넘으면 "1일 기준치 넘었어요", 아니면 "1일 기준치의 N%" */
+export function sodiumDay(mg: number) {
+  const over = mg > SODIUM_DAILY_MG;
+  return { text: over ? "1일 기준치 넘었어요" : `1일 기준치의 ${Math.round((mg / SODIUM_DAILY_MG) * 100)}%`, percent: meterPercent(mg, SODIUM_DAILY_MG), warn: over };
+}
+
+/** 막대 목표(결정 4): 몸 정보 목표 → 식단 goal_kcal → null */
+export const goalFor = (profileTarget: number | null, planGoal: number | null) => profileTarget ?? planGoal ?? null;
+
+/** 채우기를 부를 레시피: 보이는 날짜 칸의 레시피 중 pending 목록에 있는 것(중복 없이, 31개까지) */
+export function fillTargets(slots: Pick<MealSlot, "date" | "recipe_id">[], dates: string[], pending: number[]): number[] {
+  return [...new Set(slots.filter((s) => s.recipe_id !== null && dates.includes(s.date) && pending.includes(s.recipe_id)).map((s) => s.recipe_id!))].slice(0, 31);
+}
