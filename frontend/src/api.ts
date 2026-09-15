@@ -47,6 +47,9 @@ export interface KitchenTool extends KitchenToolInput {
 /** on: AI 인식 / sample: API 키 없는 개발 모드의 예시 결과 / off: 사진으로 추가 숨김 */
 export type ScanMode = "on" | "sample" | "off";
 
+/** on: 요리 채널 영상 / cached: 체험 계정 — 받아 둔 기본 채널 영상을 읽기만 / sample: 예시 영상 / off: 영상 칸 숨김 */
+export type VideoMode = "on" | "cached" | "sample" | "off";
+
 export interface User {
   id: number;
   nickname: string;
@@ -55,8 +58,7 @@ export interface User {
   scan: ScanMode;
   scan_limit: number;
   recipe_limit: number;
-  /** on: 요리 채널 영상 / sample: 키 없는 개발 모드의 예시 영상 / off: 영상 칸 숨김 */
-  videos: ScanMode;
+  videos: VideoMode;
   /** on: 식품영양성분 DB / sample: 키 없는 개발 모드 예시 식품 / off: 영양 칸 숨김 */
   nutrition: ScanMode;
   /** 제휴 링크를 쓸 수 있는 쇼핑몰만 true(쿠팡은 서버에 파트너스 키가 있을 때). 링크는 storeLinks.ts에서 만든다 */

@@ -6,7 +6,7 @@ from datetime import datetime, time, timedelta, timezone
 
 import pytest
 
-from app import ai, demo, outbound, scan
+from app import ai, auth, demo, outbound, scan, videos
 from app.ingredients import SEOUL, seoul_today
 from app.models import (
     AiCall,
@@ -23,10 +23,13 @@ from app.models import (
     Staple,
     StorageLocation,
     User,
+    YoutubeChannel,
+    YoutubeVideo,
     db,
     utcnow,
 )
 from tests.test_shopping_notes import JPEG, add_note, photo_path, upload
+from tests.test_videos import make_channel, vid
 
 USER_TABLES = (Ingredient, StorageLocation, ItemRule, Staple, Recipe, Seasoning, ShoppingItem, ShoppingNote, MealPlan, AiCall)
 
@@ -353,6 +356,96 @@ def test_demo_videos_are_sample_even_with_key(demo_app):
     assert c.post("/api/channels", json={"url": "https://www.youtube.com/@cook"}).status_code == 503
     with demo_app.app_context():
         assert AiCall.query.count() == 0
+
+
+def test_demo_reads_cached_default_channel_videos_without_refresh(demo_app, monkeypatch):
+    demo_app.config["YOUTUBE_API_KEY"] = "k"
+    default = make_channel(
+        demo_app,
+        "D",
+        default=True,
+        fetched_ago=timedelta(hours=7),  # 일반 사용자라면 새로 받을 만큼 오래됨 — 체험 계정은 그래도 새로 받지 않는다
+        videos_=[("v1", 1, "제육볶음 황금레시피"), ("v2", 2, "두부조림")],
+    )
+    other = make_channel(demo_app, "O", videos_=[("o1", 1, "안 보이는 채널 영상")])  # 기본 채널이 아니라 체험 계정에는 안 보임
+    with demo_app.app_context():
+        db.session.add(
+            YoutubeVideo(
+                video_id=vid("old"),
+                channel_id=default,
+                title="30일 넘어 캐시에서 빠진 영상",
+                published_at=utcnow() - timedelta(days=40),
+                fetched_at=utcnow() - videos.KEEP_FOR - timedelta(days=1),
+            )
+        )
+        db.session.commit()
+        channel_fetched_at = db.session.get(YoutubeChannel, default).fetched_at
+        other_video_id = YoutubeVideo.query.filter_by(channel_id=other).one().id
+
+    for name in ("channel_info", "playlist_videos", "video_details"):
+        monkeypatch.setattr(outbound, name, fail_if_called)
+    monkeypatch.setattr(videos, "refresh_stale", fail_if_called)  # 목록 첫 페이지에서도 새로 받지 않음을 못박는다
+
+    c = new_client(demo_app)
+    assert c.post("/api/demo-login").get_json()["videos"] == "cached"
+
+    body = c.get("/api/videos").get_json()
+    assert body["sample"] is False
+    assert {v["title"] for v in body["items"]} == {"제육볶음 황금레시피", "두부조림"}
+
+    q_body = c.get("/api/videos?q=제육").get_json()
+    assert [v["title"] for v in q_body["items"]] == ["제육볶음 황금레시피"]
+
+    visible_id = next(v["id"] for v in body["items"] if v["title"] == "제육볶음 황금레시피")
+    assert c.get(f"/api/videos/{visible_id}").status_code == 200
+    assert c.get(f"/api/videos/{other_video_id}").status_code == 404
+
+    channels_body = c.get("/api/channels").get_json()
+    assert channels_body["sample"] is False
+    assert [ch["id"] for ch in channels_body["items"]] == [default]
+
+    assert c.post("/api/channels", json={"url": "https://www.youtube.com/@cook"}).status_code == 503
+    assert c.patch(f"/api/channels/{default}", json={"hidden": True}).status_code == 503
+    assert c.delete(f"/api/channels/{default}").status_code == 503
+
+    with demo_app.app_context():
+        assert YoutubeVideo.query.filter_by(video_id=vid("old")).count() == 1  # 체험 계정 요청으로는 지우지 않는다
+        assert db.session.get(YoutubeChannel, default).fetched_at == channel_fetched_at  # 새로 받지 않아 그대로
+        assert AiCall.query.count() == 0
+
+
+def test_demo_video_import_calls_youtube_only_within_demo_ai_limit(demo_app, monkeypatch):
+    # 체험 계정이 실제 영상에서 `레시피로 가져오기`를 누르면 링크 가져오기와 같은 길: AI 레시피 한도 검사를 먼저 통과해야
+    # videos.list(1 unit)를 부른다. 하루 한도(DEMO_AI_DAILY_LIMIT)를 다 쓰면 429이고 유튜브는 부르지 않는다
+    demo_app.config.update(ANTHROPIC_API_KEY="test-key", YOUTUBE_API_KEY="k", AI_SCAN_BURST_LIMIT=100)  # 60초 연속 한도(기본 3)는 따로 막는다
+    c = new_client(demo_app)
+    c.post("/api/demo-login")
+    fetched = []
+
+    def snippet(video_id, key):
+        fetched.append(video_id)
+        return {"title": "제육볶음 황금레시피", "description": "돼지고기 600g, 양파 1개를 볶아요. " * 3, "channel_title": "집밥 연구소", "thumbnail_url": None}
+
+    recipe = {"title": "제육볶음", "servings": 2, "ingredients": [{"name": "돼지고기", "amount": "600g"}], "steps": ["볶아요."]}
+    monkeypatch.setattr(outbound, "video_snippet", snippet)
+    monkeypatch.setattr(ai, "extract_recipe", lambda text, images: ({"found": True, "recipe": recipe}, {"model": "m", "input_tokens": 1, "output_tokens": 1}))
+    url = {"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
+    for _ in range(auth.DEMO_AI_DAILY_LIMIT):
+        assert c.post("/api/recipes/import", json=url).status_code == 200
+    blocked = c.post("/api/recipes/import", json=url)
+    assert (blocked.status_code, blocked.get_json()["error"]) == (429, f"오늘 AI 레시피는 {auth.DEMO_AI_DAILY_LIMIT}번까지 쓸 수 있어요. 내일 다시 써주세요.")
+    assert len(fetched) == auth.DEMO_AI_DAILY_LIMIT
+
+
+def test_demo_gets_sample_when_cached_default_videos_are_too_old(demo_app):
+    demo_app.config["YOUTUBE_API_KEY"] = "k"
+    default = make_channel(demo_app, "D", default=True, videos_=[("old", 1, "오래된 영상")])
+    with demo_app.app_context():
+        video = YoutubeVideo.query.filter_by(channel_id=default).one()
+        video.fetched_at = utcnow() - videos.KEEP_FOR - timedelta(days=1)
+        db.session.commit()
+    c = new_client(demo_app)
+    assert c.post("/api/demo-login").get_json()["videos"] == "sample"
 
 
 def test_login_required_checks_provider_id(client, login, app):

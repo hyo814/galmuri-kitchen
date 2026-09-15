@@ -47,13 +47,14 @@ export default function Channels({ user }: { user: User }) {
   const mine = data?.items.filter((c) => !c.is_default) ?? [];
   const defaults = data?.items.filter((c) => c.is_default) ?? [];
   const full = !!data && data.mine_count >= data.mine_limit;
-  // 예시 모드는 서버가 바꾸기를 503으로 막으므로 누르지 못하게 한다(포커스는 남게 aria-disabled)
+  // 예시 모드·체험 계정은 서버가 바꾸기를 503으로 막으므로 누르지 못하게 한다(포커스는 남게 aria-disabled)
   const sample = !!data?.sample;
-  const locked = sample ? { "aria-disabled": true, "aria-describedby": "channels-sample-note" } : {};
+  const readOnly = sample || user.videos === "cached";
+  const locked = readOnly ? { "aria-disabled": true, "aria-describedby": "channels-sample-note" } : {};
 
   const add = async (e: FormEvent) => {
     e.preventDefault();
-    if (full || sample) return;
+    if (full || readOnly) return;
     setAdding(true);
     setAddError("");
     setRowError(null);
@@ -91,7 +92,7 @@ export default function Channels({ user }: { user: User }) {
   };
 
   const remove = (channel: Channel) => {
-    if (sample || !confirm("이 채널의 영상을 목록에서 뺄까요?")) return;
+    if (readOnly || !confirm("이 채널의 영상을 목록에서 뺄까요?")) return;
     const index = mine.findIndex((c) => c.id === channel.id);
     change(channel, () => api(`/api/channels/${channel.id}`, { method: "DELETE" }), () => {
       focusAfterRemove.current = index;
@@ -99,7 +100,7 @@ export default function Channels({ user }: { user: User }) {
   };
 
   const toggle = (channel: Channel) =>
-    !sample &&
+    !readOnly &&
     change(channel, () => api(`/api/channels/${channel.id}`, { method: "PATCH", body: { hidden: !channel.hidden } }));
 
   /** 실패한 줄 바로 아래의 오류 문구 */
@@ -136,10 +137,10 @@ export default function Channels({ user }: { user: User }) {
           inputMode="url"
           autoComplete="off"
           aria-label="채널 링크"
-          aria-describedby={addError ? "channel-add-error" : full ? "channel-full" : sample ? "channels-sample-note" : undefined}
+          aria-describedby={addError ? "channel-add-error" : full ? "channel-full" : readOnly ? "channels-sample-note" : undefined}
           aria-invalid={addError ? true : undefined}
-          aria-disabled={sample || undefined}
-          readOnly={sample}
+          aria-disabled={readOnly || undefined}
+          readOnly={readOnly}
           placeholder="채널 링크 붙여넣기"
           maxLength={500}
           disabled={full}
@@ -149,7 +150,7 @@ export default function Channels({ user }: { user: User }) {
             setAddError("");
           }}
         />
-        <button className="btn primary" disabled={!sample && (adding || full || !url.trim())} {...locked}>
+        <button className="btn primary" disabled={!readOnly && (adding || full || !url.trim())} {...locked}>
           {adding ? "추가하는 중…" : "추가"}
         </button>
       </form>
@@ -157,9 +158,9 @@ export default function Channels({ user }: { user: User }) {
         <p className="error r3-add-error" id="channel-add-error" role="alert">
           {addError}
         </p>
-      ) : sample ? (
+      ) : readOnly ? (
         <p className="hint r3-add-error" id="channels-sample-note">
-          예시에서는 바꿀 수 없어요
+          {sample ? "예시에서는 바꿀 수 없어요" : "체험 계정에서는 채널을 바꿀 수 없어요"}
         </p>
       ) : (
         full && (
