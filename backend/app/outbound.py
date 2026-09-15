@@ -3,6 +3,7 @@
 - 유튜브·인스타그램: 사용자가 보낸 주소를 요청하지 않고 영상 ID·게시물 코드로 고정 호스트 주소를 다시 만든다(fetch_fixed).
 - 블로그 같은 일반 주소: https·443 포트·공인 IP만(DNS 결과 전부 + 검사한 IP 하나에만 연결 + 연결된 소켓의 상대 주소),
   리다이렉트는 매번 다시 검사해 최대 3번, text/html·3MB(fetch_public_page).
+  본문 글에 레시피가 없어 보이는 페이지의 본문 사진(page_images)도 같은 검사로 받는다: 사진 형식은 파일 시그니처로 보고, 전체 10초.
 - 둘 다 프록시 환경변수를 쓰지 않고, 리다이렉트까지 합쳐 8초가 지나면 감시 타이머가 소켓을 끊는다.
 예외 메시지에는 주소·키를 넣지 않는다(FetchError는 예외·이유 이름만 담는다).
 예외: 3a의 식약처 공공 레시피 동기화 CLI(`flask sync-public-recipes`, public_recipes.py)는 고정 호스트 하나를 운영자가 직접 부르는 명령이라 이 파일을 거치지 않는다.
@@ -24,6 +25,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.connection import HTTPSConnection
 from urllib3.connectionpool import HTTPSConnectionPool
 
+from .scan import sniff_image_type
+
 MAX_BYTES = 3_000_000  # 만개의레시피 한 페이지가 1.2MB쯤이다. 조금씩 읽으며 세고(_read) 전체 시간도 TOTAL_SECONDS로 막는다
 CONNECT_SECONDS = 3.05
 TOTAL_SECONDS = 8
@@ -34,6 +37,13 @@ MAX_LABEL = 200  # 출처 카드 제목·채널 이름
 HEADERS = {"User-Agent": "galmuri-kitchen/1.0"}
 FIXED_HOSTS = {"www.googleapis.com", "www.youtube.com", "www.instagram.com"}
 REDIRECT_CODES = {301, 302, 303, 307, 308}
+MAX_IMAGE_CANDIDATES = 8  # 블로그 본문 사진 후보(요청은 차례로)
+MAX_PAGE_IMAGES = 5  # AI에 함께 보내는 본문 사진
+MIN_IMAGE_BYTES = 15_000  # 이보다 작으면 아이콘·여백 이미지로 본다
+IMAGE_TOTAL_SECONDS = 10  # 사진 요청 전체(페이지 요청 8초와 따로)
+# ponytail: 파일 이름·경로 규칙으로 꾸밈 이미지를 거른다. 엉뚱한 사진이 자주 섞이면 본문 영역(article·가장 긴 글 블록) 안의 <img>만 고르거나 크기(width·height) 속성을 본다.
+# loading은 요청 목록 밖에서 더했다: eggiscoming.com 게시판은 본문 사진보다 앞에 15KB가 넘는 로딩 문구 PNG 4장이 있다.
+DECOR_IMAGE = re.compile(r"logo|icon|btn|button|banner|sprite|profile|emoji|avatar|loading", re.I)
 YOUTUBE_HOSTS = {"youtube.com", "music.youtube.com", "youtube-nocookie.com"}
 YOUTUBE_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 CHANNEL_ID = re.compile(r"UC[A-Za-z0-9_-]{22}")
@@ -209,15 +219,17 @@ def _check_public_url(url):
     return _host_key(host), infos[0][4][0]  # 첫 주소 하나에만 연결한다
 
 
-def _fetch(url, params=None, public=False):
-    """(본문, charset, 최종 주소). public이면 매 단계 주소를 검사하고 리다이렉트를 따라간다."""
+def _fetch(url, params=None, public=False, image=False, seconds=None):
+    """(본문, charset, 최종 주소). public이면 매 단계 주소를 검사하고 리다이렉트를 따라간다.
+    image면 Content-Type을 보지 않는다(부른 쪽이 파일 시그니처로 본다). seconds는 리다이렉트까지 합친 제한 시간(기본 TOTAL_SECONDS)."""
+    seconds = TOTAL_SECONDS if seconds is None else seconds
     addresses = {} if public else None
     adapter = PublicOnlyAdapter(addresses)
     session = requests.Session()
     session.trust_env = False  # 프록시 환경변수·.netrc를 쓰지 않는다
     session.mount("https://", adapter)
-    deadline = time.monotonic() + TOTAL_SECONDS
-    watchdog = threading.Timer(TOTAL_SECONDS, adapter.expire)
+    deadline = time.monotonic() + seconds
+    watchdog = threading.Timer(seconds, adapter.expire)
     watchdog.daemon = True
     watchdog.start()
     try:
@@ -237,7 +249,7 @@ def _fetch(url, params=None, public=False):
                     continue
                 if res.status_code != 200:
                     raise FetchError(f"HTTP{res.status_code}")
-                if public and not res.headers.get("Content-Type", "").lower().startswith("text/html"):
+                if public and not image and not res.headers.get("Content-Type", "").lower().startswith("text/html"):
                     raise FetchError("NotHtml")
                 return _read(res, deadline, adapter), _charset(res), url
         raise FetchError("TooManyRedirects")
@@ -260,6 +272,25 @@ def fetch_fixed(url, params=None):
 def fetch_public_page(url):
     """사용자가 준 일반 주소(블로그 등)를 요청한다. (본문, charset, 검사를 통과한 최종 주소)."""
     return _fetch(url, public=True)
+
+
+def page_images(urls):
+    """블로그 본문 사진 후보 주소를 앞에서부터 8개까지 차례로 받아 [(bytes, media_type)] 최대 5장.
+    페이지와 같은 공인 주소 검사·리다이렉트 3번·3MB. JPEG·PNG·WEBP 시그니처이고 15KB 이상만. 실패한 사진은 건너뛴다.
+    사진 요청 전체가 10초를 넘기지 않게 한 장마다 남은 시간만 준다. 사진은 저장하지 않는다."""
+    images, deadline = [], time.monotonic() + IMAGE_TOTAL_SECONDS
+    for url in urls[:MAX_IMAGE_CANDIDATES]:
+        left = deadline - time.monotonic()
+        if left <= 0 or len(images) == MAX_PAGE_IMAGES:
+            break
+        try:
+            data = _fetch(url, public=True, image=True, seconds=left)[0]
+        except FetchError:
+            continue
+        media_type = sniff_image_type(data)
+        if media_type and len(data) >= MIN_IMAGE_BYTES:
+            images.append((data, media_type))
+    return images
 
 
 def parse_link(value):
@@ -457,7 +488,7 @@ class _Page(HTMLParser):
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.meta, self.title, self.parts = {}, None, []
+        self.meta, self.title, self.parts, self.images = {}, None, [], []
         self._open, self._title = [], None
 
     def end_title(self):
@@ -476,6 +507,11 @@ class _Page(HTMLParser):
                 self.meta.setdefault(key, content)
         elif tag == "title" and self.title is None:
             self._title = []
+        elif tag == "img":  # 글과 달리 form 안의 사진도 모은다(카페24 게시판은 글 전체가 <form> 안에 있다)
+            attrs = dict(attrs)
+            src = attrs.get("data-src") or attrs.get("src")  # 늦게 불러오는 사진은 src가 자리 표시 이미지다
+            if src:
+                self.images.append(src)
         if tag not in self.VOID and tag != "title":
             self._open.append(tag)
         self._separator(tag)
@@ -521,13 +557,32 @@ def instagram_post(shortcode):
     return {"caption": caption[:MAX_TEXT], "title": title, "thumbnail_url": _https(page.meta.get("og:image"))}
 
 
+def _image_candidates(sources, base):
+    """<img> 주소 → 최종 주소 기준 절대 https 주소. svg·gif·꾸밈 이름(DECOR_IMAGE)은 빼고, 중복 없이 8개까지."""
+    found = []
+    for src in sources:
+        try:
+            url = urljoin(base, src.strip())
+            parts = urlsplit(url)
+        except ValueError:
+            continue
+        path = parts.path.lower()
+        if parts.scheme != "https" or path.endswith((".svg", ".gif")) or DECOR_IMAGE.search(path) or url in found:
+            continue  # http 주소는 https로 바꾸지 않고 뺀다
+        found.append(url)
+        if len(found) == MAX_IMAGE_CANDIDATES:
+            break
+    return found
+
+
 def web_page(url):
-    """공개 웹 페이지의 제목·사이트 이름·본문 글, 검사를 통과한 최종 주소. 사진은 받지 않는다."""
+    """공개 웹 페이지의 제목·사이트 이름·본문 글·본문 사진 후보 주소, 검사를 통과한 최종 주소. 사진은 여기서 받지 않는다(page_images)."""
     body, encoding, final_url = fetch_public_page(url)
     page = _parse_html(body, encoding)
     return {
         "title": _label(page.meta.get("og:title") or page.title),
         "site_name": _label(page.meta.get("og:site_name")) or urlsplit(final_url).hostname,
         "text": page.text(),
+        "images": _image_candidates(page.images, final_url),
         "url": final_url,
     }

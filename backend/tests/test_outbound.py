@@ -516,7 +516,7 @@ def test_web_page_extracts_title_site_and_text(monkeypatch):
         "title": "제육볶음 만들기",
         "site_name": "요리 블로그",
         "text": "제육볶음\n재료: 돼지고기 600g\n양파 1개\n대파",
-        "url": "https://recipe.example.com/final",
+        "url": "https://recipe.example.com/final",    "images": [],
     }
     second = outbound.web_page("https://cook.example.com/x")
     assert (second["title"], second["site_name"], len(second["text"])) == ("두부조림", "cook.example.com", 10_000)
@@ -541,6 +541,99 @@ def test_web_page_cells_breaks_and_unclosed_tags(monkeypatch):
     assert (unclosed["title"], unclosed["text"]) == ("제육볶음", "재료: 돼지고기")
     assert outbound.web_page(PAGE)["text"] == "재료: 두부"
     assert outbound.web_page(PAGE)["text"] == "본문\n꼬리 글"
+
+
+def test_web_page_image_candidates(monkeypatch):
+    """본문 사진 후보: <img> data-src·src 문서 순서, 최종 주소 기준 절대 주소, https만, svg·gif·꾸밈 이름 제외, 중복 제거, 8개까지.
+    form 안의 사진도 넣는다(카페24 게시판은 글 전체가 <form> 안에 있다)."""
+    fake_pages(
+        monkeypatch,
+        (
+            "<header><img src='/skin/LOGO_top.png'></header>"
+            "<img src='/skin/loading/text_1.png'><img src='spacer.gif'><img src='/a/arrow.SVG'>"
+            "<form><img src='/upload/1.jpg'></form>"
+            "<img src='placeholder.gif' data-src='/upload/2.jpg'>"
+            "<img src='http://recipe.example.com/upload/plain.jpg'>"
+            "<img src='//cdn.example.com/upload/3.webp?w=1000'>"
+            "<img src='/upload/1.jpg'>"  # 중복
+            "<img src='/icons/x.png'><img src='/btn_ok.jpg'><img src='/button/go.png'><img src='/banner/a.jpg'><img src='/sprite.png'>"
+            "<img src='/user/profile.jpg'><img src='/emoji/a.png'><img src='/avatar/1.jpg'><img><img src=''>"
+            "<img src='https://other.example.com/p/4.png'><img src='5.jpg'><img src='../6.jpeg'>"
+            "<img src='/7.jpg'><img src='/8.jpg'><img src='/9.jpg'>",
+            "https://recipe.example.com/post/final",
+            "utf-8",
+        ),
+    )
+    assert outbound.web_page(PAGE)["images"] == [
+        "https://recipe.example.com/upload/1.jpg",
+        "https://recipe.example.com/upload/2.jpg",
+        "https://cdn.example.com/upload/3.webp?w=1000",
+        "https://other.example.com/p/4.png",
+        "https://recipe.example.com/post/5.jpg",
+        "https://recipe.example.com/6.jpeg",
+        "https://recipe.example.com/7.jpg",
+        "https://recipe.example.com/8.jpg",
+    ]
+
+
+IMAGE = b"\xff\xd8\xff" + b"j" * 40  # 테스트에서는 MIN_IMAGE_BYTES를 20으로 줄인다
+
+
+def test_page_images_filters_and_skips_failures(monkeypatch):
+    monkeypatch.setattr(outbound, "MIN_IMAGE_BYTES", 20)
+    monkeypatch.setattr(outbound, "MAX_BYTES", 100)
+    fake_dns(monkeypatch, {"recipe.example.com": ["93.184.216.34"], "internal.example": ["10.0.0.9"]})
+    png = b"\x89PNG\r\n\x1a\n" + b"p" * 40
+    webp = b"RIFF" + b"\0" * 4 + b"WEBP" + b"w" * 40
+    sent = fake_send(
+        monkeypatch,
+        [
+            response(200, b"<html>" + b"x" * 40, {"Content-Type": "image/jpeg"}),  # 선언만 사진 → 건너뜀
+            response(200, b"\xff\xd8\xff" + b"j" * 5, {"Content-Type": "image/jpeg"}),  # 너무 작음(아이콘·여백)
+            response(200, b"\xff\xd8\xff" + b"j" * 200, {"Content-Type": "image/jpeg"}),  # 너무 큼
+            response(302, headers={"Location": "https://internal.example/x.jpg"}),  # 사설 주소로 리다이렉트
+            response(404),
+            requests.ConnectionError("boom"),
+            response(200, IMAGE, {"Content-Type": "text/html"}),  # 선언된 형식은 보지 않는다
+            response(200, png, {}),
+            response(200, webp, {"Content-Type": "application/octet-stream"}),
+        ],
+    )
+    urls = [f"https://recipe.example.com/{i}.jpg" for i in range(9)]
+    # 후보는 앞 8개만 받는다: 앞의 6개는 건너뛰고 7·8번째만 사진(9번째 webp는 요청하지 않는다)
+    assert outbound.page_images(urls) == [(IMAGE, "image/jpeg"), (png, "image/png")]
+    assert len(sent) == 8
+
+    sent = fake_send(monkeypatch, [response(200, IMAGE, {"Content-Type": "image/jpeg"}), response(200, png, {}), response(200, webp, {})])
+    assert outbound.page_images(urls[:3]) == [(IMAGE, "image/jpeg"), (png, "image/png"), (webp, "image/webp")]
+    url, kwargs, headers = sent[0]
+    assert (url, kwargs["allow_redirects"], kwargs["proxies"], headers["User-Agent"]) == (urls[0], False, {}, "galmuri-kitchen/1.0")
+    assert kwargs["timeout"][1] <= 10
+
+
+def test_page_images_stop_at_five(monkeypatch):
+    monkeypatch.setattr(outbound, "MIN_IMAGE_BYTES", 20)
+    fake_dns(monkeypatch, {"recipe.example.com": ["93.184.216.34"]})
+    sent = fake_send(monkeypatch, [response(200, IMAGE, {}) for _ in range(8)])
+    assert outbound.page_images([f"https://recipe.example.com/{i}.jpg" for i in range(8)]) == [(IMAGE, "image/jpeg")] * 5
+    assert len(sent) == 5
+
+
+def test_page_images_share_ten_second_budget(monkeypatch):
+    """사진 요청 전체가 10초 안에서 끝난다. 한 장마다 남은 시간만 주고, 시간이 다 되면 나머지는 요청하지 않는다."""
+    now, given = [0.0], []
+
+    def fetch(url, params=None, public=False, image=False, seconds=None):
+        assert public and image
+        given.append(seconds)
+        now[0] += 4
+        return IMAGE, None, url
+
+    monkeypatch.setattr(outbound.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(outbound, "_fetch", fetch)
+    monkeypatch.setattr(outbound, "MIN_IMAGE_BYTES", 20)
+    assert len(outbound.page_images([f"https://recipe.example.com/{i}.jpg" for i in range(8)])) == 3
+    assert given == [10, 6, 2]
 
 
 # --- 요리 채널: channel_info · playlist_videos · video_details ---
