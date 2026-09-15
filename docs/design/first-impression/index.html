@@ -1,0 +1,360 @@
+<title>갈무리부엌 첫인상 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+  :root {
+    --board: #e6e8eb; --bg: #f3f4f6; --surface: #ffffff; --field: #f3f4f6; --text: #17191c; --text-2: #5b616b; --text-3: #63697a; --line: #eef0f2; --chip-line: #d3d7dd; --handle: #e1e4e8;
+    --accent: #0b7a4c; --accent-strong: #086a41; --accent-tint: #e7f6ef; --on-accent: #ffffff; --warn: #8f5500; --warn-tint: #fff3dc; --danger: #c4262e; --danger-tint: #fdeded; --note: #3a3f46;
+    --kakao: #fee500; --naver: #03c75a; --desk: #dfe3e0; --frame: #17191c; --spot: rgb(11 122 76 / 0.16);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --handle: #3a3d43; --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --danger: #ff6b6f; --danger-tint: #3b1c1f; --note: #d3d7dc; --desk: #121417; --frame: #2a2d32; --spot: rgb(47 192 127 / 0.18); }
+  }
+  :root[data-theme="dark"] { --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --handle: #3a3d43; --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --danger: #ff6b6f; --danger-tint: #3b1c1f; --note: #d3d7dc; --desk: #121417; --frame: #2a2d32; --spot: rgb(47 192 127 / 0.18); }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 16px 64px; background: var(--board); color: var(--text); font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1320px; margin-inline: auto; display: grid; gap: 40px; }
+  .intro h1 { margin: 0 0 8px; font-size: 26px; line-height: 34px; text-wrap: balance; }
+  .intro p { margin: 0 0 6px; max-width: 72ch; font-size: 15px; line-height: 24px; color: var(--text-2); word-break: keep-all; }
+  .intro b { color: var(--note); }
+  .asks { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; }
+  .ask { padding: 14px 16px; border-radius: 16px; background: var(--surface); display: grid; gap: 4px; }
+  .ask h3 { margin: 0; font-size: 15px; }
+  .ask p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+  .ask .rec { color: var(--accent-strong); font-weight: 600; }
+  section { display: grid; gap: 16px; }
+  .sec-head { display: grid; gap: 4px; max-width: 72ch; }
+  .tag { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: 0.06em; color: var(--text-3); }
+  .sec-head h2 { margin: 0; font-size: 20px; line-height: 28px; }
+  .sec-head p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+  .board { display: flex; flex-wrap: wrap; gap: 28px 24px; align-items: flex-start; }
+  .option { display: grid; gap: 10px; width: min(384px, 100%); }
+  .cap { display: grid; gap: 2px; }
+  .cap h3 { margin: 0; font-size: 16px; }
+  .cap p { margin: 0; font-size: 13px; line-height: 20px; color: var(--text-2); word-break: keep-all; }
+
+  /* 앱 조각 — 실제 styles.css 토큰과 모양을 따른다 */
+  .phone { position: relative; width: 100%; height: 760px; overflow: hidden; border-radius: 28px; background: var(--bg); padding: 20px 16px 0; display: flex; flex-direction: column; gap: 12px; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 52px; border-radius: 16px; font-size: 16px; font-weight: 600; white-space: nowrap; border: 0; font-family: inherit; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); }
+  .btn.secondary { background: var(--field); color: var(--text); }
+  .btn.ghost { background: var(--surface); color: var(--text); box-shadow: inset 0 0 0 1.5px var(--chip-line); }
+  .btn.kakao { background: var(--kakao); color: #191919; }
+  .btn.naver { background: var(--naver); color: #fff; }
+  .btn.google { background: #fff; color: #1f1f1f; box-shadow: inset 0 0 0 1px #dadce0; }
+  .btn.sm { height: 40px; border-radius: 12px; font-size: 14px; padding: 0 14px; }
+  .card { border-radius: 20px; background: var(--surface); padding: 14px 16px; display: grid; gap: 10px; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .grow { flex: 1; min-width: 0; }
+  .muted { color: var(--text-3); font-size: 13px; line-height: 19px; }
+  .num { font-variant-numeric: tabular-nums; }
+  .pill { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: 8px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .pill.red { background: var(--danger-tint); color: var(--danger); }
+  .pill.warn { background: var(--warn-tint); color: var(--warn); }
+  .pill.gray { background: var(--field); color: var(--text-2); }
+  .pill.green { background: var(--accent-tint); color: var(--accent-strong); }
+  .mark { flex: none; display: block; }
+  .h1 { margin: 0; font-size: 28px; line-height: 36px; font-weight: 700; }
+  .sub { margin: 0; font-size: 15px; color: var(--text-2); }
+  .tabbar { margin-top: auto; margin-inline: -16px; display: grid; grid-template-columns: repeat(5, 1fr); padding: 8px 0 14px; background: var(--surface); border-top: 1px solid var(--line); font-size: 11px; color: var(--text-3); text-align: center; }
+  .tabbar span.on { color: var(--accent-strong); font-weight: 700; }
+  .tabbar i { display: block; width: 22px; height: 22px; margin: 0 auto 3px; border-radius: 6px; box-shadow: inset 0 0 0 2px currentColor; }
+
+  /* 로그인 */
+  .login { padding: 28px 20px 18px; gap: 12px; }
+  .login-hero { display: grid; gap: 6px; }
+  .login-hero .h1 { font-size: 26px; }
+  .note { margin: -4px 0 0; text-align: center; font-size: 12px; color: var(--text-3); }
+  .divider { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-3); }
+  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--chip-line); }
+  .legal { text-align: center; font-size: 12px; color: var(--text-3); text-decoration: underline; }
+  .gap-old { flex: 1; border-radius: 16px; border: 2px dashed var(--chip-line); display: grid; place-items: center; font-size: 13px; color: var(--text-3); }
+
+  /* 미리보기 캐러셀 */
+  .peek { flex: 1; display: grid; grid-template-rows: 1fr auto; gap: 10px; min-height: 0; }
+  .peek-track { position: relative; overflow: hidden; border-radius: 20px; background: var(--surface); }
+  .slide { position: absolute; inset: 0; padding: 14px 16px; display: grid; align-content: center; gap: 10px; transition: opacity .5s ease, transform .5s ease; opacity: 0; transform: translateX(16px); }
+  .slide.on { opacity: 1; transform: none; }
+  .slide .step { font-size: 12px; font-weight: 700; color: var(--accent-strong); }
+  .slide h4 { margin: 0; font-size: 17px; line-height: 24px; word-break: keep-all; }
+  .mini { display: grid; gap: 6px; }
+  .mini .row { padding: 7px 10px; border-radius: 12px; background: var(--field); font-size: 14px; }
+  .receipt { display: flex; gap: 8px; align-items: center; }
+  .receipt .paper { width: 46px; height: 60px; border-radius: 4px; background: repeating-linear-gradient(to bottom, var(--chip-line) 0 2px, transparent 2px 8px) 8px 10px / 30px 44px no-repeat, var(--field); box-shadow: inset 0 0 0 1px var(--chip-line); }
+  .arrow { color: var(--text-3); font-size: 18px; }
+  .dots { display: flex; justify-content: center; gap: 6px; }
+  .dots button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 4px; background: var(--chip-line); transition: width .3s; }
+  .dots button.on { width: 20px; background: var(--accent); }
+  .dots button:focus-visible, .btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  /* 다람이 안내 카드 */
+  .guide { background: var(--accent-tint); border-radius: 20px; padding: 14px 16px; display: grid; gap: 12px; }
+  .guide .row { align-items: flex-start; }
+  .guide p { margin: 0; font-size: 15px; line-height: 22px; word-break: keep-all; }
+  .guide p b { color: var(--accent-strong); }
+  .guide .x { margin-left: auto; font-size: 18px; color: var(--text-3); line-height: 1; }
+  .guide .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .guide .btn.secondary { background: var(--surface); }
+  .list { border-radius: 20px; background: var(--surface); padding: 4px 16px; }
+  .item { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .item:last-child { border-bottom: 0; }
+  .item b { display: block; font-size: 16px; }
+  .chips { display: flex; gap: 8px; }
+  .chip { height: 36px; padding: 0 14px; border-radius: 18px; display: grid; place-items: center; font-size: 14px; background: var(--surface); color: var(--text-2); }
+  .chip.on { background: var(--text); color: var(--bg); font-weight: 700; }
+  .spot { box-shadow: 0 0 0 3px var(--accent), 0 0 0 9px var(--spot); }
+  .tip { position: relative; margin-top: -2px; padding: 10px 12px; border-radius: 12px; background: var(--text); color: var(--bg); font-size: 13px; line-height: 19px; word-break: keep-all; }
+  .tip::before { content: ""; position: absolute; top: -6px; left: 28px; width: 12px; height: 12px; background: inherit; transform: rotate(45deg); border-radius: 2px; }
+  .rcard { display: grid; gap: 4px; }
+  .rimg { height: 88px; border-radius: 14px; background: linear-gradient(135deg, #d9c3a1, #b9cfa8); }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); padding: 4px; border-radius: 14px; background: var(--field); font-size: 14px; text-align: center; }
+  .seg span { padding: 8px 0; border-radius: 10px; color: var(--text-2); }
+  .seg span.on { background: var(--surface); color: var(--text); font-weight: 700; }
+
+  /* PC 화면 */
+  .desk { width: 100%; border-radius: 18px; overflow: hidden; background: var(--frame); padding: 10px; }
+  .desk-bar { display: flex; align-items: center; gap: 6px; padding: 0 6px 10px; }
+  .desk-bar i { width: 10px; height: 10px; border-radius: 5px; background: #4a4e55; }
+  .desk-bar span { margin-left: 10px; flex: 1; max-width: 360px; height: 22px; border-radius: 6px; background: #2a2d32; color: #a6acb5; font-size: 12px; display: flex; align-items: center; padding: 0 10px; font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .desk-screen { background: var(--desk); border-radius: 10px; display: grid; grid-template-columns: minmax(0, 1fr) 384px; gap: clamp(24px, 5vw, 72px); align-items: center; padding: 36px clamp(20px, 5vw, 72px); }
+  .desk-screen .phone { height: 720px; box-shadow: 0 24px 60px rgb(0 0 0 / 0.18), 0 0 0 1px var(--line); }
+  .pitch { display: grid; gap: 22px; max-width: 460px; justify-self: end; }
+  .pitch .brand { display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: 700; }
+  .pitch h2 { margin: 0; font-size: clamp(30px, 3.4vw, 42px); line-height: 1.25; letter-spacing: -0.02em; text-wrap: balance; word-break: keep-all; }
+  .pitch h2 em { font-style: normal; color: var(--accent-strong); }
+  .flow { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+  .flow li { display: grid; grid-template-columns: 32px 1fr; gap: 12px; align-items: start; }
+  .flow li > span { width: 32px; height: 32px; border-radius: 10px; background: var(--surface); color: var(--accent-strong); font-weight: 700; display: grid; place-items: center; font-size: 15px; }
+  .flow b { display: block; font-size: 16px; line-height: 22px; }
+  .flow small { display: block; font-size: 14px; line-height: 21px; color: var(--text-2); word-break: keep-all; }
+  .qr { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 16px; background: var(--surface); width: fit-content; }
+  .qr svg { width: 84px; height: 84px; display: block; border-radius: 6px; background: #fff; padding: 6px; }
+  .qr b { display: block; font-size: 15px; }
+  .qr small { font-size: 13px; color: var(--text-3); }
+  .foot { font-size: 12px; color: var(--text-3); }
+  @media (max-width: 900px) {
+    .desk-screen { grid-template-columns: 1fr; justify-items: center; }
+    .pitch { justify-self: stretch; }
+    .desk-screen .phone { width: min(384px, 100%); }
+  }
+  @media (prefers-reduced-motion: reduce) { .slide, .dots button { transition: none; } }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 512 512"><rect width="512" height="512" rx="115" fill="#0b7a4c"/><g transform="translate(256 256) scale(0.78) translate(-286 -240)"><path d="M330 382 C440 374 462 262 414 218 C384 190 390 146 434 136" fill="none" stroke="#ffffff" stroke-width="68" stroke-linecap="round"/><path d="M168 360 H304 L252 426 Q236 444 220 426 Z" fill="#ffc94a"/><path d="M236 186 C300 186 346 214 354 262 C358 288 366 306 382 326 C360 330 346 330 336 334 C322 360 280 386 236 386 C192 386 150 360 136 334 C126 330 112 330 90 326 C106 306 114 288 118 262 C126 214 172 186 236 186 Z" fill="#ffffff" stroke="#0b7a4c" stroke-width="16" stroke-linejoin="round" paint-order="stroke"/><path d="M130 250 C112 206 98 160 84 94 L104 116 L110 88 C142 126 176 168 196 206 Z" fill="#ffffff"/><path d="M342 250 C360 206 374 160 388 94 L368 116 L362 88 C330 126 296 168 276 206 Z" fill="#ffffff"/><path d="M138 228 C128 198 118 170 110 140 C134 162 156 186 172 212 Z" fill="#ffc94a"/><path d="M334 228 C344 198 354 170 362 140 C338 162 316 186 300 212 Z" fill="#ffc94a"/><path d="M176 284 Q194 266 212 284" fill="none" stroke="#07140d" stroke-width="11" stroke-linecap="round"/><ellipse cx="278" cy="282" rx="17" ry="21" fill="#07140d"/><circle cx="284" cy="273" r="6" fill="#ffffff"/><path d="M258 246 Q282 232 304 244" fill="none" stroke="#07140d" stroke-width="10" stroke-linecap="round"/><path d="M222 312 H250 Q256 312 252 318 L240 330 Q236 334 232 330 L220 318 Q216 312 222 312 Z" fill="#07140d"/><rect x="224" y="344" width="24" height="22" rx="5" fill="#ffffff" stroke="#07140d" stroke-width="6"/><path d="M236 346 V364" stroke="#07140d" stroke-width="5"/><path d="M208 336 Q236 354 266 332" fill="none" stroke="#07140d" stroke-width="7" stroke-linecap="round"/><g transform="rotate(-9 236 196) translate(236 196) scale(.82) translate(-236 -196)"><path d="M170 174 L162 112 C126 104 124 50 168 44 C178 8 222 0 236 24 C250 0 294 8 304 44 C348 50 346 104 310 112 L302 174 Z" fill="#ffffff" stroke="#0b7a4c" stroke-width="20" stroke-linejoin="round" paint-order="stroke"/><path d="M204 118 V160" stroke="#0b7a4c" stroke-width="10" stroke-linecap="round"/><path d="M236 100 V160" stroke="#0b7a4c" stroke-width="10" stroke-linecap="round"/><path d="M268 118 V160" stroke="#0b7a4c" stroke-width="10" stroke-linecap="round"/><rect x="158" y="166" width="156" height="48" rx="14" fill="#ffffff" stroke="#0b7a4c" stroke-width="20" paint-order="stroke"/></g></g></symbol>
+</svg>
+
+<div class="wrap">
+  <header class="intro">
+    <h1>갈무리부엌 첫인상 시안</h1>
+    <p>9월 21일부터는 심사자뿐 아니라 <b>처음 보는 투표자</b>가 링크를 열어요. PC로도, 폰으로도 열어요. 지금은 로그인하기 전에 이 앱이 뭘 해 주는지 보이는 게 없어요.</p>
+    <p>그래서 세 곳을 고쳐요. 말투는 설명서가 아니라 옆에서 말 거는 느낌으로 맞췄어요. <b>PC로 열었을 때</b>, <b>로그인 화면</b>, <b>체험하기를 누른 뒤 첫 30초</b>예요. 색·글꼴·버튼 모양은 지금 앱을 그대로 따르고, 예시 재고는 체험 계정에 실제로 들어 있는 재료예요.</p>
+  </header>
+
+  <div class="asks">
+    <div class="ask"><h3>① PC 옆 소개는 어디까지?</h3><p><span class="rec">추천: 모든 화면</span>. 투표자는 PC에서 앱을 둘러보는 내내 설명과 QR을 봐요. 다른 안은 로그인 화면에만 보여 주는 거예요.</p></div>
+    <div class="ask"><h3>② 미리보기는 자동으로 넘길까?</h3><p><span class="rec">추천: 4초마다 자동</span>. 점을 누르면 멈춰요. 기기에서 움직임 줄이기를 켠 분에게는 넘기지 않아요.</p></div>
+    <div class="ask"><h3>③ 체험 안내는 몇 번 보여 줄까?</h3><p><span class="rec">추천: 체험 계정마다 한 번</span>. 닫거나 버튼을 누르면 다시 뜨지 않아요. 가리는 덮개 대신 화면 안의 카드라 바로 무시해도 돼요.</p></div>
+  </div>
+
+  <section aria-labelledby="s-a">
+    <div class="sec-head">
+      <span class="tag">A · PC로 열었을 때 (넓이 1024px 이상)</span>
+      <h2 id="s-a">왼쪽은 궁금해지는 한 줄과 세 걸음, 오른쪽은 폰 크기 앱</h2>
+      <p>지금은 넓은 화면에서도 버튼이 가운데 한 줄로만 놓여요. 앱은 폰 크기 그대로 두고, 남는 자리에 무엇을 해 주는 앱인지와 폰으로 여는 QR을 둬요. 폰에서는 이 소개가 보이지 않아요.</p>
+    </div>
+    <div class="desk">
+      <div class="desk-bar"><i></i><i></i><i></i><span>galmuri-kitchen.onrender.com</span></div>
+      <div class="desk-screen">
+        <div class="pitch">
+          <div class="brand"><svg class="mark" width="40" height="40"><use href="#mark"/></svg>갈무리부엌</div>
+          <h2>영수증 한 장 찍으면<br><em>오늘 저녁 메뉴</em>까지 나와요</h2>
+          <ol class="flow">
+            <li><span>1</span><div><b>찍기만 하면 알아서 적어둬요</b><small>냉장고 사진도 돼요. 5장까지 한 번에 읽어요.</small></div></li>
+            <li><span>2</span><div><b>상하기 전에 먼저 챙겨줘요</b><small>두부는 내일까지, 대파는 모레까지. 잊어도 괜찮아요.</small></div></li>
+            <li><span>3</span><div><b>그 재료로 만들 요리를 골라줘요</b><small>없는 재료만 장보기 목록에 쏙 담아요.</small></div></li>
+          </ol>
+          <div class="qr">
+            <svg id="qr" viewBox="0 0 25 25" aria-label="폰으로 여는 QR 코드 자리" role="img"></svg>
+            <div><b>폰으로 이어서 보기</b><small>카메라로 비추면 바로 열려요</small></div>
+          </div>
+          <span class="foot">QR은 실제 배포 주소로 만들어요. 시안에서는 모양만 보여요.</span>
+        </div>
+        <div class="phone login">
+          <div class="login-hero">
+            <svg class="mark" width="56" height="56"><use href="#mark"/></svg>
+            <p class="h1">갈무리부엌</p>
+            <p class="sub">냉장고 속 재료로 오늘 뭐 해 먹을지 정해요.</p>
+          </div>
+          <div class="peek" data-peek>
+            <div class="peek-track"></div>
+            <div class="dots"></div>
+          </div>
+          <button class="btn primary" type="button">로그인 없이 체험하기</button>
+          <p class="note">예시 재고가 들어 있는 체험 공간이 열려요. 하루 뒤 사라져요.</p>
+          <div class="divider">계정으로 계속하기</div>
+          <button class="btn kakao" type="button">카카오 로그인</button>
+          <span class="legal">이용약관 · 개인정보처리방침</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="s-b">
+    <div class="sec-head">
+      <span class="tag">B · 로그인 화면 (폰)</span>
+      <h2 id="s-b">비어 있던 가운데에 앱이 해 주는 일 세 장</h2>
+      <p>그림이 아니라 실제 앱 모양으로 만든 작은 카드라 가볍고 글자가 또렷해요. 스크린리더는 세 장을 차례로 읽어요.</p>
+    </div>
+    <div class="board">
+      <div class="option">
+        <div class="cap"><h3>지금</h3><p>로고와 버튼 사이가 비어 있어요. 무엇을 체험하게 되는지 누르기 전에는 알 수 없어요.</p></div>
+        <div class="phone login">
+          <div class="login-hero">
+            <svg class="mark" width="64" height="64"><use href="#mark"/></svg>
+            <p class="h1">갈무리부엌</p>
+            <p class="sub">냉장고 속 재료로 오늘 뭐 해 먹을지 정해요.</p>
+          </div>
+          <div class="gap-old">빈 자리</div>
+          <button class="btn primary" type="button">로그인 없이 체험하기</button>
+          <p class="note">예시 재고가 들어 있는 체험 공간이 열려요. 하루 뒤 사라져요.</p>
+          <div class="divider">계정으로 계속하기</div>
+          <button class="btn kakao" type="button">카카오 로그인</button>
+          <button class="btn naver" type="button">네이버 로그인</button>
+          <button class="btn google" type="button">Google로 계속하기</button>
+          <span class="legal">이용약관 · 개인정보처리방침</span>
+        </div>
+      </div>
+      <div class="option">
+        <div class="cap"><h3>바꾼 뒤</h3><p>찍기 → 챙기기 → 오늘 메뉴를 4초마다 넘겨요. 짧은 말투로 궁금하게 만들고, 버튼 위치와 순서는 그대로 둬요.</p></div>
+        <div class="phone login">
+          <div class="login-hero">
+            <svg class="mark" width="56" height="56"><use href="#mark"/></svg>
+            <p class="h1">갈무리부엌</p>
+            <p class="sub">냉장고 속 재료로 오늘 뭐 해 먹을지 정해요.</p>
+          </div>
+          <div class="peek" data-peek>
+            <div class="peek-track"></div>
+            <div class="dots"></div>
+          </div>
+          <button class="btn primary" type="button">로그인 없이 체험하기</button>
+          <p class="note">예시 재고가 들어 있는 체험 공간이 열려요. 하루 뒤 사라져요.</p>
+          <div class="divider">계정으로 계속하기</div>
+          <button class="btn kakao" type="button">카카오 로그인</button>
+          <button class="btn naver" type="button">네이버 로그인</button>
+          <button class="btn google" type="button">Google로 계속하기</button>
+          <span class="legal">이용약관 · 개인정보처리방침</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="s-c">
+    <div class="sec-head">
+      <span class="tag">C · 체험하기를 누른 뒤 첫 30초</span>
+      <h2 id="s-c">다람이가 핵심 순간까지 두 번만 안내해요</h2>
+      <p>체험 계정은 들어오자마자 재고 목록만 보여서, 무엇을 눌러야 할지 스스로 찾아야 해요. 곧 상할 재료 → 그 재료로 만드는 AI 레시피까지 두 번 눌러 닿게 해요.</p>
+    </div>
+    <div class="board">
+      <div class="option">
+        <div class="cap"><h3>C1 재고 화면 맨 위</h3><p>체험 계정에서 처음 한 번만 보여요. '사진 찍어보기'는 다른 세션이 만드는 예시 사진 스캔으로 이어져요.</p></div>
+        <div class="phone">
+          <div class="row"><div class="grow"><p class="h1">내 재고</p><p class="sub">재료 10개 · 빨리 먹어야 할 재료 2개</p></div></div>
+          <div class="guide" role="region" aria-label="체험 안내">
+            <div class="row">
+              <svg class="mark" width="40" height="40"><use href="#mark"/></svg>
+              <p>냉장고를 미리 채워뒀어요. 그런데 <b>두부가 내일까지예요!</b> 두부로 뭘 만들 수 있을지 같이 볼까요?</p>
+              <span class="x" aria-label="안내 닫기">✕</span>
+            </div>
+            <div class="acts">
+              <button class="btn sm primary" type="button">요리 찾아보기</button>
+              <button class="btn sm secondary" type="button">사진 찍어보기</button>
+            </div>
+          </div>
+          <div class="chips"><span class="chip on">전체</span><span class="chip">냉장실</span><span class="chip">냉동실</span><span class="chip">실온</span></div>
+          <div class="list">
+            <div class="item"><div class="grow"><b>두부</b><span class="muted">1모 · 냉장실 · 9월 11일 구입</span></div><span class="pill red">D-1</span></div>
+            <div class="item"><div class="grow"><b>대파</b><span class="muted">1단 · 냉장실 · 9월 9일 구입</span></div><span class="pill red">D-2</span></div>
+            <div class="item"><div class="grow"><b>김치</b><span class="muted">1kg · 냉장실 · 9월 4일 구입</span></div><span class="pill warn">구입 10일째</span></div>
+            <div class="item"><div class="grow"><b>우유</b><span class="muted">1L · 냉장실 · 9월 12일 구입</span></div><span class="pill gray">D-6</span></div>
+          </div>
+          <nav class="tabbar" aria-label="탭 예시"><span class="on"><i></i>재고</span><span><i></i>레시피</span><span><i></i>장보기</span><span><i></i>식단</span><span><i></i>더보기</span></nav>
+        </div>
+      </div>
+      <div class="option">
+        <div class="cap"><h3>C2 요리 찾아보기를 누르면</h3><p>추천 칸 맨 위 AI 레시피 카드를 초록 테두리로 짚고, 한 줄 말풍선을 붙여요. 카드를 누르거나 다른 곳을 누르면 사라져요.</p></div>
+        <div class="phone">
+          <p class="h1">레시피</p>
+          <div class="seg"><span class="on">추천</span><span>내 레시피</span><span>영상</span></div>
+          <div class="card spot">
+            <div class="row">
+              <svg class="mark" width="36" height="36"><use href="#mark"/></svg>
+              <div class="grow"><b>지금 재고로 AI 레시피 만들기</b><div class="muted">두부·대파를 먼저 쓰는 3가지</div></div>
+              <span class="pill green">AI</span>
+            </div>
+          </div>
+          <div class="tip">여기를 눌러보세요. 두부랑 대파부터 쓰는 요리 3가지를 바로 만들어줘요. 체험은 하루 5번까지 돼요.</div>
+          <div class="card rcard">
+            <div class="rimg"></div>
+            <div class="row"><b class="grow">두부조림</b><span class="pill green">재료 4/5</span></div>
+            <span class="muted">두부 D-1 · 대파 D-2를 써요 · 모자란 재료 간장</span>
+          </div>
+          <div class="card rcard">
+            <div class="rimg" style="background:linear-gradient(135deg,#e3b8a4,#d9c3a1)"></div>
+            <div class="row"><b class="grow">김치찌개</b><span class="pill green">재료 5/6</span></div>
+          </div>
+          <nav class="tabbar" aria-label="탭 예시"><span><i></i>재고</span><span class="on"><i></i>레시피</span><span><i></i>장보기</span><span><i></i>식단</span><span><i></i>더보기</span></nav>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+  const SLIDES = [
+    { step: "찰칵", title: "영수증 찍으면 끝이에요", body: `<div class="receipt"><div class="paper" aria-hidden="true"></div><span class="arrow" aria-hidden="true">→</span><div class="mini grow"><div class="row"><span class="grow">두부 1모</span><span class="num">1,800원</span></div><div class="row"><span class="grow">대파 1단</span><span class="num">2,480원</span></div><div class="row"><span class="grow">우유 1L</span><span class="num">2,980원</span></div></div></div>` },
+    { step: "잠깐만요", title: "두부가 내일까지래요", body: `<div class="mini"><div class="row"><span class="grow">두부</span><span class="pill red">D-1</span></div><div class="row"><span class="grow">대파</span><span class="pill red">D-2</span></div><div class="row"><span class="grow">김치</span><span class="pill warn">구입 10일째</span></div></div>` },
+    { step: "그럼 오늘은", title: "두부조림 어때요?", body: `<div class="mini"><div class="row"><span class="grow">두부조림</span><span class="pill green">재료 4/5</span></div><div class="row"><span class="grow">김치찌개</span><span class="pill green">재료 5/6</span></div><div class="row"><span class="grow">간장만 사면 돼요</span><span class="pill gray">장보기에 담기</span></div></div>` },
+  ];
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.querySelectorAll("[data-peek]").forEach((peek, n) => {
+    const track = peek.querySelector(".peek-track");
+    const dots = peek.querySelector(".dots");
+    track.setAttribute("aria-roledescription", "미리보기");
+    const slides = SLIDES.map((s, i) => {
+      const el = document.createElement("div");
+      el.className = "slide" + (i === 0 ? " on" : "");
+      el.setAttribute("aria-label", `${i + 1} / ${SLIDES.length}`);
+      el.innerHTML = `<span class="step">${s.step}</span><h4>${s.title}</h4>${s.body}`;
+      track.append(el);
+      const dot = document.createElement("button");
+      dot.type = "button";
+      dot.id = `peek-${n}-dot-${i}`;
+      dot.className = i === 0 ? "on" : "";
+      dot.setAttribute("aria-label", `${i + 1}번째 미리보기`);
+      dot.addEventListener("click", () => { stop(); show(i); });
+      dots.append(dot);
+      return el;
+    });
+    let cur = 0, timer = null;
+    const show = (i) => {
+      cur = i;
+      slides.forEach((el, k) => el.classList.toggle("on", k === i));
+      dots.querySelectorAll("button").forEach((d, k) => d.classList.toggle("on", k === i));
+    };
+    const stop = () => { clearInterval(timer); timer = null; };
+    if (!reduce) timer = setInterval(() => show((cur + 1) % SLIDES.length), 4000);
+  });
+
+  // QR 모양만 흉내 낸 무늬(실제 구현은 배포 주소로 만든 QR)
+  (() => {
+    const svg = document.getElementById("qr");
+    const N = 25; let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const finder = (x, y) => `<rect x="${x}" y="${y}" width="7" height="7" fill="#17191c"/><rect x="${x + 1}" y="${y + 1}" width="5" height="5" fill="#fff"/><rect x="${x + 2}" y="${y + 2}" width="3" height="3" fill="#17191c"/>`;
+    const inFinder = (x, y) => (x < 8 && y < 8) || (x > N - 9 && y < 8) || (x < 8 && y > N - 9);
+    let out = "";
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (!inFinder(x, y) && rnd() > 0.52) out += `<rect x="${x}" y="${y}" width="1" height="1" fill="#17191c"/>`;
+    svg.innerHTML = out + finder(0, 0) + finder(N - 7, 0) + finder(0, N - 7);
+  })();
+</script>
