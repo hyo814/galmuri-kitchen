@@ -456,16 +456,17 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 **구현 세부 (2026-09-15, 4b-2, Task 3 — 레시피 1인분 영양 계산·식품 고르기 저장, `app/nutrition.py`):**
 - 계산 결과는 저장하지 않고 요청마다 계산한다(ponytail: 식단 한 번에 레시피 124개까지. 느려지면 `(recipe.updated_at, 사용자 food_matches 최신 시각)` 서명으로 캐시).
 - 재료 키 `match_key(이름)` = `normalize(ingredient_key(이름))` 앞 60자(`돼지고기 앞다리살(국산)` → `돼지고기앞다리살`). 사용자 기억(`food_matches.ingredient_key`)·자동 맞추기·찾아본 기록(`food_searches.query_key`)·단위 무게(`unit_weight_estimates.name_key`)·AI 추정 행(`food_code` `ai:<키>`)이 모두 이 키를 쓴다.
-- **단위 → g(결정 5):** `g` 그대로, `ml` 1g(ponytail: 기름·꿀은 10~40% 차이), 큰술·숟가락·스푼·tbsp·`T` 15g, 작은술·티스푼·`t`·ts·tsp 5g, 컵 200g, 꼬집 0.5g. `T`(큰술)와 `t`(작은술)는 원래 글자로 가르고 나머지는 대소문자 무시(`Tbsp`=15). kg·L는 `parse_amount`가 g·ml로 바꿔 둔다. 숟가락·ml 환산은 추정으로 보지 않는다. 그 밖의 단위(모·개·포기·대 …)는 셀 수 있는 단위.
+- **단위 → g(결정 5):** `g` 그대로, `ml` 1g(ponytail: 기름·꿀은 10~40% 차이), 큰술·숟가락·스푼 15g, 작은술·티스푼 5g, 컵 200g, 꼬집 0.5g, `g`·`ml`은 대소문자 무시. **영문 숟가락(Ruling 10, 결정 5 확장):** `t`·`ts`는 원래 글자로 가른다 — 큰 `T`로 시작하면(`T`·`Ts`·`TS`) 큰술 15g, 작은 `t`(`t`·`ts`)면 작은술 5g. `tbs`·`tbsp`는 대소문자 무관 15g(`Tbs`·`Tbsp`·`TBSP`), `tsp`는 대소문자 무관 5g(`Tsp`·`TSP`). kg·L는 `parse_amount`가 g·ml로 바꿔 둔다. 숟가락·ml 환산은 추정으로 보지 않는다. 그 밖의 단위(모·개·포기·대 …)는 셀 수 있는 단위.
 - **셀 수 있는 단위 한 단위 무게(결정 7):** 사용자가 고친 값(`food_matches.unit_grams`, 출처 `user`) → 모두 공유 `unit_weight_estimates`(출처 `ai`·`sample`) → 없으면 계산 못 함.
 - **식품 정하기(`resolve`, 결정 9·10, 개정 1):** 사용자 기억이 있으면 — `food_code` NULL(추정으로 두기)이면 `ai:<키>` 행이 있을 때 `estimate`, 없으면 `estimate_missing` / 고른 코드가 캐시에 있으면 `matched`, 사라졌으면 `unmatched`. 기억이 없으면 — 자동 맞추기가 되면 `auto` / 안 되고 찾아본 기록이 있으면 `ai:<키>` 행 유무로 `estimate`·`estimate_missing`(`unmatched` 아님) / 찾아본 기록도 없으면 `unsearched`.
 - **자동 맞추기(결정 10, 개정 1):** 후보 = 캐시 행(source ≠ `ai`) 중 `재료 키 ∈ name_parts(이름)`. ① 원재료성 후보가 있으면 `(조각에 '생것' 없음, 조각 수, 이름 길이, 이름)` 순 첫 행(`대파` → `파_대파_생것`, `돼지고기` → `돼지고기_뒷다리_생것`이 `돼지고기_삶은것`보다 먼저) ② 없으면 `normalize(이름) == 키`인 행이 딱 하나일 때 그것 ③ 아니면 못 맞춤. 후보는 `FoodNutrient.name ILIKE %키%`(`\`·`%`·`_` 이스케이프)를 키 50개씩 `OR`로 묶어 읽고 파이썬에서 `name_parts`로 거른다(물은 늘 0g이라 찾지 않는다). 사용자 기억·찾아본 기록·단위 무게·식품 코드는 `IN` 500개씩 — 레시피 하나(재료 50개까지)면 쿼리 5번.
+- 재료 키가 빈 이름(`+`·`·`·`(고명)`)은 찾지도 정하지도 않고(쿼리·`resolve` 없음) 양을 모르는 줄처럼 뺀다(`unknown_amount`, 약, 계산 중 아님 — 채우기 반복이 멈추지 않게).
 - **줄 상태(위에서부터 처음 맞는 것):**
 
   | 조건 | status | pending_reason |
   |---|---|---|
   | 이름이 `물`이거나 양이 약간·적당량·적당히·조금·소량·취향껏(결정 6) | `trace`(0g, 약 안 붙임) | |
-  | `parse_amount`가 못 읽음(`10~15개`·빈 칸) | `unknown_amount` | |
+  | `parse_amount`가 못 읽음(`10~15개`·빈 칸) 또는 재료 키가 빔 | `unknown_amount` | |
   | `unsearched` | `pending` | `search` |
   | `unmatched` | `unmatched` | |
   | `estimate_missing` | AI 추정 가능하면 `pending`, 아니면 `no_estimate` | `food` |
@@ -473,9 +474,9 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
   | 그 밖 | `estimated`(식품이 `estimate`이거나 무게 출처가 `ai`·`sample`) 또는 `ok` | |
 
   AI 추정 가능 = `ai.scan_mode(user) != "off"`. 계산된 줄(`ok`·`estimated`) = 100g당 값 × g ÷ 100, 값 없는 영양소(None)는 0으로 더한다.
-- **레시피(결정 14·15·16·17):** 1인분 = 전체 ÷ `max(servings, 1)`. kcal·나트륨은 정수, 탄수화물·단백질·지방·당류 g는 소수 첫째 자리 반올림. `approx`(약) = `ok`·`trace`가 아닌 줄(추정·못 맞춤·양 모름·무게 모름·계산 중)이 하나라도 있으면. `per_serving`은 `ok`·`estimated`·`trace` 줄이 하나도 없으면 `null`(물·약간뿐이면 0값). `usable` = 계산된 줄 수 × 2 ≥ `trace`를 뺀 줄 수. `missing_count` = `unmatched`·`needs_weight`·`no_estimate`·`unknown_amount`·`pending` 수.
+- **레시피(결정 14·15·16·17):** 1인분 = 전체 ÷ `max(servings, 1)`. kcal·나트륨은 정수, 탄수화물·단백질·지방·당류·줄 `grams`·`unit_grams`는 소수 첫째 자리로 반올림 — 모두 .5는 올림(`floor(x+0.5)`, 화면 `Math.round`와 같게. 식품 찾기 목록 `kcal`은 파이썬 `round`). `approx`(약) = `ok`·`trace`가 아닌 줄(추정·못 맞춤·양 모름·무게 모름·계산 중)이 하나라도 있으면. `per_serving`은 `ok`·`estimated` 줄이 있을 때 합산, 모든 줄이 `trace`면 0값, 그 밖(계산된 줄 없이 `trace`가 아닌 줄이 하나라도 있음)은 `null`. `usable` = 계산된 줄 수 × 2 ≥ `trace`를 뺀 줄 수. `missing_count` = `unmatched`·`needs_weight`·`no_estimate`·`unknown_amount`·`pending` 수.
 - `GET /api/recipes/<id>/nutrition`(로그인 필요, `Cache-Control: no-store`): `nutrition` off → 503 `영양 계산을 지금은 쓸 수 없어요.` / 남의 것·없는 것 404 → 200 `{servings, per_serving: {kcal, carbs_g, protein_g, fat_g, sugars_g, sodium_mg} | null, approx, estimated_count, missing_count, pending, usable, ingredients: [{name, amount, key, status, pending_reason, countable, quantity, unit, grams, unit_grams, unit_grams_source: user|ai|sample|null, food: {food_code, name, group, kcal} | null, estimate_food, kcal_per_serving}]}`. `food`는 `matched`·`auto`일 때만, `estimate_food`는 `estimate`·`estimate_missing`일 때 `true`. `grams`는 계산된 줄만(`trace`는 0), `unit_grams`는 셀 수 있는 단위의 알고 있는 한 단위 무게(상태와 무관).
-- `PUT /api/food-matches {name, food_code, unit?, unit_grams?}`(로그인 필요) → 204. 순서·문구: `nutrition` off 503 / body가 dict 아님 400 `잘못된 요청이에요.` / `name` 1~50자 아님 `재료 이름은 1~50자로 입력해주세요.`, 재료 키가 비면 `잘못된 요청이에요.` / `food_code`가 `null`이 아니면 문자열이고 캐시에 source ≠ `ai`인 행이 있어야 함, 아니면 `식품을 다시 골라주세요.`(`null` = 추정으로 두기) / `unit`이 `null`이 아니면 앞뒤 공백을 뺀 1~10자 셀 수 있는 단위(g·ml·숟가락 단위는 안 됨), 아니면 `잘못된 요청이에요.` / `unit_grams`는 `unit`이 있을 때만 보고 `null`(그 단위 고친 값 지움) 또는 bool 아닌 0.1~5000 숫자(소수 첫째 반올림), 아니면 `무게는 0.1~5000g 사이로 입력해주세요.` / 새 행인데 사용자 행이 2,000개면 `식품은 2000개까지 기억할 수 있어요.`(결정 22) / 재료 하나에 고친 단위가 20개인데 새 단위면 `잘못된 요청이에요.`. `unit` 없이 보내면 고친 무게는 그대로 둔다. 처음 저장이 동시에 두 번 오면 400 `방금 저장했어요. 다시 불러와주세요.`.
+- `PUT /api/food-matches {name, food_code, unit?, unit_grams?}`(로그인 필요) → 204. 순서·문구: `nutrition` off 503 / body가 dict 아님 400 `잘못된 요청이에요.` / `name` 1~50자 아님 `재료 이름은 1~50자로 입력해주세요.`, 재료 키가 비면 `잘못된 요청이에요.` / `food_code` 키가 없으면 `잘못된 요청이에요.`(`null`은 추정으로 두기), `null`이 아니면 문자열이고 캐시에 source ≠ `ai`인 행이 있어야 함, 아니면 `식품을 다시 골라주세요.`(`null` = 추정으로 두기) / `unit`이 `null`이 아니면 앞뒤 공백을 뺀 1~10자 셀 수 있는 단위(g·ml·숟가락 단위는 안 됨), 아니면 `잘못된 요청이에요.` / `unit_grams`는 `unit`이 있을 때만 보고 `null`(그 단위 고친 값 지움) 또는 bool 아닌 0.1~5000 숫자(소수 첫째 반올림), 아니면 `무게는 0.1~5000g 사이로 입력해주세요.` / 새 행인데 사용자 행이 2,000개면 `식품은 2000개까지 기억할 수 있어요.`(결정 22) / 재료 하나에 고친 단위가 20개인데 새 단위면 `잘못된 요청이에요.`. `unit` 없이 보내면 고친 무게는 그대로 둔다. 처음 저장이 동시에 두 번 오면 400 `방금 저장했어요. 다시 불러와주세요.`.
 
 ## 22. 3단계 추가: 양념 비율 계산기 (추가: 2026-09-13)
 - 레시피 탭 안 `양념 비율` 칸(추천 · 내 레시피 · 영상 · 양념 비율). 불고기·제육볶음·간장조림·초고추장·쌈장·갈비 양념 등 기본 양념을 제공하고 사용자가 추가·수정("내 비율").

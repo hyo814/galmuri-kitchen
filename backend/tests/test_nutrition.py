@@ -39,7 +39,10 @@ def test_match_key():
 
 @pytest.mark.parametrize(
     "unit, grams",
-    [("g", 1), ("ml", 1), ("큰술", 15), ("T", 15), ("t", 5), ("Tbsp", 15), ("컵", 200), ("꼬집", 0.5), ("모", None), ("개", None)],
+    [("g", 1), ("ml", 1), ("G", 1), ("ML", 1), ("큰술", 15), ("컵", 200), ("꼬집", 0.5), ("모", None), ("개", None),
+     # Ruling 10: 큰 T로 시작하면 큰술(단 tsp는 대소문자 무관 작은술), 작은 t·ts는 작은술
+     ("T", 15), ("Ts", 15), ("TS", 15), ("Tbs", 15), ("Tbsp", 15), ("tbsp", 15), ("TBSP", 15),
+     ("t", 5), ("ts", 5), ("tsp", 5), ("TSP", 5), ("Tsp", 5)],
 )
 def test_fixed_grams(unit, grams):
     assert fixed_grams(unit) == grams
@@ -64,13 +67,15 @@ def test_fixed_grams(unit, grams):
           "food": {"food_code": "T1", "name": "두부", "group": "원재료성", "kcal": 84}, "estimate_food": False}),
         ({"name": "두부", "amount": "1모"}, res("auto", TOFU, {"모": (300, "ai")}), False,
          {"status": "estimated", "grams": 300.0, "unit_grams_source": "ai"}),
+        ({"name": "두부", "amount": "1모"}, res("auto", TOFU, {"모": (300, "sample")}), False,
+         {"status": "estimated", "grams": 300.0, "unit_grams_source": "sample"}),
         ({"name": "간장", "amount": "2큰술"}, res("matched", SOY), False,
          {"status": "ok", "grams": 30.0, "countable": False, "unit_grams": None, "quantity": 2.0, "unit": "큰술"}),
         ({"name": "김치", "amount": "100g"}, res("estimate", food("ai:김치", "김치", 18, group="추정")), False,
          {"status": "estimated", "food": None, "estimate_food": True, "kcal_per_serving": 18}),
     ],
     ids=["water", "trace-word", "unknown-amount", "unsearched", "unmatched", "estimate-missing-can", "estimate-missing-cannot",
-         "weight-missing-can", "weight-missing-cannot", "user-weight", "ai-weight", "spoon", "estimate"],
+         "weight-missing-can", "weight-missing-cannot", "user-weight", "ai-weight", "sample-weight", "spoon", "estimate"],
 )
 def test_ingredient_row_statuses(item, resolved, can_estimate, expected):
     row = ingredient_row(item, resolved, can_estimate, 1)
@@ -113,6 +118,30 @@ def test_recipe_nutrition_rounding_and_none_nutrients():
                              {"물": res("unsearched", key="물"), "소금": res("unsearched", key="소금")}, True)
     assert trace["per_serving"] == {"kcal": 0, "carbs_g": 0.0, "protein_g": 0.0, "fat_g": 0.0, "sugars_g": 0.0, "sodium_mg": 0}
     assert (trace["approx"], trace["pending"], trace["usable"], trace["missing_count"]) == (False, False, True, 0)
+
+
+def test_recipe_nutrition_trace_with_pending_has_no_per_serving():
+    result = recipe_nutrition([{"name": "물", "amount": "1컵"}, {"name": "양파", "amount": "1개"}], 1,
+                              {"물": res("unsearched", key="물"), "양파": res("unsearched", key="양파")}, True)
+    assert (result["per_serving"], result["pending"], result["usable"]) == (None, True, False)
+
+
+def test_recipe_nutrition_rounds_half_up():
+    beef = food("B1", "소고기", 100, sodium_mg=1)
+    result = recipe_nutrition([{"name": "소고기", "amount": "261g"}, {"name": "소고기", "amount": "0.25g"}], 2,
+                              {"소고기": res("matched", beef, key="소고기")}, True)
+    assert [line["grams"] for line in result["ingredients"]] == [261.0, 0.3]
+    assert result["per_serving"]["kcal"] == 131  # 261.25 / 2 = 130.625
+    assert result["ingredients"][0]["kcal_per_serving"] == 131  # 130.5
+    assert result["per_serving"]["sodium_mg"] == 1  # 2.6125 / 2 = 1.30625
+
+
+def test_recipe_nutrition_empty_key_is_left_out_not_pending():
+    result = recipe_nutrition([{"name": "+", "amount": "1개"}, {"name": "(고명)", "amount": "1개"}, {"name": "소금", "amount": "1g"}], 1,
+                              {"소금": res("matched", food("N1", "소금", 0, sodium_mg=38000), key="소금")}, True)
+    assert [line["status"] for line in result["ingredients"]] == ["unknown_amount", "unknown_amount", "ok"]
+    assert [line["key"] for line in result["ingredients"]] == ["", "", "소금"]
+    assert (result["pending"], result["approx"], result["missing_count"], result["per_serving"]["sodium_mg"]) == (False, True, 2, 380)
 
 
 def row(name, group="원재료성"):
@@ -269,6 +298,7 @@ def test_put_food_match_and_recompute(client, login, app):
         ({"name": "", "food_code": None}, "재료 이름은 1~50자로 입력해주세요."),
         ({"name": "가" * 51, "food_code": None}, "재료 이름은 1~50자로 입력해주세요."),
         ({"name": "()", "food_code": None}, BAD),
+        ({"name": "두부"}, BAD),
         ({"name": "두부", "food_code": "없는코드"}, PICK_AGAIN),
         ({"name": "두부", "food_code": "ai:두부"}, PICK_AGAIN),
         ({"name": "두부", "food_code": 123}, PICK_AGAIN),
@@ -322,6 +352,31 @@ def test_put_food_match_unit_cap(client, login, app):
     res = client.put("/api/food-matches", json={"name": "두부", "food_code": "T1", "unit": "모", "unit_grams": 300})
     assert (res.status_code, res.get_json()) == (400, {"error": BAD})
     assert client.put("/api/food-matches", json={"name": "두부", "food_code": "T1", "unit": "u1", "unit_grams": 300}).status_code == 204
+
+
+def test_context_dedupes_candidates_across_like_batches(app):
+    with app.app_context():
+        me = make_user("1")
+        db.session.add(cached("D1", "대파", group="가공식품"))
+        db.session.commit()
+        names = ["대파", "파"] + [f"라{i:03d}" for i in range(60)]
+        batches = nutrition._chunks(set(names), nutrition.LIKE_CHUNK)
+        assert "대파" in batches[0] and "파" in batches[1]  # '%대파%'·'%파%' 두 쿼리 모두 D1을 돌려준다
+        context = NutritionContext(me, [SimpleNamespace(servings=1, ingredients=[{"name": n, "amount": "10g"} for n in names])])
+        assert len(context.candidates["대파"]) == 1
+        assert context.resolve("대파")["state"] == "auto"
+
+
+def test_context_skips_empty_key(app, monkeypatch):
+    with app.app_context():
+        me = make_user("1")
+        context = NutritionContext(me, [])
+        resolved = []
+        real = context.resolve
+        monkeypatch.setattr(context, "resolve", lambda key: resolved.append(key) or real(key))
+        result = context.recipe(SimpleNamespace(servings=1, ingredients=[{"name": "·", "amount": "1개"}, {"name": "양파", "amount": "1개"}]))
+        assert resolved == ["양파"]
+        assert [line["status"] for line in result["ingredients"]] == ["unknown_amount", "pending"]
 
 
 def test_context_candidate_lookup_batches_and_escapes(app):

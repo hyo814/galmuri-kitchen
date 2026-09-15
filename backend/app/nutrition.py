@@ -18,8 +18,8 @@ from .validation import commit_or_duplicate, text
 
 bp = Blueprint("nutrition", __name__, url_prefix="/api")
 
-SPOON_GRAMS = {"큰술": 15, "숟가락": 15, "스푼": 15, "tbsp": 15, "T": 15,
-               "작은술": 5, "티스푼": 5, "t": 5, "ts": 5, "tsp": 5, "컵": 200, "꼬집": 0.5}  # 22절 계량 기준(결정 5)
+SPOON_GRAMS = {"큰술": 15, "숟가락": 15, "스푼": 15, "tbs": 15, "tbsp": 15,
+               "작은술": 5, "티스푼": 5, "tsp": 5, "컵": 200, "꼬집": 0.5}  # 22절 계량 기준(결정 5). 영문 키는 소문자, t·ts는 fixed_grams가 가른다
 TRACE_WORDS = {"약간", "적당량", "적당히", "조금", "소량", "취향껏"}
 COUNTED = ("ok", "estimated")
 MISSING = ("unmatched", "needs_weight", "no_estimate", "unknown_amount", "pending")
@@ -36,10 +36,14 @@ def match_key(name):
 
 
 def fixed_grams(unit):
-    """g·ml(1ml=1g, ponytail: 기름·꿀은 10~40% 차이)·숟가락 단위 한 단위 g. 셀 수 있는 단위면 None. 'T'(큰술)와 't'(작은술)는 원래 글자로 가른다."""
-    if unit.lower() in ("g", "ml"):
+    """g·ml(1ml=1g, ponytail: 기름·꿀은 10~40% 차이)·숟가락 단위 한 단위 g. 셀 수 있는 단위면 None.
+    Ruling 10: t·ts는 원래 글자로 가른다(T·Ts·TS 큰술 15, t·ts 작은술 5). tbs·tbsp는 대소문자 무관 15, tsp는 대소문자 무관 5."""
+    lower = unit.lower()
+    if lower in ("g", "ml"):
         return 1.0
-    return SPOON_GRAMS.get(unit, SPOON_GRAMS.get(unit.lower()))
+    if lower in ("t", "ts"):
+        return 15 if unit[0] == "T" else 5
+    return SPOON_GRAMS.get(lower)
 
 
 def auto_match(key, rows):
@@ -56,7 +60,15 @@ def auto_match(key, rows):
 
 
 def _round1(value):
-    return round(value, 1)
+    """0 이상 값 소수 첫째 자리 반올림(.5는 올림, 화면 Math.round와 같게)."""
+    return math.floor(value * 10 + 0.5) / 10
+
+
+def _round0(value):
+    return math.floor(value + 0.5)
+
+
+NO_KEY = {"key": "", "state": "unsearched", "food": None, "unit_grams": {}}  # 재료 키가 빈 이름('+'·'(고명)'): 찾지 않는다
 
 
 def ingredient_row(item, resolved, can_estimate, servings):
@@ -75,8 +87,8 @@ def ingredient_row(item, resolved, can_estimate, servings):
 
     if normalize(item["name"]) in ALWAYS_HAVE or normalize(amount) in TRACE_WORDS:
         status, grams, values = "trace", 0.0, dict.fromkeys(NUTRIENTS, 0.0)
-    elif parsed is None:
-        status = "unknown_amount"
+    elif parsed is None or not resolved["key"]:
+        status = "unknown_amount"  # 양을 못 읽었거나 이름으로 식품을 찾을 수 없다(빼고 약)
     elif state == "unsearched":
         status, reason = "pending", "search"
     elif state == "unmatched":
@@ -96,24 +108,26 @@ def ingredient_row(item, resolved, can_estimate, servings):
         "countable": countable, "quantity": quantity, "unit": unit,
         "grams": _round1(grams) if grams is not None else None,
         "unit_grams": _round1(weight) if weight is not None else None, "unit_grams_source": weight_source,
-        "food": {"food_code": food["food_code"], "name": food["name"], "group": food["group"], "kcal": round(food["kcal"])} if shows_food else None,
+        "food": {"food_code": food["food_code"], "name": food["name"], "group": food["group"], "kcal": _round0(food["kcal"])} if shows_food else None,
         "estimate_food": state in ("estimate", "estimate_missing"),
         "values": values,
-        "kcal_per_serving": round(values["kcal"] / servings) if values is not None else None,
+        "kcal_per_serving": _round0(values["kcal"] / servings) if values is not None else None,
     }
 
 
 def recipe_nutrition(ingredients, servings, resolved_by_key, can_estimate):
-    """레시피 1인분(결정 14). 값 없는 영양소는 0으로 더한다. per_serving은 계산된 줄(COUNTED·trace)이 하나도 없으면 None."""
+    """레시피 1인분(결정 14). 값 없는 영양소는 0으로 더한다. per_serving은 COUNTED 줄이 있거나 모든 줄이 trace일 때만(아니면 None).
+    빈 키는 NO_KEY로 계산한다(resolved_by_key에 넣지 않는다)."""
     servings = max(servings or 0, 1)
-    rows = [ingredient_row(item, resolved_by_key[match_key(item["name"])], can_estimate, servings) for item in ingredients]
+    keys = [match_key(item["name"]) for item in ingredients]
+    rows = [ingredient_row(item, resolved_by_key[key] if key else NO_KEY, can_estimate, servings) for item, key in zip(ingredients, keys)]
     statuses = [row["status"] for row in rows]
-    counted = [row for row in rows if row["status"] in COUNTED + ("trace",)]
-    per_serving = None
-    if counted:
-        totals = {n: sum(row["values"][n] for row in counted) / servings for n in NUTRIENTS}
-        per_serving = {n: round(v) if n in ("kcal", "sodium_mg") else _round1(v) for n, v in totals.items()}
     counted_count, trace_count = sum(s in COUNTED for s in statuses), statuses.count("trace")
+    per_serving = None
+    if counted_count or (rows and trace_count == len(rows)):
+        counted = [row for row in rows if row["values"] is not None]
+        totals = {n: sum(row["values"][n] for row in counted) / servings for n in NUTRIENTS}
+        per_serving = {n: _round0(v) if n in ("kcal", "sodium_mg") else _round1(v) for n, v in totals.items()}
     return {
         "servings": servings,
         "per_serving": per_serving,
@@ -154,12 +168,14 @@ class NutritionContext:
             self.foods.update((f.food_code, f) for f in FoodNutrient.query.filter(FoodNutrient.food_code.in_(chunk)))
         # ponytail: '파'처럼 짧은 키는 LIKE가 캐시의 많은 행을 읽는다. 느려지면 name_parts를 따로 저장하는 표로 바꾼다
         like_keys = keys - ALWAYS_HAVE
+        found = {}  # 한 행이 여러 묶음의 LIKE에 걸릴 수 있다('대파'는 '%대파%'·'%파%') — 코드로 한 번만
         for chunk in _chunks(like_keys, LIKE_CHUNK):
             patterns = [FoodNutrient.name.ilike("%" + k.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%", escape="\\")
                         for k in chunk]
-            for row in FoodNutrient.query.filter(FoodNutrient.source != "ai", or_(*patterns)):
-                for part in set(name_parts(row.name)) & like_keys:
-                    self.candidates[part].append(row)
+            found.update((row.food_code, row) for row in FoodNutrient.query.filter(FoodNutrient.source != "ai", or_(*patterns)))
+        for row in found.values():
+            for part in set(name_parts(row.name)) & like_keys:
+                self.candidates[part].append(row)
 
     def resolve(self, key):
         """결정 10·9(개정 1). 사용자 기억 → 자동 맞추기 → 찾아봤으면 AI 추정 → 아직 안 찾아봄."""
@@ -184,7 +200,7 @@ class NutritionContext:
         return {"key": key, "state": state, "food": _food_json(food) if food else None, "unit_grams": unit_grams}
 
     def recipe(self, recipe):
-        resolved = {key: self.resolve(key) for key in {match_key(i["name"]) for i in recipe.ingredients}}
+        resolved = {key: self.resolve(key) for key in {match_key(i["name"]) for i in recipe.ingredients} - {""}}
         return recipe_nutrition(recipe.ingredients, recipe.servings, resolved, self.can_estimate)
 
 
@@ -213,7 +229,9 @@ def put_food_match():
     key = match_key(text(data.get("name"), "재료 이름은", 50))
     if not key:
         abort(400, "잘못된 요청이에요.")
-    food_code = data.get("food_code")
+    if "food_code" not in data:  # null은 추정으로 두기, 빠진 것은 잘못된 요청
+        abort(400, "잘못된 요청이에요.")
+    food_code = data["food_code"]
     if food_code is not None and (
         not isinstance(food_code, str)
         or FoodNutrient.query.filter(FoodNutrient.food_code == food_code, FoodNutrient.source != "ai").first() is None
@@ -229,7 +247,7 @@ def put_food_match():
         if grams is not None:
             if isinstance(grams, bool) or not isinstance(grams, (int, float)) or not math.isfinite(grams) or not 0.1 <= grams <= 5000:
                 abort(400, WEIGHT_ERROR)
-            grams = round(float(grams), 1)
+            grams = _round1(float(grams))
 
     match = FoodMatch.query.filter_by(user_id=g.user.id, ingredient_key=key).first()
     if match is None:
