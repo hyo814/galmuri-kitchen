@@ -5861,3 +5861,83 @@ button.sh-offline svg:last-child {
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
+
+/* 사진 칸·사진만 먼저(Task 10, 시안 3 · ADD, 4 · PHOTO FIRST) */
+.fl-camera {
+  margin-left: auto;
+}
+
+.fl-camera:disabled {
+  opacity: 0.4;
+}
+
+/* .sh-photo는 사진을 둥글게 자르려고 overflow: hidden이라 ✕ 터치 영역(::before)이 그 안에 있으면 잘린다(리뷰 fix round 1).
+   그래서 ✕는 .sh-photo의 형제로 두고, 자르지 않는 이 칸이 위치 기준이 된다 */
+.fl-photo-slot {
+  position: relative;
+}
+
+.fl-photo-x {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: var(--inverse-bg);
+  color: var(--inverse-text);
+}
+
+.fl-photo-x:disabled {
+  opacity: 0.5;
+}
+
+/* 시각 크기는 28px로 두고 터치 영역만 44px로 넓힌다(::before가 실제로 눌리는 자리, .fl-photo-slot 기준이라 안 잘린다) */
+.fl-photo-x::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+}
+
+.sh-photo.add:disabled {
+  opacity: 0.4;
+
+/* 요리 일기 (5) */
+
+/* 5 · Task 12 */
+.ck-reason {
+  display: grid;
+  gap: 8px;
+}
+
+.ck-reason-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--field);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.ck-reason-opt[aria-checked="true"] {
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.ck-reason-opt small {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+}

@@ -269,6 +269,16 @@ def test_demo_ai_global_budget_falls_back_to_sample(demo_app, monkeypatch):
     assert imported.status_code == 200 and imported.get_json()["sample"] is True
 
 
+def test_demo_budget_counts_eat_out_calls(demo_app):
+    c = new_client(demo_app)
+    user_id = c.post("/api/demo-login").get_json()["id"]
+    demo_app.config.update(ANTHROPIC_API_KEY="test-key", DEMO_AI_GLOBAL_DAILY=1)
+    with demo_app.app_context():
+        db.session.add(AiCall(user_id=user_id, demo=True, kind="eat_out", created_at=utcnow()))
+        db.session.commit()
+        assert ai.scan_mode(db.session.get(User, user_id)) == "sample"
+
+
 def test_nutrition_calls_do_not_spend_demo_ai_budget(demo_app):
     c = new_client(demo_app)
     user_id = c.post("/api/demo-login").get_json()["id"]
