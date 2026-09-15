@@ -62,7 +62,7 @@ NAVER_BLOG_PATH = re.compile(r"/([A-Za-z0-9_-]+)/(\d+)/?")
 VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 CHANNELS_URL = "https://www.googleapis.com/youtube/v3/channels"
 PLAYLIST_ITEMS_URL = "https://www.googleapis.com/youtube/v3/playlistItems"
-PLAYLIST_SIZE = 30
+PLAYLIST_SIZE = 50  # playlistItems.list 한 쪽 최대. 30개와 같은 1 unit이라 제목 검색 범위만 넓어진다(2026-09-15 사용자: '제육' 검색이 1개)
 THUMBNAIL_HOSTS = {"i.ytimg.com", "yt3.ggpht.com", "yt3.googleusercontent.com"}
 MAX_CHANNEL_TITLE = 100
 MAX_DESCRIPTION = 500  # 영상 보기 화면 설명 미리보기
@@ -476,7 +476,7 @@ def channel_info(key, *, channel_id=None, handle=None, username=None):
 
 
 def playlist_videos(key, playlist_id):
-    """재생목록 최근 영상 30개(playlistItems.list, 1 unit). 비공개·삭제 영상(공개 날짜 없음)은 뺀다. 재생목록이 없으면 None."""
+    """재생목록 최근 영상 50개(playlistItems.list, 1 unit). 비공개·삭제 영상(공개 날짜 없음)은 뺀다. 재생목록이 없으면 None."""
     params = {"part": "snippet,contentDetails", "playlistId": playlist_id, "maxResults": PLAYLIST_SIZE, "key": key}
     try:
         items = _youtube_items(PLAYLIST_ITEMS_URL, params)

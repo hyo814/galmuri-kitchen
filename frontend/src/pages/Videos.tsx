@@ -15,6 +15,23 @@ export function resetVideoFilter() {
   lastFilter = { channel: null, q: "" };
 }
 
+/** 받아 둔 영상(채널마다 최근 50개) 밖까지 찾게 유튜브 검색 결과를 새 창으로 연다(폰은 유튜브 앱). 쿼터를 쓰지 않는다 */
+function YoutubeSearchLink({ q, more }: { q: string; more: boolean }) {
+  const query = q.includes("레시피") ? q : `${q} 레시피`;
+  return (
+    <a
+      className="btn secondary inline r3-yt-search"
+      href={`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      <Icon name="external" size={16} />
+      {more ? "YouTube에서 더 찾기" : "YouTube에서 찾기"}
+      <span className="sr-only">(새 창에서 열려요)</span>
+    </a>
+  );
+}
+
 /** 레시피 탭 `영상` 칸: 제목 검색 · 채널 칩 · 작은 썸네일 한 줄 목록 (시안 Videos) */
 export default function Videos({ sample }: { sample: boolean }) {
   const [input, setInput] = useState(lastFilter.q);
@@ -150,6 +167,7 @@ export default function Videos({ sample }: { sample: boolean }) {
                 전체 채널에서 찾기
               </button>
             )}
+            {q && channel === null && <YoutubeSearchLink q={q} more={false} />}
           </section>
         )
       ) : (
@@ -177,6 +195,7 @@ export default function Videos({ sample }: { sample: boolean }) {
             ))}
           </ul>
           <InfiniteSentinel onVisible={loadMore} hasMore={hasMore} multiPage={multiPage} loading={loading} error={error} onRetry={loadMore} />
+          {q && settled && <YoutubeSearchLink q={q} more />}
           <p className="r3-credit">YouTube 제공</p>
         </>
       )}
