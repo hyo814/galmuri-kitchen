@@ -42,7 +42,7 @@ def fake_pages(monkeypatch, by_name):
     """fetch_page를 가짜로. 받은 검색어를 순서대로 모은다."""
     asked = []
 
-    def fake(key, name, page):
+    def fake(key, name, page, seconds=None):
         asked.append(name)
         rows = by_name.get(name, [])
         return rows, len(rows)
@@ -340,7 +340,7 @@ def test_deadline_after_search_skips_fallback_and_ai(client, login, app, monkeyp
     monkeypatch.setattr("app.nutrition.time", SimpleNamespace(monotonic=lambda: clock[0]))
     asked = []
 
-    def slow_page(key, name, page):
+    def slow_page(key, name, page, seconds=None):
         asked.append(name)
         clock[0] += 10  # 찾기 한 번에 예산(8초)을 다 썼다
         return [], 0

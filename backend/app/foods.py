@@ -24,6 +24,10 @@ ENDPOINT = "https://apis.data.go.kr/1471000/FoodNtrCpntDbInfo02/getFoodNtrCpntDb
 ROWS_PER_PAGE = 100
 MAX_PAGES = 3  # 1쪽 + 마지막 쪽 + (마지막 쪽이 짧으면) 그 앞쪽. Step 0b 실측: 원재료성 행이 결과 뒤쪽에 몰려 있다(스펙 21절 구현 세부)
 FETCH_SECONDS = 5
+# CLI 미리 받기는 사람이 기다리지 않아 쪽마다 길게 기다린다. 결과가 많은 이름의 마지막 쪽은 한국에서도 5초 가까이 걸린다
+# (2026-09-15 실측: 간장 3,117행 32쪽 4.9초, 운영 싱가포르에서 5초 제한에 걸려 미리 받기가 멈췄다)
+WARM_FETCH_SECONDS = 20
+WARM_STOP_AFTER_FAILURES = 3  # 미리 받기가 연달아 이만큼 실패하면 API가 멈춘 것으로 보고 그만둔다
 REFRESH_AFTER = timedelta(days=30)
 USER_DAILY_FETCHES, DEMO_DAILY_FETCHES, GLOBAL_DAILY_FETCHES = 300, 50, 8000
 FETCH_BURST, FETCH_BURST_SECONDS = 20, 60  # 사용자마다 60초에 20번(식품 고르기 검색을 빨리 고쳐 쓸 때)
@@ -142,18 +146,19 @@ def _total_count(value):
         return 0
 
 
-def fetch_page(key, name, page):
+def fetch_page(key, name, page, seconds=FETCH_SECONDS):
     """(행 dict 목록, totalCount). serviceKey는 Decoding 키를 인코딩하지 않고 주소에 그대로 붙인다(조사 문서: 다시 인코딩하면 403).
-    header.resultCode가 '00'이 아니면 FetchError('ResultCode'). body.items는 목록 또는 {'item': 한 행 또는 목록}.
+    header.resultCode가 '00'이 아니면 FetchError('ResultCode22'처럼 숫자 코드를 붙여, 숫자가 아니면 'ResultCode'). body.items는 목록 또는 {'item': 한 행 또는 목록}.
     응답 모양이 기대와 다르면(header·body가 dict가 아니거나 없음 등) ValueError."""
     body, _ = outbound.fetch_fixed(f"{ENDPOINT}?serviceKey={key}",
                                     params={"FOOD_NM_KR": name, "type": "json", "numOfRows": ROWS_PER_PAGE, "pageNo": page},
-                                    seconds=FETCH_SECONDS)
+                                    seconds=seconds)
     try:
         data = json.loads(body)
         header = data["header"]
-        if header.get("resultCode") != "00":
-            raise outbound.FetchError("ResultCode")
+        code = header.get("resultCode")
+        if code != "00":
+            raise outbound.FetchError("ResultCode" + (code if isinstance(code, str) and code.isdigit() and len(code) <= 3 else ""))
         result_body = data["body"]
         items = result_body.get("items")
         total = result_body.get("totalCount")
@@ -256,6 +261,7 @@ def _search_api(key, user):
     뒤쪽 쪽이 한도·실패로 막히면 이미 받은 행은 그대로 캐시에 넣되 food_searches는 남기지 않아(다음에 다시 찾도록) False."""
     api_key = current_app.config["FOOD_NUTRITION_API_KEY"]
     demo = user is not None and user.provider == "demo"
+    seconds = FETCH_SECONDS if user is not None else WARM_FETCH_SECONDS  # user None = CLI 미리 받기
     fetched = [0]
 
     def fetch(page):
@@ -265,9 +271,9 @@ def _search_api(key, user):
         db.session.add(AiCall(user_id=user.id if user else None, kind=FETCH_KIND, model=None, demo=demo, created_at=utcnow()))
         db.session.commit()
         try:
-            return fetch_page(api_key, key, page)
+            return fetch_page(api_key, key, page, seconds)
         except (outbound.FetchError, ValueError) as e:
-            current_app.logger.warning("food fetch failed: %s", type(e).__name__)  # 이유 이름만(주소·키 없음)
+            current_app.logger.warning("food fetch failed: %s(%s)", type(e).__name__, e)  # 이유 이름만(TooSlow·HTTP503·ResultCode22 …, 주소·키 없음)
             return None
 
     def store(collected, total=None):
@@ -403,18 +409,25 @@ def search_dishes():
 @bp.cli.command("warm-food-nutrients")
 @click.option("--limit", default=300, type=click.IntRange(1, 2000))
 def warm_food_nutrients(limit):
-    """PublicRecipe.ingredient_keys를 모두 세어 많은 순 N개를 search_and_cache(name, None)으로 찾아본다."""
+    """PublicRecipe.ingredient_keys를 모두 세어 많은 순 N개를 search_and_cache(name, None)으로 찾아본다.
+    실패한 이름은 건너뛰고 계속한다(늘 느린 이름 하나가 뒤 이름을 막지 않게). 전체 한도에 걸리거나 WARM_STOP_AFTER_FAILURES번 연달아 실패하면 멈춘다.
+    찾아본 이름은 30일 동안 다시 부르지 않으므로 다시 돌리면 남은 이름만 찾는다."""
     if not current_app.config["FOOD_NUTRITION_API_KEY"]:
         raise click.ClickException("FOOD_NUTRITION_API_KEY가 없어요.")
     counter = Counter()
     for (keys,) in db.session.query(PublicRecipe.ingredient_keys):
         counter.update(key for key in (keys or []) if key)
-    names = [name for name, _ in counter.most_common(limit)]
-    done = 0
+    # 찾을 수 없는 이름(정규화하면 빈 이름·자모뿐)은 요청 없이 늘 False라 실패로 세지 않게 미리 뺀다(리뷰 I1)
+    names = [name for name, _ in counter.most_common() if (key := query_key(name)) and not JAMO_ONLY.fullmatch(key)][:limit]
+    done = failures_in_a_row = 0
     for name in names:
-        if not search_and_cache(name, None):
+        if search_and_cache(name, None):
+            done += 1
+            failures_in_a_row = 0
+            continue
+        failures_in_a_row += 1
+        if not fetch_allowed(None) or failures_in_a_row >= WARM_STOP_AFTER_FAILURES:
             break
-        done += 1
     if done == len(names):
         click.echo(f"식품 이름 {done}개를 찾아봤어요.")
     elif not fetch_allowed(None):

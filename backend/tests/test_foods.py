@@ -611,8 +611,73 @@ def test_warm_cli_reports_failure_message_when_not_limited(make_app, monkeypatch
         db.session.add(PublicRecipe(rcp_seq="1", title="a", ingredient_keys=["두부", "대파", "양파"]))
         db.session.commit()
 
-        results = iter([True, False])  # 두 번째 이름에서 실패(FetchError 등) — 전체 한도는 아직 남아 있다
+        results = iter([True, False, True])  # 두 번째 이름에서 실패(FetchError 등) — 전체 한도는 남아 있어 세 번째 이름으로 넘어간다
         monkeypatch.setattr(foods, "search_and_cache", lambda name, user: next(results))
         result = app.test_cli_runner().invoke(args=["warm-food-nutrients", "--limit", "3"])
         assert result.exit_code == 0
-        assert "식품 이름 1개를 찾아봤어요. 요청이 실패해 2개는 다음에 찾아요." in result.output
+        assert "식품 이름 2개를 찾아봤어요. 요청이 실패해 1개는 다음에 찾아요." in result.output
+
+
+def test_warm_cli_stops_after_failures_in_a_row(make_app, monkeypatch):
+    # 늘 실패하는 이름 하나는 건너뛰지만, 연달아 WARM_STOP_AFTER_FAILURES번 실패하면 API가 멈춘 것으로 보고 그만둔다
+    app = make_app(FOOD_NUTRITION_API_KEY="k")
+    with app.app_context():
+        db.session.add(PublicRecipe(rcp_seq="1", title="a", ingredient_keys=["두부", "대파", "양파", "감자", "당근"]))
+        db.session.commit()
+
+        seen = []
+
+        def always_fail(name, user):
+            seen.append(name)
+            return False
+
+        monkeypatch.setattr(foods, "search_and_cache", always_fail)
+        result = app.test_cli_runner().invoke(args=["warm-food-nutrients", "--limit", "5"])
+        assert result.exit_code == 0
+        assert len(seen) == foods.WARM_STOP_AFTER_FAILURES == 3
+        assert "식품 이름 0개를 찾아봤어요. 요청이 실패해 5개는 다음에 찾아요." in result.output
+
+
+def test_warm_cli_failure_count_resets_after_success_and_skips_unsearchable_names(make_app, monkeypatch):
+    # 성공하면 연달아 실패한 수를 0부터 다시 센다. 자모뿐·빈 이름은 요청 없이 늘 False라 목록에서 미리 빼 실패로 세지 않는다
+    app = make_app(FOOD_NUTRITION_API_KEY="k")
+    with app.app_context():
+        names = ["가지", "감자", "고추", "김치", "당근", "대파", "두부"]
+        db.session.add_all([
+            PublicRecipe(rcp_seq="1", title="a", ingredient_keys=["ㄷ", "ㅁ", "ㅂ", "()"]),  # 가장 많이 나오지만 찾을 수 없는 이름
+            PublicRecipe(rcp_seq="2", title="b", ingredient_keys=["ㄷ", "ㅁ", "ㅂ", "()"]),
+            *[PublicRecipe(rcp_seq=f"n{i}", title=name, ingredient_keys=[name]) for i, name in enumerate(names)],
+        ])
+        db.session.commit()
+
+        seen = []
+        results = iter([False, False, True, False, False, False, True])
+
+        def fake_search(name, user):
+            seen.append(name)
+            return next(results)
+
+        monkeypatch.setattr(foods, "search_and_cache", fake_search)
+        result = app.test_cli_runner().invoke(args=["warm-food-nutrients", "--limit", "7"])
+        assert result.exit_code == 0
+        assert seen == names[:6]  # 3번째 실패 묶음(4·5·6번째)에서 멈춰 7번째는 부르지 않는다
+        assert "식품 이름 1개를 찾아봤어요. 요청이 실패해 6개는 다음에 찾아요." in result.output
+
+
+def test_cli_search_waits_longer_than_user_search_and_logs_reason(make_app, monkeypatch, caplog):
+    # 사람이 기다리는 검색은 5초, CLI 미리 받기(user None)는 쪽마다 20초. 실패 로그에 이유 이름(주소·키 없음)을 남긴다
+    app = make_app(FOOD_NUTRITION_API_KEY="secret-key")
+    with app.app_context():
+        user = make_user()
+        fetch, calls = make_fetch([page([item("F1", "두부")], 1), page([item("F2", "대파")], 1), outbound.FetchError("TooSlow"), page([], 0, code="22")])
+        monkeypatch.setattr(outbound, "fetch_fixed", fetch)
+        assert foods.search_and_cache("두부", user) is True
+        assert foods.search_and_cache("대파", None) is True
+        assert [c["seconds"] for c in calls] == [foods.FETCH_SECONDS, foods.WARM_FETCH_SECONDS] == [5, 20]
+
+        with caplog.at_level("WARNING"):
+            assert foods.search_and_cache("양파", None) is False
+            assert foods.search_and_cache("감자", None) is False
+        assert "food fetch failed: FetchError(TooSlow)" in caplog.text
+        assert "food fetch failed: FetchError(ResultCode22)" in caplog.text
+        assert "secret-key" not in caplog.text

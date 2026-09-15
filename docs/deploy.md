@@ -96,7 +96,7 @@
 저장소 루트의 `render.yaml`이 웹(`0.5c-512mb`, 잠들지 않음)·Postgres(`0.1c-256mb`, 만료 없음)·체험 계정 지우기 Cron을 Singapore에 만든다.
 1. https://dashboard.render.com → New → **Blueprint** → GitHub 저장소 선택
 2. 입력 칸이 뜨는 키(`ANTHROPIC_API_KEY`·`YOUTUBE_API_KEY`·`FOODSAFETY_API_KEY`·`FOOD_NUTRITION_API_KEY`·`COUPANG_ACCESS_KEY`·`COUPANG_SECRET_KEY`·`COUPANG_PARTNERS_ID`·`R2_*`)를 채운다. R2 네 값은 웹과 Cron에 두 번 넣는다. `SECRET_KEY`는 자동 생성돼 둘이 같이 쓴다.
-3. 배포가 끝나면 웹 서비스 → **Shell**에서 한 번 `flask --app app sync-public-recipes`, 그다음 `flask --app app warm-food-nutrients --limit 100`(공공 레시피에 많이 나오는 재료 100개를 식품 DB에서 미리 찾아 둔다). 100개로 시작해 레시피 상세 영양이 뜨는 시간을 재 보고 괜찮으면 `--limit`을 올려 다시 돌린다(캐시 행이 늘수록 영양 계산의 이름 찾기가 느려진다)
+3. 배포가 끝나면 웹 서비스 → **Shell**에서 한 번 `flask --app app sync-public-recipes`, 그다음 `flask --app app warm-food-nutrients --limit 100`(공공 레시피에 많이 나오는 재료 100개를 식품 DB에서 미리 찾아 둔다). 100개로 시작해 레시피 상세 영양이 뜨는 시간을 재 보고 괜찮으면 `--limit`을 올려 다시 돌린다(캐시 행이 늘수록 영양 계산의 이름 찾기가 느려진다). `요청이 실패해 N개는 다음에 찾아요.`가 나오면 같은 명령을 다시 돌린다(찾아본 이름은 30일 동안 건너뛰어 남은 이름만 찾는다). Logs의 `food fetch failed: …(…)` 괄호 안이 이유다(`FetchError(TooSlow)` 시간 초과, `FetchError(HTTP503)` 서버 오류, `FetchError(ResultCode…)` API가 준 결과 코드, `ValueError(JSONDecodeError)` JSON이 아닌 응답 — 키·하루 한도 오류가 XML로 오면 이렇게 보인다)
 4. 주소가 나오면 4번 카카오 로그인을 등록하고 `KAKAO_CLIENT_ID`/`KAKAO_CLIENT_SECRET`를 웹 서비스 Environment에 추가한다.
 5. 5-3의 5번(IP 한도 확인)을 한 번 한다.
 
