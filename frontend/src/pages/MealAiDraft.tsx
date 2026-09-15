@@ -378,7 +378,7 @@ function Review({ plan, today, store, regenerateError, onChange, onRegenerate, o
       {draft.sample && (
         <p className="rc-sample">
           <Icon name="info" size={16} />
-          예시 초안이에요
+          오늘 체험용 AI를 다 써서 예시 식단을 보여줘요. 로그인하면 실제로 짜줘요.
         </p>
       )}
       <p className="r3-note">

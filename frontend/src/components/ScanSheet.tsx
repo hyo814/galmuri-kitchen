@@ -312,7 +312,7 @@ export default function ScanSheet({ mode, limit, locations, onAdded, onManual, o
             <p className="hint scan-quota">
               <Icon name="info" size={16} />
               {mode === "sample"
-                ? "지금은 사진을 실제로 읽지 않고 예시 재료를 보여줘요"
+                ? "오늘 체험용 AI를 다 써서 사진을 읽지 않고 예시 재료를 보여줘요. 로그인하면 실제로 읽어줘요"
                 : `하루 ${limit}번까지 쓸 수 있어요 · 인식에 실패해도 1번으로 세요`}
             </p>
           </>
@@ -369,7 +369,7 @@ export default function ScanSheet({ mode, limit, locations, onAdded, onManual, o
             <p className="hint scan-quota">
               <Icon name="info" size={16} />
               {mode === "sample"
-                ? "지금은 사진을 실제로 읽지 않고 예시 재료를 보여줘요"
+                ? "오늘 체험용 AI를 다 써서 사진을 읽지 않고 예시 재료를 보여줘요. 로그인하면 실제로 읽어줘요"
                 : `여러 장이어도 오늘 남은 횟수는 1번만 줄어요${remainingText(usage, "scan")}`}
             </p>
             <div className="actions">

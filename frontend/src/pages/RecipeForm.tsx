@@ -228,7 +228,9 @@ function RecipeEditor({ initial, draft = null }: { initial: MyRecipe | null; dra
           <div>
             <h1>가져온 레시피 확인</h1>
             <p className="summary">
-              AI가 정리했어요. 틀린 곳을 고친 뒤 저장해주세요{draft.sample && " · 예시 초안이에요"}
+              {draft.sample
+                ? "오늘 체험용 AI를 다 써서 예시 초안을 보여줘요. 로그인하면 실제로 정리해줘요"
+                : "AI가 정리했어요. 틀린 곳을 고친 뒤 저장해주세요"}
             </p>
           </div>
         ) : (

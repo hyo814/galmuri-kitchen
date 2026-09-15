@@ -156,7 +156,7 @@ function Review({ result, sourceLabel, listed, today, onDone }: Pick<Props, "sou
       {result.sample && (
         <span className="badge info scan-sample">
           <Icon name="info" size={16} />
-          예시 결과예요 · 사진을 읽지 않았어요
+          오늘 체험용 AI를 다 써서 사진을 읽지 않고 예시를 보여줘요. 로그인하면 실제로 읽어줘요.
         </span>
       )}
 

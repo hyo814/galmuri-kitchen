@@ -337,7 +337,7 @@ def test_normal_user_limits_unchanged(client, login, app):
     assert client.get("/api/me").get_json()["recipe_limit"] == app.config["AI_DAILY_RECIPE_LIMIT"]
 
 
-TOO_MANY = (429, {"error": "체험하기를 너무 많이 눌렀어요. 잠시 후 다시 시도해주세요."})
+TOO_MANY = (429, {"error": "지금 같은 인터넷으로 체험하는 분이 많아요. 잠시 뒤 다시 누르거나 카카오·네이버로 로그인해주세요."})
 
 
 def age_demo_users(app, **delta):
