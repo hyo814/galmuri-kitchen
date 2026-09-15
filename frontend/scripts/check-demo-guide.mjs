@@ -13,17 +13,22 @@ assert.equal(withRo("두부"), "두부로");
 assert.equal(withRo("돼지고기 앞다리살"), "돼지고기 앞다리살로"); // ㄹ받침은 로
 assert.equal(withRo("떡국"), "떡국으로");
 assert.equal(withRo("SPAM"), "SPAM(으)로");
+assert.equal(withRo("두부 "), "두부로"); // 공백은 뗀다
 
 assert.equal(guideText(demo).join(""), "냉장고를 미리 채워뒀어요. 그런데 두부가 내일까지예요! 두부로 뭘 만들 수 있을지 같이 볼까요?");
 assert.equal(guideText(demo)[1], "두부가 내일까지예요!");
 assert.equal(guideText([item("양상추", 0)])[1], "양상추가 오늘까지예요!");
+assert.equal(guideText([item(" 두부 ", 1)]).join(""), "냉장고를 미리 채워뒀어요. 그런데 두부가 내일까지예요! 두부로 뭘 만들 수 있을지 같이 볼까요?");
+assert.equal(guideText([item("SPAM", 2)])[1], "SPAM(이)가 2일 남았어요!");
 assert.equal(guideText([item("당근", 3)]).join(""), "냉장고를 미리 채워뒀어요. 그런데 당근이 3일 남았어요! 당근으로 뭘 만들 수 있을지 같이 볼까요?");
 assert.deepEqual(guideText([item("우유", 6, "ok")]), ["냉장고를 미리 채워뒀어요. 곧 먹어야 할 재료로 뭘 만들 수 있을지 같이 볼까요?", "", ""]);
 
-assert.equal(spotlightTip(["두부", "대파"], 5), "여기를 눌러보세요. 두부랑 대파부터 쓰는 요리 3가지를 바로 만들어줘요. 체험은 하루 5번까지 돼요.");
-assert.match(spotlightTip(["김치", "두부", "대파"], 5), /^여기를 눌러보세요\. 김치랑 두부부터 쓰는/); // 앞 두 개만
-assert.match(spotlightTip(["당근", "대파"], 5), / 당근이랑 대파부터 쓰는 /); // 받침 있으면 이랑
-assert.equal(spotlightTip(["두부"], 3), "여기를 눌러보세요. 두부부터 쓰는 요리 3가지를 바로 만들어줘요. 체험은 하루 3번까지 돼요.");
-assert.equal(spotlightTip([], 5), "여기를 눌러보세요. 곧 먹어야 할 재료부터 쓰는 요리 3가지를 바로 만들어줘요. 체험은 하루 5번까지 돼요.");
+assert.equal(spotlightTip(["두부", "대파"]), "여기를 눌러보세요. 두부랑 대파로 만들 요리를 바로 골라줘요.");
+assert.equal(spotlightTip(["김치", "두부", "대파"]), "여기를 눌러보세요. 김치랑 두부로 만들 요리를 바로 골라줘요."); // 앞 두 개만
+assert.equal(spotlightTip(["당근", "떡국"]), "여기를 눌러보세요. 당근이랑 떡국으로 만들 요리를 바로 골라줘요."); // 로는 마지막 이름을 따른다
+assert.equal(spotlightTip(["두부", "돼지고기 앞다리살"]), "여기를 눌러보세요. 두부랑 돼지고기 앞다리살로 만들 요리를 바로 골라줘요.");
+assert.equal(spotlightTip(["SPAM", "대파"]), "여기를 눌러보세요. SPAM(이)랑 대파로 만들 요리를 바로 골라줘요."); // 한글이 아니면 (이)랑
+assert.equal(spotlightTip(["두부 "]), "여기를 눌러보세요. 두부로 만들 요리를 바로 골라줘요.");
+assert.equal(spotlightTip([]), "여기를 눌러보세요. 곧 먹어야 할 재료로 만들 요리를 바로 골라줘요.");
 
 console.log("check-demo-guide: ok");

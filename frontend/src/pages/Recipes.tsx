@@ -29,6 +29,7 @@ let lastPublicQuery = ""; // 식약처 레시피 검색어도 같은 이유로 �
 export function resetRecipesSegment() {
   lastSegment = "recommend";
   lastPublicQuery = "";
+  pendingSpotlight = null;
   resetVideoFilter();
 }
 
@@ -154,13 +155,13 @@ function useRecommendations() {
   return { meta, ...list };
 }
 
-/** 추천 칸 맨 위 한 줄 카드: 지금 재고로 AI 레시피 3개 만들기. spotlight가 있으면 테두리와 말풍선으로 짚는다(체험 안내) */
-function AiEntry({ spotlight }: { spotlight: string | null }) {
+/** 추천 칸 맨 위 한 줄 카드: 지금 재고로 AI 레시피 3개 만들기. tip이 있으면 테두리와 말풍선으로 짚고, 닫히면 onTipDone(체험 안내) */
+function AiEntry({ tip, onTipDone }: { tip: string | null; onTipDone: () => void }) {
   const { data: usage } = useResource<AiUsage>("/api/ai-usage");
   const usedUp = !!usage && usage.recipe.used >= usage.recipe.limit;
   const status = useAiStatus();
-  const [tip, setTip] = useState(spotlight);
   const cardRef = useRef<HTMLElement>(null);
+  const tipRef = useRef<HTMLParagraphElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   // 짚을 때: 카드를 보이게 하고 버튼에 포커스(말풍선은 aria-describedby로 읽힌다). 다른 곳을 누르거나 Esc, 카드가 화면 밖으로 나가면 사라진다
@@ -169,9 +170,10 @@ function AiEntry({ spotlight }: { spotlight: string | null }) {
     if (!tip || !card) return;
     card.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     buttonRef.current?.focus({ preventScroll: true });
-    const close = () => setTip(null);
+    const close = onTipDone;
     const onPointer = (e: PointerEvent) => {
-      if (!card.contains(e.target as Node)) close();
+      const target = e.target as Node;
+      if (!card.contains(target) && !tipRef.current?.contains(target)) close(); // 말풍선을 눌러도 닫지 않는다
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") close();
@@ -189,11 +191,11 @@ function AiEntry({ spotlight }: { spotlight: string | null }) {
       document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
     };
-  }, [tip]);
+  }, [tip, onTipDone]);
 
   // 이미 만든 결과·만드는 중이면 새로 부르지 않고 그 화면을 연다(횟수를 아낀다. 새로 만들기는 `다시 만들기`)
   const open = () => {
-    setTip(null);
+    if (tip) onTipDone();
     if (!status || (status === "error" && !usedUp)) startAiRecipes();
     navigate("/recipes/ai");
   };
@@ -221,7 +223,7 @@ function AiEntry({ spotlight }: { spotlight: string | null }) {
         </button>
       </section>
       {tip && (
-        <p className="r3-ai-tip" id="ai-entry-tip">
+        <p ref={tipRef} className="r3-ai-tip" id="ai-entry-tip">
           {tip}
         </p>
       )}
@@ -283,7 +285,7 @@ function PublicSearchResults({ q }: { q: string }) {
   );
 }
 
-function RecommendList({ onShowMine, showAi, spotlight }: { onShowMine: () => void; showAi: boolean; spotlight: string | null }) {
+function RecommendList({ onShowMine, showAi, spotlight, onSpotlightDone }: { onShowMine: () => void; showAi: boolean; spotlight: string | null; onSpotlightDone: () => void }) {
   const { meta, items, loading, error, hasMore, multiPage, loadMore, reload } = useRecommendations();
   const [input, setInput] = useState(lastPublicQuery);
   const [q, setQ] = useState(lastPublicQuery);
@@ -299,7 +301,7 @@ function RecommendList({ onShowMine, showAi, spotlight }: { onShowMine: () => vo
     lastPublicQuery = q;
   }, [q]);
   // 재고 수를 알기 전에는 그리지 않고, 재고가 비었으면 숨긴다(만들 재료가 없다. 깜빡임 방지)
-  const ai = showAi && meta !== undefined && meta.inventoryCount > 0 && <AiEntry spotlight={spotlight} />;
+  const ai = showAi && meta !== undefined && meta.inventoryCount > 0 && <AiEntry tip={spotlight} onTipDone={onSpotlightDone} />;
 
   // C-L2: 첫 페이지가 실패하면(메타가 없음) 다시 불러오기 버튼을 보여 준다
   if (!meta)
@@ -524,14 +526,17 @@ export default function Recipes({ user }: { user: User }) {
   // 영상을 쓸 수 없으면(운영에서 키 없음) 영상 칸을 숨긴다
   const segments = user.videos === "off" ? SEGMENTS.filter(([key]) => key !== "video") : SEGMENTS;
   const [segment, setSegment] = useState<Segment>(segments.some(([key]) => key === lastSegment) ? lastSegment : "recommend");
-  // 체험 안내에서 왔으면 AI 카드 말풍선(한 번만 — 다음에 열 때는 없다). AI 카드가 안 보이는 모드면 그냥 지나간다
-  const [spotlight] = useState(() => pendingSpotlight && spotlightTip(pendingSpotlight, user.recipe_limit));
+  // 체험 안내에서 왔으면 AI 카드 말풍선. 한 번만: 닫히거나 카드를 누르거나 다른 칸으로 가면 없앤다(추천으로 돌아와도 다시 짚지 않게).
+  // AI 카드가 안 보이는 모드면 그냥 지나간다
+  const [spotlight, setSpotlight] = useState(() => pendingSpotlight && spotlightTip(pendingSpotlight));
+  const spotlightDone = useCallback(() => setSpotlight(null), []);
   useEffect(() => {
     pendingSpotlight = null;
   }, []);
   const choose = useCallback((next: Segment) => {
     lastSegment = next;
     setSegment(next);
+    setSpotlight(null);
   }, []);
 
   return (
@@ -546,7 +551,7 @@ export default function Recipes({ user }: { user: User }) {
           </button>
         ))}
       </div>
-      {segment === "recommend" && <RecommendList onShowMine={() => choose("mine")} showAi={user.scan !== "off"} spotlight={spotlight} />}
+      {segment === "recommend" && <RecommendList onShowMine={() => choose("mine")} showAi={user.scan !== "off"} spotlight={spotlight} onSpotlightDone={spotlightDone} />}
       {segment === "mine" && <MyRecipeList canImport={user.scan !== "off"} />}
       {segment === "video" && <Videos sample={user.videos === "sample"} />}
       {segment === "seasoning" && <Seasonings />}
