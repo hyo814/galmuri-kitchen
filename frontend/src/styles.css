@@ -6494,3 +6494,117 @@ body:has(.ck-toast:not(:empty)) .page::after {
 .ck-row:has(> .ck-starpick) > b {
   line-height: 44px;
 }
+
+/* 5 · Task 11 */
+/* 집밥 리포트(시안 5) — 달 이동 제목은 페이지 h1 */
+.fl-mnav h1 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+}
+
+.ck-report .nt-card p {
+  margin: 0;
+}
+
+/* 시안 .muted 크기(13px) — 큰 숫자 위 글자·지난달 대비·버린 재료 안내 */
+.ck-report .nt-card .muted {
+  font-size: 13px;
+  line-height: 19px;
+  word-break: keep-all;
+}
+
+/* 카드 제목(많이 아낀 요리·버린 재료) */
+.ck-report .nt-card > b:first-child {
+  font-size: 15px;
+}
+
+.ck-hero-card {
+  gap: 4px;
+}
+
+/* 합계 묶음(4px)과 안내 사이는 카드 기본 간격만큼 — `.ck-report .nt-card p`보다 뒤·같은 무게라 이긴다 */
+.ck-hero-card p.nt-src {
+  margin-top: 6px;
+}
+
+.ck-hero-big {
+  font-size: 34px;
+  line-height: 42px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--accent-strong);
+}
+
+.ck-hero-sub {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ck-hero-empty {
+  font-size: 20px;
+  line-height: 28px;
+}
+
+.ck-stats4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* 음수 합계·버린 재료 수 */
+.ck-warn {
+  color: var(--warn);
+}
+
+/* 줄마다 같은 칸(subgrid) — 금액이 64px보다 길어도 모든 막대 폭이 같은 기준으로 줄어든다 */
+.ck-bars {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) minmax(64px, auto);
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ck-bar {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ck-bar > span:first-child {
+  overflow-wrap: anywhere;
+}
+
+.ck-bar > span:last-child {
+  justify-self: end;
+  white-space: nowrap;
+  color: var(--text-2);
+}
+
+.ck-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 요리 일기 목록 위 이번 달 카드를 리포트로 가는 버튼으로(R11-5) */
+button.ck-month {
+  width: calc(100% - 40px);
+  border: 0;
+  text-align: left;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.ck-month .muted {
+  font-size: 13px;
+  line-height: 19px;
+}
