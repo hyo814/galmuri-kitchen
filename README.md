@@ -217,7 +217,10 @@ macOS 기준이며, 명령은 저장소 루트에서 시작합니다.
 ```
 backend/.venv/bin/pytest -q -W error::DeprecationWarning   # 백엔드 1,475개
 cd frontend && npm run check && npm run build              # 순수 로직 검사 스크립트 9개 + 타입 검사·빌드(빌드 전에 styles.css 괄호 짝 검사)
+cd frontend && npm run e2e                                 # 화면 단위 테스트(Playwright) 45개 — 처음 한 번 npx playwright install chromium
 ```
+
+E2E는 빌드한 화면을 Flask가 전용 포트(5320)·빈 SQLite로 내어 주고, 테스트마다 새 체험 계정으로 탭 5개의 핵심 흐름(오프라인 장보기 동기화 포함)을 돌립니다. 실제 API 키는 읽지 않아 AI·유튜브는 예시 결과로 돕니다(`frontend/playwright.config.ts`).
 
 PostgreSQL 검증, 마이그레이션 점검, Docker 스모크 테스트, Render 배포 절차는 [`docs/deploy.md`](docs/deploy.md)에 있습니다.
 
@@ -261,6 +264,7 @@ AI 호출 원가가 가장 큰 비용이라, 원가를 먼저 재고 그 위에 
 ```
 backend/app/        Flask 앱 (재고, 레시피, AI, 장보기, 영상, 체험 계정, 내보내기)
 backend/tests/      pytest
+frontend/e2e/       Playwright 화면 단위 테스트
 frontend/src/       React 화면 (pages, components, shopping 오프라인 로직)
 frontend/public/    PWA manifest, 서비스 워커, 아이콘
 docs/superpowers/   설계 문서와 단계별 구현 계획
