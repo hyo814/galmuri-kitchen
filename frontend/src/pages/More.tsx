@@ -198,6 +198,10 @@ function ExportSheet({ onClose }: { onClose: () => void }) {
           <span>장보기 메모</span>
           <b>{count(data?.memos)}</b>
         </li>
+        <li>
+          <span>식단</span>
+          <b>{data?.meals === undefined ? "…" : `${data.meals}칸`}</b>
+        </li>
       </ul>
       <p className="mo-note">
         <Icon name="info" size={16} />

@@ -1,4 +1,4 @@
-"""데이터 내보내기(스펙 27절): 재고·내 레시피·내 양념 비율·장보기를 CSV로 묶은 zip. 하루(서울) 5번까지."""
+"""데이터 내보내기(스펙 27절): 재고·내 레시피·내 양념 비율·장보기·식단을 CSV로 묶은 zip. 하루(서울) 5번까지."""
 
 import csv
 import io
@@ -9,13 +9,14 @@ import zlib
 from datetime import timedelta, timezone
 
 from flask import Blueprint, abort, g, jsonify, request, send_file
-from sqlalchemy import or_, text
+from sqlalchemy import case, or_, text
 from sqlalchemy.orm import joinedload, selectinload
 
 from . import scan
 from .auth import login_required
 from .ingredients import SEOUL, seoul_today
-from .models import AiCall, Ingredient, Recipe, Seasoning, ShoppingItem, ShoppingNote, db
+from .meals import MEALS
+from .models import AiCall, Ingredient, MealPlan, MealSlot, Recipe, Seasoning, ShoppingItem, ShoppingNote, db
 from .shopping import STOCKED_KEEP_DAYS
 
 bp = Blueprint("export", __name__, url_prefix="/api/export")
@@ -42,6 +43,7 @@ SHOPPING_SOURCE_LABELS = {  # 화면 sync.ts의 sourceTag와 같게(직접 담�
     "meal_plan": "식단",
     "memo": "메모 사진",
 }
+MEAL_LABELS = {"breakfast": "아침", "lunch": "점심", "dinner": "저녁", "snack": "간식"}
 SPOOL_BYTES = 5_000_000  # 이보다 크면 메모리 대신 임시 파일에 zip을 만든다
 BATCH = 200
 
@@ -59,6 +61,17 @@ def shopping_rows():
     """shopping.csv에 담는 장보기 항목: 목록 + 7일 안에 산 것(요약 개수와 같게)."""
     cutoff = scan.utcnow() - timedelta(days=STOCKED_KEEP_DAYS)
     return owned(ShoppingItem).filter(or_(ShoppingItem.stocked_at.is_(None), ShoppingItem.stocked_at >= cutoff))
+
+
+def meal_rows():
+    """meals.csv에 담는 식단 칸: 내 식단의 채운 칸 전부(식단 이름과 함께), 식단 시작일 → 날짜 → 끼니 순."""
+    meal_order = case(*[(MealSlot.meal == meal, index) for index, meal in enumerate(MEALS)], else_=len(MEALS))
+    return (
+        db.session.query(MealSlot, MealPlan.name)
+        .join(MealPlan, MealSlot.plan_id == MealPlan.id)
+        .filter(MealPlan.user_id == g.user.id)
+        .order_by(MealPlan.start_on, MealPlan.id, MealSlot.date, meal_order)
+    )
 
 
 @bp.before_request
@@ -105,6 +118,7 @@ def summary():
         seasonings=owned(Seasoning).count(),
         shopping=shopping_rows().count(),
         memos=owned(ShoppingNote).count(),
+        meals=meal_rows().count(),
         limit=DAILY_LIMIT,
         remaining=remaining(),
     )
@@ -145,6 +159,7 @@ def export():
         .order_by(ShoppingNote.updated_at.desc(), ShoppingNote.id.desc())
         .yield_per(BATCH)
     )
+    meals = meal_rows().yield_per(BATCH)
     spool = tempfile.SpooledTemporaryFile(max_size=SPOOL_BYTES)
     with zipfile.ZipFile(spool, "w", zipfile.ZIP_DEFLATED) as archive:
         write_csv(
@@ -223,6 +238,23 @@ def export():
                     seoul_time(n.updated_at),
                 ]
                 for n in shopping_notes
+            ),
+        )
+        write_csv(
+            archive,
+            "meals.csv",
+            ["식단 이름", "날짜", "끼니", "요리", "인분", "레시피에서", "1인분 추정 kcal"],
+            (
+                [
+                    plan_name,
+                    slot.date,
+                    MEAL_LABELS.get(slot.meal, slot.meal),
+                    slot.title,
+                    slot.servings,
+                    "예" if slot.recipe_id is not None else "아니요",
+                    "" if slot.est_kcal is None else slot.est_kcal,
+                ]
+                for slot, plan_name in meals
             ),
         )
     spool.seek(0)
