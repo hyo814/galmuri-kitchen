@@ -11,6 +11,7 @@ import More from "./pages/More";
 import RecipeAi, { RecipeAiDetail, resetAiRecipes } from "./pages/RecipeAi";
 import RecipeDetail from "./pages/RecipeDetail";
 import RecipeForm, { resetRecipeDraft } from "./pages/RecipeForm";
+import { resetRecipeNutrition } from "./components/RecipeNutrition";
 import Shopping from "./pages/Shopping";
 import ShoppingStock from "./pages/ShoppingStock";
 import SeasoningCalc from "./pages/SeasoningCalc";
@@ -35,9 +36,9 @@ const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
   "/": ({ user }) => <Fridge user={user} />,
   "/recipes": ({ user }) => <Recipes user={user} />,
   "/recipes/new": () => <RecipeForm />,
-  "/recipes/mine/:id": ({ route }) => <RecipeDetail kind="mine" id={route.params.id} />,
+  "/recipes/mine/:id": ({ route, user }) => <RecipeDetail kind="mine" id={route.params.id} user={user} />,
   "/recipes/mine/:id/edit": ({ route }) => <RecipeForm id={route.params.id} />,
-  "/recipes/public/:id": ({ route }) => <RecipeDetail kind="public" id={route.params.id} />,
+  "/recipes/public/:id": ({ route, user }) => <RecipeDetail kind="public" id={route.params.id} user={user} />,
   "/recipes/ai": () => <RecipeAi />,
   "/recipes/ai/:n": ({ route }) => <RecipeAiDetail index={Number(route.params.n)} />,
   "/recipes/videos/:id": ({ route, user }) => <VideoPlayer id={route.params.id} user={user} />,
@@ -146,6 +147,7 @@ export default function App() {
     resetAiRecipes();
     resetRecipeDraft();
     resetMealsView();
+    resetRecipeNutrition();
     scrollTops.clear();
     setUser(null);
   }, []);

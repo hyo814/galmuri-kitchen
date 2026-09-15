@@ -506,3 +506,46 @@ export interface BodyProfile {
 export interface BodyProfileResponse {
   profile: BodyProfile | null;
 }
+
+// ---- 레시피 1인분 영양·식품 고르기(스펙 21절, 4b-2 Task 3·8) ----
+export type NutritionStatus = "ok" | "estimated" | "trace" | "unmatched" | "needs_weight" | "no_estimate" | "unknown_amount" | "pending";
+
+export interface NutritionIngredient {
+  name: string;
+  amount: string;
+  key: string;
+  status: NutritionStatus;
+  pending_reason: "search" | "weight" | "food" | null;
+  countable: boolean;
+  quantity: number | null;
+  unit: string | null;
+  grams: number | null;
+  unit_grams: number | null;
+  unit_grams_source: "user" | "ai" | "sample" | null;
+  food: { food_code: string; name: string; group: string; kcal: number } | null;
+  estimate_food: boolean;
+  kcal_per_serving: number | null;
+}
+
+export interface RecipeNutrition {
+  servings: number;
+  per_serving: Nutrients | null;
+  approx: boolean;
+  estimated_count: number;
+  missing_count: number;
+  pending: boolean;
+  usable: boolean;
+  ingredients: NutritionIngredient[];
+}
+
+export interface FoodSearchItem {
+  food_code: string;
+  name: string;
+  group: string;
+  kcal: number;
+}
+
+export interface FoodSearchResult {
+  items: FoodSearchItem[];
+  searched: boolean;
+}
