@@ -29,12 +29,17 @@ CHOICES_MAX = 50
 CHOICES_QUERY_MAX = 50
 
 
-def inventory(user_id):
-    """[(재고 이름, 빨리 먹어야 하는지)] — 빨리 먹어야 할 재료(urgent·danger)가 앞. 요청마다 한 번 만든다."""
+def inventory_rows(user_id):
+    """[(Ingredient 행, 빨리 먹어야 하는지)] — 빨리 먹어야 할 재료(urgent·danger)가 앞, 그 안은 id 순. 추천(inventory)과 요리했어요 초안이 같이 쓴다."""
     today, rules, seasonings = seoul_today(), user_rules(user_id), seasoning_names(user_id)
     items = Ingredient.query.options(joinedload(Ingredient.location)).filter_by(user_id=user_id).order_by(Ingredient.id).all()
-    stock = [(i.name, status_of(i, today, rules, seasonings) in ("urgent", "danger")) for i in items]
-    return sorted(stock, key=lambda row: not row[1])
+    rows = [(i, status_of(i, today, rules, seasonings) in ("urgent", "danger")) for i in items]
+    return sorted(rows, key=lambda row: not row[1])
+
+
+def inventory(user_id):
+    """[(재고 이름, 빨리 먹어야 하는지)] — inventory_rows 순서 그대로. 요청마다 한 번 만든다."""
+    return [(item.name, urgent) for item, urgent in inventory_rows(user_id)]
 
 
 def annotate(ingredients, keys, stock):

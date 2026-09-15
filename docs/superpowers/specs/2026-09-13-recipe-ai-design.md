@@ -125,6 +125,7 @@ recipe-ai/
 | POST | `/api/shopping/items/mark-stocked` | 산 것으로 옮기기(재료 안 만듦) `{ids:[…] 1~300}` → 204(28절) |
 | GET | `/api/videos`, `/api/videos/<id>` | 요리 채널 영상(17절) |
 | GET/POST | `/api/channels` · PATCH/DELETE `/api/channels/<id>` | 채널 목록·추가 / 기본 채널 숨기기·내 채널 빼기(17절) |
+| GET | `/api/recipes/<id>/cook-draft` | 요리했어요 초안(29절 구현 세부 결정 4·5). 내 레시피만(남의 것·없는 id 404) → 200 `{recipe_id, title, servings, eat_out_price, eat_out_source, rows:[{name, amount, ingredient_id, stock_name, stock_quantity, stock_unit, base_amount, seasoning}]}`(`Cache-Control: no-store`). 재고를 바꾸지 않는다 |
 | GET/POST | `/api/cook-logs` | 기록 목록 / 생성(multipart: 필드 + 사진 + `usages` JSON) |
 | DELETE | `/api/cook-logs/<id>` | 기록 삭제(재고 복원 안 함) |
 | GET | `/api/photos/<key>` | 소유자 확인(내 접두사 `shopping/<user_id>/`·`foodlog/<user_id>/` + 그 사진 행) 후 로컬은 파일 전송(`private, max-age=3600`·nosniff·`Content-Security-Policy: default-src 'none'; sandbox`), R2는 같은 소유자 확인 뒤 R2에서 받아 같은 헤더로 흘려보냄(없는 객체 404, R2 오류 503 `사진을 지금은 볼 수 없어요.`)(28절). 남의 키·지운 사진 404 |
@@ -561,7 +562,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
   레시피 상세에 인분 −/+ 조절(화면에서만 배율 적용, 저장하지 않음).
 - **식단 기본 인분 (D5, 4b단계):** `meal_plans.default_servings`(int 1~20). 식단을 만들 때 한 번 입력(기본값: 마지막으로 만든 식단의 값, 없으면 1)하고 새 칸의 `servings` 기본값으로 쓴다.
 - **요리했어요 차감 기본값 (D2, 5단계):** "전량" 대신 — 레시피 재료 양을 파싱해 재고와 단위가 같으면 `레시피 양 × (요리 인분 / recipes.servings)`,
-  단위가 다르거나 파싱할 수 없으면 `1`(재고 단위). 조미료 분류 필수품과 매칭되는 재료는 기본 "차감 안 함"(체크 해제 상태로 표시, 사용자가 켤 수 있음). 차감 결과가 0 이하면 삭제.
+  단위가 다르거나 파싱할 수 없으면 `1`(재고 단위). 조미료 분류 필수품과 매칭되는 재료는 기본 "차감 안 함"(체크 해제 상태로 표시, 사용자가 켤 수 있음). 차감 결과가 0 이하면 삭제. (구현: 양념은 조미료 분류 필수품 또는 숟가락·약간 양, 29절 결정 5 · 재고 단위 환산 amounts.in_unit)
 - **장보기 체크와 재고 등록 분리 (D3, 4단계):** 매장에서 항목을 체크하면 `done_at`만 기록한다(폼 없음, 오프라인 대기열 대상).
   장보기 화면 상단 `체크한 N개 재고에 넣기` 버튼 → 한 화면에서 일괄 등록: 구입일 하나(기본 오늘), 위치는 항목의 `location_id` → 같은 이름의 최근 재료 위치 → 기본 냉장 위치 순으로 프리필, 항목별 수정 가능.
   16절의 "체크 시 재료로 등록"은 이 방식으로 대체한다.
@@ -810,3 +811,6 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **사 먹으면 얼마 칸(29절 결정 11):** `recipes.eat_out_price`(1인분, 원, 0~1,000,000)·`eat_out_source`(`user`|`ai`|`sample`). `recipe_json`에만 넣고, `PUT /api/recipes/<id>`는 이 칸을 받지 않는다(폼에서만 바꾼다, Task 4·5).
 - **마이그레이션 id(29절 결정 31):** Task 1 `h1p1r1i1c1e1`(down `g3f3l3p3h3o3`), Task 4 `h2c2o2o2k2l2`(down `h1p1r1i1c1e1`).
 - **`amounts.in_unit(amount_text, unit)`(23절 D2):** 레시피 양 글자를 재고 단위 수량으로 바꾼다. `parse_amount`로 양과 `1{unit}`을 각각 읽어 단위(대소문자 무시)가 같으면 배수를, 다르거나 못 읽으면 `None`을 돌려준다. 재고 단위에 숫자가 들었으면(`30구`처럼) 매칭하지 않고 `None`.
+- **요리했어요 초안 `GET /api/recipes/<id>/cook-draft`(29절 결정 4·5, `app/cooklog.py`):** 응답 `{recipe_id, title, servings, eat_out_price, eat_out_source, rows}`(`Cache-Control: no-store`, 내 레시피만 — 남의 것·없는 id 404). 줄 `{name, amount, ingredient_id, stock_name, stock_quantity, stock_unit, base_amount, seasoning}`은 레시피 재료 순서 그대로이고 물(`ALWAYS_HAVE`)은 뺀다. 재고는 `recipes.inventory_rows`(추천과 같은 순서 — 빨리 먹어야 할 것 먼저 → id, 개정 1 P18)에서 `ingredient_key`로 `match_prepared`해 먼저 맞은 재료 하나에만 붙이고, 뒤에 같은 재고에 맞는 재료는 재고 없음(`ingredient_id`·`stock_*`·`base_amount` 모두 `null`). `base_amount` = `amounts.in_unit(레시피 양, 재고 단위)`(레시피 인분 기준, 단위가 다르거나 못 읽으면 `null` → 화면이 `1`). 화면은 `base_amount × 요리 인분 ÷ 레시피 인분`(소수 셋째 자리)을 쓴다.
+- **양념 판정 `is_seasoning(key, amount, staples)`(29절 결정 5):** 조미료 분류 필수품(`seasoning_names`)과 `names_match`, 또는 레시피 양이 `nutrition.TRACE_WORDS`(약간·적당량…)거나 `parse_amount` 단위가 숟가락(`SPOON_UNITS`에서 `컵` 뺀 `SEASONING_SPOONS`)이면 양념. 양념 줄도 재고에 붙이지만(사용자가 켤 수 있게) 체크 해제로 시작하고 재료비에는 넣지 않는다.
+- **재료비·아낀 돈(29절 결정 13·14):** `round_won(value, step=10)`은 `floor(value/step + 0.5) × step`(0.5 올림, 짝수 반올림 안 씀). 줄 재료비 `item_cost(used, price, price_quantity)` = `round_won(가격 × min(쓴 양 ÷ 구입 수량, 1))`, 가격이나 구입 수량이 없으면(0 포함) `None`. `summarize(eat_out_price, servings, items)` → `ingredient_cost`(가격 있는 줄 합, 없으면 0), `saved` = 사 먹으면 × 인분 − 재료비(사 먹으면 얼마가 있고 가격 있는 줄이 1개 이상일 때만, 아니면 `None` — 음수·사 먹으면 0원도 그대로), `excluded_count` = `excluded == "no_price"` 줄 수(양념 제외). dict 줄과 모델 줄을 모두 받는다. 예: 사 먹으면 9,000원 × 2인분 − (3,870 + 2,480 + 830) = 10,820원.
