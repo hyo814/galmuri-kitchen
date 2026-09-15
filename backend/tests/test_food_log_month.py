@@ -2,7 +2,7 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from app.models import FoodLog, FoodLogPhoto, User, db
+from app.models import CookLog, FoodLog, FoodLogPhoto, User, db
 
 BAD = "잘못된 요청이에요."
 RANGE = "날짜를 다시 확인해주세요."
@@ -57,8 +57,8 @@ def test_month_days_and_summary(client, login, app):
     assert isinstance(body["today"], str)
 
     day1, day2, day3 = body["days"]
-    assert {k: day1[k] for k in ("meals", "count", "kcal", "approx", "photo_url")} == {
-        "meals": 2, "count": 2, "kcal": 1420, "approx": False, "photo_url": None,
+    assert {k: day1[k] for k in ("meals", "count", "kcal", "approx", "photo_url", "cooked")} == {
+        "meals": 2, "count": 2, "kcal": 1420, "approx": False, "photo_url": None, "cooked": False,
     }
     assert day2["photo_url"] == f"/api/photos/foodlog/{uid}/b.jpg"
     assert day2["approx"] is True
@@ -83,6 +83,36 @@ def test_first_photo_follows_meal_order(client, login, app):
     assert body["days"][0]["photo_url"] == f"/api/photos/foodlog/{uid}/y.jpg"
 
 
+def add_cook(app, user_id, cooked_on, photo_key=None):
+    with app.app_context():
+        db.session.add(CookLog(user_id=user_id, title="김치찌개", cooked_on=cooked_on, servings=1, photo_key=photo_key))
+        db.session.commit()
+
+
+def test_month_marks_cook_days(client, login, app):
+    uid = login().id
+    add_log(app, uid, date(2026, 9, 2), "lunch")
+    add_cook(app, uid, date(2026, 9, 2))  # 사진 없는 일기가 먼저여도 사진이 있는 첫 일기를 쓴다
+    add_cook(app, uid, date(2026, 9, 2), f"cooklog/{uid}/k.jpg")
+    add_cook(app, uid, date(2026, 9, 5))
+    add_cook(app, uid, date(2026, 8, 31), f"cooklog/{uid}/p.jpg")
+    add_cook(app, uid, date(2026, 10, 1), f"cooklog/{uid}/n.jpg")
+
+    body = get_month(client).get_json()
+    assert [d["date"] for d in body["days"]] == ["2026-09-02", "2026-09-05"]
+    day2, day5 = body["days"]
+    assert (day2["cooked"], day2["photo_url"], day2["meals"]) == (True, f"/api/photos/cooklog/{uid}/k.jpg", 1)
+    assert day5 == {"date": "2026-09-05", "meals": 0, "count": 0, "kcal": None, "approx": False, "photo_url": None, "cooked": True}
+    assert body["summary"]["logged_days"] == 2
+
+    photo_log = add_log(app, uid, date(2026, 9, 7), "lunch")
+    add_photo(app, photo_log, f"foodlog/{uid}/f.jpg")
+    add_cook(app, uid, date(2026, 9, 7), f"cooklog/{uid}/m.jpg")
+    days = get_month(client).get_json()["days"]
+    assert [d["date"] for d in days] == ["2026-09-02", "2026-09-05", "2026-09-07"]  # 요리만 있는 날도 날짜 순
+    assert (days[2]["cooked"], days[2]["photo_url"]) == (True, f"/api/photos/foodlog/{uid}/f.jpg")  # 먹은 기록 사진이 먼저
+
+
 def test_same_meal_counts_once_for_dots(client, login, app):
     user = login()
     uid = user.id
@@ -102,6 +132,7 @@ def test_empty_month_and_other_users(client, login, app):
         db.session.commit()
         other_id = other.id
     add_log(app, other_id, date(2026, 9, 3), "lunch", kcal=400, place="home")
+    add_cook(app, other_id, date(2026, 9, 4))
 
     body = get_month(client).get_json()
     assert body == {
