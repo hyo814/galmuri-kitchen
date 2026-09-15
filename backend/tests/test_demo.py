@@ -6,7 +6,7 @@ from datetime import datetime, time, timedelta, timezone
 
 import pytest
 
-from app import ai, demo, outbound, scan, videos
+from app import ai, auth, demo, outbound, scan, videos
 from app.ingredients import SEOUL, seoul_today
 from app.models import (
     AiCall,
@@ -377,6 +377,29 @@ def test_demo_reads_cached_default_channel_videos_without_refresh(demo_app, monk
         assert YoutubeVideo.query.filter_by(video_id=vid("old")).count() == 1  # 체험 계정 요청으로는 지우지 않는다
         assert db.session.get(YoutubeChannel, default).fetched_at == channel_fetched_at  # 새로 받지 않아 그대로
         assert AiCall.query.count() == 0
+
+
+def test_demo_video_import_calls_youtube_only_within_demo_ai_limit(demo_app, monkeypatch):
+    # 체험 계정이 실제 영상에서 `레시피로 가져오기`를 누르면 링크 가져오기와 같은 길: AI 레시피 한도 검사를 먼저 통과해야
+    # videos.list(1 unit)를 부른다. 하루 한도(DEMO_AI_DAILY_LIMIT)를 다 쓰면 429이고 유튜브는 부르지 않는다
+    demo_app.config.update(ANTHROPIC_API_KEY="test-key", YOUTUBE_API_KEY="k", AI_SCAN_BURST_LIMIT=100)  # 60초 연속 한도(기본 3)는 따로 막는다
+    c = new_client(demo_app)
+    c.post("/api/demo-login")
+    fetched = []
+
+    def snippet(video_id, key):
+        fetched.append(video_id)
+        return {"title": "제육볶음 황금레시피", "description": "돼지고기 600g, 양파 1개를 볶아요. " * 3, "channel_title": "집밥 연구소", "thumbnail_url": None}
+
+    recipe = {"title": "제육볶음", "servings": 2, "ingredients": [{"name": "돼지고기", "amount": "600g"}], "steps": ["볶아요."]}
+    monkeypatch.setattr(outbound, "video_snippet", snippet)
+    monkeypatch.setattr(ai, "extract_recipe", lambda text, images: ({"found": True, "recipe": recipe}, {"model": "m", "input_tokens": 1, "output_tokens": 1}))
+    url = {"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
+    for _ in range(auth.DEMO_AI_DAILY_LIMIT):
+        assert c.post("/api/recipes/import", json=url).status_code == 200
+    blocked = c.post("/api/recipes/import", json=url)
+    assert (blocked.status_code, blocked.get_json()["error"]) == (429, f"오늘 AI 레시피는 {auth.DEMO_AI_DAILY_LIMIT}번까지 쓸 수 있어요. 내일 다시 써주세요.")
+    assert len(fetched) == auth.DEMO_AI_DAILY_LIMIT
 
 
 def test_demo_gets_sample_when_cached_default_videos_are_too_old(demo_app):
