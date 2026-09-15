@@ -285,6 +285,7 @@ def test_caps(client, login, monkeypatch):
     monkeypatch.setattr("app.food_logs.MAX_LOGS", 21)
     assert error(post_log(client, title="밥", eaten_on="2026-09-12")) == (400, "먹은 기록은 21개까지 남길 수 있어요.")
     assert error(patch_log(client, moved.get_json()["id"], eaten_on="2026-09-14")) == (400, "하루에 20개까지 남길 수 있어요.")
+    assert patch_log(client, moved.get_json()["id"], eaten_on="2026-09-12").status_code == 200  # 옮기기는 전체 상한을 세지 않는다
 
 
 def test_day_plan_slot_suggestions(client, login):
@@ -348,3 +349,53 @@ def test_nutrition_off_mode(client, login, app):
 
     patched = patch_log(client, slot_log["id"], title="요거트").get_json()
     assert (patched["nutrition"], patched["meal_slot_id"], patched["recipe_id"], patched["source"]) == (None, None, None, "meal_plan")
+
+
+def test_patch_slot_log_rules(client, login):
+    login()
+    plan = make_plan(client).get_json()
+    slot = put_slot(client, plan["id"], date="2026-09-14", meal="lunch", title="비빔밥").get_json()
+    other = put_slot(client, plan["id"], date="2026-09-14", meal="dinner", title="카레").get_json()
+    log = post_log(client, meal_slot_id=slot["id"]).get_json()
+    assert post_log(client, meal_slot_id=other["id"]).status_code == 201
+
+    assert error(patch_log(client, log["id"], meal_slot_id=other["id"])) == (400, "이미 먹었어요로 남긴 칸이에요.")
+    assert error(patch_log(client, log["id"], eaten_on="2026-09-16")) == (400, "아직 오지 않은 날은 남길 수 없어요.")
+    assert error(client.patch(f"/api/food-logs/{log['id']}", json=[])) == (400, BAD)
+
+    patched = patch_log(client, log["id"], meal="snack").get_json()  # 같은 날 끼니만 옮기면 칸 연결은 둔다
+    assert (patched["meal"], patched["meal_slot_id"]) == ("snack", slot["id"])
+    patched = patch_log(client, log["id"], eaten_on="2026-09-13").get_json()
+    assert (patched["eaten_on"], patched["meal_slot_id"], patched["source"]) == ("2026-09-13", None, "meal_plan")
+    assert [s["id"] for s in get_day(client).get_json()["plan_slots"]] == [slot["id"]]
+
+
+def test_ai_slot_without_recipe_rescales(client, login):
+    login()
+    plan = make_plan(client).get_json()
+    body = {"dishes": [new_dish("된장국")], "slots": [{"date": "2026-09-14", "meal": "dinner", "dish": 0, "est_kcal": 420}]}
+    assert apply(client, plan["id"], body).status_code == 201
+    slot = client.get(f"/api/meal-plans/{plan['id']}").get_json()["slots"][0]
+    assert client.delete(f"/api/recipes/{slot['recipe_id']}").status_code == 204
+
+    log = post_log(client, meal_slot_id=slot["id"]).get_json()
+    assert (log["recipe_id"], log["nutrition"]["kcal"], log["servings"]) == (None, 420, 1.0)
+    patched = patch_log(client, log["id"], servings=2).get_json()
+    assert (patched["nutrition"]["kcal"], patched["approx"]) == (840, True)
+
+
+def test_nutrition_off_keeps_snapshots(client, login, app):
+    login()
+    add_foods(app, cached("T1", "두부", kcal=84))
+    recipe = add_recipe(client, "두부부침", [{"name": "두부", "amount": "100g"}])
+    partial = add_recipe(client, "두부양배추", [{"name": "두부", "amount": "100g"}, {"name": "양배추", "amount": "100g"}])
+    log = post_log(client, recipe_id=recipe["id"]).get_json()
+    pending = post_log(client, recipe_id=partial["id"], meal="dinner").get_json()
+    assert (log["nutrition"]["kcal"], pending["nutrition"]["kcal"], pending["nutrition_pending"]) == (84, 84, True)
+
+    app.config.update(DEV_MODE=False)
+    patched = patch_log(client, log["id"], servings=2).get_json()
+    assert (patched["nutrition"]["kcal"], patched["servings"]) == (168, 2.0)
+    body = get_day(client).get_json()
+    row = next(r for r in body["logs"] if r["id"] == pending["id"])
+    assert (row["nutrition"], row["nutrition_pending"], body["nutrition_pending_recipe_ids"]) == (pending["nutrition"], False, [])

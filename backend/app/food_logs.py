@@ -119,6 +119,8 @@ def apply_fields(log, data, creating):
             if data.get("meal") not in MEALS:
                 abort(400, "끼니를 골라주세요.")
             log.meal = data["meal"]
+    if log.meal_slot is not None and log.eaten_on != log.meal_slot.date:
+        log.meal_slot = None  # 칸 날짜 밖으로 옮기면 연결만 끊는다(source 그대로). 같은 날 끼니만 옮기면 둔다
 
     if what or amount:
         servings, grams = data.get("servings"), data.get("grams")
@@ -165,10 +167,11 @@ def scaled(per, factor):
 
 
 def has_source(log):
-    """다시 계산할 출처(레시피·음식 코드)가 남았나. 없는데 kcal이 있으면 출처가 지워진 기록(개정 1 D4).
+    """다시 계산할 출처(레시피·음식 코드)가 남았고 영양 모드가 off가 아닌가. 아니면 kcal을 두고 비율 조정만(개정 1 D4).
+    off면 fill_snapshots가 레시피·음식을 계산하지 않아 스냅숏을 지우게 된다.
     식단 칸만 남은 기록은 세지 않는다 — 칸 기록의 레시피는 칸 레시피와 같아서, 레시피가 지워지면 칸도 레시피를 잃어
     다시 계산하면 스냅숏이 비거나(칸 AI 추정 kcal이 없을 때) 다른 값으로 바뀐다."""
-    return log.recipe is not None or log.food_code is not None
+    return (log.recipe is not None or log.food_code is not None) and nutrition_mode(g.user) != "off"
 
 
 def rescale(log, factor):
@@ -234,7 +237,7 @@ def day_food_logs():
     if day is None:
         abort(400, "날짜를 다시 확인해주세요.")
     logs = (
-        FoodLog.query.options(selectinload(FoodLog.meal_slot))
+        FoodLog.query.options(selectinload(FoodLog.meal_slot), selectinload(FoodLog.recipe))
         .filter_by(user_id=g.user.id, eaten_on=day)
         .order_by(_meal_order(FoodLog.meal), FoodLog.created_at, FoodLog.id)
         .all()
