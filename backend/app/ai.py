@@ -180,8 +180,8 @@ def extract(kind, images):
         if kind not in NO_PRICE_KINDS:
             prompt += " purchased_on은 영수증·주문에 찍힌 날짜이고, 여러 날짜가 보이면 가장 늦은 날짜를 쓴다."
     content.append({"type": "text", "text": prompt})
-    max_tokens = 8192 if len(images) > 1 else 4096
-    return _parse(content, MemoScanResult if kind == "memo" else ScanResult, max_tokens, f"scan {kind}")
+    many = len(images) > 1  # 여러 장은 출력이 길어 토큰·제한 시간을 늘린다
+    return _parse(content, MemoScanResult if kind == "memo" else ScanResult, 8192 if many else 4096, f"scan {kind}", timeout=90 if many else 45)
 
 
 class DraftIngredient(BaseModel):

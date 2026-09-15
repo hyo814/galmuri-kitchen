@@ -378,6 +378,18 @@ def test_extract_sends_all_images_in_order_with_multi_prompt(app, fake_anthropic
     assert "한 번만 적는다" in prompt["text"] and "가장 늦은 날짜" in prompt["text"]
 
 
+def test_extract_timeout_is_longer_for_many_photos(app, fake_anthropic):
+    parsed = ai.ScanResult(items=[], purchased_on=None)
+    usage = SimpleNamespace(input_tokens=1, output_tokens=1)
+    calls = fake_anthropic(response=SimpleNamespace(stop_reason="end_turn", parsed_output=parsed, usage=usage, model="m"))
+    app.config["ANTHROPIC_API_KEY"] = "test-key"
+    with app.app_context():
+        ai.extract("fridge", [(b"one", "image/jpeg")])
+        assert calls["client"]["timeout"] == 45
+        ai.extract("fridge", [(b"one", "image/jpeg"), (b"two", "image/jpeg")])
+        assert calls["client"]["timeout"] == 90
+
+
 def test_extract_fridge_multi_prompt_has_no_date_rule(app, fake_anthropic):
     parsed = ai.ScanResult(items=[], purchased_on=None)
     usage = SimpleNamespace(input_tokens=1, output_tokens=1)
