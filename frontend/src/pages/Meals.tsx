@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { api, localToday, type AiUsage, type MealKind, type MealPlan, type MealPlanList, type MealPlanSummary, type MealSlot, type User } from "../api";
-import BodyGoalCard from "../components/BodyGoalCard";
+import {
+  api, localToday, type AiUsage, type BodyProfileResponse, type MealKind, type MealPlan, type MealPlanList, type MealPlanSummary, type MealSlot, type User,
+} from "../api";
+import BodyGoalCard, { type TodayTotal } from "../components/BodyGoalCard";
+import DayNutritionSheet from "../components/DayNutritionSheet";
 import Icon from "../components/Icon";
 import Mascot from "../components/Mascot";
 import MealCopySheet, { type CopyResult } from "../components/MealCopySheet";
@@ -13,11 +16,18 @@ import { addDays, remainingText, withJosa } from "../format";
 import {
   dayHead, defaultPlanName, initialWeek, MEALS, monthGrid, pickPlan, rangeText, slotDateText, weekDates, weekOf, weekStarts,
 } from "../meals/plan";
+import { dailyTarget, kcalNumber } from "../nutrition/body";
+import { daySum, dayHeadText, fillTargets, goalFor, meterPercent, slotKcalText } from "../nutrition/day";
 import { useAsyncAction } from "../useAsyncAction";
 import { navigate } from "../useHashRoute";
 import { cache, forgetResources, useResource } from "../useResource";
 import { forgetMealDraft } from "../meals/draftStore";
 import { urgentLabel } from "./Recipes";
+
+/** 채우기를 이미 부른 레시피 `${planId}|${recipe_id}`(결정 13). pending 목록이 나중에 줄어도(다른 레시피가 먼저 풀려도)
+ * 이미 부른 레시피는 다시 넣지 않는다 — 레시피별로 한 번만 시도한다(합쳐 부른 목록으로 판단하면 pending이 줄 때마다
+ * 새 조합으로 보여 계속 다시 불렀다). resetMealsView가 비운다 */
+const attempted = new Set<string>();
 
 // 탭을 오가도 보던 식단·보기·주를 기억한다(로그아웃 때 resetMealsView)
 let lastPlanId: number | null = null;
@@ -31,6 +41,7 @@ export function resetMealsView() {
   lastView = "week";
   lastWeek = {};
   notice = null;
+  attempted.clear();
   forgetMealDraft();
 }
 
@@ -213,13 +224,36 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
   const [copied, setCopied] = useState("");
   const [openSlot, setOpenSlot] = useState<MealSlot | null>(null);
   const [fill, setFill] = useState<{ date: string; meal: MealKind; current?: MealSlot } | null>(null);
+  /** 하루 머리를 눌러 연 하루 영양 시트의 날짜 */
+  const [nutritionDate, setNutritionDate] = useState<string | null>(null);
   /** 시트가 열려 있는 동안 바뀐 칸은 닫을 때 한 번에 다시 받는다. 닫은 뒤 늦게 끝난 저장은 바로 다시 받는다 */
   const dirty = useRef(false);
   const sheetOpen = useRef(false);
 
+  const { data: bodyProfile, set: setBodyProfile } = useResource<BodyProfileResponse>("/api/body-profile");
+  const profileTarget = bodyProfile?.profile ? dailyTarget(bodyProfile.profile, today).target : null;
+  const goal = goalFor(profileTarget, plan?.goal_kcal ?? null);
+
   useEffect(() => {
     lastWeek[summary.id] = week;
   }, [summary.id, week]);
+
+  // 채우기(결정 13): 주 보기에서 보이는 주의 pending 레시피 중 아직 안 시도한 것만, 레시피마다 한 번
+  useEffect(() => {
+    if (!plan || view !== "week" || user.nutrition === "off") return;
+    const attemptedIds = new Set(plan.nutrition_pending_recipe_ids.filter((id) => attempted.has(`${plan.id}|${id}`)));
+    const ids = fillTargets(plan.slots, weekDates(week, plan), plan.nutrition_pending_recipe_ids, attemptedIds);
+    if (!ids.length) return;
+    for (const id of ids) attempted.add(`${plan.id}|${id}`); // 요청 전에 표시(pending이 줄어도 같은 레시피를 다시 부르지 않게)
+    (async () => {
+      try {
+        await api("/api/nutrition/fill", { method: "POST", body: { recipe_ids: ids } });
+      } catch {
+        // 조용히 실패: 다음에 다시 보면 그때 채운다(레시피는 그대로 시도한 것으로 남는다)
+      }
+      await reload();
+    })();
+  }, [plan, view, week, user.nutrition, reload]);
 
   // 복사 결과 한 줄은 주·보기가 바뀌면 지운다(식단이 바뀌면 key로 새로 그린다). 처음 그릴 때는 지우지 않는다(AI 초안 결과)
   const shownFor = useRef(`${week}|${view}`);
@@ -312,6 +346,17 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
   const dates = weekDates(week, shown);
   const slots = new Map((plan?.slots ?? []).map((s) => [`${s.date}|${s.meal}`, s]));
 
+  // 카드 둘째 줄 "오늘 식단": 오늘이 식단 기간 안이고 그날 채운 칸이 있으면(보고 있는 주와 무관하게 오늘 칸으로)
+  const todaySlots = plan ? MEALS.map(([meal]) => plan.slots.find((s) => s.date === today && s.meal === meal)).filter((s): s is MealSlot => !!s) : [];
+  const todaySum = plan && shown.start_on <= today && today <= shown.end_on ? daySum(todaySlots) : null;
+  const todayTotal: TodayTotal | null = todaySum
+    ? {
+        text: `${todaySum.approx ? "약 " : ""}${kcalNumber(todaySum.kcal)}`,
+        percent: meterPercent(todaySum.kcal, profileTarget ?? todaySum.kcal),
+        over: profileTarget !== null && todaySum.kcal > profileTarget,
+      }
+    : null;
+
   // 월 보기: 식단 기간과 겹치는 달만
   const firstMonth = shown.start_on.slice(0, 7);
   const lastMonth = addDays(shown.start_on, shown.days - 1).slice(0, 7);
@@ -353,7 +398,7 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
       <p className="ml-copied" role="status">
         {copied}
       </p>
-      <BodyGoalCard today={today} />
+      <BodyGoalCard today={today} todayTotal={todayTotal} onProfileChanged={setBodyProfile} />
       <div className="ml-row2">
         <button type="button" className="ml-plan" aria-haspopup="dialog" aria-label={`${shown.name}, 다른 식단 고르기`} onClick={onPick}>
           <span>{shown.name}</span>
@@ -520,19 +565,47 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
         <div className="ml-days">
           {dates.map((date) => {
             const head = dayHead(date);
-            const filled = MEALS.filter(([meal]) => slots.has(`${date}|${meal}`)).length;
+            const daySlots = MEALS.map(([meal]) => slots.get(`${date}|${meal}`)).filter((s): s is MealSlot => !!s);
+            const filled = daySlots.length;
+            const sum = daySum(daySlots);
+            const over = goal !== null && !!sum && sum.kcal > goal;
             return (
               <section key={date} className={date === today ? "ml-day today" : "ml-day"} data-date={date} aria-label={slotDateText(date, today)}>
-                <div className="ml-day-head">
-                  <span className="ml-date">{head.day}</span>
-                  <span className="ml-dow">{head.dow}</span>
-                  {date === today && <span className="badge info">오늘</span>}
-                  <span className="ml-count">{filled} / 4</span>
-                </div>
+                {sum ? (
+                  <button
+                    type="button"
+                    className="ml-day-head nt-head-btn"
+                    aria-haspopup="dialog"
+                    aria-label={`${head.day} ${head.dow}${date === today ? " · 오늘" : ""} 식단 영양 보기, ${dayHeadText(sum, goal)}`}
+                    onClick={() => setNutritionDate(date)}
+                  >
+                    <span className="ml-date">{head.day}</span>
+                    <span className="ml-dow">{head.dow}</span>
+                    {date === today && <span className="badge info">오늘</span>}
+                    <span className={over ? "ml-count nt-kcal warn" : "ml-count nt-kcal"}>{dayHeadText(sum, goal)}</span>
+                  </button>
+                ) : (
+                  <div className="ml-day-head">
+                    <span className="ml-date">{head.day}</span>
+                    <span className="ml-dow">{head.dow}</span>
+                    {date === today && <span className="badge info">오늘</span>}
+                    <span className="ml-count">{filled} / 4</span>
+                  </div>
+                )}
+                {goal !== null && sum && (
+                  <div
+                    className={over ? "nt-meter nt-dmeter warn" : "nt-meter nt-dmeter"}
+                    role="img"
+                    aria-label={`목표의 ${Math.round((sum.kcal / goal) * 100)}%`}
+                  >
+                    <i style={{ width: `${meterPercent(sum.kcal, goal)}%` }} />
+                  </div>
+                )}
                 {MEALS.map(([meal, label]) => {
                   const slot = slots.get(`${date}|${meal}`);
                   if (!slot) return null;
                   const urgent = slot.recipe_id !== null ? urgentLabel(slot.urgent_names) : "";
+                  const kcalText = slotKcalText(slot.nutrition);
                   return (
                     <button
                       key={meal}
@@ -540,7 +613,7 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
                       className="ml-slot"
                       data-meal={meal}
                       aria-haspopup="dialog"
-                      aria-label={`${head.day} ${label} ${slot.title}, ${slot.servings}인분${urgent && `, ${urgent}`}`}
+                      aria-label={`${head.day} ${label} ${slot.title}, ${slot.servings}인분${urgent && `, ${urgent}`}${kcalText && `, 1인분 ${kcalText}`}`}
                       onClick={() => {
                         sheetOpen.current = true;
                         setOpenSlot(slot);
@@ -559,6 +632,7 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
                           )}
                         </span>
                       </span>
+                      <span className="nt-slot-kcal">{kcalText}</span>
                     </button>
                   );
                 })}
@@ -631,6 +705,14 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
           onSaved={saved}
           onInterrupted={() => void replacePlan()}
           onClose={() => setFill(null)}
+        />
+      )}
+      {nutritionDate && plan && (
+        <DayNutritionSheet
+          date={nutritionDate}
+          slots={plan.slots.filter((s) => s.date === nutritionDate)}
+          goal={goal}
+          onClose={() => setNutritionDate(null)}
         />
       )}
     </main>

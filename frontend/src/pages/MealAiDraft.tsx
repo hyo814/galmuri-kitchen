@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
-import { ApiError, api, localToday, type AiUsage, type Ingredient, type MealKind, type MealPlan, type User } from "../api";
+import { ApiError, api, localToday, type AiUsage, type BodyProfileResponse, type Ingredient, type MealKind, type MealPlan, type User } from "../api";
 import Icon from "../components/Icon";
 import Mascot from "../components/Mascot";
 import { namesLabel, remainingText, withJosa } from "../format";
@@ -7,6 +7,7 @@ import {
   cancelDraft, discardDraft, drafts, emit, errors, getVersion, keyOf, running, startDraft, subscribe, type DraftStore,
 } from "../meals/draftStore";
 import { dateWithDow, dayHead, emptySlotCount, initialWeek, kcalText, MEALS, urgentChip, weekDates, weekStarts } from "../meals/plan";
+import { dailyTarget } from "../nutrition/body";
 import { useAsyncAction } from "../useAsyncAction";
 import { navigate } from "../useHashRoute";
 import { forgetRecipeCaches, forgetResources, useResource } from "../useResource";
@@ -66,10 +67,22 @@ function Draft({ plan, reloadPlan }: { plan: MealPlan; reloadPlan: () => Promise
   const dates = weekDates(week, plan);
   const [meals, setMeals] = useState<MealKind[]>(loading?.meals ?? store?.meals ?? ["lunch", "dinner"]);
   const [kcal, setKcal] = useState(plan.goal_kcal?.toString() ?? "");
+  const touchedKcal = useRef(false);
   const [note, setNote] = useState(plan.goal_note ?? "");
   const usage = useResource<AiUsage>("/api/ai-usage");
   const stock = useResource<Ingredient[]>("/api/ingredients");
+  const bodyProfile = useResource<BodyProfileResponse>("/api/body-profile");
   const ids = { meals: useId(), kcal: useId(), kcalErr: useId() };
+
+  // 목표 칸이 비어 있으면 몸 정보 목표로 채운다(결정 4). 이미 만졌으면 덮어쓰지 않는다.
+  // 이 칸이 받는 값은 500~5000만이라(위 kcalBad) 그 밖의 목표는 채우지 않고 비워 둔다.
+  useEffect(() => {
+    if (plan.goal_kcal !== null || touchedKcal.current) return;
+    const profile = bodyProfile.data?.profile;
+    if (!profile) return;
+    const target = dailyTarget(profile, today).target;
+    if (target >= 500 && target <= 5000) setKcal(String(target));
+  }, [bodyProfile.data, plan.goal_kcal, today]);
 
   const phase = loading ? "loading" : store ? "review" : "input";
   // 단계가 바뀌면 누른 버튼이 사라져 포커스를 잃는다 → 맨 위 제목으로
@@ -189,7 +202,10 @@ function Draft({ plan, reloadPlan }: { plan: MealPlan; reloadPlan: () => Promise
               value={kcal}
               aria-invalid={kcalBad || undefined}
               aria-describedby={kcalBad ? ids.kcalErr : undefined}
-              onChange={(e) => setKcal(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              onChange={(e) => {
+                touchedKcal.current = true;
+                setKcal(e.target.value.replace(/\D/g, "").slice(0, 4));
+              }}
             />
             <span className="suffix" aria-hidden="true">
               kcal
