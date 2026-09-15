@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, localToday, type FoodLog, type FoodLogDay, type FoodLogMonth, type MealKind, type User } from "../api";
 import FoodLogDaySheet, { fillAttempted } from "../components/FoodLogDaySheet";
-import FoodLogSheet from "../components/FoodLogSheet";
+import FoodLogSheet, { uploadFoodPhoto } from "../components/FoodLogSheet";
 import Icon from "../components/Icon";
 import LoadError from "../components/LoadError";
+import Sheet from "../components/Sheet";
 import { monthGrid } from "../meals/plan";
 import { cellKcalText, cellLabel, monthLabel, monthOf, shiftMonth, summaryView } from "../foodlog/log";
 import { goBack } from "../useHashRoute";
@@ -211,6 +212,33 @@ export default function FoodLogPage({ user }: { user: User }) {
     void monthReload.current();
   }, []);
 
+  // ---- 사진만 먼저(프레임 4): 머리 카메라 버튼 → 앨범·카메라 고르기 시트 → 고르면 시트를 닫고 바로 올린다 ----
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickBusy, setQuickBusy] = useState(false);
+  const [quickError, setQuickError] = useState("");
+  const quickCameraRef = useRef<HTMLInputElement>(null);
+  const quickAlbumRef = useRef<HTMLInputElement>(null);
+
+  async function quickPhoto(file: File) {
+    setQuickOpen(false);
+    setQuickBusy(true);
+    setQuickError("");
+    try {
+      const created = await uploadFoodPhoto<FoodLog>("/api/food-logs/photo", file);
+      forgetResources("/api/food-logs");
+      // 같은 달이면 setMonth가 같은 값이라 다시 그리지 않으니 reload를 직접 부른다(리뷰 fix round 1 I2)
+      const m = monthOf(created.eaten_on);
+      if (m === month) void monthReload.current();
+      else setMonth(m);
+      setSelected(created.eaten_on);
+      setOpen(true);
+    } catch (e) {
+      setQuickError((e as Error).message);
+    } finally {
+      setQuickBusy(false);
+    }
+  }
+
   // `MonthBody`가 요약과 달력 사이에 그대로 끼워 넣는다(시안 순서 유지) — 그래서 그 달이 불러오는 중·오류여도 이건 산다
   const nav = (
     <div className="fl-mnav">
@@ -237,9 +265,70 @@ export default function FoodLogPage({ user }: { user: User }) {
           <Icon name="back" />
         </button>
         <h1>먹은 기록</h1>
+        <button
+          type="button"
+          className="icon-btn fl-camera"
+          aria-label="사진만 먼저 남기기"
+          aria-haspopup="dialog"
+          disabled={quickBusy}
+          onClick={() => setQuickOpen(true)}
+        >
+          <Icon name="camera" />
+        </button>
       </header>
+      {/* 리뷰 fix round 1: role=status 영역은 늘 붙어 있고 글자만 바뀐다(스크린리더가 안정적으로 읽게) */}
+      <p className="muted" role="status">
+        {quickBusy ? "사진을 남기는 중…" : ""}
+      </p>
+      {quickError && (
+        <p className="error" role="alert">
+          {quickError}
+        </p>
+      )}
 
       <MonthBody key={month} month={month} selected={selected} onSelect={onSelect} onToday={onToday} onReload={onReload} nav={nav} />
+
+      {quickOpen && (
+        <Sheet
+          title="빠르게 사진만 남기기"
+          description="지금 시간의 끼니(아침 5–10시·점심 10–15시·저녁 15–21시·그 밖은 간식)에 사진 기록이 생겨요"
+          onClose={() => setQuickOpen(false)}
+        >
+          <input
+            ref={quickCameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) void quickPhoto(file);
+            }}
+          />
+          <input
+            ref={quickAlbumRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) void quickPhoto(file);
+            }}
+          />
+          <div className="actions actions-even">
+            <button type="button" className="btn secondary" onClick={() => quickAlbumRef.current?.click()}>
+              <Icon name="file" size={18} />
+              앨범에서 고르기
+            </button>
+            <button type="button" className="btn primary" onClick={() => quickCameraRef.current?.click()}>
+              <Icon name="camera" size={18} />
+              카메라로 찍기
+            </button>
+          </div>
+        </Sheet>
+      )}
 
       {open && selected && (
         <FoodLogDaySheet
