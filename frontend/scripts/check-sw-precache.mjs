@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { fillServiceWorker, precacheList, writeServiceWorker } from "./sw-precache.mjs";
 
 assert.deepEqual(
-  precacheList(["sw.js", "index.html", "assets/index-abc.js", "assets/index-abc.js.map", "icon-192.png", "manifest.webmanifest"]),
+  precacheList(["sw.js", "index.html", "assets/index-abc.js", "assets/index-abc.js.map", "icon-192.png", "og.png", "manifest.webmanifest"]),
   ["/", "/assets/index-abc.js", "/icon-192.png", "/manifest.webmanifest"],
 );
 

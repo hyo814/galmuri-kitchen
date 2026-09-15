@@ -413,6 +413,7 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
           <li><a href="#process">개발 프로세스</a></li>
           <li><a href="#lessons">배운 점</a></li>
           <li><a href="#roadmap">로드맵</a></li>
+          <li><a href="#revenue">수익 구조</a></li>
           <li><a href="#contact">연락처</a></li>
         </ol>
       </nav>
@@ -781,6 +782,18 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
           <li><div><b>쇼핑몰 정렬 링크 확인</b><span class="status">폰 확인 전</span><span>7곳의 <code>낮은 가격순</code> 주소를 실제 폰에서 확인하기 전까지 운영 화면에는 <code>검색 결과</code> 칩만 보입니다.</span></div></li>
           <li><div><b>"갈무리부엌" 상표 조사</b><span class="status">출시 전 확인 필요</span><span>KIPRIS 9류(소프트웨어)·42류(SaaS) 선등록 여부를 출시 전에 확인합니다.</span></div></li>
         </ol>
+      </section>
+
+      <section class="section" id="revenue" aria-labelledby="revenue-title">
+        <p class="section-kicker">수익 구조</p>
+        <h2 id="revenue-title">원가를 먼저 재고, 그 위에 붙인다</h2>
+        <p class="section-intro">가장 큰 비용은 AI 호출입니다. 호출마다 토큰을 <code>ai_calls</code>에 남겨 사용자당 원가를 잴 수 있게 해 두었습니다. 추천과 정렬 순서는 수수료와 관계없이 둡니다.</p>
+        <ol class="roadmap">
+          <li><div><b>쿠팡 파트너스 제휴 링크</b><span class="status">구현 · 키 넣으면 작동</span><span>장보기에서 쿠팡으로 갈 때 제휴 링크로 보내고 <code>광고</code> 표시를 붙입니다. 체험 계정·로그인 전은 일반 링크입니다.</span></div></li>
+          <li><div><b>AI 한도 기준 구독</b><span class="status">기획</span><span>무료와 유료는 사진 인식·AI 레시피·식단 AI 횟수로 나눕니다. 비용이 드는 곳이 경계입니다. 레시피 개수 제한은 원가가 거의 없어 쓰지 않습니다. 웹 결제라 앱스토어 수수료가 없습니다.</span></div></li>
+          <li><div><b>식품 브랜드 협찬 레시피</b><span class="status">기획</span><span>사용자가 모이면 추천 목록에 <code>광고</code> 표시를 달고 섞습니다.</span></div></li>
+        </ol>
+        <p class="section-intro">배너 광고와 사용자 재고·식습관 데이터 판매는 하지 않습니다.</p>
       </section>
 
       <section class="section" id="contact" aria-labelledby="contact-title">

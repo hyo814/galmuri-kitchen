@@ -422,6 +422,23 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
   color: var(--text-3);
   text-align: center;
 }
+/* 로그인 화면: 위 체험하기와 아래 소셜 로그인 사이 구분 줄 */
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 4px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-3);
+}
+.login-divider::before,
+.login-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--chip-line);
+}
 
 .login-hero {
   display: flex;
@@ -1172,6 +1189,7 @@ button.row-btn > svg {
 .scan-quota {
   display: flex;
   align-items: center;
+  word-break: keep-all;
   justify-content: center;
   gap: 6px;
   margin-top: -4px;
@@ -1319,8 +1337,14 @@ button.row-btn > svg {
 
 .scan-sample {
   align-self: flex-start;
+  word-break: keep-all;
   gap: 4px;
+  height: auto;
+  min-height: 28px;
   margin-top: -8px;
+  padding-block: 4px;
+  line-height: 20px;
+  white-space: normal;
 }
 
 .scan-date .scan-source {
@@ -1537,12 +1561,18 @@ button.row-btn > svg {
 
 .rc-sample {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  word-break: keep-all;
   gap: 6px;
   margin: 12px 20px 0;
   color: var(--text-3);
   font-size: 14px;
   line-height: 20px;
+}
+
+.rc-sample svg {
+  margin-top: 2px;
+  flex-shrink: 0;
 }
 
 .rc-group {

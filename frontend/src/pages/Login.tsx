@@ -4,6 +4,7 @@ import ProviderLogo, { type LoginProvider } from "../components/ProviderLogo";
 
 const LAST_LOGIN_KEY = "lastLoginProvider";
 const LOGIN_PROVIDERS: LoginProvider[] = ["kakao", "naver", "google"];
+const PROVIDER_LABELS: Record<LoginProvider, string> = { kakao: "카카오 로그인", naver: "네이버 로그인", google: "Google로 계속하기" };
 
 /** 로그인에 성공한 소셜 로그인을 기기에 기억한다(계정이 로그인 방법마다 따로라 다음에 같은 버튼을 누르게). 로그아웃해도 지우지 않는다 */
 export function rememberLoginProvider(provider: string) {
@@ -53,6 +54,31 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
     }
   };
 
+  const providers = LOGIN_PROVIDERS.filter((name) => options?.providers.includes(name));
+  // 처음 온 분은 체험하기를 먼저, 이 기기에서 소셜 로그인한 적 있는 분은 그 버튼을 먼저 보여준다
+  const demoFirst = !!options?.demo_login && !providers.some((name) => name === last);
+  const social = providers.map((name) => (
+    <div className="login-provider" key={name}>
+      {last === name && (
+        <span className="login-last" id={`login-last-${name}`}>
+          지난번에 이걸로 로그인했어요
+        </span>
+      )}
+      <a className={`btn ${name}`} href={`/auth/login/${name}`} aria-describedby={last === name ? `login-last-${name}` : undefined}>
+        <ProviderLogo name={name} />
+        {PROVIDER_LABELS[name]}
+      </a>
+    </div>
+  ));
+  const demo = options?.demo_login && (
+    <>
+      <button className={demoFirst ? "btn primary" : "btn secondary"} onClick={() => postLogin("/api/demo-login")} disabled={busy}>
+        로그인 없이 체험하기
+      </button>
+      <p className="login-note">예시 재고가 들어 있는 체험 공간이 열려요. 하루 뒤 사라져요.</p>
+    </>
+  );
+
   return (
     <main className="login">
       <div className="login-hero">
@@ -65,53 +91,10 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
           {error}
         </p>
       )}
-      {options?.providers.includes("kakao") && (
-        <div className="login-provider">
-          {last === "kakao" && (
-            <span className="login-last" id="login-last-kakao">
-              지난번에 이걸로 로그인했어요
-            </span>
-          )}
-          <a className="btn kakao" href="/auth/login/kakao" aria-describedby={last === "kakao" ? "login-last-kakao" : undefined}>
-            <ProviderLogo name="kakao" />
-            카카오 로그인
-          </a>
-        </div>
-      )}
-      {options?.providers.includes("naver") && (
-        <div className="login-provider">
-          {last === "naver" && (
-            <span className="login-last" id="login-last-naver">
-              지난번에 이걸로 로그인했어요
-            </span>
-          )}
-          <a className="btn naver" href="/auth/login/naver" aria-describedby={last === "naver" ? "login-last-naver" : undefined}>
-            <ProviderLogo name="naver" />
-            네이버 로그인
-          </a>
-        </div>
-      )}
-      {options?.providers.includes("google") && (
-        <div className="login-provider">
-          {last === "google" && (
-            <span className="login-last" id="login-last-google">
-              지난번에 이걸로 로그인했어요
-            </span>
-          )}
-          <a className="btn google" href="/auth/login/google" aria-describedby={last === "google" ? "login-last-google" : undefined}>
-            <ProviderLogo name="google" />
-            Google로 계속하기
-          </a>
-        </div>
-      )}
-      {options?.demo_login && (
-        <>
-          <button className="btn secondary" onClick={() => postLogin("/api/demo-login")} disabled={busy}>
-            로그인 없이 체험하기
-          </button>
-          <p className="login-note">예시 재고가 들어 있는 체험 공간이 열려요. 하루 뒤 사라져요.</p>
-        </>
-      )}
+      {demoFirst && demo}
+      {demoFirst && social.length > 0 && <p className="login-divider">계정으로 계속하기</p>}
+      {social}
+      {!demoFirst && demo}
       {options?.dev_login && (
         <button className="btn secondary" onClick={() => postLogin("/api/dev-login")} disabled={busy}>
           개발용 로그인

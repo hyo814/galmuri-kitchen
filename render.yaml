@@ -19,6 +19,7 @@ services:
     plan: 0.5c-512mb
     region: singapore
     dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/auth-options  # 로그인·DB 없이 200을 주는 가벼운 GET(auth.py). 새 배포가 이 응답을 준 뒤에 사람을 넘긴다
     envVars:
       - fromGroup: galmuri-shared
       - key: DATABASE_URL

@@ -6,7 +6,21 @@ from datetime import date, datetime, time, timedelta, timezone
 import app.export as export_module
 from app import scan
 from app.ingredients import SEOUL, seoul_today
-from app.models import AiCall, FoodLog, FoodLogPhoto, MealSlot, PublicRecipe, ShoppingItem, ShoppingNote, ShoppingNotePhoto, User, db, utcnow
+from app.models import (
+    AiCall,
+    CookLog,
+    CookLogItem,
+    FoodLog,
+    FoodLogPhoto,
+    MealSlot,
+    PublicRecipe,
+    ShoppingItem,
+    ShoppingNote,
+    ShoppingNotePhoto,
+    User,
+    db,
+    utcnow,
+)
 
 RECIPE = {
     "title": "두부조림",
@@ -29,6 +43,7 @@ SHOPPING_HEADER = ["이름", "수량", "단위", "생활용품", "살 날", "넣
 MEMO_HEADER = ["장소", "메모", "사진 수", "사진 파일 이름", "고친 시각"]
 MEALS_HEADER = ["식단 이름", "날짜", "끼니", "요리", "인분", "레시피에서", "1인분 추정 kcal"]
 FOOD_LOG_HEADER = export_module.FOOD_LOG_HEADER
+COOK_LOG_HEADER = export_module.COOK_LOG_HEADER
 
 
 def read_zip(res):
@@ -106,6 +121,10 @@ def test_summary_counts_only_my_data(client, login, app):
     other_plan = add_plan(client)
     fill_slot(client, other_plan["id"], title="남의 식단")
     client.post("/api/food-logs", json={"eaten_on": day(), "meal": "dinner", "title": "남의 기록"})
+    other = user_id(app, "other")
+    with app.app_context():
+        db.session.add(CookLog(user_id=other, title="남의 일기", cooked_on=seoul_today(), servings=1))
+        db.session.commit()
     login()
     client.post("/api/ingredients", json={"name": "두부", "purchased_on": day()})
     client.post("/api/recipes", json=RECIPE)
@@ -123,6 +142,10 @@ def test_summary_counts_only_my_data(client, login, app):
     with app.app_context():  # 7일 안에 산 것은 shopping.csv에 들어가므로 센다, 7일 지난 것은 세지 않는다
         db.session.add(ShoppingItem(user_id=me, name="계란", stocked_at=seoul_noon(3)))
         db.session.add(ShoppingItem(user_id=me, name="오래된 양파", stocked_at=seoul_noon(10)))
+        db.session.add_all([
+            CookLog(user_id=me, title="김치찌개", cooked_on=seoul_today(), servings=2),
+            CookLog(user_id=me, title="계란말이", cooked_on=seoul_today() - timedelta(days=1), servings=1),
+        ])
         db.session.commit()
     summary = client.get("/api/export/summary").get_json()
     assert summary["shopping"] == len(read_zip(client.get("/api/export"))["shopping.csv"]) - 1
@@ -134,6 +157,7 @@ def test_summary_counts_only_my_data(client, login, app):
         "memos": 1,
         "meals": 2,
         "food_logs": 2,
+        "cook_logs": 2,
         "limit": 5,
         "remaining": 5,
     }
@@ -151,6 +175,7 @@ def test_export_empty_data_has_header_only_csvs(client, login):
         "shopping_memos.csv": [MEMO_HEADER],
         "meals.csv": [MEALS_HEADER],
         "food_logs.csv": [FOOD_LOG_HEADER],
+        "cook_logs.csv": [COOK_LOG_HEADER],
     }
 
 
@@ -225,6 +250,7 @@ def test_export_zip_contents(client, login, app):
     files = read_zip(res)
     assert set(files) == {
         "ingredients.csv", "recipes.csv", "seasonings.csv", "shopping.csv", "shopping_memos.csv", "meals.csv", "food_logs.csv",
+        "cook_logs.csv",
     }
 
     assert files["ingredients.csv"] == [  # 구입일, id 순(구입일 모름은 맨 뒤)
@@ -329,6 +355,44 @@ def test_export_includes_food_logs_csv(client, login, app):
         "0", "", kst(seoul_noon(1) - timedelta(hours=5)),
     ]
     assert rows[0][15] == "식단"  # 남긴 방법
+
+
+def test_export_includes_cook_logs_csv(client, login, app):
+    login("other")
+    other = user_id(app, "other")
+    with app.app_context():
+        db.session.add(CookLog(user_id=other, title="남의 일기", cooked_on=seoul_today() - timedelta(days=1), servings=1))
+        db.session.commit()
+    login()
+    me = user_id(app)
+    with app.app_context():
+        kimchi = CookLog(
+            user_id=me, title="김치찌개", cooked_on=seoul_today() - timedelta(days=1), servings=2, rating=4, memo="=맛있음",
+            eat_out_price=9000, eat_out_source="ai", ingredient_cost=7180, saved=10820, excluded_count=1,
+            photo_key=f"cooklog/{me}/a.jpg", created_at=seoul_noon(1),
+        )
+        kimchi.items = [
+            CookLogItem(name="김치", used=0.3, unit="kg", cost=3870),
+            CookLogItem(name="두부", used=1, unit="모", cost=2480),
+            CookLogItem(name="돼지고기", amount_text="200g", excluded="no_price"),
+            CookLogItem(name="대파", excluded="no_price"),  # 레시피 양이 비어 있던 재고 밖 재료 → 이름만('대파 None'이 아니게)
+        ]
+        db.session.add(kimchi)
+        db.session.add(
+            CookLog(user_id=me, title="계란말이", cooked_on=seoul_today() - timedelta(days=2), servings=1, created_at=seoul_noon(2))
+        )
+        db.session.commit()
+
+    files = read_zip(client.get("/api/export"))
+    assert files["cook_logs.csv"][0] == COOK_LOG_HEADER
+    rows = files["cook_logs.csv"][1:]
+    assert [row[1] for row in rows] == ["계란말이", "김치찌개"]  # 날짜 오름차순(9/13 → 9/14)
+    egg_row, kimchi_row = rows
+    assert kimchi_row == [
+        day(1), "김치찌개", "2", "4", "'=맛있음", "9000", "추정", "7180", "10820", "1",
+        "김치 0.3kg; 두부 1모; 돼지고기 200g; 대파", "a.jpg", kst(seoul_noon(1)),
+    ]
+    assert (egg_row[8], egg_row[6]) == ("", "")  # 아낀 돈(원), 사 먹으면 출처: saved·eat_out 없음
 
 
 def test_safe_cell_blocks_formulas():
