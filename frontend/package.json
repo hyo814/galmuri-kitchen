@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/check-css-braces.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "e2e": "playwright test",
