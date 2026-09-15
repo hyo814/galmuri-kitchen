@@ -5,9 +5,9 @@ import re
 from flask import Blueprint, abort, current_app, g, jsonify, request
 
 from . import ai, outbound, scan
-from .auth import ai_daily_limit, login_required
+from .auth import ai_daily_limit, get_owned_or_404, login_required
 from .matching import normalize, tokens
-from .models import AiCall, PublicRecipe, db
+from .models import AiCall, PublicRecipe, Recipe, db
 from .recipe_parse import MAX_AMOUNT, MAX_NAME, MAX_STEP, ingredient_key
 from .recipes import MAX_INGREDIENTS, MAX_STEPS, annotate, inventory
 
@@ -287,6 +287,48 @@ def import_recipe():
     if draft is None:
         return need_text(source)
     return jsonify(**draft, source=source, source_url=source_url, source_card=source_card, sample=False)
+
+
+EAT_OUT_MIN, EAT_OUT_MAX = 1_000, 100_000
+EAT_OUT_FAIL = "사 먹는 가격을 추정하지 못했어요. 직접 입력해주세요."
+EAT_OUT_OFF = "사 먹는 가격을 지금은 추정할 수 없어요."
+
+
+@bp.post("/recipes/<int:recipe_id>/eat-out-estimate")
+@login_required
+def estimate_eat_out_price(recipe_id):
+    """29절 결정 11. 레시피에 값이 있으면 AI 없이 그 값. 없을 때만 한 번 추정해 레시피에 저장한다."""
+    recipe = get_owned_or_404(Recipe, recipe_id)
+    if recipe.eat_out_price is not None:
+        return jsonify(eat_out_price=recipe.eat_out_price, eat_out_source=recipe.eat_out_source)
+
+    mode = ai.scan_mode(g.user)
+    if mode == "off":
+        abort(503, EAT_OUT_OFF)
+    if mode == "sample":
+        price, source = ai.SAMPLE_EAT_OUT_PRICE, "sample"  # 예시 모드는 기록을 남기지 않는다
+    else:
+        scan.check_ai_limits(g.user.id, scan.RECIPE_KINDS, ai_daily_limit(g.user, "AI_DAILY_RECIPE_LIMIT"), "AI 레시피는")
+        call = scan.start_ai_call(g.user.id, "eat_out")
+        try:
+            raw, usage = ai.estimate_eat_out(recipe.title, [ingredient_key(i["name"]) for i in recipe.ingredients])
+        except ai.AiError:
+            abort(502, EAT_OUT_FAIL)
+        scan.finish_ai_call(call, usage)
+        price = raw.get("price") if isinstance(raw, dict) else None
+        if isinstance(price, bool) or not isinstance(price, int) or not (EAT_OUT_MIN <= price <= EAT_OUT_MAX):
+            abort(502, EAT_OUT_FAIL)
+        source = "ai"
+
+    # eat_out_price가 그사이 채워졌으면(사용자 입력·경합) 덮지 않는다. updated_at을 그대로 넣어 onupdate가 돌지 않게 한다
+    # (내 레시피 목록 순서가 추정 때문에 바뀌지 않게, Task 4·5도 폼 값으로 레시피를 바꿀 때 같은 방법을 쓴다).
+    Recipe.query.filter(Recipe.id == recipe_id, Recipe.eat_out_price.is_(None)).update(
+        {Recipe.eat_out_price: price, Recipe.eat_out_source: source, Recipe.updated_at: Recipe.updated_at},
+        synchronize_session=False,
+    )
+    db.session.commit()
+    db.session.refresh(recipe)
+    return jsonify(eat_out_price=recipe.eat_out_price, eat_out_source=recipe.eat_out_source)
 
 
 @bp.get("/ai-usage")
