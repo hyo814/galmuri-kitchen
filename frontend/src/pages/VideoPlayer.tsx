@@ -49,7 +49,7 @@ export default function VideoPlayer({ id, user }: { id: string; user: User }) {
     );
 
   const validId = VIDEO_ID.test(video.video_id);
-  const playable = user.videos === "on" && validId;
+  const playable = (user.videos === "on" || user.videos === "cached") && validId;
   const watchUrl = `https://www.youtube.com/watch?v=${video.video_id}`;
   // 예시 영상 ID는 가짜라 AI가 켜져 있으면(실제 가져오기) 보내지 않는다. AI도 예시 모드면 서버가 예시 초안을 준다.
   const sampleOnly = user.videos === "sample" && user.scan === "on";

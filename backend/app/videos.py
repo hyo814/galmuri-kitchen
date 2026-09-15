@@ -79,10 +79,18 @@ SAMPLE_VIDEOS = [  # (제목, 채널 id, 길이 초, 며칠 전, 설명)
 
 
 def video_mode(user):
-    """on: 키 있음 / sample: 키 없음 + 개발 모드(예시 목록) / off: 키 없음 + 운영(영상 칸 숨김).
-    체험 계정은 유튜브 할당량을 쓰지 않게 늘 예시 목록(채널 추가·새로 받기 없음)."""
+    """on: 키 있음 / cached: 체험 계정 + 키 있음 + 받아 둔 기본 채널 영상이 있음(읽기만: 새로 받기·채널 바꾸기 없음, 유튜브 할당량을 쓰지 않는다) /
+    sample: 키 없음 + 개발 모드(예시 목록) / off: 키 없음 + 운영(영상 칸 숨김)."""
     if user.provider == "demo":
-        return "sample"
+        has_key = bool(current_app.config["YOUTUBE_API_KEY"])
+        cached = has_key and (
+            db.session.query(YoutubeVideo.id)
+            .join(YoutubeChannel, YoutubeVideo.channel_id == YoutubeChannel.id)
+            .filter(YoutubeChannel.is_default.is_(True), YoutubeVideo.fetched_at >= utcnow() - KEEP_FOR)
+            .first()
+            is not None
+        )
+        return "cached" if cached else "sample"
     if current_app.config["YOUTUBE_API_KEY"]:
         return "on"
     return "sample" if current_app.config["DEV_MODE"] else "off"
@@ -318,7 +326,7 @@ def list_videos():
         ]
         return jsonify(items=items, next_cursor=None, sample=True)
 
-    if cursor is None:
+    if cursor is None and mode != "cached":  # 체험 계정은 읽기만: 새로 받기 없음(유튜브 할당량을 쓰지 않는다)
         refresh_stale(g.user.id, current_app.config["YOUTUBE_API_KEY"], time.monotonic() + REQUEST_SECONDS)
     query = db.session.query(YoutubeVideo, YoutubeChannel).join(YoutubeChannel, YoutubeVideo.channel_id == YoutubeChannel.id)
     query = query.filter(visible_filter(g.user.id), YoutubeVideo.fetched_at >= utcnow() - KEEP_FOR)
