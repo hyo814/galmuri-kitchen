@@ -85,8 +85,9 @@ function Peek() {
       className="peek"
       aria-roledescription="캐러셀"
       aria-label="갈무리부엌 미리보기"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
+      // 터치의 탭은 가짜 mouseenter를 남겨 계속 멈춰 있게 되므로 마우스일 때만 멈춘다
+      onPointerEnter={(e) => e.pointerType === "mouse" && setPaused(true)}
+      onPointerLeave={(e) => e.pointerType === "mouse" && setPaused(false)}
       onFocus={() => setPaused(true)}
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget)) setPaused(false);
@@ -109,7 +110,8 @@ function Peek() {
           </div>
         ))}
       </div>
-      <div className="peek-dots">
+      <div className="peek-dots" role="group" aria-label="미리보기 고르기">
+        <span className="sr-only">점을 누르면 넘기기를 멈춰요</span>
         {PEEK_SLIDES.map((slide, i) => (
           <button
             key={slide.step}

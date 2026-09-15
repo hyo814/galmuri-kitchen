@@ -6094,6 +6094,19 @@ button.sh-offline svg:last-child {
     bottom: var(--frame-top);
   }
 
+  /* 시작 화면도 틀 안에(index.html의 첫 화면과 같은 자리 — 틀 → 전체 → 틀로 깜빡이지 않게) */
+  .splash {
+    inset: var(--frame-top) auto auto var(--col-x);
+    width: var(--col-w);
+    height: var(--frame-h);
+    border-radius: var(--frame-r);
+  }
+
+  html {
+    scroll-padding-top: var(--frame-top);
+    scroll-padding-bottom: calc(var(--frame-top) + var(--tabbar-h));
+  }
+
   .cta-bar {
     bottom: calc(var(--frame-top) + var(--tabbar-h));
   }
@@ -6213,25 +6226,28 @@ button.sh-offline svg:last-child {
   color: var(--text-3);
 }
 
-/* B. 로그인 미리보기 캐러셀: 로고와 버튼 사이 빈 자리를 채운다. 키가 작은 화면에서는 숨겨 체험하기 버튼이 밀리지 않게 */
+/* B. 로그인 미리보기 캐러셀: 로고와 버튼 사이 남는 자리만 채운다(flex-basis 0 — 버튼을 아래로 밀지 않는다).
+   자리가 작으면 줄여 보여 주고(트랙 138~199px), 더 작으면 제목만(70~137px), 그보다 작으면 숨긴다. 크기는 .peek 컨테이너 쿼리로 본다 */
 .login .login-hero {
   flex: none;
-  padding-top: 8px;
 }
 
 .peek {
   display: flex;
-  flex: 1;
+  flex: 1 1 0;
   flex-direction: column;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   min-height: 0;
-  margin: 4px 0;
+  max-height: 286px; /* 트랙 260 + 점 22 + 사이 4 */
+  margin-block: auto;
+  container-type: size;
 }
 
 .peek-track {
   position: relative;
-  height: clamp(200px, 30dvh, 260px);
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   border-radius: 20px;
   background: var(--surface);
@@ -6333,7 +6349,7 @@ button.sh-offline svg:last-child {
   display: grid;
   place-items: center;
   width: 32px;
-  height: 28px;
+  height: 22px;
   padding: 0;
   border: 0;
   border-radius: 8px;
@@ -6354,13 +6370,54 @@ button.sh-offline svg:last-child {
   background: var(--accent);
 }
 
-@media (max-height: 700px) {
-  .peek {
+/* 트랙 200px 미만(점·사이 26px 포함 226px 미만): 줄여 보이기 */
+@container (max-height: 225.9px) {
+  .peek-slide {
+    gap: 6px;
+    padding: 8px 14px;
+  }
+
+  .peek-step {
     display: none;
   }
 
-  .login .login-hero {
-    flex: 1;
+  .peek-title {
+    margin: 0;
+    font-size: 16px;
+    line-height: 22px;
+  }
+
+  .peek-rows {
+    gap: 4px;
+  }
+
+  .peek-rows li {
+    min-height: 28px;
+    font-size: 14px;
+  }
+}
+
+/* 트랙 138px 미만: 한 줄 제목만 넘긴다 */
+@container (max-height: 163.9px) {
+  .peek-slide {
+    align-content: center;
+    gap: 2px;
+  }
+
+  .peek-step {
+    display: block;
+  }
+
+  .peek-rows,
+  .peek-receipt {
+    display: none;
+  }
+}
+
+/* 트랙 70px 미만: 숨기기 */
+@container (max-height: 95.9px) {
+  .peek > * {
+    display: none;
   }
 }
 
@@ -6413,6 +6470,10 @@ button.sh-offline svg:last-child {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+.demo-guide-acts > :only-child {
+  grid-column: 1 / -1;
 }
 
 .demo-guide-acts .btn {

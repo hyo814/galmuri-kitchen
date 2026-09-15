@@ -208,7 +208,8 @@ export default function Fridge({ user }: { user: User }) {
         </p>
       )}
 
-      {missing.length > 0 && (
+      {/* 체험 안내 카드가 떠 있는 동안은 필수품 배너를 숨긴다(카드 두 장이 겹쳐 보이지 않게). 닫으면 다시 보인다 */}
+      {missing.length > 0 && !(guide && items) && (
         <button className="banner" onClick={() => { setStaplesMissingOnly(true); setPanel("staples"); }}>
           <span className="banner-icon">
             <Icon name="alert" size={22} />
