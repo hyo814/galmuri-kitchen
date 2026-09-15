@@ -1,8 +1,11 @@
 import { useState, type ReactNode } from "react";
 import { api, type MyRecipe, type RecipeDetail as Detail, type RecipeIngredientStatus, type User } from "../api";
+import { cookedLine } from "../cooklog/cook.ts";
+import CookSheet, { toastSaved } from "../components/CookSheet";
 import Icon from "../components/Icon";
 import RecipeNutrition from "../components/RecipeNutrition";
 import ShoppingAddButton from "../components/ShoppingAddButton";
+import { starsText } from "../foodlog/log.ts";
 import { SOURCE_LABEL, imageSrc, scaleAmount, withJosa } from "../format";
 import { recipeQuantity } from "../shopping/sync";
 import { useAsyncAction } from "../useAsyncAction";
@@ -140,6 +143,7 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
     reload,
   } = useResource<Detail>(kind === "mine" ? `/api/recipes/${id}` : `/api/public-recipes/${id}`);
   const { busy, error: actionError, run } = useAsyncAction();
+  const [cooking, setCooking] = useState(false);
 
   if (!recipe)
     return (
@@ -214,6 +218,15 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
           )}
         </p>
       </header>
+      {recipe.kind === "mine" && recipe.cooked && (
+        <p className="ck-cooked">
+          <span className="badge info">요리 {recipe.cooked.count}번</span>
+          <span className="muted" aria-hidden="true">
+            {cookedLine(recipe.cooked, starsText)}
+          </span>
+          <span className="sr-only">{cookedLine(recipe.cooked, (n) => `별점 ${n}점`)}</span>
+        </p>
+      )}
 
       <RecipeBody
         title={recipe.title}
@@ -242,15 +255,35 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
       )}
 
       {recipe.kind === "mine" ? (
-        <div className="rc-actions">
-          <button className="btn outline" onClick={() => navigate(`/recipes/mine/${recipe.id}/edit`)}>
-            <Icon name="pencil" />
-            수정
-          </button>
-          <button className="btn danger-text" disabled={busy} onClick={remove}>
-            이 레시피 삭제
-          </button>
-        </div>
+        <>
+          <div className="rc-actions">
+            <button className="btn outline" onClick={() => navigate(`/recipes/mine/${recipe.id}/edit`)}>
+              <Icon name="pencil" />
+              수정
+            </button>
+            <button className="btn danger-text" disabled={busy} onClick={remove}>
+              이 레시피 삭제
+            </button>
+          </div>
+          {/* 알림이 떠 있으면 styles.css가 버튼을 알림 위로 올린다(시안 2). data-cook-button: 되돌린 뒤 포커스가 돌아올 자리 */}
+          <div className="cta-bar">
+            <button className="btn primary" aria-haspopup="dialog" data-cook-button disabled={busy} onClick={() => setCooking(true)}>
+              <Icon name="pan" />
+              요리했어요
+            </button>
+          </div>
+          {cooking && (
+            <CookSheet
+              recipeId={recipe.id}
+              user={user}
+              onSaved={(result) => {
+                toastSaved(result); // 되돌리면 App이 지금 화면을 새로 만든다
+                void reload(); // 재고 표시·요리 표시를 새로
+              }}
+              onClose={() => setCooking(false)}
+            />
+          )}
+        </>
       ) : (
         <div className="cta-bar">
           <button className="btn primary" disabled={busy} onClick={save}>

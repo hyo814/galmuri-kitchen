@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, ty
 import { ApiError, api, onUnauthorized, type User } from "./api";
 import Splash from "./components/Splash";
 import TabBar from "./components/TabBar";
+import UndoToast, { hideUndoToast, useUndoneCount } from "./components/UndoToast";
 import FoodLogPage, { resetFoodLogView } from "./pages/FoodLog";
 import Fridge from "./pages/Fridge";
 import Login, { rememberLoginProvider } from "./pages/Login";
@@ -67,6 +68,7 @@ export default function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [offline, setOffline] = useState(false);
   const route = useHashRoute();
+  const undone = useUndoneCount();
 
   useEffect(() => {
     const onScroll = () => scrollTops.set(route.path, window.scrollY);
@@ -151,6 +153,7 @@ export default function App() {
     resetMealsView();
     resetRecipeNutrition();
     resetFoodLogView();
+    hideUndoToast();
     scrollTops.clear();
     setUser(null);
   }, []);
@@ -229,8 +232,11 @@ export default function App() {
   return (
     <>
       {splash}
-      {/* key: 경로가 바뀌면 화면을 새로 만든다(상세 3 → 상세 4에서 이전 데이터가 남지 않게) */}
-      <Fragment key={route.path}>{PAGES[route.pattern]({ route, user, onLogout: logout })}</Fragment>
+      {/* key: 경로가 바뀌면 화면을 새로 만든다(상세 3 → 상세 4에서 이전 데이터가 남지 않게).
+          요리 되돌리기에 성공해도 새로 만든다 — 재고·먹은 기록·레시피 상세 어느 화면이든 되돌린 값으로(캐시는 undoCook이 지움) */}
+      <Fragment key={`${route.path}#${undone}`}>{PAGES[route.pattern]({ route, user, onLogout: logout })}</Fragment>
+      {/* 화면 밖(경로가 바뀌어도 남는다). 탭 막대 앞이라 요리했어요 버튼 다음 Tab이 되돌리기 */}
+      <UndoToast />
       <TabBar path={route.path} />
     </>
   );
