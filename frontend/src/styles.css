@@ -5979,6 +5979,28 @@ button.sh-offline svg:last-child {
 
 /* 요리 일기 (5) */
 
+/* 5 · Task 13 */
+/* 달력 칸 오른쪽 위 요리 일기 표시(시안 `.cook`, top 2px·right 3px). 384px에서 칸 폭은 약 45px(시안 목업도 같은 폭)이라
+   시안 값대로면 이미 2자리 날짜 숫자와 빠듯하게 겹치고, 오늘 원(24px)과도 겹친다(개정 1 Q37) — 화면 확인(브리프 Step 3)에서 실측해 칸 밖으로 더 뺐다.
+   오늘·평소 칸 모두 이 값 하나로 안 겹친다(Q37 전용 오늘 규칙은 따로 두지 않는다) */
+.fl-cook {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--warn-tint);
+  color: var(--warn);
+  font-size: 9px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+/* 날짜 상세 맨 위 요리 일기 줄(day.cook_logs)은 .fl-plan을 그대로 쓴다.
+   ponytail: .fl-cookrow에 아래 여백은 두지 않는다 — 시트 본문 gap(.sheet.fl-day .sheet-body)이 이미 줄 사이를 벌린다(개정 1 Q38, 브리프의 8px을 대신한다) */
+
 /* 5 · Task 12 */
 .ck-reason {
   display: grid;

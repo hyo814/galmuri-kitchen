@@ -30,7 +30,7 @@ export default function MealSlotSheet({ slot: initial, today, user, onChanged, o
   const { busy, error: removeError, run } = useAsyncAction();
   const { busy: eatenBusy, error: eatenError, run: runEaten } = useAsyncAction();
   const [ateHint, setAteHint] = useState(false);
-  /** 요리했어요 시트(결정 28) — 칸 상세 위에 얹는다(칸 상세는 닫지 않는다) */
+  /** 요리했어요 시트(결정 28) — 칸 상세와 형제로 그려진다(칸 상세 위에 얹는 게 아니다), 저장하면 칸 상세도 함께 닫힌다 */
   const [cooking, setCooking] = useState(false);
   const servingsLabel = useId();
   // 빠르게 여러 번 눌러도 누른 차례대로 저장되게 요청을 줄 세운다. 실패하면 마지막으로 저장된 값으로 되돌린다

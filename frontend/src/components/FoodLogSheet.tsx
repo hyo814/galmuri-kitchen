@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { api, type DishItem, type DishSearchResult, type FoodLog, type FoodLogDay, type FoodLogPhoto, type FoodPlace, type MealKind, type RecipeChoice, type RecipeNutrition, type User } from "../api";
 import { resizeImage } from "../image.ts";
 import {
@@ -27,6 +27,7 @@ import { forgetResources } from "../useResource";
 import { fillAttempted } from "./FoodLogDaySheet";
 import Icon from "./Icon";
 import Sheet from "./Sheet";
+import StarPicker from "./StarPicker";
 
 interface Props {
   date: string;
@@ -366,16 +367,6 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log: logPro
     });
   }
 
-  // 별 라디오: 화살표로 점수를 옮기고 켠다(roving tabindex)
-  function starKey(e: KeyboardEvent<HTMLButtonElement>) {
-    const delta = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
-    if (!delta) return;
-    e.preventDefault();
-    const next = Math.min(5, Math.max(1, (rating ?? 0) + delta));
-    setRating(next);
-    (e.currentTarget.parentElement!.children[next - 1] as HTMLElement).focus();
-  }
-
   const busy = save.busy || remove.busy;
   const error = save.error || remove.error;
   const q = dishQ.trim();
@@ -689,23 +680,7 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log: logPro
         <span className="field-label" aria-hidden="true">
           만족도 <span className="optional">(선택)</span>
         </span>
-        <div className="fl-bigstars" role="radiogroup" aria-label="만족도">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button
-              key={n}
-              type="button"
-              role="radio"
-              aria-checked={rating === n}
-              aria-label={`${n}점`}
-              tabIndex={n === (rating ?? 1) ? 0 : -1}
-              className={rating !== null && n <= rating ? "on" : undefined}
-              onClick={() => setRating(rating === n ? null : n)}
-              onKeyDown={starKey}
-            >
-              ★
-            </button>
-          ))}
-        </div>
+        <StarPicker label="만족도" value={rating} onChange={setRating} />
       </div>
 
       <div className="field">
