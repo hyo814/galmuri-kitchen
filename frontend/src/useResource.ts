@@ -48,5 +48,14 @@ export function useResource<T>(url: string) {
     reload();
   }, [reload]);
 
-  return { data, error, status, reload };
+  /** 저장·삭제 응답을 이미 갖고 있을 때 다시 받지 않고 바로 반영한다(지연·재요청 실패 위험 없이) */
+  const set = useCallback(
+    (next: T) => {
+      cache.set(url, next);
+      setData(next);
+    },
+    [url],
+  );
+
+  return { data, error, status, reload, set };
 }
