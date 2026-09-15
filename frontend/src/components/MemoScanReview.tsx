@@ -39,7 +39,7 @@ export default function MemoScanReview({ image, sourceLabel, listed, today, onSc
   // 닫으면(뒤로가기·배경 탭·취소) 진행 중인 인식 요청도 멈춘다
   useEffect(() => {
     const controller = new AbortController();
-    uploadScan("memo", image, controller.signal).then(
+    uploadScan("memo", [image], controller.signal).then(
       (result) => {
         onScanned();
         setStep(result.items.length ? { name: "review", result } : { name: "error", message: "사진에서 살 것을 찾지 못했어요.", status: 0, reason: "empty" });

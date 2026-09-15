@@ -26,10 +26,10 @@ export const SOURCE_LABEL: Record<RecipeSource, string> = {
   photo: "사진에서 가져옴",
 };
 
-/** AI 레시피 남은 횟수 꼬리말: " · 오늘 8번 남음" / " · 오늘은 다 썼어요" / 아직 모르면 "" */
-export function remainingText(usage: AiUsage | undefined): string {
+/** AI 남은 횟수 꼬리말(기본 AI 레시피, "scan"은 사진 인식): " · 오늘 8번 남음" / " · 오늘은 다 썼어요" / 아직 모르면 "" */
+export function remainingText(usage: AiUsage | undefined, group: keyof AiUsage = "recipe"): string {
   if (!usage) return "";
-  const left = usage.recipe.limit - usage.recipe.used;
+  const left = usage[group].limit - usage[group].used;
   return left > 0 ? ` · 오늘 ${left}번 남음` : " · 오늘은 다 썼어요";
 }
 

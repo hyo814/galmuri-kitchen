@@ -1,0 +1,262 @@
+<title>재고 사진 여러 장 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+  :root {
+    --board: #e6e8eb;
+    --bg: #f3f4f6;
+    --surface: #ffffff;
+    --field: #f3f4f6;
+    --text: #17191c;
+    --text-2: #5b616b;
+    --text-3: #63697a;
+    --line: #eef0f2;
+    --chip-line: #d3d7dd;
+    --scrim: rgb(15 17 20 / 0.48);
+    --accent: #0b7a4c;
+    --accent-strong: #086a41;
+    --accent-tint: #e7f6ef;
+    --on-accent: #ffffff;
+    --warn: #8f5500;
+    --warn-tint: #fff3dc;
+    --photo-a: #d9c3a1;
+    --photo-b: #b9cfa8;
+    --photo-c: #c7b3c9;
+    --note: #3a3f46;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --scrim: rgb(0 0 0 / 0.6); --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --photo-a: #5a4a33; --photo-b: #3f5436; --photo-c: #4d3f50; --note: #d3d7dc;
+    }
+  }
+  :root[data-theme="dark"] {
+    --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --scrim: rgb(0 0 0 / 0.6); --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --photo-a: #5a4a33; --photo-b: #3f5436; --photo-c: #4d3f50; --note: #d3d7dc;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 16px 56px; background: var(--board); color: var(--text); font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .intro { max-width: 1700px; margin: 0 auto 28px; }
+  .intro h1 { margin: 0 0 8px; font-size: 26px; line-height: 34px; font-weight: 700; text-wrap: balance; }
+  .intro p { margin: 0 0 6px; max-width: 66ch; font-size: 15px; line-height: 24px; color: var(--text-2); word-break: keep-all; }
+  .intro b { color: var(--note); }
+  .asks { max-width: 1700px; margin: 0 auto 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; }
+  .ask { padding: 14px 16px; border-radius: 16px; background: var(--surface); }
+  .ask h3 { margin: 0 0 4px; font-size: 15px; }
+  .ask p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+  .ask .rec { color: var(--accent-strong); font-weight: 600; }
+
+  .board { max-width: 1700px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(384px, 100%), 1fr)); gap: 32px 24px; align-items: start; }
+  .option { display: grid; gap: 12px; justify-items: center; }
+  .cap { width: min(384px, 100%); display: grid; gap: 4px; }
+  .tag { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: 0.06em; color: var(--text-3); }
+  .cap h2 { margin: 0; font-size: 18px; line-height: 26px; }
+  .cap p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+
+  /* 폰 */
+  .phone { position: relative; width: min(384px, 100%); height: 800px; overflow: hidden; border-radius: 28px; background: var(--bg); }
+  .under { padding: 24px 20px; }
+  .under h3 { margin: 0 0 4px; font-size: 26px; font-weight: 700; }
+  .under p { margin: 0; color: var(--text-3); font-size: 15px; }
+  .scrim { position: absolute; inset: 0; background: var(--scrim); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 92%; overflow: hidden; padding: 12px 20px 24px; border-radius: 24px 24px 0 0; background: var(--surface); display: grid; gap: 14px; }
+  .sheet.tall { top: 7%; }
+  .handle { justify-self: center; width: 40px; height: 4px; border-radius: 2px; background: var(--chip-line); }
+  .sh-title { margin: 0; font-size: 21px; line-height: 28px; font-weight: 700; }
+  .sh-desc { margin: 2px 0 0; font-size: 14px; line-height: 20px; color: var(--text-2); word-break: keep-all; }
+  .hint { display: flex; gap: 6px; align-items: flex-start; font-size: 13px; line-height: 19px; color: var(--text-3); word-break: keep-all; }
+  .hint svg { flex: none; margin-top: 2px; }
+
+  .btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 56px; border-radius: 16px; font-size: 17px; font-weight: 600; white-space: nowrap; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); }
+  .btn.secondary { background: var(--field); color: var(--text); }
+  .actions { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; }
+
+  /* 사진 모으기 */
+  .kindline { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--field); font-size: 15px; font-weight: 600; }
+  .kindline .ic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--surface); color: var(--accent-strong); }
+  .kindline span.chg { margin-left: auto; font-size: 14px; color: var(--accent-strong); }
+  .tray { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .thumb { position: relative; aspect-ratio: 1; max-width: 100%; border-radius: 14px; overflow: hidden; }
+  .thumb .img { position: absolute; inset: 0; }
+  .thumb .n { position: absolute; left: 6px; bottom: 6px; padding: 1px 7px; border-radius: 10px; background: rgb(0 0 0 / 0.55); color: #fff; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .thumb .x { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 14px; background: rgb(0 0 0 / 0.55); color: #fff; }
+  .add { display: grid; place-items: center; align-content: center; gap: 4px; aspect-ratio: 1; border-radius: 14px; box-shadow: inset 0 0 0 1.5px var(--chip-line); color: var(--text-2); font-size: 13px; font-weight: 600; }
+  .add svg { color: var(--accent-strong); }
+  .count { display: flex; justify-content: space-between; font-size: 14px; color: var(--text-2); }
+  .count b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+  /* 기다리기 */
+  .wait { display: grid; justify-items: center; gap: 14px; padding: 20px 0 8px; text-align: center; }
+  .stack { position: relative; width: 132px; height: 110px; }
+  .stack i { position: absolute; width: 84px; height: 96px; border-radius: 12px; box-shadow: 0 2px 8px rgb(0 0 0 / 0.12); }
+  .stack i:nth-child(1) { left: 0; top: 8px; transform: rotate(-9deg); background: var(--photo-b); }
+  .stack i:nth-child(2) { left: 24px; top: 2px; transform: rotate(-2deg); background: var(--photo-c); }
+  .stack i:nth-child(3) { left: 48px; top: 10px; transform: rotate(7deg); background: var(--photo-a); }
+  .bar { width: 100%; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .bar i { display: block; width: 46%; height: 100%; border-radius: 2px; background: var(--accent); }
+  .wait h4 { margin: 0; font-size: 19px; line-height: 26px; }
+  .wait p { margin: 0; font-size: 14px; color: var(--text-2); }
+
+  /* 확인 */
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 8px; background: var(--accent-tint); color: var(--accent-strong); font-size: 12px; font-weight: 600; }
+  .label { font-size: 14px; font-weight: 600; color: var(--text-2); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; height: 36px; padding: 0 12px; border-radius: 18px; background: var(--field); color: var(--text-2); font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .chip.on { background: var(--accent-tint); color: var(--accent-strong); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .chip.small { height: 32px; padding: 0 10px; font-size: 13px; }
+  .picked { font-size: 13px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .items { display: grid; }
+  .item { display: grid; grid-template-columns: 28px minmax(0, 1fr) 24px; align-items: center; gap: 10px; min-height: 60px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .cb { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; background: var(--accent); color: var(--on-accent); }
+  .cb.off { background: none; box-shadow: inset 0 0 0 2px var(--chip-line); }
+  .it-name { font-size: 16px; font-weight: 600; }
+  .it-sub { font-size: 13px; line-height: 18px; color: var(--text-3); }
+  .it-sub .own { color: var(--warn); font-weight: 600; }
+  .chev { color: var(--text-3); }
+  .edit { grid-column: 1 / -1; display: grid; gap: 10px; padding: 4px 0 10px 38px; }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .fld { display: grid; gap: 4px; }
+  .fld span { font-size: 12px; color: var(--text-3); }
+  .fld div { height: 44px; display: flex; align-items: center; padding: 0 12px; border-radius: 12px; background: var(--field); font-size: 15px; }
+  .foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 20px 20px; background: var(--surface); box-shadow: 0 -1px 0 var(--line); }
+
+  /* 재고 목록 */
+  .list { margin: 0 16px; border-radius: 20px; background: var(--surface); }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 14px 16px; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .row b { font-size: 16px; }
+  .row small { display: block; margin-top: 2px; font-size: 13px; color: var(--text-3); }
+  .pill { font-size: 12px; font-weight: 600; color: var(--warn); background: var(--warn-tint); padding: 3px 8px; border-radius: 8px; }
+
+  svg { flex: none; }
+  .foot-note { width: min(384px, 100%); font-size: 13px; line-height: 20px; color: var(--text-3); word-break: keep-all; }
+</style>
+
+<header class="intro">
+  <h1>재고 사진 여러 장 · 구입일 칩 · ‘기억 안 나요’</h1>
+  <p>사진으로 추가할 때 <b>한 번에 최대 5장</b>을 모아 AI가 한 번에 읽고(오늘 남은 횟수는 1번만 줄어요), 겹친 재료는 하나로 합쳐요. 확인 화면의 구입일은 <b>칩으로 빠르게</b> 고르고, 모르면 <b>기억 안 나요</b>로 비워 둘 수 있어요. 재료마다 따로 고치는 것도 돼요.</p>
+  <p>화면 흐름: ① 종류 고르고 찍기(지금과 같음) → ② 사진 모으기 → ③ 찾는 중 → ④ 확인(구입일 칩) → ⑤ 한 재료만 다른 날 → ⑥ 재고 목록.</p>
+</header>
+
+<section class="asks" aria-label="정할 것">
+  <div class="ask"><h3>A. 첫 사진 뒤 바로 읽을까, 모아서 읽을까</h3><p>시안은 <span class="rec">모아서 읽기</span>예요. 한 장만 찍어도 ‘1장 읽기’ 한 번만 누르면 돼요.</p></div>
+  <div class="ask"><h3>B. ‘기억 안 나요’면 오래됨 경고는?</h3><p>시안은 <span class="rec">경고 없음</span>. 유통기한을 넣은 재료만 임박·지남을 알려줘요. 목록에는 날짜 대신 아무것도 안 보여요.</p></div>
+  <div class="ask"><h3>C. 냉장고 사진의 첫 선택</h3><p>시안은 냉장고 사진이면 <span class="rec">아무 칩도 안 고른 상태</span>로 시작해 고르게 해요(영수증·주문은 찍힌 날짜가 먼저 골라져요).</p></div>
+</section>
+
+<main class="board">
+
+  <!-- ② 사진 모으기 -->
+  <section class="option" aria-labelledby="f2">
+    <div class="cap"><span class="tag">② COLLECT</span><h2 id="f2">사진 모으기</h2><p>첫 사진을 찍으면 이 화면으로 와요. 칸·문 쪽을 따로 찍어 더 넣거나, 앨범에서 여러 장을 한 번에 골라요. 사진마다 ✕로 뺄 수 있어요.</p></div>
+    <div class="phone">
+      <div class="under"><h3>내 재고</h3><p>재료 11개</p></div>
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <div><p class="sh-title">냉장고 사진 3장</p><p class="sh-desc">칸마다 따로 찍으면 더 잘 찾아요 · 5장까지</p></div>
+        <div class="kindline"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M5 10h14M8.5 6v1.5M8.5 13v2.5"/></svg></span>냉장고 사진<span class="chg">바꾸기</span></div>
+        <div class="count"><span>사진</span><b>3 / 5</b></div>
+        <div class="tray">
+          <div class="thumb"><div class="img" style="background:linear-gradient(160deg,var(--photo-a),var(--photo-b))"></div><span class="n">1</span><span class="x" aria-label="1번 사진 빼기"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
+          <div class="thumb"><div class="img" style="background:linear-gradient(200deg,var(--photo-b),var(--photo-c))"></div><span class="n">2</span><span class="x"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
+          <div class="thumb"><div class="img" style="background:linear-gradient(120deg,var(--photo-c),var(--photo-a))"></div><span class="n">3</span><span class="x"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
+          <div class="add"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h2l1.5-2h6l1.5 2h2A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.5"/></svg>더 찍기</div>
+          <div class="add"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M20 16l-5-5-8 8"/></svg>앨범</div>
+        </div>
+        <p class="hint"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.01"/></svg>여러 장이어도 오늘 남은 횟수는 1번만 줄어요 · 오늘 8번 남음</p>
+        <div class="actions"><span class="btn secondary">취소</span><span class="btn primary">3장 읽기</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ③ 찾는 중 -->
+  <section class="option" aria-labelledby="f3">
+    <div class="cap"><span class="tag">③ READING</span><h2 id="f3">찾는 중</h2><p>사진 수를 보여주고, 한 번의 AI 호출로 읽어요. 지금처럼 취소할 수 있어요.</p></div>
+    <div class="phone">
+      <div class="under"><h3>내 재고</h3><p>재료 11개</p></div>
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <div class="wait">
+          <div class="stack"><i></i><i></i><i></i></div>
+          <div><h4>사진 3장에서 재료를 찾고 있어요</h4><p>겹치는 재료는 하나로 합쳐요 · 20초쯤 걸려요</p></div>
+          <div class="bar"><i></i></div>
+        </div>
+        <span class="btn secondary">취소</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ④ 확인 -->
+  <section class="option" aria-labelledby="f4">
+    <div class="cap"><span class="tag">④ REVIEW</span><h2 id="f4">확인 — 구입일 칩</h2><p>구입일 칩 한 줄: 오늘 · 어제 · 3일 전 · 1주 전 · 날짜 고르기 · 기억 안 나요. 고르면 아래에 실제 날짜가 보여요. 모든 재료에 같이 적용돼요.</p></div>
+    <div class="phone">
+      <div class="scrim"></div>
+      <div class="sheet tall">
+        <div class="handle"></div>
+        <div><p class="sh-title">찾은 재료 12개</p><p class="sh-desc">사진 3장에서 찾았어요 · 겹친 재료는 합쳤어요 · 넣을 재료만 체크해주세요</p></div>
+        <div style="display:grid;gap:8px">
+          <span class="label">언제 샀어요?</span>
+          <div class="chips">
+            <span class="chip">오늘</span><span class="chip">어제</span><span class="chip on">3일 전</span><span class="chip">1주 전</span>
+            <span class="chip"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>날짜 고르기</span>
+            <span class="chip">기억 안 나요</span>
+          </div>
+          <span class="picked">9월 12일 (토) 구입으로 넣어요</span>
+          <p class="hint"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.01"/></svg>냉장고에 있던 재료는 대략 골라도 괜찮아요. 다른 날 산 재료는 눌러서 따로 고쳐요.</p>
+        </div>
+        <div class="items">
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span><span><span class="it-name">두부</span><br><span class="it-sub">1모 · 냉장실</span></span><span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span></div>
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span><span><span class="it-name">대파</span><br><span class="it-sub">1단 · 냉장실 · <span class="own">어제 구입</span></span></span><span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span></div>
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span><span><span class="it-name">달걀</span><br><span class="it-sub">10개 · 냉장실 · 사진 1·3에서 합침</span></span><span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span></div>
+          <div class="item"><span class="cb off"></span><span><span class="it-name">냉동만두</span><br><span class="it-sub">1봉 · 냉동실</span></span><span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span></div>
+        </div>
+        <div class="foot"><div class="actions"><span class="btn secondary">다시 찍기</span><span class="btn primary">11개 재고에 넣기</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑤ 재료 하나만 다른 날 -->
+  <section class="option" aria-labelledby="f5">
+    <div class="cap"><span class="tag">⑤ ONE ITEM</span><h2 id="f5">한 재료만 다른 날</h2><p>줄을 펼치면 수량·단위·보관 위치·가격 아래에 그 재료의 구입일 칩이 있어요. 기본은 <b>위와 같게</b>.</p></div>
+    <div class="phone">
+      <div class="scrim"></div>
+      <div class="sheet tall">
+        <div class="handle"></div>
+        <div><p class="sh-title">찾은 재료 12개</p><p class="sh-desc">사진 3장에서 찾았어요 · 겹친 재료는 합쳤어요</p></div>
+        <div class="chips"><span class="chip small">오늘</span><span class="chip small">어제</span><span class="chip small on">3일 전</span><span class="chip small">1주 전</span><span class="chip small">날짜 고르기</span><span class="chip small">기억 안 나요</span></div>
+        <div class="items">
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span><span><span class="it-name">두부</span><br><span class="it-sub">1모 · 냉장실</span></span><span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span></div>
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span><span><span class="it-name">대파</span><br><span class="it-sub">1단 · 냉장실 · <span class="own">어제 구입</span></span></span><span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg></span>
+            <div class="edit">
+              <div class="fields"><div class="fld"><span>수량</span><div>1</div></div><div class="fld"><span>단위</span><div>단</div></div><div class="fld"><span>보관 위치</span><div>냉장실</div></div><div class="fld"><span>가격 (선택)</span><div style="color:var(--text-3)">모르면 비워두세요</div></div></div>
+              <div style="display:grid;gap:6px"><span class="label" style="font-size:13px">이 재료 구입일</span>
+                <div class="chips"><span class="chip small">위와 같게</span><span class="chip small">오늘</span><span class="chip small on">어제</span><span class="chip small">3일 전</span><span class="chip small">날짜 고르기</span><span class="chip small">기억 안 나요</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span><span><span class="it-name">달걀</span><br><span class="it-sub">10개 · 냉장실</span></span><span class="chev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span></div>
+        </div>
+        <div class="foot"><div class="actions"><span class="btn secondary">다시 찍기</span><span class="btn primary">11개 재고에 넣기</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑥ 재고 목록 -->
+  <section class="option" aria-labelledby="f6">
+    <div class="cap"><span class="tag">⑥ STOCK LIST</span><h2 id="f6">재고 목록 — 구입일 모름</h2><p>‘기억 안 나요’로 넣은 재료는 날짜 없이 수량·위치만 보여요. 유통기한이 없으면 오래됨 경고도 없어요. 재료를 눌러 언제든 구입일을 넣을 수 있어요.</p></div>
+    <div class="phone">
+      <div class="under"><h3>내 재고</h3><p>재료 14개</p></div>
+      <div class="list">
+        <div class="row"><span><b>우유</b><small>1개 · 냉장실 · 9월 10일 구입</small></span><span class="pill">구입 5일째</span></div>
+        <div class="row"><span><b>두부</b><small>1모 · 냉장실 · 9월 12일 구입</small></span><span></span></div>
+        <div class="row"><span><b>대파</b><small>1단 · 냉장실 · 9월 14일 구입</small></span><span></span></div>
+        <div class="row"><span><b>고추장</b><small>1통 · 냉장실</small></span><span></span></div>
+        <div class="row"><span><b>냉동만두</b><small>1봉 · 냉동실</small></span><span></span></div>
+      </div>
+    </div>
+    <p class="foot-note">재료 고치기 화면의 구입일 칸에도 <b>기억 안 나요</b>를 둬서 나중에 비우거나 채울 수 있어요.</p>
+  </section>
+
+</main>

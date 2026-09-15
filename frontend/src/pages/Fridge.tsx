@@ -240,8 +240,9 @@ export default function Fridge({ user }: { user: User }) {
                       <span className="row-title">{item.name}</span>
                       <span className="row-sub">
                         {formatQuantity(item.quantity)}
-                        {item.unit} · {item.location_name} · {formatDate(item.purchased_on)} 구입
-                        {item.status === "danger" && ` · 구입 ${item.days_since_purchase}일째`}
+                        {item.unit} · {item.location_name}
+                        {item.purchased_on && ` · ${formatDate(item.purchased_on)} 구입`}
+                        {item.status === "danger" && item.days_since_purchase !== null && ` · 구입 ${item.days_since_purchase}일째`}
                       </span>
                     </span>
                     {label && <span className={`badge ${item.status}`}>{label}</span>}
