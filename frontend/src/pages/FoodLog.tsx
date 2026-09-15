@@ -226,7 +226,10 @@ export default function FoodLogPage({ user }: { user: User }) {
     try {
       const created = await uploadFoodPhoto<FoodLog>("/api/food-logs/photo", file);
       forgetResources("/api/food-logs");
-      setMonth(monthOf(created.eaten_on));
+      // 같은 달이면 setMonth가 같은 값이라 다시 그리지 않으니 reload를 직접 부른다(리뷰 fix round 1 I2)
+      const m = monthOf(created.eaten_on);
+      if (m === month) void monthReload.current();
+      else setMonth(m);
       setSelected(created.eaten_on);
       setOpen(true);
     } catch (e) {
@@ -267,16 +270,16 @@ export default function FoodLogPage({ user }: { user: User }) {
           className="icon-btn fl-camera"
           aria-label="사진만 먼저 남기기"
           aria-haspopup="dialog"
+          disabled={quickBusy}
           onClick={() => setQuickOpen(true)}
         >
           <Icon name="camera" />
         </button>
       </header>
-      {quickBusy && (
-        <p className="muted" role="status">
-          사진을 남기는 중…
-        </p>
-      )}
+      {/* 리뷰 fix round 1: role=status 영역은 늘 붙어 있고 글자만 바뀐다(스크린리더가 안정적으로 읽게) */}
+      <p className="muted" role="status">
+        {quickBusy ? "사진을 남기는 중…" : ""}
+      </p>
       {quickError && (
         <p className="error" role="alert">
           {quickError}
