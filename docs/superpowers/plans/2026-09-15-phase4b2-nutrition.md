@@ -64,6 +64,15 @@
 27. **식단 기간 합계(21절 `합산 단위: 식단 기간`)는 이번에 넣지 않는다** — 승인 시안에 화면이 없고, 기간 요약은 4b-3 먹은 기록 달력의 월 요약(24절)과 겹친다. 필요하면 `day.ts daySum`을 기간 칸에 그대로 쓴다.
 28. **마이그레이션 id**: Task 1 `f1b1o1d1y1p1`(down `e1p1u1r1c1h1`), Task 2 `f2f2o2o2d2s2`(down `f1b1o1d1y1p1`) — **구현 시 head 확인**.
 
+## 개정 1 (2026-09-15, 실측 뒤 — Task 2 Step 0b, 컨트롤러 Ruling 8) — Task 2~5가 이 절을 따른다
+
+실측: 이 서비스의 검색은 이름 부분 일치이고 순서가 음식 → 가공식품 → 원재료성(`DB_GRP_CM` `R1`)이다. 원재료성 행은 결과 **끝쪽**에 모이고 이름은 `재료_부위_상태`(`파_대파_생것`, `돼지고기_뒷다리_생것`) 모양이다. 분류로 거르는 요청 변수는 없다. `두부` 1·2쪽(200행)에는 원재료성·이름이 똑같은 행이 없다.
+
+- **결정 11 바꿈(찾기 쪽):** 1쪽은 늘, 전체 건수가 100을 넘으면 **마지막 쪽**도, 마지막 쪽 번호가 3 이상이고 50행 미만이면 그 앞 쪽도(이름 하나에 최대 3번). `foods.name_parts(이름)` = `_`·`,`로 나눈 조각을 `normalize`한 목록. 식품 찾기 목록은 `(검색어 키가 조각에 없음, GROUP_ORDER, 이름 길이, 이름)` 순.
+- **결정 10 바꿈(자동 맞추기):** 후보 = 캐시 행(source != `ai`) 중 `재료 키 in name_parts(이름)`. ① 원재료성 후보가 있으면 그중 `(조각에 '생것' 없음, 조각 수, 이름 길이, 이름)` 순 첫 행 ② 없으면 `normalize(이름) == 키`인 행이 딱 하나일 때 그것 ③ 아니면 못 맞춤. `auto_match(key, rows)`의 rows는 이 후보 목록이다. `NutritionContext`는 후보를 `FoodNutrient.name LIKE %키%`(이스케이프, 키 50개씩 `or_`로 묶은 쿼리) 뒤 파이썬에서 `name_parts`로 거른다.
+- **못 맞춘 재료 = AI 추정(스펙 21절 "매칭 실패 식품은 AI 추정치를 쓰고 `추정` 표시"):** `resolve`에서 사용자 기억이 없고 자동 맞추기가 없으며 찾아본 기록(FoodSearch)이 있으면 `unmatched`가 아니라 **`ai:<키>` 행이 있으면 `estimate`, 없으면 `estimate_missing`**(→ `can_estimate`면 `pending`(`pending_reason` `food`), 아니면 `no_estimate`). 채우기(Task 4)는 이 줄도 `food` 추정 목록에 넣는다. 화면 줄 문구는 `{이름} · AI로 추정했어요` + `바꾸기`(Task 8 그대로). `unmatched` 상태는 사용자가 고른 식품 코드가 캐시에서 사라졌을 때만 남는다.
+- 테스트 영향: Task 3 `test_auto_match_rules`는 위 ①②③으로, `test_context_resolves_match_auto_and_estimates`의 `대파`(찾아봤고 후보 없음)는 `estimate_missing`, Task 4 `test_on_mode_searches_then_estimates_once`는 후보 없는 재료가 `foods` 추정 목록에 들어가는지 확인.
+
 ## 브랜치
 
 | 브랜치 | 태스크 | 시작 시점 |
