@@ -74,7 +74,7 @@
 | `DEMO_IP_DAILY_LIMIT` | 선택 | 같은 IP에서 24시간에 만들 수 있는 체험 계정 수(기본 100) | 직접 설정 |
 | `DEMO_AI_GLOBAL_DAILY` | 선택 | 체험 계정 전체의 사진 인식·AI 레시피 호출 24시간 예산(기본 300). 넘으면 체험 계정은 예시 결과로 동작 | 직접 설정 |
 | `TRUSTED_PROXY_HOPS` | 선택 | `X-Forwarded-For`를 붙이는 앞단 프록시 수(기본 1, Render). 체험 계정 IP 한도가 이 값으로 접속 주소를 고른다. 확인은 아래 5-3 | 직접 설정 |
-| `COUPANG_ACCESS_KEY` / `COUPANG_SECRET_KEY` | 선택 | 쿠팡 파트너스 제휴 링크. 둘 다 있으면 `/api/me`의 `shop_affiliates`가 `{"coupang": true}`가 되고, 쿠팡 칩이 `/api/shop-links/coupang/go`를 거쳐 딥링크 API의 단축 링크로 열리며 `광고`·파트너스 안내 문구가 보인다. 없거나 API 실패·3초 초과·호출 한도(1시간 전체 80·사용자 10)면 일반 검색 링크. 웹 서비스에만 넣는다 | 쿠팡 파트너스 → 파트너스 API(최종 승인 뒤 발급) |
+| `COUPANG_ACCESS_KEY` / `COUPANG_SECRET_KEY` | 선택 | 쿠팡 파트너스 제휴 링크. 둘 다 있으면(체험 계정 제외) `/api/me`의 `shop_affiliates`가 `{"coupang": true}`가 되고, 쿠팡 칩이 `/api/shop-links/coupang/go`를 거쳐 딥링크 API의 단축 링크로 열리며 `광고`·파트너스 안내 문구가 보인다. 없거나 API 실패·3초 초과·호출 한도(1시간 전체 80·사용자 10)면 일반 검색 링크. 웹 서비스에만 넣는다 | 쿠팡 파트너스 → 파트너스 API(최종 승인 뒤 발급) |
 | `COUPANG_PARTNERS_ID` | 선택 | 트래킹 코드(AF…). 참고용 — 링크에는 쓰지 않는다 | 쿠팡 파트너스 |
 | `DEV_MODE` | 로컬 전용 | 로컬 개발 | 운영(Render)에는 **넣지 않는다** |
 

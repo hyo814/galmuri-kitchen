@@ -15,8 +15,9 @@ GO = "/api/shop-links/coupang/go"
 
 
 @pytest.fixture(autouse=True)
-def empty_cache():
+def empty_cache(monkeypatch):
     coupang._cache.clear()
+    monkeypatch.setattr(coupang, "_paused_until", 0.0)
     yield
     coupang._cache.clear()
 
@@ -59,6 +60,10 @@ def test_authorization_matches_documented_hmac():
     )
 
 
+def deeplink_response(body):
+    return lambda self, request, **kwargs: response(200, json.dumps(body).encode(), {})
+
+
 def test_deeplink_posts_signed_json_to_fixed_host(monkeypatch):
     sent = []
 
@@ -74,6 +79,7 @@ def test_deeplink_posts_signed_json_to_fixed_host(monkeypatch):
     assert headers["Authorization"].startswith("CEA algorithm=HmacSHA256, access-key=test-access, signed-date=")
     assert "test-secret" not in headers["Authorization"]
     assert kwargs["allow_redirects"] is False and kwargs["proxies"] == {}
+    assert kwargs["timeout"][1] <= coupang.TIMEOUT_SECONDS  # 3초 제한이 requests까지 간다(넘으면 감시 타이머가 끊는다)
 
 
 @pytest.mark.parametrize(
@@ -83,16 +89,49 @@ def test_deeplink_posts_signed_json_to_fixed_host(monkeypatch):
         {"rCode": "0", "data": []},
         {"rCode": "0", "data": [{"shortenUrl": "https://evil.example.com/a"}]},
         {"rCode": "0", "data": [{"shortenUrl": "http://link.coupang.com/a/x"}]},
+        {"rCode": "0", "data": [{"shortenUrl": "https://evil.com\\.coupang.com/a"}]},  # urlsplit 호스트는 *.coupang.com, 브라우저는 evil.com
+        {"rCode": "0", "data": [{"shortenUrl": "https://link.coupang.com/a/x\r\nSet-Cookie: a=b"}]},
+        {"rCode": "0", "data": [{"shortenUrl": "https://link.coupang.com:8443/a/x"}]},
+        {"rCode": "0", "data": [{"shortenUrl": "https://link.coupang.com/a/x?next=https://evil.com"}]},
+        {"rCode": "0", "data": [{"shortenUrl": "https://evil.coupang.com/a/x"}]},
+        {"rCode": "0", "data": [{"shortenUrl": 123}]},
     ],
 )
 def test_deeplink_rejects_bad_responses(monkeypatch, body):
-    monkeypatch.setattr(requests.Session, "send", lambda self, request, **kwargs: response(200, json.dumps(body).encode(), {}))
+    monkeypatch.setattr(requests.Session, "send", deeplink_response(body))
     with pytest.raises((ValueError, IndexError, KeyError)):
         coupang.deeplink(PLAIN, "a", "b")
 
 
-def test_go_requires_login(client):
-    assert go(client).status_code == 401
+def test_go_without_login_redirects_to_plain(client, app, keys, fake_deeplink):
+    calls = fake_deeplink()
+    res = go(client)
+    assert (res.status_code, res.headers["Location"]) == (302, PLAIN)
+    assert go(client, "https://evil.example.com/np/search?q=a").status_code == 400
+    assert calls == []
+    with app.app_context():
+        assert AiCall.query.count() == 0
+
+
+def test_go_demo_user_gets_plain_without_api(client, login, app, keys, fake_deeplink):
+    calls = fake_deeplink()
+    user = login()
+    with app.app_context():
+        db.session.get(type(user), user.id).provider = "demo"
+        db.session.commit()
+    assert go(client).headers["Location"] == PLAIN
+    assert client.get("/api/me").get_json()["shop_affiliates"] == {}  # 광고 표시도 없다
+    assert calls == []
+    with app.app_context():
+        assert AiCall.query.count() == 0
+
+
+def test_go_bad_shorten_url_end_to_end_falls_back_to_plain(client, login, app, keys, monkeypatch):
+    body = {"rCode": "0", "data": [{"shortenUrl": "https://evil.com\\.coupang.com/a"}]}
+    monkeypatch.setattr(requests.Session, "send", deeplink_response(body))
+    login()
+    res = go(client)
+    assert (res.status_code, res.headers["Location"]) == (302, PLAIN)
 
 
 @pytest.mark.parametrize(
@@ -143,15 +182,29 @@ def test_go_redirects_to_affiliate_link_and_caches(client, login, app, keys, fak
         assert [(c.user_id, c.kind, c.model) for c in AiCall.query.all()] == [(user.id, "shop_link", None)]
 
 
-@pytest.mark.parametrize("error", [FetchError("TooSlow"), ValueError("rCode"), KeyError("data")])
-def test_go_api_error_falls_back_to_plain(client, login, keys, fake_deeplink, caplog, error):
+@pytest.mark.parametrize(
+    "error, paused",
+    [(FetchError("TooSlow"), False), (KeyError("data"), False), (ValueError("rCode"), True), (FetchError("HTTP429"), True)],
+)
+def test_go_api_error_falls_back_to_plain_and_cools_down(client, login, app, keys, fake_deeplink, caplog, monkeypatch, error, paused):
     calls = fake_deeplink(error)
-    login()
+    user = login()
     assert go(client).headers["Location"] == PLAIN
+    with app.app_context():
+        assert [(c.user_id, c.kind) for c in AiCall.query.all()] == [(user.id, "shop_link")]  # 실패한 호출도 기록한다
     assert go(client).headers["Location"] == PLAIN
-    assert len(calls) == 2  # 실패는 기억하지 않는다
+    assert len(calls) == 1  # 실패한 주소는 10분 동안 다시 부르지 않는다
     assert type(error).__name__ in caplog.text
     assert "test-secret" not in caplog.text and "coupang.com/np" not in caplog.text
+
+    other = "https://www.coupang.com/np/search?q=%EB%91%90%EB%B6%80"
+    assert go(client, other).headers["Location"] == other
+    assert len(calls) == (1 if paused else 2)  # rCode·429 뒤에는 다른 주소도 10분 쉰다
+
+    monkeypatch.setattr(coupang, "_paused_until", 0.0)
+    coupang._cache.clear()
+    assert go(client, other).headers["Location"] == other
+    assert len(calls) == (2 if paused else 3)  # 쉬는 시간이 지나면 다시 부른다
 
 
 def test_go_budget_falls_back_to_plain(client, login, app, keys, fake_deeplink):
@@ -160,19 +213,24 @@ def test_go_budget_falls_back_to_plain(client, login, app, keys, fake_deeplink):
     now = utcnow()
     with app.app_context():
         db.session.add_all([AiCall(user_id=user.id, kind="shop_link", created_at=now - timedelta(hours=2)) for _ in range(20)])
-        db.session.add_all([AiCall(user_id=user.id, kind="shop_link", created_at=now - timedelta(minutes=5)) for _ in range(10)])
+        db.session.add_all([AiCall(user_id=user.id, kind="shop_link", created_at=now - timedelta(minutes=5)) for _ in range(9)])
         db.session.commit()
-    assert go(client).headers["Location"] == PLAIN  # 사용자 1시간 10번
-    assert calls == []
+    assert go(client).headers["Location"] == SHORT  # 10번째 호출은 된다(1시간 안 9번 기록)
+    coupang._cache.clear()
+    assert go(client).headers["Location"] == PLAIN  # 11번째는 사용자 1시간 10번에 걸린다
+    assert len(calls) == 1
 
-    other = login("2")
+    other = login("2")  # 이제 이 클라이언트는 다른 사용자
     with app.app_context():
-        db.session.add_all([AiCall(user_id=user.id, kind="shop_link", created_at=now) for _ in range(coupang.GLOBAL_HOURLY - 10)])
-        db.session.commit()
-    assert go(client).headers["Location"] == PLAIN  # 전체 1시간 80번
+        db.session.add_all([AiCall(user_id=user.id, kind="shop_link", created_at=now) for _ in range(coupang.GLOBAL_HOURLY - 11)])
+        db.session.commit()  # 1시간 안 전체 79번
+    coupang._cache.clear()
+    assert go(client).headers["Location"] == SHORT  # 전체 80번째는 된다
+    coupang._cache.clear()
+    assert go(client).headers["Location"] == PLAIN  # 81번째는 전체 1시간 80번에 걸린다
     with app.app_context():
-        assert AiCall.query.filter_by(user_id=other.id).count() == 0
-    assert calls == []
+        assert AiCall.query.filter_by(user_id=other.id).count() == 1
+    assert len(calls) == 2
 
 
 def test_cache_is_bounded(monkeypatch):
@@ -180,8 +238,7 @@ def test_cache_is_bounded(monkeypatch):
     for i in range(3):
         coupang._remember(f"u{i}", f"s{i}")
     assert (coupang._cached("u0"), coupang._cached("u1"), coupang._cached("u2")) == (None, "s1", "s2")
-    monkeypatch.setattr(coupang, "CACHE_SECONDS", -1)
-    coupang._remember("u3", "s3")
+    coupang._remember("u3", "s3", seconds=-1)
     assert coupang._cached("u3") is None  # 24시간 지난 링크
 
 
