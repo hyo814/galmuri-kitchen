@@ -59,12 +59,18 @@ def login_user(user):
     session.permanent = True
 
 
+def current_user():
+    """세션의 사용자. 없거나 지운 사용자 id가 다시 쓰였으면(pid 다름) None."""
+    user_id = session.get("user_id")
+    user = db.session.get(User, user_id) if user_id else None
+    return user if user is not None and session.get("pid") == user.provider_id else None
+
+
 def login_required(view):
     @wraps(view)
     def wrapper(*args, **kwargs):
-        user_id = session.get("user_id")
-        g.user = db.session.get(User, user_id) if user_id else None
-        if g.user is None or session.get("pid") != g.user.provider_id:
+        g.user = current_user()
+        if g.user is None:
             abort(401, "로그인이 필요해요.")
         return view(*args, **kwargs)
 
@@ -106,8 +112,13 @@ def user_json(user):
         scan_limit=ai_daily_limit(user, "AI_DAILY_SCAN_LIMIT"),
         recipe_limit=ai_daily_limit(user, "AI_DAILY_RECIPE_LIMIT"),
         videos=video_mode(user),
-        # 쇼핑몰 링크는 화면(storeLinks.ts)에서 만들므로 제휴 ID를 넘긴다. 값 있는 것만(스펙 16절)
-        shop_affiliates={k: v for k, v in {"coupang": current_app.config["COUPANG_PARTNERS_ID"]}.items() if v},
+        # 제휴 링크를 쓸 수 있는 쇼핑몰만 true(스펙 16절). 쿠팡은 서버가 키로 딥링크를 만든다(coupang.py) — 키·트래킹 코드는 넘기지 않는다.
+        # 체험 계정은 서버가 늘 일반 링크로 보내므로 광고 표시도 없다
+        shop_affiliates=(
+            {"coupang": True}
+            if current_app.config["COUPANG_ACCESS_KEY"] and current_app.config["COUPANG_SECRET_KEY"] and user.provider != "demo"
+            else {}
+        ),
     )
 
 

@@ -66,14 +66,37 @@ assert.deepEqual(order({ lastUsed: "kurly" }), ["kurly", ...ids.filter((id) => i
 assert.deepEqual(order({ lastUsed: "nope" }), ids);
 assert.deepEqual(order({ lastUsed: null }), ids);
 
-const formats = { gmarket: (u, id) => u + "&aff=" + id };
-const withAd = storeLinks("대파", { gmarket: "X", coupang: "Y" }, { formats });
+const formats = { gmarket: (u) => u + "&aff=1" };
+const withAd = storeLinks("대파", { gmarket: true, coupang: true }, { formats });
 assert.deepEqual(withAd.map((r) => r.store), ids); // 제휴가 붙어도 순서 그대로
 for (const r of withAd) {
-  assert.equal(r.ad, r.store === "gmarket", r.store); // coupang은 ID가 있어도 형식이 없어 광고 아님
-  for (const l of r.links) assert.equal(new URL(l.url).searchParams.get("aff"), r.store === "gmarket" ? "X" : null, l.url);
+  assert.equal(r.ad, r.store === "gmarket", r.store); // coupang은 켜져 있어도 이 formats에 형식이 없어 광고 아님
+  for (const l of r.links) assert.equal(new URL(l.url).searchParams.get("aff"), r.store === "gmarket" ? "1" : null, l.url);
 }
-assert.ok(storeLinks("대파", { coupang: "Y" }).every((r) => !r.ad)); // 기본 AFFILIATE_FORMATS는 비어 있다
+assert.ok(storeLinks("대파", { gmarket: true }).every((r) => !r.ad)); // 기본 AFFILIATE_FORMATS에는 쿠팡만 있다
+assert.ok(storeLinks("대파", { coupang: false }).every((r) => !r.ad));
+assert.ok(storeLinks("대파", { coupang: "AF123" }).every((r) => !r.ad)); // 옛 /api/me 모양(제휴 ID)
+
+// 쿠팡 제휴(기본 형식): 같은 주소의 이동 엔드포인트가 원래 검색 주소를 url로 그대로 넘긴다. 다른 쇼핑몰은 그대로
+for (const onlyVerified of [false, true]) {
+  const before = storeLinks("A&B #1 대파", {}, { onlyVerified });
+  const after = storeLinks("A&B #1 대파", { coupang: true }, { onlyVerified });
+  for (const [i, r] of after.entries()) {
+    assert.equal(r.ad, r.store === "coupang", r.store);
+    for (const [j, l] of r.links.entries()) {
+      const was = before[i].links[j];
+      if (r.store !== "coupang") { assert.deepEqual(l, was); continue; }
+      const go = new URL(l.url, "https://galmuri.example");
+      assert.equal(go.origin + go.pathname, "https://galmuri.example/api/shop-links/coupang/go", l.url);
+      assert.deepEqual([...go.searchParams.keys()], ["url"]);
+      assert.equal(go.searchParams.get("url"), was.url);
+      const target = new URL(was.url); // 서버 검사(coupang.plain_search_url)와 같은 조건
+      assert.equal(target.host + target.pathname, "www.coupang.com/np/search");
+      assert.ok([...target.searchParams.keys()].every((k) => k === "q" || k === "sorter"), was.url);
+      assert.ok([null, "salePriceAsc", "saleCountDesc", "latestAsc"].includes(target.searchParams.get("sorter")), was.url); // backend coupang.SORTERS
+    }
+  }
+}
 
 // 운영(onlyVerified): 쇼핑몰은 모두 보이고, 폰 확인 전 쇼핑몰은 정렬 칩 없이 검색 주소 하나만
 for (const r of storeLinks("대파", {}, { onlyVerified: true })) {

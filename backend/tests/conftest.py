@@ -26,6 +26,8 @@ TEST_CONFIG = {
     "R2_ACCESS_KEY_ID": None,
     "R2_SECRET_ACCESS_KEY": None,
     "R2_BUCKET": None,
+    "COUPANG_ACCESS_KEY": None,  # 셸에 키가 있어도 쿠팡 제휴 링크는 키 없음으로 시작한다
+    "COUPANG_SECRET_KEY": None,
 }
 
 

@@ -1,6 +1,6 @@
 """외부 HTTP 요청은 이 파일에서만 한다(스펙 17절).
 
-- 유튜브·인스타그램: 사용자가 보낸 주소를 요청하지 않고 영상 ID·게시물 코드로 고정 호스트 주소를 다시 만든다(fetch_fixed).
+- 유튜브·인스타그램: 사용자가 보낸 주소를 요청하지 않고 영상 ID·게시물 코드로 고정 호스트 주소를 다시 만든다(fetch_fixed). 쿠팡 파트너스 API도 고정 호스트(coupang.py).
 - 블로그 같은 일반 주소: https·443 포트·공인 IP만(DNS 결과 전부 + 검사한 IP 하나에만 연결 + 연결된 소켓의 상대 주소),
   리다이렉트는 매번 다시 검사해 최대 3번, text/html·3MB(fetch_public_page).
   본문 글에 레시피가 없어 보이는 페이지의 본문 사진(page_images)도 같은 검사로 받는다: 사진 형식은 파일 시그니처로 보고, 전체 10초.
@@ -35,7 +35,7 @@ MAX_LINK = 500
 MAX_TEXT = 10_000
 MAX_LABEL = 200  # 출처 카드 제목·채널 이름
 HEADERS = {"User-Agent": "galmuri-kitchen/1.0"}
-FIXED_HOSTS = {"www.googleapis.com", "www.youtube.com", "www.instagram.com"}
+FIXED_HOSTS = {"www.googleapis.com", "www.youtube.com", "www.instagram.com", "api-gateway.coupang.com"}  # 쿠팡: 파트너스 딥링크(coupang.py)
 REDIRECT_CODES = {301, 302, 303, 307, 308}
 MAX_IMAGE_CANDIDATES = 8  # 블로그 본문 사진 후보(요청은 차례로)
 MAX_PAGE_IMAGES = 5  # AI에 함께 보내는 본문 사진
@@ -225,9 +225,10 @@ def _check_public_url(url):
     return _host_key(host), infos[0][4][0]  # 첫 주소 하나에만 연결한다
 
 
-def _fetch(url, params=None, public=False, image=False, seconds=None):
+def _fetch(url, params=None, public=False, image=False, seconds=None, json_body=None, headers=None):
     """(본문, charset, 최종 주소). public이면 매 단계 주소를 검사하고 리다이렉트를 따라간다.
-    image면 Content-Type을 보지 않고(부른 쪽이 파일 시그니처로 본다) MAX_IMAGE_BYTES까지만 읽는다. seconds는 리다이렉트까지 합친 제한 시간(기본 TOTAL_SECONDS)."""
+    image면 Content-Type을 보지 않고(부른 쪽이 파일 시그니처로 본다) MAX_IMAGE_BYTES까지만 읽는다. seconds는 리다이렉트까지 합친 제한 시간(기본 TOTAL_SECONDS).
+    json_body를 주면 POST로 보낸다(headers는 기본 헤더에 더한다)."""
     seconds = TOTAL_SECONDS if seconds is None else seconds
     addresses = {} if public else None
     adapter = PublicOnlyAdapter(addresses)
@@ -245,7 +246,10 @@ def _fetch(url, params=None, public=False, image=False, seconds=None):
                 host, ip = _check_public_url(url)
                 addresses[host] = ip
             timeout = (CONNECT_SECONDS, _remaining(deadline))
-            res = session.get(url, params=params, headers=HEADERS, timeout=timeout, allow_redirects=False, stream=True)
+            res = session.request(
+                "POST" if json_body is not None else "GET", url, params=params, json=json_body, headers={**HEADERS, **(headers or {})},
+                timeout=timeout, allow_redirects=False, stream=True,
+            )
             with res:
                 if public and res.status_code in REDIRECT_CODES:
                     location = res.headers.get("Location")
@@ -267,12 +271,12 @@ def _fetch(url, params=None, public=False, image=False, seconds=None):
         session.close()
 
 
-def fetch_fixed(url, params=None):
-    """정해 둔 호스트(유튜브 API·유튜브·인스타그램)만, 리다이렉트 없이 요청한다. (본문, charset)."""
+def fetch_fixed(url, params=None, json_body=None, headers=None, seconds=None):
+    """정해 둔 호스트(유튜브 API·유튜브·인스타그램·쿠팡 API)만, 리다이렉트 없이 요청한다. (본문, charset). json_body를 주면 POST."""
     parts = urlsplit(url)
     if parts.scheme != "https" or parts.hostname not in FIXED_HOSTS or parts.netloc != parts.hostname:
         raise FetchError("HostNotAllowed")
-    return _fetch(url, params)[:2]
+    return _fetch(url, params, json_body=json_body, headers=headers, seconds=seconds)[:2]
 
 
 def fetch_public_page(url):
