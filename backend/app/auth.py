@@ -71,9 +71,14 @@ def login_required(view):
     return wrapper
 
 
-def get_owned_or_404(model, obj_id):
-    if obj_id > 2**31 - 1:  # DB의 int 컬럼 범위 밖 → 조회 없이 바로 404 (500 방지)
+def abort_if_id_too_big(obj_id):
+    """DB의 int 컬럼 범위 밖 → 조회 없이 바로 404 (500 방지). URL <int:>는 음수를 받지 않는다."""
+    if obj_id > 2**31 - 1:
         abort(404, "찾을 수 없어요.")
+
+
+def get_owned_or_404(model, obj_id):
+    abort_if_id_too_big(obj_id)
     obj = db.session.get(model, obj_id)
     if obj is None or obj.user_id != g.user.id:
         abort(404, "찾을 수 없어요.")

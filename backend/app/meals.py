@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from . import ai, scan
 from .amounts import is_spoon, parse_amount
-from .auth import ai_daily_limit, get_owned_or_404, login_required
+from .auth import abort_if_id_too_big, ai_daily_limit, get_owned_or_404, login_required
 from .ingredients import seoul_today
 from .matching import match_prepared, normalize, prepare
 from .models import Ingredient, MealPlan, MealSlot, Recipe, ShoppingItem, db
@@ -83,8 +83,7 @@ def plan_json(plan, prepared_stock, urgent):
 
 def _owned_plan_with_slots(plan_id):
     """plan_json용: 칸 목록은 레시피까지 selectinload로 한 번에(N+1 방지)."""
-    if not 0 < plan_id <= 2**31 - 1:
-        abort(404, NOT_FOUND)
+    abort_if_id_too_big(plan_id)
     plan = (
         MealPlan.query.options(selectinload(MealPlan.slots).selectinload(MealSlot.recipe))
         .filter_by(id=plan_id, user_id=g.user.id)
@@ -97,8 +96,7 @@ def _owned_plan_with_slots(plan_id):
 
 def _owned_slot(slot_id):
     """칸 → 식단 → user_id 확인, 아니면 404."""
-    if not 0 < slot_id <= 2**31 - 1:
-        abort(404, NOT_FOUND)
+    abort_if_id_too_big(slot_id)
     slot = (
         MealSlot.query.join(MealPlan, MealSlot.plan_id == MealPlan.id)
         .filter(MealSlot.id == slot_id, MealPlan.user_id == g.user.id)
@@ -137,7 +135,7 @@ def list_meal_plans():
             .all()
         )
         counts = dict(rows)
-    latest = MealPlan.query.filter_by(user_id=g.user.id).order_by(MealPlan.created_at.desc(), MealPlan.id.desc()).first()
+    latest = max(plans, key=lambda p: (p.created_at, p.id), default=None)  # 마지막으로 만든 식단(시작일 순서가 아니다)
     return jsonify(
         items=[plan_summary(p, counts.get(p.id, 0)) for p in plans],
         default_servings=latest.default_servings if latest else 1,
@@ -252,6 +250,7 @@ def put_meal_slot(plan_id):
 @bp.post("/meal-plans/<int:plan_id>/copy-week")
 @login_required
 def copy_meal_week(plan_id):
+    """from_on(식단 주 페이지 시작일)부터 한 주의 칸을 다음 weeks주에 복사한다. 이미 채운 칸은 그대로 두고, 31일 안에서 기간을 늘린다."""
     plan = get_owned_or_404(MealPlan, plan_id)
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
@@ -334,7 +333,8 @@ def clean_meal_draft(raw, empty_keys, mine_by_id, prepared_stock, urgent, candid
     dishes = []  # 원래 번호 그대로, 못 쓰는 번호는 None
     first = {}  # 요리 키 → 처음 나온 번호. 같은 요리가 또 오면 처음 것으로 합친다(넣을 때 같은 레시피를 두 번 만들지 않게)
     canon = []  # 원래 번호 → 합친 번호(못 쓰면 None)
-    for row in raw.get("dishes")[:MAX_DRAFT_DISHES] if isinstance(raw.get("dishes"), list) else []:
+    rows = raw.get("dishes") if isinstance(raw.get("dishes"), list) else []
+    for row in rows[:MAX_DRAFT_DISHES]:
         if not isinstance(row, dict):
             dishes.append(None)
             canon.append(None)
@@ -352,7 +352,8 @@ def clean_meal_draft(raw, empty_keys, mine_by_id, prepared_stock, urgent, candid
             })
             continue
         draft = clean_draft(row)
-        canon.append(draft and first.setdefault(("new", normalize(draft["title"])), len(dishes)))
+        # 공백만 무시한다(normalize는 괄호 속을 지워 `두부조림(매운맛)`·`두부조림(간장)`까지 합쳐 버린다)
+        canon.append(draft and first.setdefault(("new", "".join(draft["title"].split()).lower()), len(dishes)))
         dishes.append(draft and {
             "recipe_id": None, "title": draft["title"], "servings": draft["servings"], "est_kcal": est_kcal,
             "ingredients": draft["ingredients"], "steps": draft["steps"],
@@ -418,6 +419,9 @@ def draft_meal_plan(plan_id):
         abort(400, "채울 빈 칸이 없어요.")
     kept = [(d.isoformat(), m, filled[(d, m)].title) for d in dates for m in MEALS if m in meals and (d, m) in filled]
 
+    mode = ai.scan_mode(g.user)
+    if mode == "off":  # 재고·레시피를 읽기 전에(목표 두 칸도 저장하지 않는다 — 화면이 AI 초안을 숨긴다)
+        abort(503, "AI 식단 초안을 지금은 쓸 수 없어요.")
     user_id = g.user.id
     stock = inventory(user_id)  # 비어도 진행한다(재고 없이도 식단은 짠다)
     prepared_stock, urgent = _prepared_stock(stock), {name for name, is_urgent in stock if is_urgent}
@@ -427,9 +431,6 @@ def draft_meal_plan(plan_id):
     goal_kcal, goal_note = plan.goal_kcal, plan.goal_note
     db.session.commit()  # 목표 두 칸은 다음에 미리 채우도록 저장한다
 
-    mode = ai.scan_mode(g.user)
-    if mode == "off":
-        abort(503, "AI 식단 초안을 지금은 쓸 수 없어요.")
     if mode == "sample":
         raw = ai.sample_meal_draft(empty)
     else:
@@ -528,7 +529,7 @@ def apply_meal_draft(plan_id):
 def shopping_rows(needs, stock, listed, today):
     """식단 장보기 미리보기 분류(스펙 23절 D4, 20절 구현 세부). 순수 함수, DB 없이 테스트한다.
     needs=[(이름, 양 글자, 인분 배율, 끼니 날짜)], stock=[(이름, 수량, 단위)], listed=[장보기 목록(stocked_at NULL) 이름]."""
-    listed_norm = {normalize(name) for name in listed}
+    listed_norm = {normalize(name) for name in listed} - {""}  # 정규화가 빈 이름은 목록과 맞춰 보지 않는다(bulk 담기와 같게)
     stock_prepared = [(prepare(name), quantity, unit) for name, quantity, unit in stock]
 
     order = []
@@ -562,53 +563,38 @@ def shopping_rows(needs, stock, listed, today):
         has_stock = bool(matched)
         have = {}
         for quantity, unit in matched:
-            parsed = parse_amount(f"{quantity:g}{unit}")
+            parsed = parse_amount(f"{quantity:f}{unit}")  # :g는 1500000을 1.5e+06으로 써서 읽지 못했다
             if parsed:
                 value, u = parsed
                 have[u] = have.get(u, 0) + value
 
         need = group["need"]
-        row = {
+        # need 첫 단위·그 양(반올림), 비었으면 1개. Task 9 MealShoppingRow(quantity·unit 필수)를 지키려고 skip 행도 실제 값을 담는다
+        unit = next(iter(need), "개")
+        quantity = round(need[unit], 2) if need else 1
+        if normalize(name) in listed_norm:
+            bucket, reason = "skip", "listed"
+        elif not need:
+            bucket, reason = ("skip", "enough") if has_stock else ("manual", None)
+        elif len(need) >= 2 or (have and unit not in have):
+            bucket, reason = "manual", None
+            quantity = max(quantity, 0.01)  # 인분 배율로 반올림하면 0이 될 수 있어 최소값을 둔다
+        else:
+            short = round(need[unit] - have.get(unit, 0), 2)  # 반올림 먼저: 문턱값 오차로 0짜리 buy가 생기지 않게
+            bucket, reason = ("buy", None) if short > 0 else ("skip", "enough")
+            if short > 0:
+                quantity = short
+
+        buckets[bucket].append((planned_on.isoformat(), index, {
             "name": name,
             "planned_on": planned_on.isoformat(),
-            "need": [{"quantity": round(value, 2), "unit": unit} for unit, value in need.items()],
+            "need": [{"quantity": round(value, 2), "unit": u} for u, value in need.items()],
             "need_extra": group["need_extra"],
-            "have": [{"quantity": round(value, 2), "unit": unit} for unit, value in have.items()],
-        }
-
-        def fallback():
-            """need 첫 단위·그 양(반올림), 비었으면 1개(manual의 빈 need와 같은 기본값).
-            Task 9 MealShoppingRow(quantity·unit 필수, null 아님)를 지키려고 skip 행도 실제 값을 담는다."""
-            if not need:
-                return 1, "개"
-            first_unit = next(iter(need))
-            return round(need[first_unit], 2), first_unit
-
-        def add(bucket, quantity, unit, reason):
-            row["quantity"], row["unit"], row["reason"] = quantity, unit, reason
-            buckets[bucket].append((planned_on.isoformat(), index, row))
-
-        if normalize(name) in listed_norm:
-            quantity, unit = fallback()
-            add("skip", quantity, unit, "listed")
-        elif not need:
-            quantity, unit = fallback()  # need가 비어 있으니 항상 (1, "개")
-            add("skip", quantity, unit, "enough") if has_stock else add("manual", quantity, unit, None)
-        elif len(need) >= 2:
-            quantity, unit = fallback()
-            add("manual", max(quantity, 0.01), unit, None)  # 인분 배율로 반올림하면 0이 될 수 있어 최소값을 둔다
-        else:
-            (unit, amount_needed), = need.items()
-            if unit not in have and have:
-                quantity, _ = fallback()
-                add("manual", max(quantity, 0.01), unit, None)
-            else:
-                short = round(amount_needed - have.get(unit, 0), 2)  # 반올림 먼저: 문턱값 오차로 0짜리 buy가 생기지 않게
-                if short > 0:
-                    add("buy", short, unit, None)
-                else:
-                    quantity, _ = fallback()
-                    add("skip", quantity, unit, "enough")
+            "have": [{"quantity": round(value, 2), "unit": u} for u, value in have.items()],
+            "quantity": quantity,
+            "unit": unit,
+            "reason": reason,
+        }))
 
     return {
         bucket: [entry_row for _, _, entry_row in sorted(entries, key=lambda entry: (entry[0], entry[1]))]
@@ -644,5 +630,5 @@ def meal_plan_shopping_preview(plan_id):
 
     rows = shopping_rows(needs, stock, listed, today)
     return jsonify(
-        start_on=start_on.isoformat(), end_on=end_on.isoformat(), recipe_slot_count=recipe_slot_count, **rows
+        name=plan.name, start_on=start_on.isoformat(), end_on=end_on.isoformat(), recipe_slot_count=recipe_slot_count, **rows
     )

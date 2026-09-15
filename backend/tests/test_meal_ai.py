@@ -1,12 +1,13 @@
-from datetime import timedelta
+from datetime import date, timedelta
 from types import SimpleNamespace
 
 import pytest
 
 from app import ai
+from app import meals as meals_module
 from app.ingredients import seoul_today
 from app.models import AiCall, MealSlot, PublicRecipe, Recipe, db
-from tests.test_meals import add_ingredient, add_recipe, make_plan, put_slot
+from tests.test_meals import add_ingredient, add_recipe, make_plan, put_slot, race_same_slot
 from tests.test_recipe_ai import fix_clock
 from tests.test_scan import ai_call_costs, ai_calls, fail_if_called
 
@@ -106,8 +107,9 @@ def test_off_mode_503(client, login, app):
     login()
     app.config["DEV_MODE"] = False
     plan = make_plan(client).get_json()
-    res = draft(client, plan["id"])
+    res = draft(client, plan["id"], goal_kcal=1800)
     assert (res.status_code, res.get_json()) == (503, {"error": "AI 식단 초안을 지금은 쓸 수 없어요."})
+    assert client.get(f"/api/meal-plans/{plan['id']}").get_json()["goal_kcal"] is None  # 재고·레시피를 읽기 전에 멈춘다
 
 
 def test_ai_mode_cleans_output_and_counts_recipe_limit(client, login, app, monkeypatch):
@@ -386,3 +388,45 @@ def test_same_new_dish_twice_merged_so_apply_creates_one_recipe(client, login, a
     assert (res.status_code, res.get_json()["created_recipes"]) == (201, 1)
     with app.app_context():
         assert [r.title for r in Recipe.query.all()] == ["두부조림"]
+
+
+def clean(app, raw, empty_keys):
+    with app.app_context():
+        return meals_module.clean_meal_draft(raw, set(empty_keys), {}, [], set(), [])
+
+
+def test_clean_keeps_three_options_and_renumbers_after_sorting_slots(app):
+    raw = {
+        "dishes": [new_dish("가지볶음"), new_dish("나물무침"), new_dish("달걀말이"), new_dish("라면")],
+        "slots": [  # 모델이 날짜·끼니 순서를 섞어 보낸다
+            {"date": "2026-09-15", "meal": "dinner", "dishes": [3]},
+            {"date": "2026-09-14", "meal": "lunch", "dishes": [1, 0, 2, 3]},  # 쓸 수 있는 번호 4개 → 앞 3개만
+            {"date": "2026-09-15", "meal": "breakfast", "dishes": [2]},
+        ],
+    }
+    result = clean(app, raw, [("2026-09-14", "lunch"), ("2026-09-15", "breakfast"), ("2026-09-15", "dinner")])
+    assert [d["title"] for d in result["dishes"]] == ["나물무침", "가지볶음", "달걀말이", "라면"]
+    assert result["slots"] == [
+        {"date": "2026-09-14", "meal": "lunch", "options": [0, 1, 2]},
+        {"date": "2026-09-15", "meal": "breakfast", "options": [2]},
+        {"date": "2026-09-15", "meal": "dinner", "options": [3]},
+    ]
+
+
+def test_clean_does_not_merge_titles_differing_only_in_parentheses(app):
+    raw = {
+        "dishes": [new_dish("두부조림(매운맛)"), new_dish("두부조림(간장)"), new_dish("두부조림 (매운맛)")],
+        "slots": [{"date": "2026-09-14", "meal": "lunch", "dishes": [0, 1, 2]}],
+    }
+    result = clean(app, raw, [("2026-09-14", "lunch")])
+    assert [d["title"] for d in result["dishes"]] == ["두부조림(매운맛)", "두부조림(간장)"]
+    assert result["slots"][0]["options"] == [0, 1]
+
+
+def test_apply_duplicate_race_rolls_back_new_recipes(client, login, app, monkeypatch):
+    login()
+    plan = make_plan(client).get_json()
+    race_same_slot(monkeypatch, plan["id"], date(2026, 9, 14), "lunch")
+    res = apply(client, plan["id"], {"dishes": [new_dish()], "slots": [VALID_SLOT]})
+    assert (res.status_code, res.get_json()) == (400, {"error": "방금 채운 칸이에요. 다시 불러와주세요."})
+    assert counts(app) == (0, 0)
