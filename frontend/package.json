@@ -6,6 +6,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "e2e": "playwright test",
     "check": "node scripts/check-format.mjs && node scripts/check-seasoning.mjs && node scripts/check-store-links.mjs && node scripts/check-shopping-sync.mjs && node scripts/check-sw-precache.mjs && node scripts/check-meals.mjs && node scripts/check-purchase-date.mjs && node scripts/check-nutrition.mjs && node scripts/check-foodlog.mjs"
   },
   "dependencies": {
