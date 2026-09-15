@@ -1,5 +1,5 @@
 // 먹은 기록 달력 순수 로직(스펙 24절, 4b-3). 브라우저 API 없음 — 오늘은 인자로 받는다(scripts/check-foodlog.mjs가 node로 읽는다).
-import type { FoodLog, FoodLogMonthDay, FoodLogMonthSummary, FoodPlace } from "../api";
+import type { DishItem, FoodLog, FoodLogMonthDay, FoodLogMonthSummary, FoodLogNutrition, FoodPlace, MealKind } from "../api";
 import { slotDateText } from "../meals/plan.ts";
 import { kcalNumber } from "../nutrition/body.ts";
 
@@ -101,3 +101,85 @@ export function logSubText(log: Pick<FoodLog, "title" | "servings" | "grams" | "
 
 /** 만족도 별 글자 "★★★★☆"(aria는 "만족도 4점") */
 export const starsText = (rating: number) => "★".repeat(rating) + "☆".repeat(5 - rating);
+
+
+// ---- 먹은 것 추가·고치기 시트(Task 9) ----
+
+export const MIN_SERVINGS = 0.5;
+export const MAX_SERVINGS = 20;
+/** −/+ 0.5씩, 0.5~20 */
+export const stepServings = (n: number, delta: 1 | -1) => Math.min(MAX_SERVINGS, Math.max(MIN_SERVINGS, n + delta * 0.5));
+
+/** 서버 scaled(_round0/_round1, .5 올림)와 같은 반올림(kcal·mg 정수, g 소수 첫째). 인자 타입은 FoodLogNutrition 한 벌(개정 1 D8·S3) */
+export function scaleNutrition(per: FoodLogNutrition, factor: number): FoodLogNutrition {
+  const g = (v: number | null) => (v === null ? null : Math.round(v * factor * 10) / 10);
+  return { kcal: Math.round(per.kcal * factor), carbs_g: g(per.carbs_g), protein_g: g(per.protein_g), fat_g: g(per.fat_g), sugars_g: g(per.sugars_g), sodium_mg: per.sodium_mg === null ? null : Math.round(per.sodium_mg * factor) };
+}
+
+export type Amount = { servings: number } | { grams: number };
+
+/** 음식 먹은 g: g 입력이면 그대로, 인분이면 1인분 무게 × 인분(무게 없으면 null) */
+export const dishGrams = (item: Pick<DishItem, "serving_g">, amount: Amount) =>
+  "grams" in amount ? amount.grams : item.serving_g === null ? null : item.serving_g * amount.servings;
+
+/** 미리보기 "약 370kcal · 당류 11g · 나트륨 820mg" */
+export function previewText(n: FoodLogNutrition | null, approx: boolean): string {
+  if (!n) return "";
+  return [`${approx ? "약 " : ""}${kcalNumber(n.kcal)}kcal`, n.sugars_g ? `당류 ${Math.round(n.sugars_g)}g` : "", n.sodium_mg ? `나트륨 ${kcalNumber(n.sodium_mg)}mg` : ""].filter(Boolean).join(" · ");
+}
+
+/** 음식 후보 설명 "음식 · 1인분(400g) 약 740kcal" / "가공식품 · 100g당 185kcal"(앞머리는 응답 group, Ruling C6) */
+export const dishSub = (item: Pick<DishItem, "group" | "serving_g" | "kcal">) =>
+  item.serving_g === null ? `${item.group} · 100g당 ${kcalNumber(item.kcal)}kcal` : `${item.group} · 1인분(${kcalNumber(item.serving_g)}g) 약 ${kcalNumber((item.kcal * item.serving_g) / 100)}kcal`;
+
+/** g 입력 → 1~3000 정수, 아니면 null */
+export function parseGrams(text: string): number | null {
+  const n = Number(text.trim());
+  return Number.isInteger(n) && n >= 1 && n <= 3000 ? n : null;
+}
+
+/** 양 칸이 숨었을 때(`바꾸기`만 누르고 아직 안 고름) 보낼 원래 양 — patchBody가 바뀌지 않았다고 본다 */
+export const keptAmount = (log: Pick<FoodLog, "servings" | "grams">): Amount =>
+  log.grams !== null ? { grams: log.grams } : { servings: log.servings ?? 1 };
+
+/** 무엇 네 갈래(결정 3) */
+export type LogKind = "plan" | "recipe" | "food" | "direct";
+export const KIND_LABEL: Record<LogKind, string> = { plan: "식단에서", recipe: "내 레시피", food: "음식", direct: "직접" };
+export type WhatPick =
+  | { kind: "plan"; slotId: number }
+  | { kind: "recipe"; recipeId: number }
+  | { kind: "food"; foodCode: string }
+  | { kind: "direct"; title: string };
+
+/** 시트 입력 한 벌. memo는 입력 그대로(보낼 때 앞뒤 공백을 빼고 비면 null) */
+export interface LogForm { meal: MealKind; what: WhatPick | null; amount: Amount; place: FoodPlace | null; rating: number | null; memo: string }
+
+/** 기록이 어떤 갈래로 남았는지(고치기 `바꾸기` 줄) */
+export const logKind = (log: Pick<FoodLog, "meal_slot_id" | "recipe_id" | "food_code">): LogKind =>
+  log.meal_slot_id !== null ? "plan" : log.recipe_id !== null ? "recipe" : log.food_code !== null ? "food" : "direct";
+
+const whatFields = (what: WhatPick) =>
+  what.kind === "plan" ? { meal_slot_id: what.slotId }
+  : what.kind === "recipe" ? { recipe_id: what.recipeId }
+  : what.kind === "food" ? { food_code: what.foodCode }
+  : { title: what.title.trim() };
+
+const memoValue = (memo: string) => memo.trim() || null;
+
+/** POST /api/food-logs body. 식단 칸은 날짜·끼니를 칸에서 가져오므로 보내지 않는다 */
+export function createBody(date: string, form: LogForm & { what: WhatPick }) {
+  const when = form.what.kind === "plan" ? {} : { eaten_on: date, meal: form.meal };
+  return { ...when, ...whatFields(form.what), ...form.amount, place: form.place, rating: form.rating, memo: memoValue(form.memo) };
+}
+
+/** PATCH body: 바뀐 칸만. 무엇을 새로 골랐으면 양도 함께(안 보내면 서버가 1인분으로 둔다). 사진 기록(제목 없음)은 무엇 없이 양을 보내지 않는다 */
+export function patchBody(log: Pick<FoodLog, "meal" | "title" | "servings" | "grams" | "place" | "rating" | "memo">, form: LogForm) {
+  const body: Record<string, unknown> = {};
+  if (form.meal !== log.meal) body.meal = form.meal;
+  if (form.what) Object.assign(body, whatFields(form.what), form.amount);
+  else if (log.title !== null && ("grams" in form.amount ? form.amount.grams !== log.grams : form.amount.servings !== log.servings)) Object.assign(body, form.amount);
+  if (form.place !== log.place) body.place = form.place;
+  if (form.rating !== log.rating) body.rating = form.rating;
+  if (memoValue(form.memo) !== log.memo) body.memo = memoValue(form.memo);
+  return body;
+}
