@@ -10,6 +10,7 @@ from app import ai, demo, outbound, scan
 from app.ingredients import SEOUL, seoul_today
 from app.models import (
     AiCall,
+    CookLog,
     FoodLog,
     Ingredient,
     ItemRule,
@@ -130,6 +131,40 @@ def test_demo_login_seeds_food_logs(demo_app, make_app):
     sample_dinner = next(log for log in sample_body["logs"] if log["meal"] == "dinner")
     assert sample_dinner["nutrition_pending"] is True
     assert sample_dinner["recipe_id"] in sample_body["nutrition_pending_recipe_ids"]
+
+
+def test_demo_login_seeds_cook_diary(demo_app):
+    a, b = new_client(demo_app, "10.0.0.1"), new_client(demo_app, "10.0.0.2")
+    a_id = a.post("/api/demo-login").get_json()["id"]
+    b_id = b.post("/api/demo-login").get_json()["id"]
+
+    logs = a.get("/api/cook-logs").get_json()["items"]
+    assert [log["title"] for log in logs] == ["김치찌개", "된장찌개", "김치찌개"]
+    first, second = logs[0], logs[1]
+    assert (first["saved"], first["rating"], first["memo"]) == (10400, 4, "두부 마저 썼어요")
+    assert (second["excluded_count"], second["saved"]) == (2, 14760)
+
+    month = seoul_today().strftime("%Y-%m")
+    report = a.get(f"/api/cook-report?month={month}").get_json()
+    assert "애호박" in report["discarded_names"]
+
+    tubu = next(i for i in a.get("/api/ingredients").get_json() if i["name"] == "두부")
+    assert tubu["price"] == 2480
+    with demo_app.app_context():
+        assert db.session.get(Ingredient, tubu["id"]).price_quantity == 1.0
+
+    recipes = a.get("/api/recipes").get_json()["items"]
+    detail = {r["title"]: a.get(f"/api/recipes/{r['id']}").get_json() for r in recipes}
+    assert (detail["김치찌개"]["eat_out_price"], detail["김치찌개"]["eat_out_source"]) == (9000, "sample")
+    assert (detail["된장찌개"]["eat_out_price"], detail["된장찌개"]["eat_out_source"]) == (8000, "user")
+
+    with demo_app.app_context():
+        assert AiCall.query.count() == 0
+        assert CookLog.query.filter_by(user_id=a_id).count() == len(demo.COOK_LOGS) == 3
+        assert CookLog.query.filter_by(user_id=b_id).count() == 3
+        a_ids = {log.id for log in CookLog.query.filter_by(user_id=a_id)}
+        b_ids = {log.id for log in CookLog.query.filter_by(user_id=b_id)}
+        assert a_ids.isdisjoint(b_ids)  # 다른 체험 계정과 섞이지 않음
 
 
 def test_demo_login_seeds_shopping_list(demo_app):

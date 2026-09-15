@@ -14,13 +14,16 @@ import click
 from flask import Blueprint, abort, current_app, jsonify, request
 from sqlalchemy import text
 
-from . import photos, storage
+from . import cooklog, photos, storage
 from .auth import login_user, user_json
 from .defaults import seed_user_defaults
-from .ingredients import seoul_today
+from .ingredients import seasoning_names, seoul_today
 from .models import (
+    CookLog,
+    CookLogItem,
     FoodLog,
     Ingredient,
+    IngredientRemoval,
     MealPlan,
     MealSlot,
     Recipe,
@@ -34,6 +37,7 @@ from .models import (
     utcnow,
 )
 from .public_recipes import SAMPLE_FILE
+from .recipe_parse import ingredient_key
 
 bp = Blueprint("demo", __name__, cli_group=None)  # 명령은 `flask purge-demo-users`
 
@@ -101,6 +105,21 @@ FOOD_LOGS = [
     (1, "lunch", None, "제육덮밥", "out", 3, "회사 앞 · 조금 짰어요"),
     (0, "breakfast", None, "토스트", "home", 4, None),
 ]
+INGREDIENT_PRICES = {"두부": 2480, "대파": 2500, "김치": 12900, "돼지고기 앞다리살": 9800}  # price_quantity = 예시 수량
+# 체험 계정 레시피(RECIPE_SAMPLES 두 개 전부)에 미리 넣는 값 — 체험은 시트에서 자동 추정하지 않는다(개정 1 P16, 사용자 결정).
+# AI가 낸 값이 아니라 김치찌개는 sample(예시 추정 = ai.SAMPLE_EAT_OUT_PRICE와 같은 9,000원), 된장찌개는 user(직접 넣은 모양)
+EAT_OUT_PRICES = {"김치찌개": (9000, "sample"), "된장찌개": (8000, "user")}
+# (며칠 전, 레시피 제목, 인분, 별점, 메모, [(재료, 쓴 양, 단위, 구입 가격, 구입 수량, 제외)], 재고에 없던 재료 [(이름, 레시피 양)])
+COOK_LOGS = [
+    (2, "김치찌개", 2, 4, "두부 마저 썼어요",
+     [("김치", 0.3, "kg", 12900, 1, None), ("두부", 1, "모", 2480, 1, None), ("대파", 0.5, "단", 2500, 1, None)],
+     [("고춧가루", "1큰술")]),
+    (5, "된장찌개", 2, 5, None,
+     [("두부", 0.5, "모", 2480, 1, None), ("애호박", 0.33, "개", None, None, "no_price"), ("감자", 1, "개", None, None, "no_price")],
+     []),
+    (35, "김치찌개", 1, 3, None, [("김치", 0.15, "kg", 12900, 1, None)], []),
+]
+DISCARDED = [(1, "애호박"), (36, "콩나물")]  # (며칠 전, 이름)
 
 
 def default_plan_name(start, days):
@@ -140,6 +159,8 @@ def seed_demo_data(user_id):
                 unit=unit,
                 purchased_on=today - timedelta(days=bought_ago),
                 expires_on=None if expires_in is None else today + timedelta(days=expires_in),
+                price=INGREDIENT_PRICES.get(name),
+                price_quantity=quantity if name in INGREDIENT_PRICES else None,
             )
         )
     for name, category in STAPLES:
@@ -236,6 +257,34 @@ def seed_demo_data(user_id):
                 nutrition_pending=recipe is not None,
             )
         )
+
+    for title, (price, source) in EAT_OUT_PRICES.items():
+        recipe = next(r for r in recipe_rows if r.title == title)
+        recipe.eat_out_price, recipe.eat_out_source = price, source
+
+    staples = seasoning_names(user_id)
+    for days_ago, title, servings, rating, memo, items, extra in COOK_LOGS:
+        recipe = next(r for r in recipe_rows if r.title == title)
+        log = CookLog(
+            user_id=user_id, recipe=recipe, title=title, cooked_on=today - timedelta(days=days_ago),
+            servings=servings, rating=rating, memo=memo,
+            eat_out_price=recipe.eat_out_price, eat_out_source=recipe.eat_out_source,
+        )
+        for name, used, unit, price, price_quantity, excluded in items:
+            log.items.append(CookLogItem(
+                name=name, used=used, unit=unit, price=price, price_quantity=price_quantity,
+                cost=cooklog.item_cost(used, price, price_quantity) if excluded is None else None,
+                excluded=excluded,
+            ))
+        for name, amount in extra:
+            seasoning = cooklog.is_seasoning(ingredient_key(name), amount, staples)
+            log.items.append(CookLogItem(name=name, amount_text=amount, excluded="seasoning" if seasoning else "no_price"))
+        for key, value in cooklog.summarize(log.eat_out_price, servings, log.items).items():
+            setattr(log, key, value)
+        db.session.add(log)
+
+    for days_ago, name in DISCARDED:
+        db.session.add(IngredientRemoval(user_id=user_id, name=name, reason="discarded", created_at=utcnow() - timedelta(days=days_ago)))
 
 
 def delete_demo_users(query, limit=None):
