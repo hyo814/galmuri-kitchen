@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { ApiError, localToday, type MealPlan, type MealShoppingPreview, type MealShoppingRow } from "../api";
+import { useRef, useState, type ReactNode } from "react";
+import { ApiError, localToday, type MealShoppingPreview, type MealShoppingRow } from "../api";
 import Icon from "../components/Icon";
 import Mascot from "../components/Mascot";
 import { addedText, cut } from "../components/ShoppingAddButton";
@@ -20,7 +20,6 @@ const BULK_MAX = 50; // 서버 한 번에 담기 상한
 export default function MealShopping({ id }: { id: string }) {
   const url = `/api/meal-plans/${id}/shopping-preview`;
   const preview = useResource<MealShoppingPreview>(url);
-  const plan = useResource<MealPlan>(`/api/meal-plans/${id}`); // 장보기 태그 이름(source_label)
   const data = preview.data;
   return (
     <main className="page">
@@ -47,7 +46,7 @@ export default function MealShopping({ id }: { id: string }) {
             </button>
           </section>
         ) : (
-          <Preview data={data} url={url} planName={plan.data?.name} />
+          <Preview data={data} url={url} reload={preview.reload} />
         )
       ) : preview.status === 404 ? (
         <p className="center muted">식단을 찾을 수 없어요.</p>
@@ -60,32 +59,36 @@ export default function MealShopping({ id }: { id: string }) {
   );
 }
 
-function Preview({ data, url, planName }: { data: MealShoppingPreview; url: string; planName?: string }) {
+function Preview({ data, url, reload }: { data: MealShoppingPreview; url: string; reload: () => Promise<void> }) {
   const today = localToday();
   // 고친 체크만 기억한다(나머지는 묶음 기본값) — 캐시로 먼저 보인 미리보기가 새로 와도 어긋나지 않게
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false); // busy는 다음 렌더에야 버튼을 막으니 빠른 두 번 누르기는 여기서 막는다
   const [error, setError] = useState("");
   const isOn = (row: MealShoppingRow, bucket: "buy" | "manual") => toggled[`${bucket}:${row.name}`] ?? bucket === "buy";
   const picked = [...data.buy.filter((r) => isOn(r, "buy")), ...data.manual.filter((r) => isOn(r, "manual"))];
 
   const add = async () => {
-    if (busy) return;
+    if (inFlight.current) return;
     // ponytail: 온라인에서만 담는다(ShoppingAddButton과 같음 — 이미 목록에 있는 이름은 서버가 건너뛴다)
     if (!navigator.onLine) {
       setError(OFFLINE);
       return;
     }
+    inFlight.current = true;
     setBusy(true);
     setError("");
     let created = 0;
+    let offset = 0;
     const skipped: string[] = [];
     try {
       for (let i = 0; i < picked.length; i += BULK_MAX) {
+        offset = i;
         const res = await addMany(
           "meal_plan",
           picked.slice(i, i + BULK_MAX).map((r) => ({ name: cut(r.name, 50), quantity: r.quantity, unit: r.unit, planned_on: r.planned_on })),
-          planName ? cut(planName, 60) : undefined,
+          cut(data.name ?? "", 60),
         );
         created += res.created;
         skipped.push(...res.skipped);
@@ -95,9 +98,15 @@ function Preview({ data, url, planName }: { data: MealShoppingPreview; url: stri
       showShoppingNotice(created ? `식단에서 ${created}개를 담았어요${skippedText ? ` · ${skippedText}` : ""}` : skippedText);
       navigate("/shopping", { replace: true });
     } catch (e) {
-      const text = e instanceof ApiError && e.status === 0 ? OFFLINE : (e as Error).message;
+      // 서버의 `N번째 재료`는 50개씩 나눠 보낸 묶음 안 번호라 전체 번호로 바꾼다
+      const text =
+        e instanceof ApiError && e.status === 0 ? OFFLINE : (e as Error).message.replace(/^(\d+)번째 재료/, (_, n) => `${Number(n) + offset}번째 재료`);
       setError(created ? `${created}개는 담았어요 · ${text}` : text);
-      if (created) forgetResources(url);
+      if (created) {
+        forgetResources(url);
+        await reload(); // 담긴 줄이 `목록에 있어요`로 옮겨 가 다시 눌러도 또 보내지 않게
+      }
+      inFlight.current = false;
       setBusy(false);
     }
   };
@@ -144,6 +153,7 @@ function Preview({ data, url, planName }: { data: MealShoppingPreview; url: stri
         <Icon name="info" size={16} />
         <span>칸마다 인분에 맞춰 필요한 양을 계산하고, 재고에 있는 만큼 뺐어요. 살 날은 그 끼니 전날이에요.</span>
       </p>
+      {data.buy.length + data.manual.length + data.skip.length === 0 && <p className="center muted">장보기에 담을 재료가 없어요</p>}
       {group("모자란 만큼 담아요", data.buy, checkRow("buy"))}
       {group("단위가 달라요 · 직접 골라주세요", data.manual, checkRow("manual"))}
       {group("담지 않아요", data.skip, (row) => (

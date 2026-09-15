@@ -41,7 +41,10 @@ assert.equal(sep.length, 5);
 assert.equal(sep[0][0], "2026-08-31");
 assert.equal(sep.at(-1).at(-1), "2026-10-04");
 assert.equal(monthGrid(2026, 2)[0][0], "2026-01-26");
-assert.equal(monthGrid(2026, 12).at(-1).at(-1) >= "2026-12-31", true);
+const dec = monthGrid(2026, 12); // 12월 → 다음 해 1월로 넘어가는 끝
+assert.equal(dec.length, 5);
+assert.equal(dec[0][0], "2026-11-30");
+assert.equal(dec.at(-1).at(-1), "2027-01-03");
 
 // 주 복사(서버 copy-week와 같은 계산)
 assert.equal(copyMaxWeeks({ start_on: "2026-09-14" }, "2026-09-14"), 3);

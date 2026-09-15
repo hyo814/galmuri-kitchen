@@ -47,10 +47,11 @@ def test_create_and_list_with_default_servings(client, login):
 
     assert client.get("/api/meal-plans").get_json()["default_servings"] == 3
 
-    make_plan(client, name="10월 첫째 주", start_on="2026-10-01", default_servings=2)
+    # 나중에 만들었지만 시작일은 더 이르다: 기본 인분은 시작일이 아니라 마지막으로 만든 식단을 따른다
+    make_plan(client, name="9월 첫째 주", start_on="2026-09-01", default_servings=2)
     body = client.get("/api/meal-plans").get_json()
     assert body["default_servings"] == 2
-    assert [item["start_on"] for item in body["items"]] == ["2026-10-01", "2026-09-14"]
+    assert [item["start_on"] for item in body["items"]] == ["2026-09-14", "2026-09-01"]
 
 
 @pytest.mark.parametrize(
@@ -96,7 +97,7 @@ def test_put_slot_recipe_text_and_overwrite(client, login):
     assert res.status_code == 200
     slot = res.get_json()
     assert (slot["title"], slot["recipe_id"], slot["servings"]) == ("라면", recipe["id"], 2)  # 식단 기본 인분(2)
-    assert slot["have_count"] is not None and slot["total_count"] == 1
+    assert (slot["have_count"], slot["total_count"]) == (0, 1)
 
     res2 = client.put(
         f"/api/meal-plans/{plan['id']}/slots",
@@ -113,22 +114,43 @@ def test_put_slot_recipe_text_and_overwrite(client, login):
 
 
 @pytest.mark.parametrize(
-    "overrides",
+    "overrides, message",
     [
-        {"date": "2026-09-13"},
-        {"date": "2026-09-21"},
-        {"date": None},
-        {"date": "2026-09-15", "meal": "brunch"},
-        {"title": ""},
-        {"title": "가" * 61},
-        {"servings": 21},
+        ({"date": "2026-09-13"}, meals_module.OUT_OF_RANGE),
+        ({"date": "2026-09-21"}, meals_module.OUT_OF_RANGE),
+        ({"date": None}, meals_module.OUT_OF_RANGE),
+        ({"date": "2026-09-15", "meal": "brunch"}, "잘못된 요청이에요."),
+        ({"title": ""}, "무엇을 먹을지는 1~60자로 입력해주세요."),
+        ({"title": "가" * 61}, "무엇을 먹을지는 1~60자로 입력해주세요."),
+        ({"servings": 21}, "인분은 1~20 사이 정수로 입력해주세요."),
     ],
 )
-def test_put_slot_validation(client, login, overrides):
+def test_put_slot_validation(client, login, overrides, message):
     login()
     plan = make_plan(client).get_json()
     res = put_slot(client, plan["id"], **overrides)
-    assert res.status_code == 400
+    assert (res.status_code, res.get_json()) == (400, {"error": message})
+
+
+def race_same_slot(monkeypatch, plan_id, day, meal):
+    """커밋 직전에 다른 요청이 같은 칸을 먼저 채운 것처럼 만든다(UNIQUE 충돌 → SLOT_TAKEN 400·되돌리기)."""
+    real = meals_module.commit_or_duplicate
+
+    def racing(message):
+        db.session.add(MealSlot(plan_id=plan_id, date=day, meal=meal, title="먼저 채움", servings=1))
+        real(message)
+
+    monkeypatch.setattr(meals_module, "commit_or_duplicate", racing)
+
+
+def test_put_slot_duplicate_race_400(client, login, app, monkeypatch):
+    login()
+    plan = make_plan(client).get_json()
+    race_same_slot(monkeypatch, plan["id"], date(2026, 9, 15), "lunch")
+    res = put_slot(client, plan["id"])
+    assert (res.status_code, res.get_json()) == (400, {"error": meals_module.SLOT_TAKEN})
+    with app.app_context():
+        assert MealSlot.query.count() == 0
 
 
 def test_put_slot_out_of_range_message(client, login):
@@ -284,21 +306,27 @@ def test_copy_week_limits(client, login):
     assert (res4.status_code, res4.get_json()["plan"]["days"]) == (200, 28)
 
 
-def test_copy_week_bad_from_on(client, login):
+WEEKS_BAD = "복사할 주는 1~4 사이 정수로 입력해주세요."
+
+
+@pytest.mark.parametrize(
+    "body, message",
+    [
+        ({"from_on": "2026-09-15", "weeks": 1}, "잘못된 요청이에요."),  # 주 페이지 시작일이 아니다
+        ({"from_on": "2026-10-30", "weeks": 1}, "잘못된 요청이에요."),  # 기간 밖
+        ({"from_on": None, "weeks": 1}, "잘못된 요청이에요."),
+        ({"from_on": "2026-09-14", "weeks": 0}, WEEKS_BAD),
+        ({"from_on": "2026-09-14", "weeks": "2"}, WEEKS_BAD),
+        ({"from_on": "2026-09-14", "weeks": True}, WEEKS_BAD),
+        ({"from_on": "2026-09-14"}, WEEKS_BAD),
+        ({"from_on": "2026-09-14", "weeks": 1}, "이번 주에 채운 칸이 없어요."),
+    ],
+)
+def test_copy_week_bad_request(client, login, body, message):
     login()
     plan = make_plan(client).get_json()
-
-    def copy_week(**body):
-        return client.post(f"/api/meal-plans/{plan['id']}/copy-week", json=body)
-
-    res_not_week_start = copy_week(from_on="2026-09-15", weeks=1)
-    assert (res_not_week_start.status_code, res_not_week_start.get_json()["error"]) == (400, "잘못된 요청이에요.")
-
-    res_out_of_range = copy_week(from_on="2026-10-30", weeks=1)
-    assert (res_out_of_range.status_code, res_out_of_range.get_json()["error"]) == (400, "잘못된 요청이에요.")
-
-    res_empty_week = copy_week(from_on="2026-09-14", weeks=1)
-    assert (res_empty_week.status_code, res_empty_week.get_json()["error"]) == (400, "이번 주에 채운 칸이 없어요.")
+    res = client.post(f"/api/meal-plans/{plan['id']}/copy-week", json=body)
+    assert (res.status_code, res.get_json()) == (400, {"error": message})
 
 
 def test_copy_week_other_user_404(client, login):
@@ -309,6 +337,21 @@ def test_copy_week_other_user_404(client, login):
     login("intruder")
     res = client.post(f"/api/meal-plans/{plan['id']}/copy-week", json={"from_on": "2026-09-14", "weeks": 1})
     assert res.status_code == 404
+
+
+def test_delete_plan_removes_its_slots(client, login, app):
+    login()
+    plan = make_plan(client).get_json()
+    other = make_plan(client, name="남기는 식단").get_json()
+    put_slot(client, plan["id"], meal="lunch")
+    put_slot(client, plan["id"], meal="dinner")
+    put_slot(client, other["id"])
+
+    assert client.delete(f"/api/meal-plans/{plan['id']}").status_code == 204
+    assert client.get(f"/api/meal-plans/{plan['id']}").status_code == 404
+    assert [p["id"] for p in client.get("/api/meal-plans").get_json()["items"]] == [other["id"]]
+    with app.app_context():
+        assert [s.plan_id for s in MealSlot.query.all()] == [other["id"]]
 
 
 def test_user_delete_cascades(client, login, app):

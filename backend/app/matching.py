@@ -13,6 +13,11 @@ def _canonical(text):
     return text
 
 
+def title_key(text):
+    """요리 제목 비교 키: 공백 제거 → 소문자 → 동의어. normalize와 달리 괄호 속은 남긴다(`두부조림(매운맛)` ≠ `두부조림(간장)`)."""
+    return _canonical(re.sub(r"\s+", "", text).lower())
+
+
 def normalize(name):
     """괄호와 그 안 내용 제거 → 공백 제거 → 소문자 → 동의어를 한 표기로(계란 → 달걀)."""
     return _canonical(re.sub(r"\s+", "", _PARENS.sub("", name)).lower())

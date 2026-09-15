@@ -92,6 +92,12 @@ def test_planned_on_today_when_meal_already_passed():
     assert row["planned_on"] == TODAY.isoformat()
 
 
+def test_planned_on_today_for_todays_meal():
+    needs = [("두부", "1모", 1, TODAY)]  # 오늘 끼니: 전날(9/14)은 지났으니 오늘 산다
+    row = by_name(shopping_rows(needs, [], [], TODAY)["buy"], "두부")
+    assert row["planned_on"] == TODAY.isoformat()
+
+
 def test_two_slots_same_ingredient_sum_with_ratio():
     needs = [
         ("두부", "1모", 2, date(2026, 9, 16)),
@@ -142,13 +148,51 @@ def test_always_have_water_excluded():
     assert result["buy"] == [] and result["manual"] == [] and result["skip"] == []
 
 
-def test_mixed_countable_and_uncountable_is_manual():
+def test_two_different_units_is_manual_with_first_unit():
     needs = [
         ("대파", "2개", 1, date(2026, 9, 16)),
         ("대파", "200g", 1, date(2026, 9, 16)),
     ]
     row = by_name(shopping_rows(needs, [], [], TODAY)["manual"], "대파")
-    assert len(row["need"]) == 2
+    assert (row["quantity"], row["unit"], row["reason"]) == (2, "개", None)
+    assert row["need"] == [{"quantity": 2, "unit": "개"}, {"quantity": 200, "unit": "g"}]
+
+
+def test_synonyms_grouped_under_first_name_seen():
+    needs = [("계란", "2개", 1, date(2026, 9, 16)), ("달걀", "1개", 1, date(2026, 9, 17))]
+    result = shopping_rows(needs, [], [], TODAY)
+    assert [row["name"] for row in result["buy"]] == ["계란"]
+    assert (result["buy"][0]["quantity"], result["buy"][0]["unit"]) == (3, "개")
+
+
+def test_same_unit_stock_counts_even_with_other_unit_stock():
+    needs = [("두부", "2모", 1, date(2026, 9, 16))]
+    stock = [("두부", 1, "모"), ("두부", 300, "g")]
+    row = by_name(shopping_rows(needs, stock, [], TODAY)["buy"], "두부")
+    assert (row["quantity"], row["unit"]) == (1, "모")
+    assert row["have"] == [{"quantity": 1, "unit": "모"}, {"quantity": 300, "unit": "g"}]
+
+
+def test_stock_with_unreadable_unit_has_stock_but_empty_have():
+    stock = [("간장", 1, "~"), ("두부", 1, "~")]
+    result = shopping_rows([("간장", "2큰술", 1, date(2026, 9, 16)), ("두부", "2모", 1, date(2026, 9, 16))], stock, [], TODAY)
+    assert by_name(result["skip"], "간장")["reason"] == "enough"  # 재고는 있다(has_stock)
+    row = by_name(result["buy"], "두부")  # 양을 못 읽으니 전부 산다
+    assert (row["quantity"], row["unit"], row["have"]) == (2, "모", [])
+
+
+def test_large_stock_quantity_is_read():
+    needs = [("쌀", "2kg", 1, date(2026, 9, 16))]
+    stock = [("쌀", 1_500_000, "g")]  # :g였으면 1.5e+06g로 읽지 못해 2kg을 다 샀다
+    row = by_name(shopping_rows(needs, stock, [], TODAY)["skip"], "쌀")
+    assert row["have"] == [{"quantity": 1_500_000, "unit": "g"}]
+
+
+def test_blank_normalized_name_is_not_marked_listed():
+    needs = [("(국산)", "1개", 1, date(2026, 9, 16))]
+    result = shopping_rows(needs, [], ["(수입)"], TODAY)
+    assert result["skip"] == []
+    assert by_name(result["buy"], "(국산)")["reason"] is None
 
 
 def test_ordering_within_bucket_by_planned_on_then_first_seen():
@@ -178,7 +222,7 @@ def test_preview_uses_servings_ratio_and_today_onward(client, login, app, monkey
     res = client.get(f"/api/meal-plans/{plan['id']}/shopping-preview")
     assert res.status_code == 200
     body = res.get_json()
-    assert (body["start_on"], body["end_on"], body["recipe_slot_count"]) == ("2026-09-15", "2026-09-20", 1)
+    assert (body["name"], body["start_on"], body["end_on"], body["recipe_slot_count"]) == ("9월 셋째 주", "2026-09-15", "2026-09-20", 1)
     row = by_name(body["manual"] + body["buy"] + body["skip"], "두부")
     assert row["need"] == [{"quantity": 2, "unit": "모"}]
     assert row["planned_on"] == "2026-09-15"

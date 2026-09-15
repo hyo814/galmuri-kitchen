@@ -53,6 +53,7 @@ export default function MealSlotSheet({ slot: initial, today, onChanged, onRepla
 
   const clear = () =>
     run(async () => {
+      await queue.current; // 누른 인분 저장이 끝난 뒤에 지운다(지운 칸에 PATCH가 가 404가 나지 않게)
       await api(`/api/meal-slots/${slot.id}`, { method: "DELETE" });
       onChanged();
       onClose();

@@ -4271,12 +4271,12 @@ button.sh-offline svg:last-child {
 .ml-add-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 12px 6px;
   padding: 10px 16px 8px;
   border-top: 1px solid var(--line);
 }
 
-/* 32px로 보이지만 위아래 6px씩 넓혀 누르는 곳은 44px(4개가 한 줄에 들어가 줄이 겹치지 않는다) */
+/* 32px로 보이지만 위아래 6px·좌우 3px(칩 사이 6px의 반)씩 넓혀 누르는 곳은 44px. 칩이 두 줄로 넘치면 줄 간격을 12px로 둬 넓힌 곳이 겹치지 않는다 */
 .ml-add-chip {
   position: relative;
   display: inline-flex;
@@ -4296,7 +4296,7 @@ button.sh-offline svg:last-child {
 .ml-add-chip::before {
   content: "";
   position: absolute;
-  inset: -6px 0;
+  inset: -6px -3px;
 }
 
 .ml-add-chip svg {
@@ -4336,6 +4336,15 @@ button.sh-offline svg:last-child {
 
 .ml-empty {
   padding: 36px 20px 24px;
+}
+
+.ml-empty-actions {
+  margin-top: 24px;
+}
+
+.list-end.ml-refetch {
+  margin: 0;
+  padding: 0;
 }
 
 .ml-steps {

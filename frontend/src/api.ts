@@ -433,7 +433,7 @@ export interface RecipeChoice {
 
 /** GET /api/meal-plans/<id>/shopping-preview 한 줄(오늘 이후 끼니만). quantity·unit은 담을 양(skip 줄도 값이 있다) */
 export interface MealShoppingRow { name: string; quantity: number; unit: string; planned_on: string; need: { quantity: number; unit: string }[]; need_extra: string[]; have: { quantity: number; unit: string }[]; reason: "listed" | "enough" | null }
-export interface MealShoppingPreview { start_on: string; end_on: string; recipe_slot_count: number; buy: MealShoppingRow[]; manual: MealShoppingRow[]; skip: MealShoppingRow[] }
+export interface MealShoppingPreview { /** 식단 이름(담기 source_label) */ name: string; start_on: string; end_on: string; recipe_slot_count: number; buy: MealShoppingRow[]; manual: MealShoppingRow[]; skip: MealShoppingRow[] }
 
 /** GET /api/meal-plans. default_servings: 마지막으로 만든 식단의 기본 인분(없으면 1) */
 export interface MealPlanList {
