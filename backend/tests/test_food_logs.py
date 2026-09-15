@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app import food_logs
-from app.models import FoodLog, FoodSearch, UnitWeightEstimate, User, db, utcnow
+from app.models import CookLog, FoodLog, FoodSearch, UnitWeightEstimate, User, db, utcnow
 from tests.test_meal_ai import apply, new_dish
 from tests.test_meals import add_recipe, make_plan, put_slot
 from tests.test_nutrition import add_foods, cached
@@ -435,3 +435,26 @@ def test_nutrition_off_keeps_snapshots(client, login, app):
     body = get_day(client).get_json()
     row = next(r for r in body["logs"] if r["id"] == pending["id"])
     assert (row["nutrition"], row["nutrition_pending"], body["nutrition_pending_recipe_ids"]) == (pending["nutrition"], False, [])
+
+
+def test_day_includes_cook_logs(client, login, app):
+    uid = login().id
+    with app.app_context():
+        other = User(provider="test", provider_id="2", nickname="other")
+        db.session.add(other)
+        db.session.flush()
+        plain = CookLog(user_id=uid, title="김치찌개", cooked_on=date(2026, 9, 14), servings=1)
+        photo = CookLog(user_id=uid, title="된장찌개", cooked_on=date(2026, 9, 14), servings=2, photo_key=f"cooklog/{uid}/a.jpg")
+        db.session.add_all([
+            plain, photo,
+            CookLog(user_id=other.id, title="남의 요리", cooked_on=date(2026, 9, 14), servings=1),
+            CookLog(user_id=uid, title="다른 날", cooked_on=date(2026, 9, 13), servings=1),
+        ])
+        db.session.commit()
+        ids = plain.id, photo.id
+
+    assert get_day(client).get_json()["cook_logs"] == [
+        {"id": ids[0], "title": "김치찌개", "photo_url": None},
+        {"id": ids[1], "title": "된장찌개", "photo_url": f"/api/photos/cooklog/{uid}/a.jpg"},
+    ]
+    assert get_day(client, "2026-09-12").get_json()["cook_logs"] == []

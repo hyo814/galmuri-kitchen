@@ -15,7 +15,7 @@ from .auth import get_owned_or_404, login_required
 from .foods import NUTRIENTS, food_by_code, nutrition_mode
 from .ingredients import SEOUL, seoul_today
 from .meals import MEALS, meal_date
-from .models import FoodLog, FoodLogPhoto, MealPlan, MealSlot, Recipe, db, utcnow
+from .models import CookLog, FoodLog, FoodLogPhoto, MealPlan, MealSlot, Recipe, db, utcnow
 from .nutrition import _round0, _round1
 from .photos import read_image
 from .validation import integer, iso_datetime, memo, text
@@ -108,12 +108,18 @@ def _next_month(first):
 
 
 def month_json(user_id, first):
-    """결정 11. 그 달 내 기록(끼니 순 → created_at → id, 사진 selectinload)을 날짜별로 묶는다.
+    """결정 11. 그 달 내 기록(끼니 순 → created_at → id, 사진 selectinload)을 날짜별로 묶고, 요리 일기 날을 cooked로 표시한다(5단계 결정 27).
     ponytail: 한 달 기록(최대 620줄)을 파이썬에서 묶는다 — 느리면 날짜별 GROUP BY와 첫 사진 서브쿼리로 바꾼다."""
     logs = (
         FoodLog.query.options(selectinload(FoodLog.photos))
         .filter(FoodLog.user_id == user_id, FoodLog.eaten_on >= first, FoodLog.eaten_on < _next_month(first))
         .order_by(FoodLog.eaten_on, _meal_order(FoodLog.meal), FoodLog.created_at, FoodLog.id)
+        .all()
+    )
+    cooks = (
+        db.session.query(CookLog.cooked_on, CookLog.photo_key)
+        .filter(CookLog.user_id == user_id, CookLog.cooked_on >= first, CookLog.cooked_on < _next_month(first))
+        .order_by(CookLog.cooked_on, CookLog.id)
         .all()
     )
     days, home, out, kcal_days = [], 0, 0, []
@@ -125,12 +131,23 @@ def month_json(user_id, first):
         photo_url = next((photo_json(log.photos[0])["url"] for log in day_logs if log.photos), None)
         days.append({
             "date": day.isoformat(), "meals": len({log.meal for log in day_logs}), "count": len(day_logs),
-            "kcal": kcal, "approx": approx, "photo_url": photo_url,
+            "kcal": kcal, "approx": approx, "photo_url": photo_url, "cooked": False,
         })
         home += sum(1 for log in day_logs if log.place == "home")
         out += sum(1 for log in day_logs if log.place == "out")
         if kcal is not None:
             kcal_days.append((kcal, approx))
+    # 결정 21·27: 요리 일기 날은 cooked, 요리만 있는 날도 days에 넣어 len(days)가 곧 기록한 날 합집합(개정 1 S12).
+    # 사진 URL은 cooklog를 import하지 않고 직접 만든다(순환 import, 개정 1 P5)
+    by_date = {cell["date"]: cell for cell in days}
+    for day, photo_key in cooks:
+        cell = by_date.setdefault(day.isoformat(), {
+            "date": day.isoformat(), "meals": 0, "count": 0, "kcal": None, "approx": False, "photo_url": None,
+        })
+        cell["cooked"] = True
+        if cell["photo_url"] is None and photo_key:  # 먹은 기록 사진이 먼저, 없으면 사진이 있는 첫 일기
+            cell["photo_url"] = f"/api/photos/{photo_key}"
+    days = sorted(by_date.values(), key=lambda cell: cell["date"])
     return {
         "days": days,
         "summary": {
@@ -345,6 +362,10 @@ def day_food_logs():
         date=day.isoformat(),
         logs=[log_json(log) for log in logs],
         plan_slots=[{"id": s.id, "meal": s.meal, "title": s.title, "servings": s.servings, "recipe_id": s.recipe_id} for s in slots],
+        cook_logs=[
+            {"id": c.id, "title": c.title, "photo_url": f"/api/photos/{c.photo_key}" if c.photo_key else None}
+            for c in CookLog.query.filter_by(user_id=g.user.id, cooked_on=day).order_by(CookLog.id)
+        ],
         nutrition_pending_recipe_ids=sorted({log.recipe_id for log in logs if log.nutrition_pending and log.recipe_id is not None}),
     )
     res.headers["Cache-Control"] = "no-store"  # 건강·식습관 정보
