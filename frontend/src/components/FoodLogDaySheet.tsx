@@ -5,7 +5,9 @@ import { PLACE_LABEL, dayDescription, dayTotals, logSubText, mealKcalText, stars
 import { MEALS, slotDateText } from "../meals/plan.ts";
 import { dailyTarget } from "../nutrition/body.ts";
 import { MAX_FILL_ATTEMPTS, meterPercent, sodiumDay } from "../nutrition/day.ts";
+import { openCookLog } from "../pages/CookDiary";
 import { useAsyncAction } from "../useAsyncAction";
+import { navigate } from "../useHashRoute";
 import { forgetResources, useResource } from "../useResource";
 import Icon from "./Icon";
 import Sheet from "./Sheet";
@@ -101,13 +103,33 @@ export default function FoodLogDaySheet({
     );
   }
 
-  const { logs, plan_slots } = day.data;
+  const { logs, plan_slots, cook_logs } = day.data;
   const t = dayTotals(logs);
   const over = goal !== null && !!t && t.kcal > goal;
   const sodium = t ? sodiumDay(t.sodium_mg) : null;
 
   return (
     <Sheet title={title} description={dayDescription(logs, goal)} className="fl-day" onClose={onClose}>
+      {cook_logs.map((log) => (
+        <div key={log.id} className="fl-plan fl-cookrow">
+          <Icon name="pan" />
+          <span>
+            요리 일기 <b>{log.title}</b>
+          </span>
+          <button
+            type="button"
+            className="nt-link"
+            aria-label={`요리 일기 ${log.title} 보기`}
+            onClick={() => {
+              openCookLog(log.id);
+              onClose();
+              navigate("/cook-logs");
+            }}
+          >
+            보기
+          </button>
+        </div>
+      ))}
       {goal !== null && t && (
         <div className={over ? "nt-meter nt-dmeter warn" : "nt-meter nt-dmeter"} role="img" aria-label={`목표의 ${Math.round((t.kcal / goal) * 100)}%`}>
           <i style={{ width: `${meterPercent(t.kcal, goal)}%` }} />

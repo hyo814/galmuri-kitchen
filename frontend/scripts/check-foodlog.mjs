@@ -43,14 +43,25 @@ assert.equal(cellKcalText(undefined), "");
 
 // 칸 버튼 이름
 assert.equal(
-  cellLabel("2026-09-14", { date: "2026-09-14", meals: 3, count: 3, kcal: 1190, approx: true, photo_url: "/api/photos/x" }, "2026-09-15"),
+  cellLabel("2026-09-14", { date: "2026-09-14", meals: 3, count: 3, kcal: 1190, approx: true, photo_url: "/api/photos/x", cooked: false }, "2026-09-15"),
   "9월 14일 월요일, 끼니 3개, 약 1,190kcal, 사진 있음",
 );
 assert.equal(cellLabel("2026-09-15", undefined, "2026-09-15"), "9월 15일 화요일 · 오늘, 기록 없음");
 // kcal 없는 날은 지난 날짜로 확인한다(리뷰 fix round 1 — 미래 날짜는 애초에 칸 버튼으로 그리지 않는다)
 assert.equal(
-  cellLabel("2026-09-13", { date: "2026-09-13", meals: 1, count: 1, kcal: null, approx: false, photo_url: null }, "2026-09-15"),
+  cellLabel("2026-09-13", { date: "2026-09-13", meals: 1, count: 1, kcal: null, approx: false, photo_url: null, cooked: false }, "2026-09-15"),
   "9월 13일 일요일, 끼니 1개",
+);
+// 요리 일기가 있는 날은 목록 끝에 붙는다(Task 13)
+assert.ok(
+  cellLabel("2026-09-14", { date: "2026-09-14", meals: 2, count: 2, kcal: 900, approx: false, photo_url: null, cooked: true }, "2026-09-15").endsWith(
+    ", 요리 일기 있음",
+  ),
+);
+// 요리 일기만 있는 날(끼니 0개)은 그 칸을 빼고 요리 일기 있음만 남는다
+assert.equal(
+  cellLabel("2026-09-14", { date: "2026-09-14", meals: 0, count: 0, kcal: null, approx: false, photo_url: null, cooked: true }, "2026-09-15"),
+  "9월 14일 월요일, 요리 일기 있음",
 );
 
 // 월 요약 카드
