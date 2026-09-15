@@ -412,7 +412,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - 기초대사량: Mifflin–St Jeor 식. 필요량 = 기초대사량 × 활동계수. 다이어트 목표 제안 = 필요량 − 500kcal(하한은 구현 시 공인 권고치 확인 후 적용).
 - 키·몸무게만으로는 오차가 커서 성별·나이를 필수로 받는다.
 - 당류 기준: 식약처 영양성분 표시 당류 1일 기준치와 WHO 권고(총 섭취 에너지 대비 비율) — **구현 시 공식 수치와 출처를 확인해 화면에 출처와 함께 표시**.
-- `body_profiles`: user_id(UNIQUE), sex, birth_year, height_cm, weight_kg, activity, updated_at. 건강 정보이므로 본인만 조회, 계정 삭제 시 함께 삭제.
+- `body_profiles`: user_id(UNIQUE), sex, birth_year, height_cm, weight_kg, activity, goal, updated_at(구현 세부 참고). 건강 정보이므로 본인만 조회, 계정 삭제 시 함께 삭제.
 ### 먹은 것 기록
 - `food_logs`: id, user_id, eaten_on, meal, food_code(선택)/recipe_id(선택)/title, amount_g 또는 servings, kcal·당류 등 계산값 스냅숏, estimated(bool).
 - 식품 검색(캐시 → 공공 API) 또는 내 레시피·식단 칸에서 `먹었어요`로 추가.
