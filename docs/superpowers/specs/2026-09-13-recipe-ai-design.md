@@ -87,7 +87,7 @@ recipe-ai/
 | POST | `/api/recipes/<id>/eat-out-estimate` | 사 먹으면 얼마 AI 추정(29절 결정 12). 값이 있으면 AI 없이 그 값, 없으면 한 번 추정해 저장 → 200 `{eat_out_price, eat_out_source}`. AI 레시피 하루 한도 공유(`ai_calls.kind = eat_out`), 키 없는 운영 503, 결과가 1,000~100,000원 밖이면 502 |
 | GET | `/api/public-recipes/<id>` | 공공 레시피 상세(같은 `ingredients` 모양) |
 | POST | `/api/public-recipes/<id>/save` | 내 레시피로 복사(source `public`) 201. 이미 저장했으면 그 레시피 200 |
-| GET | `/api/recommendations?section=all\|public&offset=0&limit=20` | 점수 순(25절: `section=all` 기본은 내 레시피 상위 10개 + 공공 레시피 한 페이지, `section=public`은 공공 레시피만). `{mine:[...10개], mine_total, public:[...], public_total, next_offset, sample, inventory_count}`(`section=public`이면 `mine`·`mine_total` 없음). 카드 항목: kind, id, title, image_url, servings, match_rate, have_count, total_count, missing(최대 5, 화면 표시용 이름), urgent_used, urgent_names, score(= match_rate + 0.1 × urgent_used) |
+| GET | `/api/recommendations?section=all\|public&offset=0&limit=20&q=` | 점수 순(25절: `section=all` 기본은 내 레시피 상위 10개 + 공공 레시피 한 페이지, `section=public`은 공공 레시피만, `section=public&q=`는 식약처 레시피 제목 검색). `{mine:[...10개], mine_total, public:[...], public_total, next_offset, sample, inventory_count}`(`section=public`이면 `mine`·`mine_total` 없음). 카드 항목: kind, id, title, image_url, servings, match_rate, have_count, total_count, missing(최대 5, 화면 표시용 이름), urgent_used, urgent_names, score(= match_rate + 0.1 × urgent_used) |
 | POST | `/api/recommendations/ai` | AI 레시피 3개 생성(저장 안 함). 하루 한도는 `AI_DAILY_RECIPE_LIMIT`, 짧은 연속 호출은 사진 인식과 같은 `AI_SCAN_BURST_LIMIT`(60초)로 막는다. `{recipes:[{title, servings, minutes, ingredients:[{name, amount, have, matched_name}], steps, urgent_names, image_url}], urgent_first, sample}`. 저장은 화면이 `POST /api/recipes`(source `ai`, image_url)로 한다 (2026-09-14, 시안 승인) |
 | POST | `/api/recipes/import` | 링크·글(JSON) 또는 사진 1~5장(multipart `image`, 2026-09-15 3장에서 늘림) → 레시피 초안(저장 안 함, 17절). 저장은 확인 화면에서 `POST /api/recipes` |
 | GET | `/api/recipes/choices?q=` | 식단 칸 채우기 시트의 `내 레시피` 목록(20절). 최근 200개 후보를 재고 일치 점수 순으로 최대 50개 `{items:[{id, title, servings, have_count, total_count, urgent_names}]}` |
@@ -147,6 +147,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
    `사진으로 추가`(냉장고 사진 · 영수증 · 온라인 주문 캡처, 카메라·갤러리는 폰이 고르게 함) → 브라우저에서 긴 변 1568px JPEG로 축소 → `/api/scan` → 확인 화면(체크, 행을 펼쳐 이름·수량·단위·보관 위치 수정, 구입일 일괄 입력; 영수증·주문은 인식된 날짜로 프리필) → `/api/ingredients/bulk`. 시안 `docs/design/scan-2/`.
    (2026-09-15, 사용자 승인 시안 docs/design/scan-multi/) 첫 사진 뒤 `사진 모으기` 단계(최대 5장, 더 찍기·앨범·✕로 빼기, `N장 읽기`). 확인 화면 구입일은 칩 `오늘 · 어제 · 3일 전 · 1주 전 · 날짜 고르기 · 기억 안 나요` — 냉장고 사진은 아무 칩도 안 고른 채 시작해 안 고르고 넣으면 `언제 샀는지 골라주세요`, 영수증·주문은 찍힌 날짜(없으면 오늘). 행을 펼치면 `이 재료 구입일`(기본 `위와 같게`), 다르면 보조 줄에 `어제 구입`·`구입일 모름`. 재고 목록은 구입일 모름이면 날짜·`구입 N일째`를 뺀다.
 3. **추천**: 내 레시피 / 공공 DB 섹션(일치율 순, 부족 재료 표시). 카드 → 상세.
+   식약처 레시피 검색 (2026-09-15, 사용자 요청): `식약처 레시피`(키가 없으면 `예시 레시피`) 제목 바로 위에 검색 칸 `식약처 레시피에서 찾기`(영상 칸 검색과 같은 모양). 입력을 멈추고 300ms 뒤(검색 키는 바로, 키보드를 닫는다) 제목으로 찾아 아래 목록을 결과로 바꾼다 — 공백·대소문자 무시, 재고와 안 겹치는 레시피도 일치 점수 순(재료가 0개면 일치 줄을 뺀다), 없으면 `'쿠키'가 들어간 레시피가 없어요.` `✕`로 지우면 추천 목록으로 돌아간다. 상세에 갔다 와도 검색어가 남고 로그아웃하면 지운다. 재고가 비었거나 추천할 공공 레시피가 없으면 칸도 없다.
    AI 입구 (2026-09-14, 시안 승인): 추천 칸 맨 위 한 줄 카드 `내 재고로 새 레시피` · `AI가 3개 만들어줘요 · 오늘 N번 남음` · `만들기` → 별도 화면 `#/recipes/ai`. 만드는 중 화면(다람이, `빨리 먹어야 할 두부·대파를 먼저 넣어볼게요.` `10초쯤 걸려요.`) → 결과 카드 3개(사진·임박 배지·제목·`2인분 · 20분`·일치 막대, `자세히`/`저장` 버튼, 저장하면 초록 `저장했어요`), 안내 `AI가 만든 레시피예요. 간과 익힘은 맛보면서 조절해주세요.`, 아래 `다시 만들기 · 오늘 N번 남음`. 시안 `docs/design/recipes-3b3c/`.
 4. **레시피 상세**(공통): 재료(보유 여부 표시), 단계. `내 레시피로 저장`(public/ai일 때), `요리했어요`.
 5. **레시피 탭**: 내 레시피 목록, 등록/수정/삭제 폼(재료 행 추가, 단계 행 추가).
@@ -684,6 +685,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 **백엔드(3a fix round):**
 
 - `GET /api/recommendations`: `section`(`all` 기본 | `public`), `offset`(0 이상, 기본 0, 음수는 0으로), `limit`(1~50, 기본 20). `section=all`이면 `{mine: 내 레시피 상위 10개, mine_total, public: public[offset:offset+limit], public_total, next_offset, sample, inventory_count}`. `section=public`이면 `mine`·`mine_total` 없이 공공 레시피만 계산한다(내 레시피는 아예 계산하지 않는다). `next_offset`은 더 있으면 `offset+limit`, 없으면 `null`.
+  - **식약처 레시피 검색**(2026-09-15): `q`(앞뒤 공백을 빼고 50자까지, `section=public`에서만 — 다른 section이면 400). 제목의 공백을 빼고 소문자로 바꾼 값에 q(공백 뺀 소문자)가 들어간 공공 레시피만(LIKE 와일드카드는 이스케이프), 재고와 겹치는 재료가 없어도(재료 0개면 `match_rate` 0) 같은 점수 순으로 넣는다. 거른 행만 계산하므로 순위 캐시를 읽지도 쓰지도 않는다.
   - **사용자별 순위 캐시**(재고가 클수록 매 요청 계산 비용이 커지는 문제 해결): 서명(오늘 날짜, 재고 이름·임박 여부, 내 레시피 개수·최대 id·최신 수정 시각, 공공 레시피 개수·최대 id·최신 수정 시각)이 그대로면 120초(TTL) 안에는 다시 계산하지 않는다. 프로세스별 캐시이고(여러 인스턴스로 늘면 Redis로 옮긴다), 500명분을 넘으면 오래된 것부터 지운다.
 - `GET /api/recipes`(내 레시피 목록): `limit`(1~50, 기본 30), `cursor`(불투명 문자열, 잘못됐으면 400). `updated_at`·id 내림차순 커서 페이지. 응답 `{items:[...], next_cursor}`(이전의 배열 응답에서 바뀜).
 

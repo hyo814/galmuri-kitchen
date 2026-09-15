@@ -405,3 +405,39 @@ def test_public_count_counts_all_public_rows_even_without_overlap(client, login,
     add_ingredient(client, "계란")
     body = recommend(client)
     assert (body["public_total"], body["public_count"]) == (0, 1)
+
+
+def test_public_search_matches_title_ignoring_spaces_and_case_and_keeps_unmatched(client, login, app):
+    # 식약처 레시피 검색: 제목에 검색어가 들어가면(공백·대소문자 무시) 재고와 안 겹쳐도, 재료가 0개여도 넣고 일치 점수 순
+    login()
+    add_public(
+        app,
+        public("1", "김치 볶음밥", ["김치", "밥"]),
+        public("2", "김치찌개", ["김치", "돼지고기"]),
+        public("3", "김치전", []),  # 빈 RCP_PARTS_DTLS
+        public("4", "잡채", ["당면", "시금치"]),
+        public("5", "LA갈비", ["갈비"]),
+        public("6", "100% 두부", ["두부"]),
+    )
+    add_ingredient(client, "김치")
+    add_ingredient(client, "돼지고기")
+
+    body = recommend(client, "?section=public&q=김치")
+    assert [(c["title"], c["have_count"], c["total_count"]) for c in body["public"]] == [("김치찌개", 2, 2), ("김치 볶음밥", 1, 2), ("김치전", 0, 0)]
+    assert (body["public_total"], body["next_offset"], "mine" in body) == (3, None, False)
+    assert [c["title"] for c in recommend(client, "?section=public&q=%20김치볶음%20")["public"]] == ["김치 볶음밥"]
+    assert [(c["title"], c["missing"]) for c in recommend(client, "?section=public&q=잡채")["public"]] == [("잡채", ["당면", "시금치"])]
+    assert [c["title"] for c in recommend(client, "?section=public&q=la")["public"]] == ["LA갈비"]
+    assert [c["title"] for c in recommend(client, "?section=public&q=%25")["public"]] == ["100% 두부"]  # %는 와일드카드가 아니다
+    assert recommend(client, "?section=public&q=_")["public"] == []
+
+    page = recommend(client, "?section=public&q=김치&limit=2&offset=0")
+    assert ([c["title"] for c in page["public"]], page["next_offset"]) == (["김치찌개", "김치 볶음밥"], 2)
+    # 검색이 추천 순위 캐시를 바꾸지 않는다: 검색 없는 목록은 여전히 재고와 겹치는 것만
+    assert [c["title"] for c in recommend(client, "?section=public")["public"]] == ["김치찌개", "김치 볶음밥"]
+
+
+def test_public_search_only_with_section_public(client, login, app):
+    login()
+    assert client.get("/api/recommendations?q=김치").status_code == 400
+    assert recommend(client, "?section=public&q=%20%20")["public"] == []  # 공백뿐이면 검색이 아니다(재고가 비어 추천도 없다)

@@ -26,7 +26,7 @@ RECIPE_LIST_PAGE_SIZE = 30
 RECOMMENDATION_PAGE_SIZE = 20
 CHOICES_CANDIDATE_LIMIT = 200  # ponytail: 최근 200개 안에서만 고른다 — 넘으면 검색어로 찾게 안내하거나 추천 순위 캐시를 쓴다
 CHOICES_MAX = 50
-CHOICES_QUERY_MAX = 50
+QUERY_MAX = 50  # 칸 채우기 내 레시피·식약처 레시피 제목 검색어
 
 
 def inventory_rows(user_id):
@@ -217,19 +217,19 @@ def match_summary(ingredients, prepared_stock, urgent):
     }
 
 
-def _card(kind, recipe_id, title, image_url, servings, keys, names, prepared_stock, urgent, matches):
-    """겹치는 재료가 하나도 없으면(물만 겹쳐도) None."""
+def _card(kind, recipe_id, title, image_url, servings, keys, names, prepared_stock, urgent, matches, keep_unmatched=False):
+    """겹치는 재료가 하나도 없으면(물만 겹쳐도) None. 검색(keep_unmatched)은 겹치지 않아도 카드를 만든다."""
     results = []
     for key in keys:
         if key not in matches:
             matches[key] = _match_key_fast(prepare(key), prepared_stock)
         results.append(matches[key])
     matched = [name for name, _ in results if name]
-    if not matched:
+    if not matched and not keep_unmatched:
         return None
     have = sum(1 for _, has in results if has)
     urgent_names = list(dict.fromkeys(name for name in matched if name in urgent))
-    rate = round(have / len(keys), 2)
+    rate = round(have / len(keys), 2) if keys else 0  # 검색은 재료가 0개인 공공 레시피(빈 RCP_PARTS_DTLS)도 넣는다
     return {
         "kind": kind,
         "id": recipe_id,
@@ -313,9 +313,10 @@ def _ranked_mine(user_id, prepared_stock, urgent):
     )
 
 
-def _ranked_public(prepared_stock, urgent):
+def _ranked_public(prepared_stock, urgent, q=""):
+    """q가 있으면 제목(공백·대소문자 무시)에 q가 들어간 레시피만, 재고와 겹치지 않아도 넣는다(검색)."""
     matches = {}
-    rows = db.session.query(
+    query = db.session.query(
         PublicRecipe.id,
         PublicRecipe.title,
         PublicRecipe.image_url,
@@ -323,9 +324,15 @@ def _ranked_public(prepared_stock, urgent):
         PublicRecipe.ingredient_keys,
         PublicRecipe.ingredients,
         PublicRecipe.is_sample,
-    ).all()
+    )
+    if q:
+        query = query.filter(func.replace(func.lower(PublicRecipe.title), " ", "").contains("".join(q.lower().split()), autoescape=True))
+    rows = query.all()
     ranked = _rank(
-        _card("public", r.id, r.title, r.image_url, r.servings, r.ingredient_keys, [i["name"] for i in r.ingredients], prepared_stock, urgent, matches)
+        _card(
+            "public", r.id, r.title, r.image_url, r.servings, r.ingredient_keys, [i["name"] for i in r.ingredients], prepared_stock, urgent, matches,
+            keep_unmatched=bool(q),
+        )
         for r in rows
     )
     sample = bool(rows) and all(r.is_sample for r in rows)
@@ -336,25 +343,29 @@ def _ranked_public(prepared_stock, urgent):
 @login_required
 def recommendations():
     """보유 재료 일치율 순 추천(스펙 4·25절). 재고와 겹치는 재료가 하나도 없는 레시피는 뺀다.
-    section=all(기본)은 내 레시피 상위 10개 + 공공 레시피 한 페이지, section=public은 공공 레시피만(내 레시피는 계산하지 않는다)."""
+    section=all(기본)은 내 레시피 상위 10개 + 공공 레시피 한 페이지, section=public은 공공 레시피만(내 레시피는 계산하지 않는다).
+    section=public에 q가 있으면 식약처 레시피 제목 검색 결과다(재고와 안 겹쳐도 넣고, 거른 행만 계산하므로 캐시하지 않는다)."""
     section = request.args.get("section", "all")
-    if section not in ("all", "public"):
+    q = request.args.get("q", "").strip()[:QUERY_MAX]
+    if section not in ("all", "public") or (q and section != "public"):
         abort(400, "잘못된 요청이에요.")
     offset = max(request.args.get("offset", 0, type=int) or 0, 0)
     limit = min(max(request.args.get("limit", RECOMMENDATION_PAGE_SIZE, type=int), 1), 50)
 
     stock = inventory(g.user.id)
     urgent = {name for name, is_urgent in stock if is_urgent}
-    signature = _rank_cache_signature(g.user.id, stock)
-    entry = _rank_cache_entry(g.user.id, signature)
-
-    if (section == "all" and entry["mine"] is None) or entry["public"] is None:
-        prepared_stock = _prepared_stock(stock)
-        if section == "all" and entry["mine"] is None:
-            entry["mine"] = _ranked_mine(g.user.id, prepared_stock, urgent)
-        if entry["public"] is None:
-            entry["public"] = _ranked_public(prepared_stock, urgent)
-    public_ranked, sample = entry["public"]
+    if q:
+        public_ranked, sample = _ranked_public(_prepared_stock(stock), urgent, q)
+    else:
+        signature = _rank_cache_signature(g.user.id, stock)
+        entry = _rank_cache_entry(g.user.id, signature)
+        if (section == "all" and entry["mine"] is None) or entry["public"] is None:
+            prepared_stock = _prepared_stock(stock)
+            if section == "all" and entry["mine"] is None:
+                entry["mine"] = _ranked_mine(g.user.id, prepared_stock, urgent)
+            if entry["public"] is None:
+                entry["public"] = _ranked_public(prepared_stock, urgent)
+        public_ranked, sample = entry["public"]
 
     public_total = len(public_ranked)
     public_page = public_ranked[offset : offset + limit]
@@ -380,7 +391,7 @@ def recommendations():
 @login_required
 def recipe_choices():
     """식단 칸 채우기 시트의 `내 레시피` 목록(20절): 최근 200개 후보를 재고 일치 점수 순으로. q가 있으면 제목 필터."""
-    q = request.args.get("q", "").strip()[:CHOICES_QUERY_MAX]
+    q = request.args.get("q", "").strip()[:QUERY_MAX]
     query = Recipe.query.filter_by(user_id=g.user.id)
     if q:
         query = query.filter(Recipe.title.contains(q, autoescape=True))
