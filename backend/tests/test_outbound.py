@@ -779,7 +779,7 @@ def test_playlist_videos_skips_private_and_404_is_none(monkeypatch):
     videos = outbound.playlist_videos("k", "UUabc")
     assert [(v["video_id"], v["title"], v["thumbnail_url"]) for v in videos] == [(VIDEO_ID, "제육볶음", "https://i.ytimg.com/vi/a/mq.jpg")]
     assert videos[0]["published_at"].isoformat() == "2026-09-11T09:00:00+00:00"
-    assert sent[0][0] == "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet%2CcontentDetails&playlistId=UUabc&maxResults=30&key=k"
+    assert sent[0][0] == "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet%2CcontentDetails&playlistId=UUabc&maxResults=50&key=k"
     assert outbound.playlist_videos("k", "UUgone") is None
     with pytest.raises(FetchError):
         outbound.playlist_videos("k", "UUabc")

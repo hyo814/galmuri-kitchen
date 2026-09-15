@@ -29,7 +29,7 @@ bp = Blueprint("videos", __name__, url_prefix="/api", cli_group=None)  # 명령�
 
 DEFAULT_CHANNELS_FILE = Path(__file__).parent / "data" / "default_channels.json"
 PAGE_SIZE = 30
-FEED_PER_CHANNEL = 12  # 전체 목록에는 채널마다 최신 12개까지만 섞는다(자주 올리는 채널이 도배하지 않게). 채널 칩·검색은 받아둔 30개 모두
+FEED_PER_CHANNEL = 12  # 전체 목록에는 채널마다 최신 12개까지만 섞는다(자주 올리는 채널이 도배하지 않게). 채널 칩·검색은 받아둔 50개 모두
 MAX_QUERY = 50
 MINE_LIMIT = 30
 STALE_AFTER = timedelta(hours=6)
@@ -146,7 +146,7 @@ def units_left(cost):
 
 
 def refresh_channel(channel, key, info=None):
-    """채널 정보·최근 영상 30개·길이/설명을 새로 받아 영상을 통째로 바꾼다(3 units, info를 주면 2).
+    """채널 정보·최근 영상 50개·길이/설명을 새로 받아 영상을 통째로 바꾼다(3 units, info를 주면 2).
     채널·재생목록이 없어졌으면(삭제·비공개) 영상과 썸네일·영상 수·재생목록을 비운다(화면에 unavailable).
     요청 실패는 잠깐의 오류일 수 있어 캐시를 그대로 둔다. 성공·실패 모두 fetched_at을 지금으로.
     외부 요청을 기다리는 동안 트랜잭션을 열어 두지 않는다. 기록·예산 확인은 부르는 쪽(claim_and_refresh)이 한다."""
