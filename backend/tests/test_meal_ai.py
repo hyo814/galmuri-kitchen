@@ -423,6 +423,16 @@ def test_clean_does_not_merge_titles_differing_only_in_parentheses(app):
     assert result["slots"][0]["options"] == [0, 1]
 
 
+def test_clean_merges_synonym_titles(app):
+    raw = {
+        "dishes": [new_dish("계란찜"), new_dish("달걀 찜"), new_dish("된장국")],
+        "slots": [{"date": "2026-09-14", "meal": "lunch", "dishes": [1, 0, 2]}],
+    }
+    result = clean(app, raw, [("2026-09-14", "lunch")])
+    assert [d["title"] for d in result["dishes"]] == ["계란찜", "된장국"]  # 처음 나온 요리로 합친다
+    assert result["slots"][0]["options"] == [0, 1]
+
+
 def test_apply_duplicate_race_rolls_back_new_recipes(client, login, app, monkeypatch):
     login()
     plan = make_plan(client).get_json()

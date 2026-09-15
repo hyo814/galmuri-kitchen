@@ -88,7 +88,7 @@ function Preview({ data, url, reload }: { data: MealShoppingPreview; url: string
         const res = await addMany(
           "meal_plan",
           picked.slice(i, i + BULK_MAX).map((r) => ({ name: cut(r.name, 50), quantity: r.quantity, unit: r.unit, planned_on: r.planned_on })),
-          cut(data.name, 60),
+          cut(data.name ?? "", 60),
         );
         created += res.created;
         skipped.push(...res.skipped);

@@ -265,7 +265,11 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
                         name={`${radioName}-recipe`}
                         checked={recipe.id === recipeId}
                         aria-label={recipe.title}
-                        aria-describedby={`${radioName}-r${recipe.id}-tag ${radioName}-r${recipe.id}-match`}
+                        aria-describedby={
+                          [recipe.urgent_names.length > 0 && `${radioName}-r${recipe.id}-tag`, recipe.total_count > 0 && `${radioName}-r${recipe.id}-match`]
+                            .filter(Boolean)
+                            .join(" ") || undefined
+                        }
                         onChange={() => setRecipeId(recipe.id)}
                       />
                       <span className="mo-dot" aria-hidden="true" />

@@ -8,7 +8,7 @@ from . import ai, scan
 from .amounts import is_spoon, parse_amount
 from .auth import abort_if_id_too_big, ai_daily_limit, get_owned_or_404, login_required
 from .ingredients import seoul_today
-from .matching import match_prepared, normalize, prepare
+from .matching import match_prepared, normalize, prepare, title_key
 from .models import Ingredient, MealPlan, MealSlot, Recipe, ShoppingItem, db
 from .recipe_ai import _int_in, clean_draft, public_image_candidates, similar_public_image
 from .recipes import ALWAYS_HAVE, _prepared_stock, check_recipe_cap, inventory, match_summary, parse_recipe, stock_context
@@ -352,8 +352,8 @@ def clean_meal_draft(raw, empty_keys, mine_by_id, prepared_stock, urgent, candid
             })
             continue
         draft = clean_draft(row)
-        # 공백만 무시한다(normalize는 괄호 속을 지워 `두부조림(매운맛)`·`두부조림(간장)`까지 합쳐 버린다)
-        canon.append(draft and first.setdefault(("new", "".join(draft["title"].split()).lower()), len(dishes)))
+        # normalize는 괄호 속을 지워 `두부조림(매운맛)`·`두부조림(간장)`까지 합쳐 버려서 괄호를 남기는 title_key를 쓴다
+        canon.append(draft and first.setdefault(("new", title_key(draft["title"])), len(dishes)))
         dishes.append(draft and {
             "recipe_id": None, "title": draft["title"], "servings": draft["servings"], "est_kcal": est_kcal,
             "ingredients": draft["ingredients"], "steps": draft["steps"],
