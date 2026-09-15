@@ -6212,3 +6212,161 @@ button.sh-offline svg:last-child {
   font-size: 13px;
   color: var(--text-3);
 }
+
+/* B. 로그인 미리보기 캐러셀: 로고와 버튼 사이 빈 자리를 채운다. 키가 작은 화면에서는 숨겨 체험하기 버튼이 밀리지 않게 */
+.login .login-hero {
+  flex: none;
+  padding-top: 8px;
+}
+
+.peek {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  min-height: 0;
+  margin: 4px 0;
+}
+
+.peek-track {
+  position: relative;
+  height: clamp(200px, 30dvh, 260px);
+  overflow: hidden;
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.peek-slide {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  padding: 14px 16px;
+  opacity: 0;
+  transform: translateX(16px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.peek-slide.on {
+  opacity: 1;
+  transform: none;
+}
+
+.peek-step {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 700;
+  color: var(--accent-strong);
+}
+
+.peek-title {
+  margin: -6px 0 0;
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 700;
+  word-break: keep-all;
+}
+
+.peek-rows {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.peek-rows li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: var(--field);
+  font-size: 15px;
+}
+
+.peek-rows li > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.peek-rows .badge {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.peek-won {
+  font-variant-numeric: tabular-nums;
+}
+
+.peek-receipt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.peek-paper {
+  flex: none;
+  width: 46px;
+  height: 60px;
+  border-radius: 4px;
+  background: repeating-linear-gradient(to bottom, var(--chip-line) 0 2px, transparent 2px 8px) 8px 10px / 30px 44px no-repeat, var(--field);
+  box-shadow: inset 0 0 0 1px var(--chip-line);
+}
+
+.peek-arrow {
+  color: var(--text-3);
+  font-size: 18px;
+}
+
+.peek-dots {
+  display: flex;
+  justify-content: center;
+}
+
+.peek-dots button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+}
+
+.peek-dots button::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--chip-line);
+  transition: width 0.3s;
+}
+
+.peek-dots button[aria-current="true"]::before {
+  width: 20px;
+  background: var(--accent);
+}
+
+@media (max-height: 700px) {
+  .peek {
+    display: none;
+  }
+
+  .login .login-hero {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .peek-slide,
+  .peek-dots button::before {
+    transition: none;
+  }
+}

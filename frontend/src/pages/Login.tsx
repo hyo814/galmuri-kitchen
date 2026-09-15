@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api, type AuthOptions, type User } from "../api";
 import ProviderLogo, { type LoginProvider } from "../components/ProviderLogo";
 
@@ -22,6 +22,109 @@ function lastLoginProvider(): string | null {
   } catch {
     return null;
   }
+}
+
+const PEEK_SLIDES: { step: string; title: string; body: ReactNode }[] = [
+  {
+    step: "찰칵",
+    title: "영수증 찍으면 끝이에요",
+    body: (
+      <div className="peek-receipt">
+        <span className="peek-paper" aria-hidden="true" />
+        <span className="peek-arrow" aria-hidden="true">
+          →
+        </span>
+        <ul className="peek-rows">
+          <li><span>두부 1모</span><span className="peek-won">1,800원</span></li>
+          <li><span>대파 1단</span><span className="peek-won">2,480원</span></li>
+          <li><span>우유 1L</span><span className="peek-won">2,980원</span></li>
+        </ul>
+      </div>
+    ),
+  },
+  {
+    step: "잠깐만요",
+    title: "두부가 내일까지래요",
+    body: (
+      <ul className="peek-rows">
+        <li><span>두부</span><span className="badge urgent">D-1</span></li>
+        <li><span>대파</span><span className="badge urgent">D-2</span></li>
+        <li><span>김치</span><span className="badge old">구입 10일째</span></li>
+      </ul>
+    ),
+  },
+  {
+    step: "그럼 오늘은",
+    title: "두부조림 어때요?",
+    body: (
+      <ul className="peek-rows">
+        <li><span>두부조림</span><span className="badge info">재료 4/5</span></li>
+        <li><span>김치찌개</span><span className="badge info">재료 5/6</span></li>
+        <li><span>간장만 사면 돼요</span><span className="badge">장보기에 담기</span></li>
+      </ul>
+    ),
+  },
+];
+
+/** 로그인 화면 미리보기 3장(첫인상 B). 4초마다 넘기고, 점을 누르면 멈춘다. 올려두거나 포커스가 안에 있으면 잠깐 멈추고, 움직임 줄이기면 넘기지 않는다 */
+function Peek() {
+  const [current, setCurrent] = useState(0);
+  const [picked, setPicked] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [reduceMotion] = useState(() => matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const rotating = !picked && !reduceMotion;
+
+  useEffect(() => {
+    if (!rotating || paused) return;
+    const timer = setInterval(() => setCurrent((i) => (i + 1) % PEEK_SLIDES.length), 4000);
+    return () => clearInterval(timer);
+  }, [rotating, paused]);
+
+  return (
+    <section
+      className="peek"
+      aria-roledescription="캐러셀"
+      aria-label="갈무리부엌 미리보기"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setPaused(false);
+      }}
+    >
+      <div className="peek-track" aria-live={rotating ? "off" : "polite"}>
+        {PEEK_SLIDES.map((slide, i) => (
+          <div
+            key={slide.step}
+            className={i === current ? "peek-slide on" : "peek-slide"}
+            role="group"
+            aria-roledescription="슬라이드"
+            aria-label={`${i + 1} / ${PEEK_SLIDES.length}`}
+            aria-hidden={i !== current}
+            inert={i !== current}
+          >
+            <span className="peek-step">{slide.step}</span>
+            <p className="peek-title">{slide.title}</p>
+            {slide.body}
+          </div>
+        ))}
+      </div>
+      <div className="peek-dots">
+        {PEEK_SLIDES.map((slide, i) => (
+          <button
+            key={slide.step}
+            type="button"
+            aria-label={`${i + 1}번째 미리보기`}
+            aria-current={i === current}
+            onClick={() => {
+              setPicked(true);
+              setCurrent(i);
+            }}
+          />
+        ))}
+      </div>
+    </section>
+  );
 }
 
 export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
@@ -82,10 +185,11 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
   return (
     <main className="login">
       <div className="login-hero">
-        <img src="/mark.svg" width="72" height="72" alt="" />
+        <img src="/mark.svg" width="56" height="56" alt="" />
         <h1>갈무리부엌</h1>
         <p>냉장고 속 재료로 오늘 뭐 해 먹을지 정해요.</p>
       </div>
+      <Peek />
       {error && (
         <p className="error" role="alert">
           {error}
