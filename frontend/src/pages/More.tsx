@@ -20,6 +20,7 @@ import ProviderLogo from "../components/ProviderLogo";
 import RulesSheet from "../components/RulesSheet";
 import Sheet from "../components/Sheet";
 import StaplesSheet from "../components/StaplesSheet";
+import { savedText } from "../cooklog/cook.ts";
 import { monthOf, todayRowSub } from "../foodlog/log";
 import { useInstallPrompt } from "../install";
 import { dailyTarget, goalLabel, kcalNumber } from "../nutrition/body";
@@ -27,6 +28,7 @@ import { useAsyncAction } from "../useAsyncAction";
 import { navigate } from "../useHashRoute";
 import { forgetRecipeCaches, forgetResources, useResource } from "../useResource";
 import { pendingShoppingChanges } from "../shopping/useShopping";
+import { resetCookReportView } from "./CookReport";
 
 type Theme = "system" | "light" | "dark";
 
@@ -415,6 +417,15 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
           title="요리 일기"
           sub={report.data ? (report.data.cooked ? `이번 달 요리 ${report.data.cooked}번` : "요리했어요로 남긴 기록을 모아 봐요") : ""}
           onClick={() => navigate("/cook-logs")}
+        />
+        <Row
+          icon={<Icon name="receipt" />}
+          title="집밥 리포트"
+          sub={report.data ? (report.data.counted ? `이번 달 ${savedText(report.data.saved_total)}` : "아낀 돈·버린 재료를 한 달씩 보여줘요") : ""}
+          onClick={() => {
+            resetCookReportView(); // 줄 문구가 이번 달이라 이번 달로 연다(R11-9)
+            navigate("/cook-report");
+          }}
         />
       </ul>
 

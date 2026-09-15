@@ -14,7 +14,7 @@ export const TABS: Tab[] = [
   { path: "/recipes", label: "레시피", icon: "book", match: (r) => r === "/recipes" || r.startsWith("/recipes/") },
   { path: "/shopping", label: "장보기", icon: "cart", match: (r) => r === "/shopping" || r.startsWith("/shopping/") },
   { path: "/meals", label: "식단", icon: "calendar", match: (r) => r === "/meals" || r.startsWith("/meals/") },
-  { path: "/more", label: "더보기", icon: "menu", match: (r) => r === "/more" || r === "/tools" || r === "/food-log" || r === "/cook-logs" },
+  { path: "/more", label: "더보기", icon: "menu", match: (r) => r === "/more" || r === "/tools" || r === "/food-log" || r === "/cook-logs" || r === "/cook-report" },
 ];
 
 export default function TabBar({ path }: { path: string }) {

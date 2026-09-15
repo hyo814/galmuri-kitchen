@@ -1,6 +1,7 @@
 // 요리 일기 순수 로직(스펙 29절, 5단계). 브라우저 API 없음 — 오늘·시각은 인자로 받는다(scripts/check-cooklog.mjs가 node로 읽는다).
 import type { CookDraftRow, CookLogItem, CookLogListItem, CookReport, MealKind } from "../api";
 import { formatQuantity, formatWon, withJosa } from "../format.ts";
+import { monthLabel } from "../foodlog/log.ts";
 import { mealLabel } from "../meals/plan.ts";
 
 export const MAX_COOK_SERVINGS = 20;
@@ -116,3 +117,25 @@ export function excludedNote(items: Pick<CookLogItem, "name" | "used" | "unit" |
   parts.push("참고용이에요");
   return parts.join(" · ");
 }
+
+// ---- Task 11: 집밥 리포트(시안 5) ----
+/** 리포트 머리 "2026년 9월 집밥 리포트" */
+export const reportTitle = (month: string) => `${monthLabel(month)} 집밥 리포트`;
+/** 큰 숫자 위 글자: 이번 달이면 "이번 달 집밥으로", 아니면 "9월 집밥으로" */
+export const reportLead = (month: string, today: string) => (month === today.slice(0, 7) ? "이번 달 집밥으로" : `${Number(month.slice(5, 7))}월 집밥으로`);
+/** 합계 아래 "요리 12번 중 10번 계산 · 재료 5개 가격 제외 · 참고용이에요" */
+export function reportNote(r: Pick<CookReport, "cooked" | "counted" | "excluded_ingredients">): string {
+  const head = `요리 ${r.cooked}번 중 ${r.counted}번 계산`;
+  return [head, r.excluded_ingredients ? `재료 ${r.excluded_ingredients}개 가격 제외` : "", "참고용이에요"].filter(Boolean).join(" · ");
+}
+/** 결정 22. 지난달 기록이 없으면 null */
+export function compareLine(r: Pick<CookReport, "cooked" | "discarded" | "previous">): string | null {
+  const { cooked, discarded } = r.previous;
+  if (!cooked && !discarded) return null;
+  const dc = r.cooked - cooked, dd = r.discarded - discarded;
+  const cook = dc > 0 ? `지난달보다 요리 ${dc}번 더` : dc < 0 ? `지난달보다 요리 ${-dc}번 덜` : "지난달과 요리 횟수가 같아요";
+  const waste = dd < 0 ? `버린 재료 ${-dd}개 줄었어요` : dd > 0 ? `버린 재료 ${dd}개 늘었어요` : "버린 재료는 그대로예요";
+  return `${cook} · ${waste}`;
+}
+/** 막대 폭 %(1등 대비, 최소 4) */
+export const barWidths = (rows: { saved: number }[]) => rows.map((r) => Math.max(4, Math.round((r.saved * 100) / Math.max(rows[0]?.saved ?? 1, 1))));

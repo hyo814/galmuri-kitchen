@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   aboutWon,
   amountHint,
+  barWidths,
+  compareLine,
   cookMeal,
   cookedLine,
   costLine,
@@ -18,6 +20,9 @@ import {
   foodLogLine,
   parseAmountInput,
   parseWon,
+  reportLead,
+  reportNote,
+  reportTitle,
   savedRowText,
   savedText,
   seoulHour,
@@ -180,5 +185,25 @@ assert.equal(withEunNeun("두부 3"), "두부 3은");
 assert.equal(withEunNeun("계란 2"), "계란 2는");
 assert.equal(withEunNeun("김치 0.3kg"), "김치 0.3kg은");
 assert.equal(withEunNeun("양파"), "양파는");
+
+// ---- Task 11: 집밥 리포트(시안 5) ----
+assert.equal(reportTitle("2026-09"), "2026년 9월 집밥 리포트");
+assert.equal(reportLead("2026-09", "2026-09-15"), "이번 달 집밥으로");
+assert.equal(reportLead("2026-08", "2026-09-15"), "8월 집밥으로");
+
+// 합계 아래 안내(참고용 표시)
+assert.equal(reportNote({ cooked: 12, counted: 10, excluded_ingredients: 5 }), "요리 12번 중 10번 계산 · 재료 5개 가격 제외 · 참고용이에요");
+assert.equal(reportNote({ cooked: 3, counted: 3, excluded_ingredients: 0 }), "요리 3번 중 3번 계산 · 참고용이에요");
+
+// 지난달 대비(결정 22)
+assert.equal(compareLine({ cooked: 12, discarded: 3, previous: { cooked: 8, discarded: 5 } }), "지난달보다 요리 4번 더 · 버린 재료 2개 줄었어요");
+assert.equal(compareLine({ cooked: 2, discarded: 1, previous: { cooked: 4, discarded: 0 } }), "지난달보다 요리 2번 덜 · 버린 재료 1개 늘었어요");
+assert.equal(compareLine({ cooked: 3, discarded: 2, previous: { cooked: 3, discarded: 2 } }), "지난달과 요리 횟수가 같아요 · 버린 재료는 그대로예요");
+assert.equal(compareLine({ cooked: 5, discarded: 0, previous: { cooked: 0, discarded: 0 } }), null);
+
+// 많이 아낀 요리 막대 폭(1등 대비, 최소 4)
+assert.deepEqual(barWidths([{ saved: 23100 }, { saved: 12400 }, { saved: 9800 }]), [100, 54, 42]);
+assert.deepEqual(barWidths([{ saved: 23100 }, { saved: 500 }]), [100, 4]);
+assert.deepEqual(barWidths([]), []);
 
 console.log("check-cooklog: ok");

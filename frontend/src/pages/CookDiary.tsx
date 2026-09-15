@@ -5,9 +5,10 @@ import Icon from "../components/Icon";
 import InfiniteSentinel from "../components/InfiniteSentinel";
 import { diaryDateText, diaryHeader, firstLine, savedRowText } from "../cooklog/cook.ts";
 import { monthOf, starsText } from "../foodlog/log";
-import { goBack } from "../useHashRoute";
+import { goBack, navigate } from "../useHashRoute";
 import { useInfiniteList } from "../useInfiniteList";
 import { useResource } from "../useResource";
+import { resetCookReportView } from "./CookReport";
 
 // 다른 화면(먹은 기록 날짜 상세, Task 13)에서 특정 일기를 열며 들어올 때 쓴다 — 이 화면이 마운트되면서 한 번 읽고 비운다
 let pendingOpen: number | null = null;
@@ -87,11 +88,22 @@ export default function CookDiary({ user }: { user: User }) {
         </h1>
       </header>
 
-      {report.data && (
-        <div className="nt-card ck-month">
-          <b>{diaryHeader(report.data)}</b>
-        </div>
-      )}
+      {/* 받기 전에도 늘 그린다 — 뒤늦게 끼어들며 목록을 밀지 않게, 이번 달 0번이어도 리포트로 가게(R11-5) */}
+      <button
+        type="button"
+        className="nt-card ck-month"
+        onClick={() => {
+          resetCookReportView(); // 카드가 이번 달이라 이번 달로 연다(R11-9)
+          navigate("/cook-report");
+        }}
+      >
+        <span>
+          <b>{report.data ? diaryHeader(report.data) : "\u00a0"}</b>
+          <br />
+          <span className="muted">집밥 리포트 보기</span>
+        </span>
+        <Icon name="chevron" />
+      </button>
 
       {items.length > 0 && (
         <ul className="nt-card ck-list">
