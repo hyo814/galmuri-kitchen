@@ -1,16 +1,18 @@
 import { useId, useRef, useState } from "react";
-import { api, type MealSlot } from "../api";
+import { api, type FoodLog, type MealSlot } from "../api";
 import { slotDateText } from "../meals/plan";
+import { openFoodLog } from "../pages/FoodLog";
 import { urgentLabel } from "../pages/Recipes";
 import { useAsyncAction } from "../useAsyncAction";
 import { navigate } from "../useHashRoute";
+import { forgetResources } from "../useResource";
 import Icon from "./Icon";
 import Sheet from "./Sheet";
 
 interface Props {
   slot: MealSlot;
   today: string;
-  /** 인분을 저장했거나 칸을 비웠다(닫힐 때 식단을 다시 받는다) */
+  /** 인분을 저장했거나 칸을 비웠거나 먹었어요를 남겼다(닫힐 때 식단을 다시 받는다) */
   onChanged: () => void;
   /** 다른 걸로 바꾸기: 이 시트를 닫고 같은 칸의 채우기 시트를 연다 */
   onReplace: (slot: MealSlot) => void;
@@ -23,6 +25,8 @@ export default function MealSlotSheet({ slot: initial, today, onChanged, onRepla
   const [servings, setServings] = useState(initial.servings);
   const [saveError, setSaveError] = useState("");
   const { busy, error: removeError, run } = useAsyncAction();
+  const { busy: eatenBusy, error: eatenError, run: runEaten } = useAsyncAction();
+  const [ateHint, setAteHint] = useState(false);
   const servingsLabel = useId();
   // 빠르게 여러 번 눌러도 누른 차례대로 저장되게 요청을 줄 세운다. 실패하면 마지막으로 저장된 값으로 되돌린다
   const queue = useRef(Promise.resolve());
@@ -59,6 +63,18 @@ export default function MealSlotSheet({ slot: initial, today, onChanged, onRepla
       onClose();
     });
 
+  const markEaten = () =>
+    runEaten(async () => {
+      await queue.current; // 인분 저장이 끝난 뒤에 보낸다
+      const log = await api<FoodLog>(`/api/meal-slots/${slot.id}/eaten`, { method: "POST" });
+      setSlot({ ...slot, eaten_log_id: log.id });
+      forgetResources("/api/food-logs");
+      onChanged();
+      setAteHint(true);
+    });
+
+  const showEaten = slot.date <= today;
+
   const isRecipe = slot.recipe_id !== null;
   return (
     <Sheet title={slot.title} description={slotDateText(slot.date, today, slot.meal)} onClose={onClose}>
@@ -71,6 +87,37 @@ export default function MealSlotSheet({ slot: initial, today, onChanged, onRepla
             </span>
           )}
         </div>
+      )}
+
+      {showEaten &&
+        (slot.eaten_log_id === null ? (
+          <button type="button" className="btn primary" disabled={eatenBusy} onClick={markEaten}>
+            <Icon name="check" />
+            {eatenBusy ? "남기는 중…" : "먹었어요 · 먹은 기록에 남기기"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn secondary"
+            onClick={() => {
+              openFoodLog({ date: slot.date, logId: slot.eaten_log_id! });
+              onClose();
+              navigate("/food-log");
+            }}
+          >
+            <Icon name="check" />
+            먹었어요 · 기록 보기
+          </button>
+        ))}
+      {showEaten && ateHint && (
+        <p className="hint" role="status">
+          먹은 기록에 남겼어요
+        </p>
+      )}
+      {showEaten && eatenError && (
+        <p className="error" role="alert">
+          {eatenError}
+        </p>
       )}
 
       <div className="field ml-serv-field" role="group" aria-labelledby={servingsLabel}>

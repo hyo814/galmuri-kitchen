@@ -609,7 +609,7 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
                       className="ml-slot"
                       data-meal={meal}
                       aria-haspopup="dialog"
-                      aria-label={`${head.day} ${label} ${slot.title}, ${slot.servings}인분${urgent && `, ${urgent}`}${kcalText && `, 1인분 ${kcalText}`}`}
+                      aria-label={`${head.day} ${label} ${slot.title}, ${slot.servings}인분${urgent && `, ${urgent}`}${kcalText && `, 1인분 ${kcalText}`}${slot.eaten_log_id !== null ? ", 먹었어요" : ""}`}
                       onClick={() => {
                         sheetOpen.current = true;
                         setOpenSlot(slot);
@@ -624,6 +624,15 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
                             <>
                               {" · "}
                               <span className="ml-use">{urgent}</span>
+                            </>
+                          )}
+                          {slot.eaten_log_id !== null && (
+                            <>
+                              {" · "}
+                              <span className="ml-eaten">
+                                <Icon name="check" size={14} />
+                                먹었어요
+                              </span>
                             </>
                           )}
                         </span>
