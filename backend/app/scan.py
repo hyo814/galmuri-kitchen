@@ -20,6 +20,7 @@ UPLOAD_KINDS = ("fridge", "receipt", "order", "memo")
 SCAN_KINDS = ("fridge", "receipt", "order", "memo")  # 일일 한도를 함께 세는 kind (memo는 장보기 메모 사진)
 RECIPE_KINDS = ("recipe", "link", "recipe_photo", "meal", "eat_out")  # AI 레시피 제안 + 링크·글·사진 가져오기 + AI 식단 초안(스펙 20절) + eat_out: 사 먹으면 얼마 추정(29절 결정 11)
 NUTRITION_KINDS = ("nutrition",)  # 영양 채우기 AI 단위 무게·영양 추정(스펙 21절). AI 레시피 한도·체험 전체 AI 예산과 따로, /api/ai-usage에는 안 보인다
+AI_KINDS = SCAN_KINDS + RECIPE_KINDS + NUTRITION_KINDS  # Claude를 부르는 kind 전체(로그인 사용자 전체 AI 예산, ai.user_ai_budget_spent)
 FETCH_KINDS = ("link_fetch",)  # 링크 가져오기의 외부 요청(AI 호출 아님, 토큰 없음). AI 한도·사용량에는 세지 않는다
 MAX_ITEMS = 50
 MAX_PHOTOS = 5  # 한 번에 읽는 사진 수(AI 호출은 한 번)
@@ -75,8 +76,8 @@ def check_ai_limits(user_id, kinds, limit, what, burst=None):
         abort(429, "잠시 후 다시 시도해주세요.")
     if calls_today(user_id, kinds) >= limit:
         abort(429, f"오늘 {what} {limit}번까지 쓸 수 있어요. 내일 다시 써주세요.")
-    if kinds in (SCAN_KINDS, RECIPE_KINDS, NUTRITION_KINDS) and g.user.provider != "demo" and ai.user_ai_budget_spent():
-        abort(429, "오늘 준비한 AI 사용량이 모두 찼어요. 내일 다시 써주세요.")
+    if set(kinds) <= set(AI_KINDS) and g.user.provider != "demo" and ai.user_ai_budget_spent():
+        abort(429, "오늘 준비한 AI 사용량이 모두 찼어요. 조금 뒤에 다시 써주세요.")
 
 
 def start_ai_call(user_id, kind):

@@ -66,6 +66,7 @@ def create_app(test_config=None):
         DEMO_IP_DAILY_LIMIT=int(os.environ.get("DEMO_IP_DAILY_LIMIT") or 100),  # 같은 IP에서 24시간에 만들 수 있는 체험 계정 수
         DEMO_AI_GLOBAL_DAILY=int(os.environ.get("DEMO_AI_GLOBAL_DAILY") or 300),  # 체험 계정 전체 AI 호출 24시간 예산, 넘으면 예시 결과
         USER_AI_GLOBAL_DAILY=int(os.environ.get("USER_AI_GLOBAL_DAILY") or 400),  # 로그인 사용자(체험 제외) 전체 Claude 호출 24시간 예산(영양 추정 포함), 넘으면 429·영양은 AI 없이 계산
+        USER_NUTRITION_GLOBAL_DAILY=int(os.environ.get("USER_NUTRITION_GLOBAL_DAILY") or 60),  # 로그인 사용자 전체 영양 추정 하루(서울) 횟수(위 예산 안에서 따로 한 번 더), 넘으면 AI 추정 없이 계산
         DEMO_NUTRITION_GLOBAL_DAILY=int(os.environ.get("DEMO_NUTRITION_GLOBAL_DAILY") or 30),  # 체험 계정 전체 영양 추정 하루(서울) 횟수, 넘으면 AI 추정 없이 계산
         TRUSTED_PROXY_HOPS=int(os.environ.get("TRUSTED_PROXY_HOPS") or 1),  # X-Forwarded-For를 붙이는 앞단 프록시 수(docs/deploy.md 5-3)
     )

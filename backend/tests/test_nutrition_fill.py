@@ -325,6 +325,34 @@ def test_user_ai_global_budget_skips_ai_and_stops_pending(client, login, app, mo
     assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": []}
 
 
+def test_user_nutrition_global_cap_skips_ai_and_stops_pending(client, login, app, monkeypatch):
+    on_mode_with_tofu(app, monkeypatch)
+    monkeypatch.setattr("app.ai.estimate_nutrition", fail)
+    fixed_now = fixed_clock(monkeypatch)
+    app.config.update(USER_NUTRITION_GLOBAL_DAILY=2)
+    login()
+    add_calls(app, None, 1, fixed_now)
+    add_calls(app, None, 5, fixed_now, demo=True)  # 체험 계정 영양 추정은 체험 한도에만 센다
+    add_calls(app, None, 5, fixed_now - timedelta(days=1))  # 어제(서울)는 안 셈
+    recipe_id = make_recipe(client, ("두부", "1모"))
+    assert rows_of(client, recipe_id)[0]["status"] == "pending"
+    add_calls(app, None, 1, fixed_now)  # 오늘 로그인 사용자 전체 2번 → 다 씀
+    assert rows_of(client, recipe_id)[0]["status"] == "needs_weight"
+    assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": []}
+
+
+def test_demo_nutrition_ignores_spent_user_ai_budget(client, login, app, monkeypatch):
+    ai_calls = on_mode_with_tofu(app, monkeypatch)
+    app.config.update(USER_AI_GLOBAL_DAILY=1, USER_NUTRITION_GLOBAL_DAILY=1)
+    add_calls(app, None, 1, utcnow(), kind="recipe")
+    add_calls(app, None, 1, utcnow())
+    login_demo(app, login, "1")
+    recipe_id = make_recipe(client, ("두부", "1모"))
+    assert rows_of(client, recipe_id)[0]["status"] == "pending"  # 체험 계정은 체험 예산만 본다
+    assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": []}
+    assert len(ai_calls) == 1
+
+
 def test_store_guess_retries_after_concurrent_insert(app, monkeypatch):
     with app.app_context():
         real_commit, commits = db.session.commit, []

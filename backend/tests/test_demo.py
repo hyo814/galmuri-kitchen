@@ -334,7 +334,7 @@ def test_normal_user_ignores_demo_budget(client, login, app, fake_anthropic):
     assert client.get("/api/me").get_json()["scan"] == "on"
 
 
-USER_BUDGET_FULL = "오늘 준비한 AI 사용량이 모두 찼어요. 내일 다시 써주세요."
+USER_BUDGET_FULL = "오늘 준비한 AI 사용량이 모두 찼어요. 조금 뒤에 다시 써주세요."
 
 
 def use_user_budget(app, count, kind="fridge", demo=False, hours_ago=0):
@@ -366,6 +366,19 @@ def test_user_ai_global_budget_blocks_logged_in_users(client, login, app, monkey
     assert (res.status_code, res.get_json()) == (429, {"error": USER_BUDGET_FULL})
     with app.app_context():
         assert AiCall.query.filter(AiCall.created_at >= utcnow() - timedelta(hours=1)).count() == 13  # 막힌 요청은 기록하지 않는다
+
+
+def test_user_ai_global_budget_blocks_link_import_before_fetch(client, login, app, monkeypatch):
+    login()
+    app.config.update(ANTHROPIC_API_KEY="test-key", USER_AI_GLOBAL_DAILY=1)
+    for name in ("web_page", "page_images", "video_snippet", "instagram_post"):
+        monkeypatch.setattr(outbound, name, fail_if_called)  # 예산을 다 썼으면 링크 주소에 요청하지 않는다
+    monkeypatch.setattr(ai, "extract_recipe", fail_if_called)
+    use_user_budget(app, 1, kind="link")
+    res = client.post("/api/recipes/import", json={"url": "https://blog.example.com/tofu"})
+    assert (res.status_code, res.get_json()) == (429, {"error": USER_BUDGET_FULL})
+    with app.app_context():
+        assert AiCall.query.filter_by(kind="link_fetch").count() == 0
 
 
 def test_demo_user_ignores_user_ai_global_budget(demo_app, monkeypatch):
