@@ -61,7 +61,8 @@ def calls_recent(user_id, kinds):
 
 
 def check_ai_limits(user_id, kinds, limit, what, burst=None):
-    """연속 호출(burst, 없으면 AI_SCAN_BURST_LIMIT)·하루 한도를 넘으면 429. what은 문구 주어(예: "사진 인식은").
+    """연속 호출(burst, 없으면 AI_SCAN_BURST_LIMIT)·하루 한도를 넘거나, Claude를 부르는 kinds인데 로그인 사용자 전체 AI 예산(ai.user_ai_budget_spent)을 다 쓰면 429.
+    what은 문구 주어(예: "사진 인식은"). 체험 계정은 전체 체험 예산(ai.scan_mode)을 따로 본다.
     바로 뒤에 start_ai_call을 불러 같은 트랜잭션에서 기록해야 한다(그 사이에 커밋하지 않는다).
     PostgreSQL은 사용자·kind 묶음별 트랜잭션 잠금을 잡아, 동시에 온 요청이 같은 개수를 보고 함께 통과하지 못하게 한다(커밋·롤백 때 풀린다)."""
     if db.session.get_bind().dialect.name == "postgresql":
@@ -74,6 +75,8 @@ def check_ai_limits(user_id, kinds, limit, what, burst=None):
         abort(429, "잠시 후 다시 시도해주세요.")
     if calls_today(user_id, kinds) >= limit:
         abort(429, f"오늘 {what} {limit}번까지 쓸 수 있어요. 내일 다시 써주세요.")
+    if kinds in (SCAN_KINDS, RECIPE_KINDS, NUTRITION_KINDS) and g.user.provider != "demo" and ai.user_ai_budget_spent():
+        abort(429, "오늘 준비한 AI 사용량이 모두 찼어요. 내일 다시 써주세요.")
 
 
 def start_ai_call(user_id, kind):

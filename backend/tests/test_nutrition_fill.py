@@ -313,6 +313,18 @@ def test_demo_with_spent_ai_budget_does_not_store_sample_values(client, login, a
         assert (UnitWeightEstimate.query.count(), FoodNutrient.query.filter_by(source="ai").count()) == (0, 0)
 
 
+def test_user_ai_global_budget_skips_ai_and_stops_pending(client, login, app, monkeypatch):
+    on_mode_with_tofu(app, monkeypatch)
+    monkeypatch.setattr("app.ai.estimate_nutrition", fail)
+    app.config.update(USER_AI_GLOBAL_DAILY=1)
+    login()
+    recipe_id = make_recipe(client, ("두부", "1모"))
+    assert rows_of(client, recipe_id)[0]["status"] == "pending"
+    add_calls(app, None, 1, utcnow(), kind="recipe")  # 로그인 사용자 전체 AI 예산을 다 씀 → 오류 없이 AI 추정만 끈다
+    assert rows_of(client, recipe_id)[0]["status"] == "needs_weight"
+    assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": []}
+
+
 def test_store_guess_retries_after_concurrent_insert(app, monkeypatch):
     with app.app_context():
         real_commit, commits = db.session.commit, []

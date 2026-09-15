@@ -30,6 +30,8 @@ services:
         value: "1"
       - key: DEMO_AI_GLOBAL_DAILY  # 체험 계정 전체 AI 호출 24시간 예산(코드 기본 300). 심사 기간 Claude 월 한도($30)에 맞춤(2026-09-15 50→80)
         value: "80"
+      - key: USER_AI_GLOBAL_DAILY  # 로그인 사용자(체험 제외) 전체 AI 호출 24시간 예산(코드 기본 400, 영양 추정 포함). 투표 기간 사용자가 몰려도 Claude 잔액이 바닥나 체험 계정까지 멈추지 않게(2026-09-16 추가)
+        value: "150"
       - key: DEMO_NUTRITION_GLOBAL_DAILY  # 체험 계정 전체 영양 추정 하루 횟수(코드 기본 30). 위 AI 예산과 따로 세어 사진·AI 레시피 체험 몫을 지킨다
         value: "30"
       - key: ANTHROPIC_API_KEY
