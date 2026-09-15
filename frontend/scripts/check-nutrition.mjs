@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { ageOf, dailyTarget, kcalNumber, parseProfileInput, targetNote } from "../src/nutrition/body.ts";
 import {
-  candidateSub, closestMatch, dailyValue, daySum, dayHeadText, fillTargets, goalFor, gramsFieldValue, ingredientKcalText,
+  MAX_FILL_ATTEMPTS, candidateSub, closestMatch, dailyValue, daySum, dayHeadText, fillTargets, goalFor, gramsFieldValue, ingredientKcalText,
   ingredientNote, macroSplit, meterPercent, pickTitle, slotKcalText, sodiumDay, sugarDay, unitGramsFrom,
 } from "../src/nutrition/day.ts";
 
@@ -133,6 +133,9 @@ assert.equal(slotKcalText(null), "");
 
 assert.equal(goalFor(null, 1800), 1800);
 assert.equal(goalFor(1272, 1800), 1272);
+
+// 자동 채우기는 레시피마다 두 번까지(Ruling 18: 첫 채우기가 찾기에 시간을 다 쓰면 한 번 더)
+assert.equal(MAX_FILL_ATTEMPTS, 2);
 
 // fillTargets: 날짜 밖·pending 아님·직접 쓰기 칸 제외·중복 한 번
 const fillDates = ["2026-09-14", "2026-09-15", "2026-09-16"];
