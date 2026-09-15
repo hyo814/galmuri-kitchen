@@ -36,3 +36,15 @@ def test_sw_and_manifest_served_with_no_cache_headers(make_app, tmp_path):
     manifest = c.get("/manifest.webmanifest")
     assert manifest.headers["Cache-Control"] == "no-cache"
     assert manifest.mimetype == "application/manifest+json"
+
+
+def test_hashed_assets_cached_long_but_index_is_not(make_app, tmp_path):
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "index.html").write_text("<div id=root></div>")
+    (tmp_path / "assets" / "index-abc.js").write_text("console.log(1)")
+    (tmp_path / "icon-192.png").write_bytes(b"png")
+    c = make_app(FRONTEND_DIST=str(tmp_path)).test_client()
+
+    assert c.get("/assets/index-abc.js").headers["Cache-Control"] == "public, max-age=31536000, immutable"
+    for path in ("/", "/some/client/route", "/icon-192.png"):
+        assert "immutable" not in c.get(path).headers.get("Cache-Control", "")

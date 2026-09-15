@@ -322,7 +322,7 @@ def demo_login():
     ):
         db.session.commit()  # 지운 만료 계정은 남긴다
         storage.delete(keys)
-        abort(429, "체험하기를 너무 많이 눌렀어요. 잠시 후 다시 시도해주세요.")
+        abort(429, "지금 같은 인터넷으로 체험하는 분이 많아요. 잠시 뒤 다시 누르거나 카카오·네이버로 로그인해주세요.")
     over = demo_users.count() - MAX_ACTIVE + 1
     if over > 0:
         # 가득 차도 심사하는 분이 막히지 않게 가장 오래된 체험 계정부터 지운다. 한 번에 PURGE_BATCH개까지만 지우고, 그래도 차 있으면 거절한다(상한 유지).

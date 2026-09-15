@@ -169,7 +169,7 @@ function Loading({ urgent }: { urgent: string[] }) {
               <br />
             </>
           )}
-          10초쯤 걸려요.
+          30초쯤 걸려요.
         </p>
         <div className="r3-dots" aria-hidden="true">
           <i />
@@ -212,12 +212,12 @@ function Results({ data }: { data: AiSuggestions }) {
       {data.sample && (
         <p className="rc-sample">
           <Icon name="info" size={16} />
-          예시 레시피로 보여줘요
+          오늘 체험용 AI를 다 써서 예시 레시피를 보여줘요. 로그인하면 실제로 만들어줘요.
         </p>
       )}
       <p className="r3-note">
         <Icon name="info" size={16} />
-        <span>AI가 만든 레시피예요. 간과 익힘은 맛보면서 조절해주세요.</span>
+        <span>{data.sample ? "" : "AI가 만든 레시피예요. "}간과 익힘은 맛보면서 조절해주세요.</span>
       </p>
       <ul className="rc-cards">
         {data.recipes.map((recipe, index) => {

@@ -31,6 +31,7 @@ def create_app(test_config=None):
     app.config.from_mapping(
         SECRET_KEY=os.environ.get("SECRET_KEY") or ("dev" if dev else None),
         SQLALCHEMY_DATABASE_URI=database_url(os.environ.get("DATABASE_URL", "sqlite:///dev.sqlite3")),
+        SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True},  # 쉬는 동안 DB가 끊은 연결을 쓰기 전에 확인해 첫 요청이 500이 나지 않게
         DEV_MODE=dev,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
@@ -172,7 +173,10 @@ def create_app(test_config=None):
             res.headers["Cache-Control"] = "no-cache"
             return res
         if path and os.path.isfile(os.path.join(dist, path)):
-            return send_from_directory(dist, path)
+            res = send_from_directory(dist, path)
+            if os.path.normpath(path).startswith("assets" + os.sep):  # Vite가 내용 해시를 이름에 넣어 내용이 바뀌면 주소도 바뀐다
+                res.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            return res
         return send_from_directory(dist, "index.html")
 
     return app
