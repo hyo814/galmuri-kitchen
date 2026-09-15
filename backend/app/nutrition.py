@@ -430,10 +430,13 @@ def fill_nutrition():
     weights, food_names = {}, {}
     for row in rows:
         name = ingredient_key(row["name"])  # 괄호 속 설명('두부(3kg)')·줄바꿈은 모델에 보내지 않는다(공유 캐시에 남으므로)
-        if row["pending_reason"] == "weight" and len(weights) < MAX_WEIGHT_GUESSES:
-            weights.setdefault((row["key"], row["unit"]), (name, row["unit"]))
-        elif row["pending_reason"] == "food" and len(food_names) < MAX_FOOD_GUESSES:
+        reason = row["pending_reason"]
+        if reason == "food" and len(food_names) < MAX_FOOD_GUESSES:
             food_names.setdefault(row["key"], name)
+        # 식품 추정을 기다리는 셀 수 있는 재료는 무게도 함께 묻는다(아니면 무게를 다음 채우기에서야 물어 계산 중으로 남는다)
+        needs_weight = reason == "weight" or (reason == "food" and row["countable"] and row["unit_grams"] is None)
+        if needs_weight and len(weights) < MAX_WEIGHT_GUESSES:
+            weights.setdefault((row["key"], row["unit"]), (name, row["unit"]))
     if weights or food_names:
         weight_pairs, food_list = list(weights.values()), list(food_names.values())
         mode = estimate_mode(user)

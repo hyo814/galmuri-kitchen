@@ -106,6 +106,24 @@ def test_on_mode_searches_then_estimates_once(client, login, app, monkeypatch):
     assert (len(asked), len(ai_calls)) == (3, 1)
 
 
+def test_countable_unmatched_food_gets_weight_and_food_in_one_fill(client, login, app, monkeypatch):
+    """I1: 찾아봤지만 후보가 없는 셀 수 있는 재료는 식품 영양과 단위 무게를 한 번에 추정한다(채우기는 레시피마다 한 번)."""
+    app.config.update(FOOD_NUTRITION_API_KEY="k", ANTHROPIC_API_KEY="k")
+    fake_pages(monkeypatch, {})
+    ai_calls = []
+
+    def fake_ai(weights, foods):
+        ai_calls.append((weights, foods))
+        return guess_for(weights, foods), USAGE
+
+    monkeypatch.setattr("app.ai.estimate_nutrition", fake_ai)
+    login()
+    recipe_id = make_recipe(client, ("새송이버섯", "2개"), ("느타리버섯", "100g"))
+    assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": []}
+    assert ai_calls == [([("새송이버섯", "개")], ["새송이버섯", "느타리버섯"])]
+    assert [r["status"] for r in rows_of(client, recipe_id)] == ["estimated", "estimated"]
+
+
 def test_multiword_fallback_search(client, login, app, monkeypatch):
     app.config.update(FOOD_NUTRITION_API_KEY="k", DEV_MODE=False)
     asked = fake_pages(monkeypatch, {"돼지고기": [api_row("P1", "돼지고기_앞다리_생것", "원재료성")]})
