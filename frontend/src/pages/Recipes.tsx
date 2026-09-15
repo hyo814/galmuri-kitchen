@@ -3,6 +3,7 @@ import { api, type AiUsage, type RecipeSummary, type RecommendationCard, type Re
 import AddRecipeSheet from "../components/AddRecipeSheet";
 import Icon from "../components/Icon";
 import InfiniteSentinel from "../components/InfiniteSentinel";
+import { spotlightTip } from "../demoGuide";
 import { SOURCE_LABEL, imageSrc, namesLabel, remainingText, withJosa } from "../format";
 import { navigate } from "../useHashRoute";
 import { useInfiniteList, type Page } from "../useInfiniteList";
@@ -29,6 +30,15 @@ export function resetRecipesSegment() {
   lastSegment = "recommend";
   lastPublicQuery = "";
   resetVideoFilter();
+}
+
+// 체험 안내 `요리 찾아보기`(첫인상 C)가 남기는 한 번짜리 표시: 다음에 레시피 화면을 열면 AI 카드를 짚는다. 값은 급한 재료 이름
+let pendingSpotlight: string[] | null = null;
+
+/** 재고 체험 안내에서 부른다: 레시피 추천 칸을 열고 AI 카드를 짚게 한다 */
+export function spotlightAiEntry(urgentNames: string[]) {
+  pendingSpotlight = urgentNames;
+  lastSegment = "recommend";
 }
 
 /** 레시피 삭제 뒤 뒤로가기하면 내 레시피 탭에 있게 (E1) */
@@ -144,31 +154,78 @@ function useRecommendations() {
   return { meta, ...list };
 }
 
-/** 추천 칸 맨 위 한 줄 카드: 지금 재고로 AI 레시피 3개 만들기 */
-function AiEntry() {
+/** 추천 칸 맨 위 한 줄 카드: 지금 재고로 AI 레시피 3개 만들기. spotlight가 있으면 테두리와 말풍선으로 짚는다(체험 안내) */
+function AiEntry({ spotlight }: { spotlight: string | null }) {
   const { data: usage } = useResource<AiUsage>("/api/ai-usage");
   const usedUp = !!usage && usage.recipe.used >= usage.recipe.limit;
   const status = useAiStatus();
+  const [tip, setTip] = useState(spotlight);
+  const cardRef = useRef<HTMLElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // 짚을 때: 카드를 보이게 하고 버튼에 포커스(말풍선은 aria-describedby로 읽힌다). 다른 곳을 누르거나 Esc, 카드가 화면 밖으로 나가면 사라진다
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!tip || !card) return;
+    card.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    buttonRef.current?.focus({ preventScroll: true });
+    const close = () => setTip(null);
+    const onPointer = (e: PointerEvent) => {
+      if (!card.contains(e.target as Node)) close();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    let seen = false;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) seen = true;
+      else if (seen) close();
+    });
+    observer.observe(card);
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [tip]);
+
   // 이미 만든 결과·만드는 중이면 새로 부르지 않고 그 화면을 연다(횟수를 아낀다. 새로 만들기는 `다시 만들기`)
   const open = () => {
+    setTip(null);
     if (!status || (status === "error" && !usedUp)) startAiRecipes();
     navigate("/recipes/ai");
   };
   return (
-    <section className="r3-ai" aria-labelledby="ai-entry-title">
-      <span className="r3-ai-mark">
-        <Icon name="sparkle" size={26} />
-      </span>
-      <span className="row-main">
-        <span className="row-title" id="ai-entry-title">
-          내 재고로 새 레시피
+    <>
+      <section ref={cardRef} className={tip ? "r3-ai spot" : "r3-ai"} aria-labelledby="ai-entry-title">
+        <span className="r3-ai-mark">
+          <Icon name="sparkle" size={26} />
         </span>
-        <span className="row-sub">{status === "done" ? "만든 레시피 3개가 있어요" : `AI가 3개 만들어줘요${remainingText(usage)}`}</span>
-      </span>
-      <button type="button" className="btn primary inline" disabled={usedUp && !hasAiState()} onClick={open}>
-        {status === "done" ? "결과 보기" : status === "loading" ? "만드는 중…" : "만들기"}
-      </button>
-    </section>
+        <span className="row-main">
+          <span className="row-title" id="ai-entry-title">
+            내 재고로 새 레시피
+          </span>
+          <span className="row-sub">{status === "done" ? "만든 레시피 3개가 있어요" : `AI가 3개 만들어줘요${remainingText(usage)}`}</span>
+        </span>
+        <button
+          ref={buttonRef}
+          type="button"
+          className="btn primary inline"
+          disabled={usedUp && !hasAiState()}
+          aria-describedby={tip ? "ai-entry-tip" : undefined}
+          onClick={open}
+        >
+          {status === "done" ? "결과 보기" : status === "loading" ? "만드는 중…" : "만들기"}
+        </button>
+      </section>
+      {tip && (
+        <p className="r3-ai-tip" id="ai-entry-tip">
+          {tip}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -226,7 +283,7 @@ function PublicSearchResults({ q }: { q: string }) {
   );
 }
 
-function RecommendList({ onShowMine, showAi }: { onShowMine: () => void; showAi: boolean }) {
+function RecommendList({ onShowMine, showAi, spotlight }: { onShowMine: () => void; showAi: boolean; spotlight: string | null }) {
   const { meta, items, loading, error, hasMore, multiPage, loadMore, reload } = useRecommendations();
   const [input, setInput] = useState(lastPublicQuery);
   const [q, setQ] = useState(lastPublicQuery);
@@ -242,7 +299,7 @@ function RecommendList({ onShowMine, showAi }: { onShowMine: () => void; showAi:
     lastPublicQuery = q;
   }, [q]);
   // 재고 수를 알기 전에는 그리지 않고, 재고가 비었으면 숨긴다(만들 재료가 없다. 깜빡임 방지)
-  const ai = showAi && meta !== undefined && meta.inventoryCount > 0 && <AiEntry />;
+  const ai = showAi && meta !== undefined && meta.inventoryCount > 0 && <AiEntry spotlight={spotlight} />;
 
   // C-L2: 첫 페이지가 실패하면(메타가 없음) 다시 불러오기 버튼을 보여 준다
   if (!meta)
@@ -467,6 +524,11 @@ export default function Recipes({ user }: { user: User }) {
   // 영상을 쓸 수 없으면(운영에서 키 없음) 영상 칸을 숨긴다
   const segments = user.videos === "off" ? SEGMENTS.filter(([key]) => key !== "video") : SEGMENTS;
   const [segment, setSegment] = useState<Segment>(segments.some(([key]) => key === lastSegment) ? lastSegment : "recommend");
+  // 체험 안내에서 왔으면 AI 카드 말풍선(한 번만 — 다음에 열 때는 없다). AI 카드가 안 보이는 모드면 그냥 지나간다
+  const [spotlight] = useState(() => pendingSpotlight && spotlightTip(pendingSpotlight, user.recipe_limit));
+  useEffect(() => {
+    pendingSpotlight = null;
+  }, []);
   const choose = useCallback((next: Segment) => {
     lastSegment = next;
     setSegment(next);
@@ -484,7 +546,7 @@ export default function Recipes({ user }: { user: User }) {
           </button>
         ))}
       </div>
-      {segment === "recommend" && <RecommendList onShowMine={() => choose("mine")} showAi={user.scan !== "off"} />}
+      {segment === "recommend" && <RecommendList onShowMine={() => choose("mine")} showAi={user.scan !== "off"} spotlight={spotlight} />}
       {segment === "mine" && <MyRecipeList canImport={user.scan !== "off"} />}
       {segment === "video" && <Videos sample={user.videos === "sample"} />}
       {segment === "seasoning" && <Seasonings />}

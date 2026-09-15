@@ -6370,3 +6370,87 @@ button.sh-offline svg:last-child {
     transition: none;
   }
 }
+
+/* C. 체험 계정 첫 30초: 재고 맨 위 다람이 안내 카드 + 레시피 추천 AI 카드 짚기 */
+.demo-guide {
+  display: grid;
+  gap: 12px;
+  margin: 16px 20px 0;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: var(--accent-tint);
+}
+
+.demo-guide-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.demo-guide-head .rc-empty-mark {
+  flex: none;
+  margin: 0;
+  border-radius: 11px;
+}
+
+.demo-guide-head p {
+  flex: 1;
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  word-break: keep-all;
+}
+
+.demo-guide-head b {
+  color: var(--accent-strong);
+}
+
+.demo-guide-head .icon-btn {
+  margin: -10px -12px 0 -6px;
+}
+
+.demo-guide-acts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.demo-guide-acts .btn {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 15px;
+}
+
+.demo-guide-acts .btn.secondary {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.r3-ai.spot {
+  box-shadow: 0 0 0 3px var(--accent), 0 0 0 9px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.r3-ai-tip {
+  position: relative;
+  margin: 18px 20px 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--inverse-bg);
+  color: var(--inverse-text);
+  font-size: 14px;
+  line-height: 20px;
+  word-break: keep-all;
+}
+
+.r3-ai-tip::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 48px;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: inherit;
+  transform: rotate(45deg);
+}
