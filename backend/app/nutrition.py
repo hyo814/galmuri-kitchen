@@ -76,18 +76,26 @@ def search_terms(key_text):
     return [key_text, max(words, key=len)] if len(words) > 1 else [key_text]
 
 
+def daily_limit(user):
+    return DEMO_NUTRITION_DAILY_LIMIT if user.provider == "demo" else NUTRITION_DAILY_LIMIT
+
+
 def estimate_mode(user):
-    """AI 추정 모드. ai.scan_mode를 따르되, 키가 있는데 체험 계정이 sample(체험 전체 AI 예산을 다 씀)이거나
-    오늘 체험 전체 영양 추정이 DEMO_NUTRITION_GLOBAL_DAILY에 닿았으면 off — 예시 값을 공유 캐시에 넣지 않고, 줄을 끝없이 계산 중으로 두지 않는다."""
+    """AI 추정 모드. ai.scan_mode를 따르되, 키가 있는데 ① 체험 계정이 sample(체험 전체 AI 예산을 다 씀)이거나
+    ② 오늘 체험 전체 영양 추정이 DEMO_NUTRITION_GLOBAL_DAILY에 닿았거나 ③ 이 사용자의 오늘 영양 추정이 하루 한도에 닿았으면 off —
+    예시 값을 공유 캐시에 넣지 않고, 줄을 끝없이 계산 중으로 두지 않는다(무게 알려주기·고르기로 고칠 수 있게). 60초 연속 한도는 곧 풀려 세지 않는다."""
     mode = ai.scan_mode(user)
-    if user.provider != "demo" or not current_app.config["ANTHROPIC_API_KEY"]:
+    if not current_app.config["ANTHROPIC_API_KEY"]:
         return mode
-    if mode == "sample":
-        return "off"
-    # ponytail: 세고 부르기라 동시에 온 체험 요청 몇 개만큼 넘을 수 있다(demo_ai_budget_spent와 같은 여유)
-    start, end = foods._day_bounds(scan.seoul_today())
-    used = AiCall.query.filter(AiCall.demo.is_(True), AiCall.kind.in_(scan.NUTRITION_KINDS), AiCall.created_at >= start, AiCall.created_at < end).count()
-    return "off" if used >= current_app.config["DEMO_NUTRITION_GLOBAL_DAILY"] else mode
+    if user.provider == "demo":
+        if mode == "sample":
+            return "off"
+        # ponytail: 세고 부르기라 동시에 온 체험 요청 몇 개만큼 넘을 수 있다(demo_ai_budget_spent와 같은 여유)
+        start, end = foods._day_bounds(scan.seoul_today())
+        used = AiCall.query.filter(AiCall.demo.is_(True), AiCall.kind.in_(scan.NUTRITION_KINDS), AiCall.created_at >= start, AiCall.created_at < end).count()
+        if used >= current_app.config["DEMO_NUTRITION_GLOBAL_DAILY"]:
+            return "off"
+    return "off" if scan.calls_today(user.id, scan.NUTRITION_KINDS) >= daily_limit(user) else mode
 
 
 def _longest_word(words):
@@ -250,7 +258,10 @@ class NutritionContext:
                 self.fallbacks.setdefault(key, (words[at], words[:at] + words[at + 1:]))
             keys.add(key)
         keys.discard("")
+        self.user = user
         self.can_estimate = estimate_mode(user) != "off"
+        # 오늘 식품 DB 찾기 한도를 다 썼으면 안 찾아본 재료를 계산 중 대신 unmatched(고르기)로 둔다 — 채우기가 찾지 못해 끝없이 계산 중이 된다
+        self.can_search = None
         self.matches, self.searched, self.foods = {}, set(), {}
         self.weights, self.candidates = defaultdict(dict), defaultdict(list)
         for chunk in _chunks(keys, IN_CHUNK):
@@ -262,11 +273,15 @@ class NutritionContext:
         codes = {m.food_code for m in self.matches.values() if m.food_code} | {f"ai:{k}" for k in keys}
         for chunk in _chunks(codes, IN_CHUNK):
             self.foods.update((f.food_code, f) for f in FoodNutrient.query.filter(FoodNutrient.food_code.in_(chunk)))
-        # ponytail: '파'처럼 짧은 키는 LIKE가 캐시의 많은 행을 읽는다. 느려지면 name_parts를 따로 저장하는 표로 바꾼다
-        like_keys = (keys | {fb for fb, _ in self.fallbacks.values()}) - ALWAYS_HAVE
+        # 기억이 있는 재료는 resolve가 후보를 보지 않는다 — 그 키와 여러 낱말 대체 키는 찾지 않는다
+        free = keys - self.matches.keys()
+        like_keys = (free | {fb for key, (fb, _) in self.fallbacks.items() if key in free}) - ALWAYS_HAVE
+        # ponytail: 한 묶음(50개 OR LIKE '%키%')마다 food_nutrients 전체를 훑는다(O(행 수), warm --limit이 행 수를 묶는다).
+        # 키는 normalize로 소문자·DB 이름은 한국어라 ILIKE(lower 비교, 6배 느림) 대신 LIKE — 영문 대문자가 섞인 이름은 후보에서 빠진다.
+        # 느려지면 이름 조각 표 food_name_parts(part 색인)를 만들어 조각 = 키로 찾는다
         found = {}  # 한 행이 여러 묶음의 LIKE에 걸릴 수 있다('대파'는 '%대파%'·'%파%') — 코드로 한 번만
         for chunk in _chunks(like_keys, LIKE_CHUNK):
-            patterns = [FoodNutrient.name.ilike("%" + k.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%", escape="\\")
+            patterns = [FoodNutrient.name.like("%" + k.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%", escape="\\")
                         for k in chunk]
             found.update((row.food_code, row) for row in FoodNutrient.query.filter(FoodNutrient.source != "ai", or_(*patterns)))
         for row in found.values():
@@ -292,7 +307,9 @@ class NutritionContext:
             food = self.foods.get(f"ai:{key}")
             state = "estimate" if food else "estimate_missing"
         else:
-            state = "unsearched"
+            if self.can_search is None:  # 안 찾아본 재료가 있을 때만 센다
+                self.can_search = foods.fetch_allowed(self.user)
+            state = "unsearched" if self.can_search else "unmatched"
         return {"key": key, "state": state, "food": _food_json(food) if food else None, "unit_grams": unit_grams}
 
     def _fallback_match(self, key):
@@ -423,10 +440,13 @@ def fill_nutrition():
     weights, food_names = {}, {}
     for row in rows:
         name = ingredient_key(row["name"])  # 괄호 속 설명('두부(3kg)')·줄바꿈은 모델에 보내지 않는다(공유 캐시에 남으므로)
-        if row["pending_reason"] == "weight" and len(weights) < MAX_WEIGHT_GUESSES:
-            weights.setdefault((row["key"], row["unit"]), (name, row["unit"]))
-        elif row["pending_reason"] == "food" and len(food_names) < MAX_FOOD_GUESSES:
+        reason = row["pending_reason"]
+        if reason == "food" and len(food_names) < MAX_FOOD_GUESSES:
             food_names.setdefault(row["key"], name)
+        # 식품 추정을 기다리는 셀 수 있는 재료는 무게도 함께 묻는다(아니면 무게를 다음 채우기에서야 물어 계산 중으로 남는다)
+        needs_weight = reason == "weight" or (reason == "food" and row["countable"] and row["unit_grams"] is None)
+        if needs_weight and len(weights) < MAX_WEIGHT_GUESSES:
+            weights.setdefault((row["key"], row["unit"]), (name, row["unit"]))
     if weights or food_names:
         weight_pairs, food_list = list(weights.values()), list(food_names.values())
         mode = estimate_mode(user)
@@ -441,10 +461,9 @@ def fill_nutrition():
 
 
 def _estimate(user, weight_pairs, food_list):
-    """한도(하루 20번·체험 2번·60초 10번)나 AI 실패면 오류 없이 넘어간다(줄은 계산 중으로 남는다)."""
-    limit = DEMO_NUTRITION_DAILY_LIMIT if user.provider == "demo" else NUTRITION_DAILY_LIMIT
+    """한도(하루 20번·체험 2번·60초 10번)나 AI 실패면 오류 없이 넘어간다(줄은 계산 중으로 남는다. 하루 한도는 estimate_mode가 먼저 off로 본다)."""
     try:
-        scan.check_ai_limits(user.id, scan.NUTRITION_KINDS, limit, "영양 추정은", burst=NUTRITION_BURST)
+        scan.check_ai_limits(user.id, scan.NUTRITION_KINDS, daily_limit(user), "영양 추정은", burst=NUTRITION_BURST)
     except TooManyRequests:
         db.session.rollback()  # PostgreSQL 잠금을 푼다
         return

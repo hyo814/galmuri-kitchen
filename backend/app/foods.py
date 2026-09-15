@@ -9,7 +9,7 @@ from pathlib import Path
 
 import click
 from flask import Blueprint, abort, current_app, g, jsonify, request
-from sqlalchemy import case
+from sqlalchemy import case, func
 from sqlalchemy.exc import IntegrityError
 
 from . import outbound
@@ -26,6 +26,8 @@ MAX_PAGES = 3  # 1쪽 + 마지막 쪽 + (마지막 쪽이 짧으면) 그 앞쪽.
 FETCH_SECONDS = 5
 REFRESH_AFTER = timedelta(days=30)
 USER_DAILY_FETCHES, DEMO_DAILY_FETCHES, GLOBAL_DAILY_FETCHES = 300, 50, 8000
+FETCH_BURST, FETCH_BURST_SECONDS = 20, 60  # 사용자마다 60초에 20번(식품 고르기 검색을 빨리 고쳐 쓸 때)
+JAMO_ONLY = re.compile(r"[ㄱ-ㅣ]+")  # 한글 조합 중인 자모(ㄱ-ㅎ, ㅏ-ㅣ)뿐
 FETCH_KIND = "food_fetch"  # ai_calls 기록(AI 호출 아님, 모델·토큰 없음). AI 한도·사용량에는 세지 않는다
 MAX_QUERY = 30
 SEARCH_LIMIT = 20
@@ -191,6 +193,13 @@ def fetch_allowed(user):
     return _fetches_between(start, end, user.id) < limit
 
 
+def _burst_allowed(user):
+    """지난 60초 이 사용자의 food_fetch가 FETCH_BURST 미만인지(CLI는 사용자 없음이라 세지 않는다). fetch_allowed와 따로 두어
+    영양 계산(NutritionContext)이 잠깐의 연속 한도로 안 찾아본 재료를 고르기로 바꾸지 않게 한다."""
+    now = utcnow()
+    return user is None or _fetches_between(now - timedelta(seconds=FETCH_BURST_SECONDS), now, user.id) < FETCH_BURST
+
+
 def _upsert_food(fields, source, now):
     row = FoodNutrient.query.filter_by(food_code=fields["food_code"]).first()
     if row is None:
@@ -249,7 +258,7 @@ def _search_api(key, user):
     fetched = [0]
 
     def fetch(page):
-        if fetched[0] >= MAX_PAGES or not fetch_allowed(user):
+        if fetched[0] >= MAX_PAGES or not fetch_allowed(user) or not _burst_allowed(user):
             return None
         fetched[0] += 1
         db.session.add(AiCall(user_id=user.id if user else None, kind=FETCH_KIND, model=None, demo=demo, created_at=utcnow()))
@@ -303,10 +312,10 @@ def _search_api(key, user):
 def search_and_cache(name, user):
     """이름 하나를 찾아 food_nutrients에 넣는다. API 검색어·food_searches 키·search_items의 LIKE 키를 모두
     query_key(name)으로 통일한다(공백·괄호 정리, 계란→달걀 같은 동의어가 세 곳 다 같은 이름으로 적용된다).
-    이미 찾아봤고 30일 안이면 부르지 않는다. 찾았거나 이미 있으면 True, 한도·실패로 못 찾았으면 False
+    이미 찾아봤고 30일 안이면 부르지 않는다. 찾았거나 이미 있으면 True, 자모뿐인 이름('ㄷ')·한도(하루·60초 20번)·실패로 못 찾았으면 False
     (찾아본 기록을 남기지 않아 다음에 다시 찾는다)."""
     key = query_key(name)
-    if not key:
+    if not key or JAMO_ONLY.fullmatch(key):
         return False
     existing = FoodSearch.query.filter_by(query_key=key).first()
     if existing is not None and _aware(existing.searched_at) >= utcnow() - REFRESH_AFTER:
@@ -325,7 +334,7 @@ def search_items(q):
     escaped = key.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     raw_first = case((FoodNutrient.group_name == "원재료성", 0), else_=1)
     rows = (
-        FoodNutrient.query.filter(FoodNutrient.source != "ai", FoodNutrient.name.ilike(f"%{escaped}%", escape="\\"))
+        FoodNutrient.query.filter(FoodNutrient.source != "ai", func.lower(FoodNutrient.name).like(f"%{escaped}%", escape="\\"))  # 한 키만 찾는 곳이라 영문 대문자 이름(CGV…)도 찾게 lower
         .order_by(raw_first)
         .limit(200)
         .all()
@@ -366,7 +375,8 @@ def search_foods():
     q = (request.args.get("q") or "").strip()[:MAX_QUERY]
     if not query_key(q):  # 정규화하면 빈 문자열(공백·괄호뿐인 입력 포함)
         abort(400, "찾을 식품 이름을 입력해주세요.")
-    searched = search_and_cache(q, g.user)
+    # 한 글자는 캐시만 찾는다(입력 중 '돼'마다 부르지 않게). 채우기는 search_and_cache로 '파'·'무' 같은 한 글자 재료도 찾는다
+    searched = len(query_key(q)) >= 2 and search_and_cache(q, g.user)
     items = search_items(q)
     return jsonify(items=items, searched=searched)
 

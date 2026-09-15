@@ -156,7 +156,7 @@ export function ingredientNote(row: NutritionIngredient): { text: string; action
     case "trace":
       return { text: "조금이라 계산에서 뺐어요", action: null };
     default:
-      return { text: "계산하는 중이에요", action: null };
+      return { text: "계산하는 중이에요", action: "고르기" }; // 한도·실패로 오래 남아도 직접 고를 수 있게
   }
 }
 

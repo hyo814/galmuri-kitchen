@@ -59,8 +59,9 @@ def nutrition_results(recipes):
     recipes = [r for r in recipes if r is not None]
     if not recipes or nutrition_mode(g.user) == "off":
         return {}
-    context = NutritionContext(g.user, list({r.id: r for r in recipes}.values()))
-    return {r.id: context.recipe(r) for r in recipes}
+    unique = list({r.id: r for r in recipes}.values())  # 같은 레시피 칸이 여럿이어도 한 번만 계산한다
+    context = NutritionContext(g.user, unique)
+    return {r.id: context.recipe(r) for r in unique}
 
 
 def slot_nutrition(slot, result):
