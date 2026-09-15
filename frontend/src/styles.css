@@ -5456,6 +5456,10 @@ button.sh-offline svg:last-child {
   gap: 4px;
 }
 
+.fl-summary p {
+  margin: 0;
+}
+
 .fl-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -5481,11 +5485,11 @@ button.sh-offline svg:last-child {
   gap: 2px;
 }
 
-.fl-split i:first-child {
+.fl-split-home {
   background: var(--accent);
 }
 
-.fl-split i:last-child {
+.fl-split-out {
   background: var(--chip-line);
 }
 
@@ -5508,7 +5512,7 @@ button.sh-offline svg:last-child {
 }
 
 .fl-cal {
-  margin: 4px 20px 0;
+  margin: 4px 16px 0;
   padding: 10px 8px 12px;
   border-radius: 20px;
   background: var(--surface);
@@ -5537,15 +5541,16 @@ button.sh-offline svg:last-child {
   display: grid;
   justify-items: center;
   align-content: start;
-  gap: 2px;
+  gap: 1px;
   height: 76px;
-  padding-top: 4px;
+  padding-top: 2px;
   border: 0;
   border-radius: 12px;
   background: none;
   font-family: inherit;
   color: inherit;
   font-size: 13px;
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
 }
 
@@ -5599,6 +5604,7 @@ button.sh-offline svg:last-child {
   font-size: 10px;
   color: var(--text-3);
   letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
 .fl-legend {

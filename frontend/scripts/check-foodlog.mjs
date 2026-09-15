@@ -21,9 +21,10 @@ assert.equal(
   "9월 14일 월요일, 끼니 3개, 약 1,190kcal, 사진 있음",
 );
 assert.equal(cellLabel("2026-09-15", undefined, "2026-09-15"), "9월 15일 화요일 · 오늘, 기록 없음");
+// kcal 없는 날은 지난 날짜로 확인한다(리뷰 fix round 1 — 미래 날짜는 애초에 칸 버튼으로 그리지 않는다)
 assert.equal(
-  cellLabel("2026-09-16", { date: "2026-09-16", meals: 1, count: 1, kcal: null, approx: false, photo_url: null }, "2026-09-15"),
-  "9월 16일 수요일, 끼니 1개",
+  cellLabel("2026-09-13", { date: "2026-09-13", meals: 1, count: 1, kcal: null, approx: false, photo_url: null }, "2026-09-15"),
+  "9월 13일 일요일, 끼니 1개",
 );
 
 // 월 요약 카드

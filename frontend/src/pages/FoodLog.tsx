@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { localToday, type FoodLogMonth, type User } from "../api";
 import Icon from "../components/Icon";
 import LoadError from "../components/LoadError";
@@ -25,37 +25,28 @@ export function resetFoodLogView(): void {
   pendingOpen = null;
 }
 
-/** 컴포넌트 이름은 FoodLogPage — 같은 파일이 `import type { FoodLog } from "../api"`를 쓰므로 `FoodLog`로 지으면 TS2440 이름 충돌(개정 1 D9) */
-export default function FoodLogPage({ user }: { user: User }) {
-  void user; // 카메라 버튼(Task 10)에서 쓴다
-  const [month, setMonth] = useState(() => (pendingOpen ? monthOf(pendingOpen.date) : (viewMonth ?? monthOf(localToday()))));
-  const [selected, setSelected] = useState<string | null>(() => pendingOpen?.date ?? null);
-
-  useEffect(() => {
-    pendingOpen = null;
-  }, []);
-  useEffect(() => {
-    viewMonth = month;
-  }, [month]);
-
+/** 한 달의 요약 카드·달력(리뷰 fix round 1, I1). `key={month}`로 달마다 새로 마운트해
+ * - 늦게 도착한 옛 달 응답이 지금 보는 달을 덮지 않고(마운트 해제된 인스턴스의 setData는 아무 화면에도 안 붙는다),
+ * - 그 달만 불러오기에 실패해도 자리에서 `LoadError`로 다시 시도할 수 있다.
+ * 머리글·달 이동(`FoodLogPage`)은 이 컴포넌트가 실패해도 그대로 남아 다른 달로 옮길 수 있다. */
+function MonthBody({
+  month,
+  selected,
+  onSelect,
+  onToday,
+}: {
+  month: string;
+  selected: string | null;
+  onSelect: (date: string) => void;
+  onToday: (today: string) => void;
+}) {
   const { data, error, reload } = useResource<FoodLogMonth>(`/api/food-logs/month?month=${month}`);
 
-  const header = (
-    <header className="topbar fl-top">
-      <button type="button" className="icon-btn" aria-label="더보기로 돌아가기" onClick={() => goBack("/more")}>
-        <Icon name="back" />
-      </button>
-      <h1>먹은 기록</h1>
-    </header>
-  );
+  useEffect(() => {
+    if (data) onToday(data.today);
+  }, [data, onToday]);
 
-  if (!data)
-    return (
-      <main className="page">
-        {header}
-        {error ? <LoadError error={error} onRetry={reload} /> : <p className="muted">불러오는 중…</p>}
-      </main>
-    );
+  if (!data) return error ? <LoadError error={error} onRetry={reload} /> : <p className="muted">불러오는 중…</p>;
 
   const today = data.today;
   const days = new Map(data.days.map((d) => [d.date, d]));
@@ -64,9 +55,7 @@ export default function FoodLogPage({ user }: { user: User }) {
   const [year, monthNo] = month.split("-").map(Number);
 
   return (
-    <main className="page">
-      {header}
-
+    <>
       <section className="nt-card fl-summary" aria-label={`${label} 요약`}>
         <div className="fl-stats">
           <div>
@@ -84,28 +73,13 @@ export default function FoodLogPage({ user }: { user: User }) {
         </div>
         {summary.split && (
           <div className="fl-split" role="img" aria-label={`집밥 ${summary.split[0]}%, 외식 ${summary.split[1]}%`}>
-            <i style={{ flex: summary.split[0] }} />
-            <i style={{ flex: summary.split[1] }} />
+            {/* 100%/0%로 갈리면 0% 쪽은 그리지 않는다 — 폭 0인 칸도 flex gap 때문에 틈이 보여서 */}
+            {summary.split[0] > 0 && <i className="fl-split-home" style={{ flex: summary.split[0] }} />}
+            {summary.split[1] > 0 && <i className="fl-split-out" style={{ flex: summary.split[1] }} />}
           </div>
         )}
         <p className="muted">{summary.note}</p>
       </section>
-
-      <div className="fl-mnav">
-        <button type="button" className="icon-btn" aria-label="지난달" onClick={() => setMonth((m) => shiftMonth(m, -1))}>
-          <Icon name="back" />
-        </button>
-        <h2 aria-live="polite">{label}</h2>
-        <button
-          type="button"
-          className="icon-btn"
-          aria-label="다음 달"
-          disabled={month >= monthOf(today)}
-          onClick={() => setMonth((m) => shiftMonth(m, 1))}
-        >
-          <Icon name="chevron" />
-        </button>
-      </div>
 
       <div className="fl-cal">
         <div className="fl-dow" aria-hidden="true">
@@ -138,7 +112,7 @@ export default function FoodLogPage({ user }: { user: User }) {
                   className={["fl-cell", date === today && "today", isSel && "sel"].filter(Boolean).join(" ")}
                   aria-label={cellLabel(date, day, today)}
                   aria-pressed={isSel}
-                  onClick={() => setSelected(date)}
+                  onClick={() => onSelect(date)}
                 >
                   <span className="fl-d">{dayNum}</span>
                   {day?.photo_url ? (
@@ -157,7 +131,56 @@ export default function FoodLogPage({ user }: { user: User }) {
           </div>
         ))}
       </div>
-      <p className="fl-legend">● 끼니 기록 · 사진 = 첫 사진</p>
+      <p className="fl-legend">
+        <span aria-hidden="true">●</span> 끼니 기록 · 사진 = 첫 사진
+      </p>
+    </>
+  );
+}
+
+/** 컴포넌트 이름은 FoodLogPage — 같은 파일이 `import type { FoodLog } from "../api"`를 쓰므로 `FoodLog`로 지으면 TS2440 이름 충돌(개정 1 D9) */
+export default function FoodLogPage({ user }: { user: User }) {
+  void user; // 카메라 버튼(Task 10)에서 쓴다
+  const [month, setMonth] = useState(() => (pendingOpen ? monthOf(pendingOpen.date) : (viewMonth ?? monthOf(localToday()))));
+  const [selected, setSelected] = useState<string | null>(() => pendingOpen?.date ?? null);
+  // 서버 today(개정 1 P14) — 받기 전엔 기기 시계로 `다음 달` 막기를 어림하고, 어느 달이든 한 번 받으면 그 값으로 굳힌다
+  const [today, setToday] = useState(() => localToday());
+
+  useEffect(() => {
+    pendingOpen = null;
+  }, []);
+  useEffect(() => {
+    viewMonth = month;
+  }, [month]);
+
+  const onToday = useCallback((t: string) => setToday(t), []);
+
+  return (
+    <main className="page">
+      <header className="topbar fl-top">
+        <button type="button" className="icon-btn" aria-label="더보기로 돌아가기" onClick={() => goBack("/more")}>
+          <Icon name="back" />
+        </button>
+        <h1>먹은 기록</h1>
+      </header>
+
+      <div className="fl-mnav">
+        <button type="button" className="icon-btn" aria-label="지난달" onClick={() => setMonth((m) => shiftMonth(m, -1))}>
+          <Icon name="back" />
+        </button>
+        <h2 aria-live="polite">{monthLabel(month)}</h2>
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="다음 달"
+          disabled={month >= monthOf(today)}
+          onClick={() => setMonth((m) => shiftMonth(m, 1))}
+        >
+          <Icon name="chevron" />
+        </button>
+      </div>
+
+      <MonthBody key={month} month={month} selected={selected} onSelect={setSelected} onToday={onToday} />
     </main>
   );
 }
