@@ -110,7 +110,7 @@ def used_text(item):
     """'김치 0.3kg' · 재고에 없던 재료는 '돼지고기 200g' · 양이 없으면 이름만."""
     if item.used is not None:
         return f"{item.name} {number(item.used)}{item.unit or ''}"
-    return f"{item.name} {item.amount_text}".strip()
+    return f"{item.name} {item.amount_text or ''}".strip()
 
 
 def write_csv(archive, name, header, rows):

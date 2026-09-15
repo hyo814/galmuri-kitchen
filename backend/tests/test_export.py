@@ -375,6 +375,7 @@ def test_export_includes_cook_logs_csv(client, login, app):
             CookLogItem(name="김치", used=0.3, unit="kg", cost=3870),
             CookLogItem(name="두부", used=1, unit="모", cost=2480),
             CookLogItem(name="돼지고기", amount_text="200g", excluded="no_price"),
+            CookLogItem(name="대파", excluded="no_price"),  # 레시피 양이 비어 있던 재고 밖 재료 → 이름만('대파 None'이 아니게)
         ]
         db.session.add(kimchi)
         db.session.add(
@@ -389,7 +390,7 @@ def test_export_includes_cook_logs_csv(client, login, app):
     egg_row, kimchi_row = rows
     assert kimchi_row == [
         day(1), "김치찌개", "2", "4", "'=맛있음", "9000", "추정", "7180", "10820", "1",
-        "김치 0.3kg; 두부 1모; 돼지고기 200g", "a.jpg", kst(seoul_noon(1)),
+        "김치 0.3kg; 두부 1모; 돼지고기 200g; 대파", "a.jpg", kst(seoul_noon(1)),
     ]
     assert (egg_row[8], egg_row[6]) == ("", "")  # 아낀 돈(원), 사 먹으면 출처: saved·eat_out 없음
 
