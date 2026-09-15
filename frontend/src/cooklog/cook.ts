@@ -39,8 +39,10 @@ export function parseWon(text: string): number | null | undefined {
 export const wonFieldText = (n: number | null | undefined, typed: string) => (n === undefined ? typed : n === null ? "" : n.toLocaleString("ko-KR"));
 /** 결정 13: 100원 단위 반올림 "약 10,800원"(부호는 호출 측) */
 export const aboutWon = (n: number) => `약 ${formatWon(Math.round(Math.abs(n) / 100) * 100)}`;
+/** 결정 15: 100원 반올림 뒤에도 음수일 때만 '더 들었어요'(aboutWon의 절댓값 반올림과 같다 — -50부터) */
+export const overSpent = (n: number) => n <= -50;
 /** 결정 15 */
-export const savedText = (saved: number) => (saved >= 0 ? `${aboutWon(saved)} 아꼈어요` : `${aboutWon(saved)} 더 들었어요`);
+export const savedText = (saved: number) => `${aboutWon(saved)} ${overSpent(saved) ? "더 들었어요" : "아꼈어요"}`;
 /** 결정 16: 식단 칸 끼니 → 오늘이면 시각(5–9 아침·10–14 점심·15–20 저녁·그 밖 간식) → 지난 날은 저녁.
  *  ponytail: 서버 food_logs.meal_for_time과 같은 시간표 — 바꾸면 둘 다(시트 설명 줄에 끼니를 보여줘야 해서 화면에도 둔다, 개정 1 D16) */
 export function cookMeal(date: string, today: string, hour: number, slotMeal?: MealKind): MealKind {
@@ -62,9 +64,13 @@ export function deductedText(names: string[]): string {
   const shown = names.length <= 3 ? names.join("·") : `${names.slice(0, 3).join("·")} 외 ${names.length - 3}개`;
   return `재고에서 ${withJosa(shown, "을", "를")} 뺐어요`; // withJosa는 낱말 + 조사를 돌려준다
 }
-/** 되돌린 뒤 알림 */
-export const undoneText = (r: { skipped: string[] }) =>
-  r.skipped.length ? `재고를 되돌렸어요 · ${withJosa(r.skipped.join("·"), "은", "는")} 그사이 바뀌어 그대로 뒀어요` : "재고를 되돌렸어요";
+/** 되돌린 뒤 알림. 재고에서 뺀 게 없던 저장이면 일기(와 먹은 기록)만 지운 것 */
+export const undoneText = (r: { restored: string[]; skipped: string[] }) =>
+  r.skipped.length
+    ? `재고를 되돌렸어요 · ${withJosa(r.skipped.join("·"), "은", "는")} 그사이 바뀌어 그대로 뒀어요`
+    : r.restored.length
+      ? "재고를 되돌렸어요"
+      : "요리 일기를 지웠어요";
 /** 쓴 양 칸 옆 "재고 600g" */
 export const stockText = (row: Pick<CookDraftRow, "stock_quantity" | "stock_unit">) =>
   row.stock_quantity === null ? "재고에 없어요" : `재고 ${formatQuantity(row.stock_quantity)}${row.stock_unit ?? ""}`;
@@ -77,7 +83,7 @@ export function cookedLine(c: { last_on: string; last_rating: number | null }, s
 // ---- Task 10: 요리 일기 목록·상세(시안 3·4) ----
 /** 목록 행 아낀 돈 조각(결정 14·15). good이면 초록 글자 */
 export function savedRowText(log: Pick<CookLogListItem, "saved" | "eat_out_price" | "excluded_count">): { text: string; good: boolean } {
-  if (log.saved !== null) return log.saved >= 0 ? { text: `${aboutWon(log.saved)} 아낌`, good: true } : { text: `${aboutWon(log.saved)} 더 듦`, good: false };
+  if (log.saved !== null) return overSpent(log.saved) ? { text: `${aboutWon(log.saved)} 더 듦`, good: false } : { text: `${aboutWon(log.saved)} 아낌`, good: true };
   if (log.eat_out_price === null) return { text: "사 먹으면 얼마 모름", good: false };
   return { text: log.excluded_count ? `재료 ${log.excluded_count}개 가격 모름` : "재료 가격 모름", good: false };
 }
@@ -121,8 +127,11 @@ export function excludedNote(items: Pick<CookLogItem, "name" | "used" | "unit" |
 // ---- Task 11: 집밥 리포트(시안 5) ----
 /** 리포트 머리 "2026년 9월 집밥 리포트" */
 export const reportTitle = (month: string) => `${monthLabel(month)} 집밥 리포트`;
-/** 큰 숫자 위 글자: 이번 달이면 "이번 달 집밥으로", 아니면 "9월 집밥으로" */
-export const reportLead = (month: string, today: string) => (month === today.slice(0, 7) ? "이번 달 집밥으로" : `${Number(month.slice(5, 7))}월 집밥으로`);
+/** 큰 숫자 위 글자: 이번 달이면 "이번 달 집밥으로", 올해면 "9월 집밥으로", 다른 해면 "2025년 9월 집밥으로" */
+export const reportLead = (month: string, today: string) =>
+  month === today.slice(0, 7)
+    ? "이번 달 집밥으로"
+    : `${month.slice(0, 4) === today.slice(0, 4) ? `${Number(month.slice(5, 7))}월` : monthLabel(month)} 집밥으로`;
 /** 합계 아래 "요리 12번 중 10번 계산 · 재료 5개 가격 제외 · 참고용이에요" */
 export function reportNote(r: Pick<CookReport, "cooked" | "counted" | "excluded_ingredients">): string {
   const head = `요리 ${r.cooked}번 중 ${r.counted}번 계산`;

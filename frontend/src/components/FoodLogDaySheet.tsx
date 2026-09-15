@@ -109,7 +109,7 @@ export default function FoodLogDaySheet({
   const sodium = t ? sodiumDay(t.sodium_mg) : null;
 
   return (
-    <Sheet title={title} description={dayDescription(logs, goal)} className="fl-day" onClose={onClose}>
+    <Sheet title={title} description={!logs.length && cook_logs.length ? "먹은 기록은 아직 없어요" : dayDescription(logs, goal)} className="fl-day" onClose={onClose}>
       {cook_logs.map((log) => (
         <div key={log.id} className="fl-plan fl-cookrow">
           <Icon name="pan" />

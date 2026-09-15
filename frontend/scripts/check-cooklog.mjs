@@ -93,6 +93,9 @@ assert.equal(aboutWon(-1250), "약 1,300원");
 assert.equal(savedText(10820), "약 10,800원 아꼈어요");
 assert.equal(savedText(-1200), "약 1,200원 더 들었어요");
 assert.equal(savedText(0), "약 0원 아꼈어요");
+// 부호도 100원 반올림 기준(H1): -49는 약 0원이라 아꼈어요, -50부터 더 들었어요
+assert.equal(savedText(-49), "약 0원 아꼈어요");
+assert.equal(savedText(-50), "약 100원 더 들었어요");
 
 // 끼니: 식단 칸 → 오늘이면 시각 → 지난 날은 저녁
 assert.equal(cookMeal("2026-09-15", "2026-09-15", 12), "lunch");
@@ -121,10 +124,11 @@ assert.equal(deductedText(["김치찌개용 돼지고기"]), "재고에서 김�
 assert.equal(deductedText(["떡"]), "재고에서 떡을 뺐어요");
 assert.equal(deductedText([]), "요리 일기에 남겼어요");
 
-// 되돌린 뒤 알림
-assert.equal(undoneText({ skipped: [] }), "재고를 되돌렸어요");
-assert.equal(undoneText({ skipped: ["대파"] }), "재고를 되돌렸어요 · 대파는 그사이 바뀌어 그대로 뒀어요");
-assert.equal(undoneText({ skipped: ["대파", "김"] }), "재고를 되돌렸어요 · 대파·김은 그사이 바뀌어 그대로 뒀어요");
+// 되돌린 뒤 알림(뺀 재료가 없던 저장은 일기만 지운다, H4)
+assert.equal(undoneText({ restored: ["두부"], skipped: [] }), "재고를 되돌렸어요");
+assert.equal(undoneText({ restored: [], skipped: ["대파"] }), "재고를 되돌렸어요 · 대파는 그사이 바뀌어 그대로 뒀어요");
+assert.equal(undoneText({ restored: ["두부"], skipped: ["대파", "김"] }), "재고를 되돌렸어요 · 대파·김은 그사이 바뀌어 그대로 뒀어요");
+assert.equal(undoneText({ restored: [], skipped: [] }), "요리 일기를 지웠어요");
 
 // 쓴 양 칸 옆 재고
 assert.equal(stockText({ stock_quantity: 600, stock_unit: "g" }), "재고 600g");
@@ -139,6 +143,7 @@ assert.equal(cookedLine({ last_on: "2026-09-15", last_rating: null }, starsText)
 // 목록 행 아낀 돈 조각(결정 14·15)
 assert.deepEqual(savedRowText({ saved: 10820, eat_out_price: 9000, excluded_count: 0 }), { text: "약 10,800원 아낌", good: true });
 assert.deepEqual(savedRowText({ saved: -1200, eat_out_price: 9000, excluded_count: 0 }), { text: "약 1,200원 더 듦", good: false });
+assert.deepEqual(savedRowText({ saved: -40, eat_out_price: 9000, excluded_count: 0 }), { text: "약 0원 아낌", good: true });
 assert.deepEqual(savedRowText({ saved: null, eat_out_price: null, excluded_count: 0 }), { text: "사 먹으면 얼마 모름", good: false });
 assert.deepEqual(savedRowText({ saved: null, eat_out_price: 9000, excluded_count: 2 }), { text: "재료 2개 가격 모름", good: false });
 assert.deepEqual(savedRowText({ saved: null, eat_out_price: 9000, excluded_count: 0 }), { text: "재료 가격 모름", good: false });
@@ -190,6 +195,7 @@ assert.equal(withEunNeun("양파"), "양파는");
 assert.equal(reportTitle("2026-09"), "2026년 9월 집밥 리포트");
 assert.equal(reportLead("2026-09", "2026-09-15"), "이번 달 집밥으로");
 assert.equal(reportLead("2026-08", "2026-09-15"), "8월 집밥으로");
+assert.equal(reportLead("2025-09", "2026-09-15"), "2025년 9월 집밥으로"); // 다른 해는 해까지(H16)
 
 // 합계 아래 안내(참고용 표시)
 assert.equal(reportNote({ cooked: 12, counted: 10, excluded_ingredients: 5 }), "요리 12번 중 10번 계산 · 재료 5개 가격 제외 · 참고용이에요");
@@ -200,6 +206,8 @@ assert.equal(compareLine({ cooked: 12, discarded: 3, previous: { cooked: 8, disc
 assert.equal(compareLine({ cooked: 2, discarded: 1, previous: { cooked: 4, discarded: 0 } }), "지난달보다 요리 2번 덜 · 버린 재료 1개 늘었어요");
 assert.equal(compareLine({ cooked: 3, discarded: 2, previous: { cooked: 3, discarded: 2 } }), "지난달과 요리 횟수가 같아요 · 버린 재료는 그대로예요");
 assert.equal(compareLine({ cooked: 5, discarded: 0, previous: { cooked: 0, discarded: 0 } }), null);
+// 지난달 요리 0번이어도 버린 재료가 있으면 보여준다
+assert.equal(compareLine({ cooked: 3, discarded: 0, previous: { cooked: 0, discarded: 2 } }), "지난달보다 요리 3번 더 · 버린 재료 2개 줄었어요");
 
 // 많이 아낀 요리 막대 폭(1등 대비, 최소 4)
 assert.deepEqual(barWidths([{ saved: 23100 }, { saved: 12400 }, { saved: 9800 }]), [100, 54, 42]);

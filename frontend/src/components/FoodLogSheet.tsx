@@ -301,6 +301,7 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log: logPro
         saved = await api<FoodLog>("/api/food-logs", { method: "POST", body: createBody(date, { ...form, what: what! }) });
       }
       forgetResources("/api/food-logs");
+      forgetResources("/api/cook-report"); // 기록한 날·집밥 비율
       if (what?.kind === "plan" || log?.meal_slot_id != null) forgetResources("/api/meal-plans");
       // 사진 칸 위쪽 "몇 번째"는 지우기 표시를 뺀 지금 보이는 기존 사진 수를 기준으로 한다(Ruling 19)
       const existingCount = existingPhotos.length - removedPhotoIdsRef.current.size;
@@ -362,6 +363,7 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log: logPro
     void remove.run(async () => {
       await api(`/api/food-logs/${log.id}`, { method: "DELETE" });
       forgetResources("/api/food-logs");
+      forgetResources("/api/cook-report"); // 기록한 날·집밥 비율
       if (log.meal_slot_id !== null) forgetResources("/api/meal-plans");
       onDeleted();
     });
