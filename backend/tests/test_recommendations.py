@@ -439,5 +439,7 @@ def test_public_search_matches_title_ignoring_spaces_and_case_and_keeps_unmatche
 
 def test_public_search_only_with_section_public(client, login, app):
     login()
+    add_public(app, public("1", "안 겹치는 레시피", ["당면"]))  # 검색이면(재고와 안 겹쳐도 넣으므로) 나온다
     assert client.get("/api/recommendations?q=김치").status_code == 400
     assert recommend(client, "?section=public&q=%20%20")["public"] == []  # 공백뿐이면 검색이 아니다(재고가 비어 추천도 없다)
+    assert [c["title"] for c in recommend(client, "?section=public&q=겹치는")["public"]] == ["안 겹치는 레시피"]
