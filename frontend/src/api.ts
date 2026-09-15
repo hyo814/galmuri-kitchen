@@ -571,5 +571,5 @@ export interface FoodLogDay { date: string; logs: FoodLog[]; plan_slots: FoodLog
 export interface FoodLogMonthDay { date: string; meals: number; count: number; kcal: number | null; approx: boolean; photo_url: string | null }
 export interface FoodLogMonthSummary { logged_days: number; avg_kcal: number | null; avg_approx: boolean; home: number; out: number; home_percent: number | null }
 export interface FoodLogMonth { month: string; today: string; days: FoodLogMonthDay[]; summary: FoodLogMonthSummary }
-export interface DishItem { food_code: string; name: string; serving_g: number | null; kcal: number; carbs_g: number | null; protein_g: number | null; fat_g: number | null; sugars_g: number | null; sodium_mg: number | null }
+export interface DishItem { food_code: string; name: string; /** "음식" 또는 "가공식품"(음식 먼저) */ group: string; serving_g: number | null; kcal: number; carbs_g: number | null; protein_g: number | null; fat_g: number | null; sugars_g: number | null; sodium_mg: number | null }
 export interface DishSearchResult { items: DishItem[]; searched: boolean }

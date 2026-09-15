@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { localToday, type FoodLog, type FoodLogDay, type FoodLogMonth, type MealKind, type User } from "../api";
+import { api, localToday, type FoodLog, type FoodLogDay, type FoodLogMonth, type MealKind, type User } from "../api";
 import FoodLogDaySheet, { fillAttempted } from "../components/FoodLogDaySheet";
+import FoodLogSheet from "../components/FoodLogSheet";
 import Icon from "../components/Icon";
 import LoadError from "../components/LoadError";
 import { monthGrid } from "../meals/plan";
@@ -161,16 +162,31 @@ function MonthBody({
 export default function FoodLogPage({ user }: { user: User }) {
   const [month, setMonth] = useState(() => (pendingOpen ? monthOf(pendingOpen.date) : (viewMonth ?? monthOf(localToday()))));
   const [selected, setSelected] = useState<string | null>(() => pendingOpen?.date ?? null);
-  const [open, setOpen] = useState(() => pendingOpen !== null); // pendingOpen.logId는 아직 읽지 않는다 — Task 9가 시트를 열 때 그 기록을 찾아 연다
-  // Task 9가 이 값으로 고치기·추가 시트를 그린다
+  const [open, setOpen] = useState(() => pendingOpen !== null);
+  const pendingLogId = useRef(pendingOpen?.logId);
   const [editing, setEditing] = useState<{ meal: MealKind; log?: FoodLog; day: FoodLogDay } | null>(null);
   // 서버 today(개정 1 P14) — 받기 전엔 기기 시계로 `다음 달` 막기를 어림하고, 어느 달이든 한 번 받으면 그 값으로 굳힌다
   const [today, setToday] = useState(() => localToday());
   const monthReload = useRef<() => Promise<void>>(async () => {});
+  // 고치기·추가 시트가 저장·삭제하면 날짜 상세를 key로 새로 마운트해 다시 받는다
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     pendingOpen = null;
   }, []);
+  // 식단 칸 `기록 보기`(Task 11)로 왔으면 그날 데이터를 받은 뒤 그 기록의 고치기 시트를 연다.
+  // ponytail: 날짜 상세도 같은 날짜를 받아 GET이 한 번 더 나간다 — 이 입구에서만이라 시트 사이에 데이터를 나누지 않는다
+  useEffect(() => {
+    const logId = pendingLogId.current;
+    pendingLogId.current = undefined;
+    if (logId === undefined || !selected) return;
+    api<FoodLogDay>(`/api/food-logs?date=${selected}`)
+      .then((day) => {
+        const log = day.logs.find((l) => l.id === logId);
+        if (log) setEditing({ meal: log.meal, log, day });
+      })
+      .catch(() => {}); // 못 받으면 날짜 상세만 연다(그 시트가 오류를 보여준다)
+  }, [selected]);
   useEffect(() => {
     viewMonth = month;
   }, [month]);
@@ -189,7 +205,11 @@ export default function FoodLogPage({ user }: { user: User }) {
   }, []);
   const onOpenLog = useCallback((log: FoodLog, day: FoodLogDay) => setEditing({ meal: log.meal, log, day }), []);
   const onAdd = useCallback((meal: MealKind, day: FoodLogDay) => setEditing({ meal, day }), []);
-  void editing; // Task 9가 이 값으로 고치기·추가 시트를 그린다
+  const onLogChanged = useCallback(() => {
+    setEditing(null);
+    setReloadTick((n) => n + 1);
+    void monthReload.current();
+  }, []);
 
   // `MonthBody`가 요약과 달력 사이에 그대로 끼워 넣는다(시안 순서 유지) — 그래서 그 달이 불러오는 중·오류여도 이건 산다
   const nav = (
@@ -223,6 +243,7 @@ export default function FoodLogPage({ user }: { user: User }) {
 
       {open && selected && (
         <FoodLogDaySheet
+          key={reloadTick}
           date={selected}
           today={today}
           user={user}
@@ -230,6 +251,18 @@ export default function FoodLogPage({ user }: { user: User }) {
           onAdd={onAdd}
           onChanged={onChanged}
           onClose={() => setOpen(false)}
+        />
+      )}
+      {editing && selected && (
+        <FoodLogSheet
+          date={selected}
+          meal={editing.meal}
+          day={editing.day}
+          log={editing.log}
+          user={user}
+          onSaved={onLogChanged}
+          onDeleted={onLogChanged}
+          onClose={() => setEditing(null)}
         />
       )}
     </main>
