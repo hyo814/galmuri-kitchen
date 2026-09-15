@@ -15,7 +15,7 @@ import {
 import { useAsyncAction } from "../useAsyncAction";
 import { navigate } from "../useHashRoute";
 import { cache, forgetResources, useResource } from "../useResource";
-import { forgetMealDraft } from "./MealAiDraft";
+import { forgetMealDraft } from "../meals/draftStore";
 import { urgentLabel } from "./Recipes";
 
 // 탭을 오가도 보던 식단·보기·주를 기억한다(로그아웃 때 resetMealsView)
@@ -64,6 +64,8 @@ export default function Meals({ user }: { user: User }) {
   const [planId, setPlanId] = useState(lastPlanId);
   /** create-ai: `AI로 초안 만들기` — 만든 뒤 바로 AI 초안 화면으로 */
   const [sheet, setSheet] = useState<"create" | "create-ai" | "pick" | null>(null);
+  /** 방금 만든 식단: 목록을 다시 받지 못해도(연결 끊김) 옛 식단 대신 이것을 보여준다 — 또 만들어 겹치지 않게 */
+  const [justCreated, setJustCreated] = useState<MealPlanSummary | null>(null);
 
   const choose = (id: number) => {
     lastPlanId = id;
@@ -72,6 +74,7 @@ export default function Meals({ user }: { user: User }) {
   const created = async (plan: MealPlan) => {
     forgetResources("/api/meal-plans");
     cache.set(`/api/meal-plans/${plan.id}`, plan); // 새 식단은 받은 그대로 바로 보여준다
+    setJustCreated(plan);
     await list.reload(); // 목록에 새 식단이 들어온 뒤에 바꿔야 이전 식단이 잠깐 보이지 않는다
     choose(plan.id);
     setSheet(null);
@@ -80,7 +83,8 @@ export default function Meals({ user }: { user: User }) {
 
   const items = list.data?.items;
   // 기억한 식단이 목록에 없으면(지워짐) 오늘이 든 식단부터
-  const current = items && (items.find((p) => p.id === planId) ?? pickPlan(items, today));
+  const current =
+    items && (items.find((p) => p.id === planId) ?? (justCreated?.id === planId ? justCreated : undefined) ?? pickPlan(items, today));
 
   const createSheet = (sheet === "create" || sheet === "create-ai") && list.data && (
     <MealPlanSheet today={today} defaultServings={list.data.default_servings} onSaved={created} onClose={() => setSheet(null)} />
@@ -111,7 +115,7 @@ export default function Meals({ user }: { user: User }) {
                 </li>
               ))}
             </ul>
-            <div className="ml-stack" style={{ marginTop: 24 }}>
+            <div className="ml-stack ml-empty-actions">
               <button type="button" className="btn primary" onClick={() => setSheet("create")}>
                 <Icon name="plus" />
                 식단 만들기
@@ -142,6 +146,7 @@ export default function Meals({ user }: { user: User }) {
         onDeleted={async () => {
           forgetResources("/api/meal-plans");
           await list.reload(); // created와 같은 순서: 목록을 받은 뒤에 바꾼다
+          setJustCreated(null);
           lastPlanId = null;
           setPlanId(null);
           // 지운 식단 화면의 메뉴 버튼이 사라져 포커스를 잃는다 → 제목으로
@@ -263,18 +268,17 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
     });
   };
 
-  /** 서버가 돌려준 식단으로 바꾸고 목록(채운 칸 수)도 다시 받는다 */
-  const replacePlan = async (next: MealPlan) => {
+  /** 칸·기간을 바꿨다: 식단과 목록(채운 칸 수)을 다시 받는다 */
+  const replacePlan = async () => {
     setCopied(""); // 다음 변경에서 지난 복사 결과는 지운다(복사는 끝난 뒤 다시 적는다)
-    forgetResources("/api/meal-plans"); // 목록의 채운 칸 수도 다시 받게(이 식단 캐시도 지우니 아래에서 다시 넣는다)
-    cache.set(url, next);
+    forgetResources("/api/meal-plans"); // 목록·장보기 미리보기 캐시도 옛 칸을 보여주지 않게
     onChanged();
     await reload();
   };
 
-  /** 채우기 시트에서 넣었다: 받은 칸을 식단에 끼워 넣고 다시 받은 뒤 닫는다(닫자마자 빈 칸이 잠깐 보이지 않게) */
+  /** 채우기 시트에서 넣었다: 식단을 다시 받은 뒤 닫는다(닫자마자 빈 칸이 잠깐 보이지 않게) */
   const saved = async (slot: MealSlot) => {
-    if (plan) await replacePlan({ ...plan, slots: [...plan.slots.filter((s) => s.date !== slot.date || s.meal !== slot.meal), slot] });
+    await replacePlan();
     setFill(null);
     // 빈 끼니 칩은 채운 칸 줄로 바뀌어 사라진다 → 그 줄로 포커스
     setTimeout(() => {
@@ -283,8 +287,8 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
     });
   };
 
-  const copiedWeek = async ({ plan: next, copied: count, kept }: CopyResult) => {
-    await replacePlan(next);
+  const copiedWeek = async ({ copied: count, kept }: CopyResult) => {
+    await replacePlan();
     setSheet(null);
     // 모두 이미 채운 칸이면 "0칸을 복사했어요"는 빼고 그대로 둔 칸만 알린다
     const keptText = kept ? `이미 채운 ${kept}칸은 그대로 뒀어요` : "";
@@ -292,12 +296,17 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
   };
 
   // 고친 기간 밖으로 나간 주는 week 계산이 initialWeek로 돌린다
-  const edited = async (next: MealPlan) => {
-    await replacePlan(next);
+  const edited = async () => {
+    await replacePlan();
     setSheet(null);
   };
 
   const move = (step: number) => setPicked(weeks[index + step]);
+  /** 끝 주·끝 달에 닿아 누른 화살표가 disabled가 되면 포커스를 잃는다 → 반대쪽 화살표로 */
+  const keepNavFocus = (button: HTMLElement) =>
+    setTimeout(() => {
+      if ((button as HTMLButtonElement).disabled) button.parentElement?.querySelector<HTMLElement>("button:not(:disabled)")?.focus();
+    });
   const dates = weekDates(week, shown);
   const slots = new Map((plan?.slots ?? []).map((s) => [`${s.date}|${s.meal}`, s]));
 
@@ -343,7 +352,7 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
         {copied}
       </p>
       <div className="ml-row2">
-        <button type="button" className="ml-plan" aria-haspopup="dialog" onClick={onPick}>
+        <button type="button" className="ml-plan" aria-haspopup="dialog" aria-label={`${shown.name}, 다른 식단 고르기`} onClick={onPick}>
           <span>{shown.name}</span>
           <Icon name="down" size={18} />
         </button>
@@ -358,11 +367,29 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
       </div>
       {view === "week" ? (
         <div className="ml-nav">
-          <button type="button" className="icon-btn" aria-label="이전 주" disabled={index <= 0} onClick={() => move(-1)}>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="이전 주"
+            disabled={index <= 0}
+            onClick={(e) => {
+              move(-1);
+              keepNavFocus(e.currentTarget);
+            }}
+          >
             <Icon name="back" size={22} />
           </button>
           <b aria-live="polite">{rangeText(dates[0], dates[dates.length - 1])}</b>
-          <button type="button" className="icon-btn" aria-label="다음 주" disabled={index >= weeks.length - 1} onClick={() => move(1)}>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="다음 주"
+            disabled={index >= weeks.length - 1}
+            onClick={(e) => {
+              move(1);
+              keepNavFocus(e.currentTarget);
+            }}
+          >
             <Icon name="chevron" size={22} />
           </button>
         </div>
@@ -373,7 +400,10 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
             className="icon-btn"
             aria-label="지난달"
             disabled={shownMonth <= firstMonth}
-            onClick={() => setMonth(addDays(`${shownMonth}-01`, -1).slice(0, 7))}
+            onClick={(e) => {
+              setMonth(addDays(`${shownMonth}-01`, -1).slice(0, 7));
+              keepNavFocus(e.currentTarget);
+            }}
           >
             <Icon name="back" size={22} />
           </button>
@@ -385,7 +415,10 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
             className="icon-btn"
             aria-label="다음 달"
             disabled={shownMonth >= lastMonth}
-            onClick={() => setMonth(addDays(`${shownMonth}-01`, 31).slice(0, 7))}
+            onClick={(e) => {
+              setMonth(addDays(`${shownMonth}-01`, 31).slice(0, 7));
+              keepNavFocus(e.currentTarget);
+            }}
           >
             <Icon name="chevron" size={22} />
           </button>
@@ -430,13 +463,15 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
                     );
                   const filled = MEALS.map(([meal]) => slots.has(`${date}|${meal}`));
                   const head = dayHead(date);
+                  // 흐린 칸(앞뒤 달)은 날짜만으로는 어느 달인지 모른다
+                  const monthText = date.slice(0, 7) !== shownMonth ? `${Number(date.slice(5, 7))}월 ` : "";
                   return (
                     <button
                       key={date}
                       type="button"
                       className={cls}
                       aria-current={date === today ? "date" : undefined}
-                      aria-label={`${head.day} ${head.dow} · 4끼 중 ${filled.filter(Boolean).length}끼 채움`}
+                      aria-label={`${monthText}${head.day} ${head.dow} · 4끼 중 ${filled.filter(Boolean).length}끼 채움`}
                       onClick={() => openDay(date)}
                     >
                       {num}
@@ -470,7 +505,8 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
             <span className="row-main">
               <span className="row-title">날짜를 누르면 그 주로 가요</span>
               <span className="row-sub">
-                {defaultPlanName(week, 7)} · {rangeText(dates[0], dates[dates.length - 1]).replace(/^\d+월 /, "")} ·{" "}
+                {/* 수요일 시작처럼 주 중간에 시작하는 식단은 가운데 날로 부른다(다음 달이 대부분인 주를 앞 달 주로 부르지 않게). 월요일 시작은 식단 이름과 같게 */}
+                {defaultPlanName(dayHead(week).dow === "월요일" ? week : dates[Math.floor((dates.length - 1) / 2)], 7)} · {rangeText(dates[0], dates[dates.length - 1]).replace(/^\d+월 /, "")} ·{" "}
                 {dates.length * 4}칸 중 {weekFilled}칸
               </span>
             </span>
@@ -590,6 +626,7 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
           current={fill.current}
           user={user}
           onSaved={saved}
+          onInterrupted={() => void replacePlan()}
           onClose={() => setFill(null)}
         />
       )}

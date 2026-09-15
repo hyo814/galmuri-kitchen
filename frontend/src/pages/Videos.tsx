@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type ChannelList, type Video, type VideoPage } from "../api";
 import Icon from "../components/Icon";
 import InfiniteSentinel from "../components/InfiniteSentinel";
-import { formatDuration, shortChannelName, timeAgo, withJosa } from "../format";
+import Thumb from "../components/VideoThumb";
+import { shortChannelName, timeAgo, withJosa } from "../format";
 import { navigate } from "../useHashRoute";
 import { useInfiniteList, type Page } from "../useInfiniteList";
 import { useResource } from "../useResource";
@@ -12,21 +13,6 @@ let lastFilter: { channel: number | null; q: string } = { channel: null, q: "" }
 
 export function resetVideoFilter() {
   lastFilter = { channel: null, q: "" };
-}
-
-/** 썸네일(없으면 자리 표시) + 오른쪽 아래 길이 배지 */
-export function Thumb({ video }: { video: Video }) {
-  const duration = formatDuration(video.duration_seconds);
-  return (
-    <span className={video.thumbnail_url ? "r3-vthumb" : "r3-vthumb noimg"}>
-      {video.thumbnail_url ? (
-        <img src={video.thumbnail_url} alt="" loading="lazy" referrerPolicy="no-referrer" />
-      ) : (
-        <Icon name="play" size={22} />
-      )}
-      {duration && <span className="dur">{duration}</span>}
-    </span>
-  );
 }
 
 /** 레시피 탭 `영상` 칸: 제목 검색 · 채널 칩 · 작은 썸네일 한 줄 목록 (시안 Videos) */

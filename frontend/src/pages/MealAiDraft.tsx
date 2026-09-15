@@ -1,8 +1,11 @@
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
-import { ApiError, api, localToday, type AiUsage, type Ingredient, type MealDraft, type MealKind, type MealPlan, type User } from "../api";
+import { ApiError, api, localToday, type AiUsage, type Ingredient, type MealKind, type MealPlan, type User } from "../api";
 import Icon from "../components/Icon";
 import Mascot from "../components/Mascot";
 import { namesLabel, remainingText, withJosa } from "../format";
+import {
+  cancelDraft, discardDraft, drafts, emit, errors, getVersion, keyOf, running, startDraft, subscribe, type DraftStore,
+} from "../meals/draftStore";
 import { dateWithDow, dayHead, emptySlotCount, initialWeek, kcalText, MEALS, urgentChip, weekDates, weekStarts } from "../meals/plan";
 import { useAsyncAction } from "../useAsyncAction";
 import { navigate } from "../useHashRoute";
@@ -11,101 +14,6 @@ import { currentWeekOf, LoadError, showMealsNotice } from "./Meals";
 import { BackLink } from "./RecipeDetail";
 import { urgentLabel } from "./Recipes";
 
-interface DraftStore {
-  planId: number;
-  weekStart: string;
-  meals: MealKind[];
-  draft: MealDraft;
-  /** 칸 "날짜|끼니" → 지금 고른 요리 번호 */
-  choice: Record<string, number>;
-  checked: Record<string, boolean>;
-}
-
-// ponytail: 만드는 중·확인·오류는 식단별 모듈 Map(뒤로가기·탭 이동 뒤에도 그대로, 새로고침하면 사라짐).
-// 만드는 중에 화면을 떠나거나 다른 식단에서 만들어도 요청은 끊지 않는다(서버가 이미 횟수를 셌다) — 그 식단의 `취소`만 끊는다. RecipeAi와 같은 방식.
-const drafts = new Map<number, DraftStore>();
-const running = new Map<number, { weekStart: string; meals: MealKind[]; ctrl: AbortController }>();
-const errors = new Map<number, string>();
-let generation = 0; // 로그아웃 뒤에 도착한 옛 응답을 버리는 번호
-let version = 0;
-const listeners = new Set<() => void>();
-const emit = () => {
-  version++;
-  listeners.forEach((listener) => listener());
-};
-const subscribe = (listener: () => void) => {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-};
-
-/** 로그아웃(resetMealsView): 모든 식단의 초안·요청을 버린다. planId를 주면(식단 지우기) 그 식단 것만 */
-export function forgetMealDraft(planId?: number) {
-  if (planId !== undefined) {
-    running.get(planId)?.ctrl.abort();
-    running.delete(planId);
-    drafts.delete(planId);
-    errors.delete(planId);
-    return emit();
-  }
-  generation++;
-  running.forEach(({ ctrl }) => ctrl.abort());
-  running.clear();
-  drafts.clear();
-  errors.clear();
-  emit();
-}
-
-/** 초안을 버리고 입력 화면으로. message가 있으면 입력 화면 오류 자리에 보여준다 */
-function discardDraft(planId: number, message = "") {
-  drafts.delete(planId);
-  if (message) errors.set(planId, message);
-  else errors.delete(planId);
-  emit();
-}
-
-/** 만들기·다시 만들기. 이전 초안은 새 초안이 올 때까지 둔다(다시 만들기를 취소하면 그대로 돌아간다) */
-function startDraft(planId: number, weekStart: string, meals: MealKind[], body: object) {
-  if (running.has(planId)) return; // 만드는 중에는 버튼이 없다 — 같은 식단 요청을 두 번 보내지 않는다
-  const ctrl = new AbortController();
-  const id = generation;
-  running.set(planId, { weekStart, meals, ctrl });
-  errors.delete(planId);
-  emit();
-  const mine = () => id === generation && running.get(planId)?.ctrl === ctrl;
-  api<MealDraft>(`/api/meal-plans/${planId}/ai-draft`, { method: "POST", body, signal: ctrl.signal }).then(
-    (draft) => {
-      if (!mine()) return;
-      running.delete(planId);
-      drafts.set(planId, {
-        planId,
-        weekStart,
-        meals,
-        draft,
-        choice: Object.fromEntries(draft.slots.map((s) => [keyOf(s), s.options[0]])),
-        checked: Object.fromEntries(draft.slots.map((s) => [keyOf(s), true])),
-      });
-      forgetResources("/api/meal-plans"); // 목표 두 칸은 서버가 식단에 저장했다
-      emit();
-    },
-    (e: unknown) => {
-      if (!mine()) return;
-      running.delete(planId);
-      errors.set(planId, (e as Error).message);
-      forgetResources("/api/meal-plans");
-      emit();
-    },
-  );
-}
-
-function cancelDraft(planId: number) {
-  running.get(planId)?.ctrl.abort();
-  running.delete(planId);
-  emit();
-}
-
-const keyOf = (s: { date: string; meal: MealKind }) => `${s.date}|${s.meal}`;
 /** "두부달걀찜으로", "불고기로", ㄹ 받침은 "로"(물로) */
 const toward = (word: string) => ((word.charCodeAt(word.length - 1) - 0xac00) % 28 === 8 ? `${word}로` : withJosa(word, "으로", "로"));
 const TITLE = "AI 식단 초안";
@@ -141,21 +49,19 @@ export default function MealAiDraft({ id, user }: { id: string; user: User }) {
 
 function Draft({ plan, reloadPlan }: { plan: MealPlan; reloadPlan: () => Promise<void> }) {
   const today = localToday();
-  useSyncExternalStore(subscribe, () => version);
+  useSyncExternalStore(subscribe, getVersion);
   const viewed = currentWeekOf(plan.id);
   const viewedWeek = viewed && weekStarts(plan).includes(viewed) ? viewed : initialWeek(plan, today);
-  // 들어올 때 한 번: 다 만든 초안이 식단에서 보고 있던 주와 다르면 옛 초안이라 버리고 그 주 입력을 보여준다.
+  // 들어올 때 한 번: 다 만든 초안·오류가 식단에서 보고 있던 주와 다르면 옛 것이라 버리고 그 주 입력을 보여준다.
   // 만드는 중인 요청은 횟수를 이미 썼으니 주가 달라도 그대로 기다린다. 읽기 전에 지워 emit 없이 이번 렌더에 반영된다(두 번 불려도 같다)
   useState(() => {
-    const stale = drafts.get(plan.id);
-    if (stale && !running.has(plan.id) && stale.weekStart !== viewedWeek) {
-      drafts.delete(plan.id);
-      errors.delete(plan.id);
-    }
+    if (running.has(plan.id)) return;
+    if (drafts.get(plan.id) && drafts.get(plan.id)!.weekStart !== viewedWeek) drafts.delete(plan.id);
+    if (errors.get(plan.id) && errors.get(plan.id)!.weekStart !== viewedWeek) errors.delete(plan.id);
   });
   const store = drafts.get(plan.id) ?? null;
   const loading = running.get(plan.id);
-  const error = errors.get(plan.id) ?? "";
+  const error = errors.get(plan.id)?.message ?? "";
   const week = loading?.weekStart ?? store?.weekStart ?? viewedWeek;
   const dates = weekDates(week, plan);
   const [meals, setMeals] = useState<MealKind[]>(loading?.meals ?? store?.meals ?? ["lunch", "dinner"]);
@@ -294,6 +200,10 @@ function Draft({ plan, reloadPlan }: { plan: MealPlan; reloadPlan: () => Promise
               500~5000 사이로 입력해주세요
             </p>
           )}
+          {/* 처음부터 붙어 있는 영역에 글자만 넣어야 스크린리더가 읽는다 */}
+          <p className="sr-only" aria-live="polite">
+            {kcalBad ? "500~5000 사이로 입력해주세요" : ""}
+          </p>
         </div>
         <label className="field">
           <span className="field-label">메모 (선택)</span>
@@ -535,7 +445,9 @@ function Review({ plan, today, store, regenerateError, onChange, onRegenerate, o
                         onClick={() => {
                           const next = slot.options[(slot.options.indexOf(choice[k]) + 1) % slot.options.length];
                           onChange({ ...store, choice: { ...choice, [k]: next } });
-                          setSwapped(`${toward(draft.dishes[next].title)} 바꿨어요`);
+                          // 같은 글자를 다시 넣으면 읽지 않는다 → 끝에 공백을 번갈아 붙인다
+                          const text = `${toward(draft.dishes[next].title)} 바꿨어요`;
+                          setSwapped((prev) => (prev === text ? `${text}\u00a0` : text));
                         }}
                       >
                         <Icon name="refresh" size={16} />

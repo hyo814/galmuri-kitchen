@@ -16,11 +16,11 @@ import {
 import { remainingText, shortChannelName, timeAgo, withJosa } from "../format";
 import { mealLabel, slotDateText } from "../meals/plan";
 import { urgentLabel } from "../pages/Recipes";
-import { Thumb } from "../pages/Videos";
 import { useAsyncAction } from "../useAsyncAction";
 import { forgetRecipeCaches, useResource } from "../useResource";
 import Icon from "./Icon";
 import Sheet from "./Sheet";
+import Thumb from "./VideoThumb";
 
 type Tab = "recipe" | "video" | "text";
 
@@ -35,6 +35,8 @@ interface Props {
   current?: MealSlot;
   user: User;
   onSaved: (slot: MealSlot) => void;
+  /** 넣는 중에 시트를 닫았다: 요청은 끊었지만 서버에는 들어갔을 수 있어 식단을 다시 받는다 */
+  onInterrupted: () => void;
   onClose: () => void;
 }
 
@@ -78,10 +80,11 @@ function SearchBox({ label, value, disabled, onChange }: { label: string; value:
   );
 }
 
-function ListState({ error, loading, empty, onRetry }: { error: string; loading: boolean; empty: string; onRetry: () => void }) {
+/** compact: 지난 목록 위에 붙이는 작은 오류(목록이 없을 때는 가운데 크게) */
+function ListState({ error, loading, empty, onRetry, compact }: { error: string; loading: boolean; empty: string; onRetry: () => void; compact?: boolean }) {
   if (error)
     return (
-      <div className="center">
+      <div className={compact ? "list-end ml-refetch" : "center"}>
         <p className="error" role="alert">
           {error}
         </p>
@@ -95,7 +98,7 @@ function ListState({ error, loading, empty, onRetry }: { error: string; loading:
 }
 
 /** 시안 FillRecipe·FillVideo·FillText: 빈 칸 채우기·다른 걸로 바꾸기 */
-export default function MealFillSheet({ plan, date, meal, current, user, onSaved, onClose }: Props) {
+export default function MealFillSheet({ plan, date, meal, current, user, onSaved, onInterrupted, onClose }: Props) {
   const videosOn = user.videos !== "off";
   const tabs: [Tab, string][] = [["recipe", "내 레시피"], ...(videosOn ? [["video", "영상"] as [Tab, string]] : []), ["text", "직접 쓰기"]];
   const [tab, setTab] = useState<Tab>("recipe");
@@ -121,8 +124,17 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
   const titleId = useId();
   const titleHint = useId();
 
-  // 시트를 닫으면(취소·뒤로가기·배경 탭) 영상 정리 요청도 끊는다
-  useEffect(() => () => abortRef.current?.abort(), []);
+  // 시트를 닫으면(취소·뒤로가기·배경 탭) 넣는 중인 요청(영상 정리·칸 넣기)도 끊고 식단을 다시 받게 한다
+  const interrupted = useRef(onInterrupted);
+  interrupted.current = onInterrupted;
+  useEffect(
+    () => () => {
+      if (!abortRef.current) return;
+      abortRef.current.abort();
+      interrupted.current();
+    },
+    [],
+  );
 
   // 검색으로 목록에서 빠진 것은 고른 것으로 치지 않는다(검색을 지우면 다시 고른 채로 보인다)
   const pickedRecipe = recipes.result?.items.find((r) => r.id === recipeId);
@@ -156,7 +168,9 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
         signal,
       });
       stage = "slot";
-      await onSaved(await putSlot({ recipe_id: recipe.id }, signal));
+      const slot = await putSlot({ recipe_id: recipe.id }, signal);
+      abortRef.current = null; // 다 넣었다: 이제 닫혀도 끊긴 요청이 아니다
+      await onSaved(slot);
     } catch (e) {
       if (signal.aborted) return;
       setImporting(false);
@@ -173,6 +187,7 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
       }
       setImportError(stage === "import" && e instanceof ApiError && e.body?.need_text === true ? NEED_TEXT : (e as Error).message);
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       if (stage !== "import") forgetRecipeCaches(); // 도중에 끊겨도 서버에는 저장됐을 수 있다
       void reloadUsage();
     }
@@ -181,7 +196,17 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
   const save = () => {
     if (!canSave || working) return;
     if (tab === "video") return void importVideo(pickedVideo!);
-    run(async () => onSaved(await putSlot(tab === "recipe" ? { recipe_id: pickedRecipe!.id } : { title: title.trim() })));
+    run(async () => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+      try {
+        const slot = await putSlot(tab === "recipe" ? { recipe_id: pickedRecipe!.id } : { title: title.trim() }, controller.signal);
+        abortRef.current = null;
+        await onSaved(slot);
+      } finally {
+        if (abortRef.current === controller) abortRef.current = null;
+      }
+    });
   };
 
   // dialog.close()로 닫아야 여는 버튼으로 포커스가 돌아간다(close 이벤트가 onClose를 부른다)
@@ -227,29 +252,40 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
           <>
             <SearchBox label="내 레시피에서 찾기" value={recipeInput} onChange={setRecipeInput} />
             {recipes.result?.items.length ? (
-              <div className="ml-picks" role="radiogroup" aria-label="내 레시피">
-                {recipes.result.items.map((recipe) => (
-                  <label key={recipe.id} className="mo-radio">
-                    <input
-                      className="sr-only"
-                      type="radio"
-                      name={`${radioName}-recipe`}
-                      checked={recipe.id === recipeId}
-                      onChange={() => setRecipeId(recipe.id)}
-                    />
-                    <span className="mo-dot" aria-hidden="true" />
-                    <span className="row-main">
-                      {recipe.urgent_names.length > 0 && <span className="sh-tag warn">{urgentLabel(recipe.urgent_names)}</span>}
-                      <span className="row-title">{recipe.title}</span>
-                      {recipe.total_count > 0 && (
-                        <span className="rc-match">
-                          재료 {recipe.total_count}개 중 <b>{recipe.have_count}개</b> 있어요
-                        </span>
-                      )}
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <>
+                {/* 다시 받기에 실패해도 지난 목록은 두고 오류를 위에 알린다 */}
+                {recipes.error && <ListState error={recipes.error} loading={false} empty="" onRetry={recipes.retry} compact />}
+                <div className="ml-picks" role="radiogroup" aria-label="내 레시피">
+                  {recipes.result.items.map((recipe) => (
+                    <label key={recipe.id} className="mo-radio">
+                      {/* 이름은 제목만, 태그·재료 수는 설명으로(읽는 이름이 길어지지 않게) */}
+                      <input
+                        className="sr-only"
+                        type="radio"
+                        name={`${radioName}-recipe`}
+                        checked={recipe.id === recipeId}
+                        aria-label={recipe.title}
+                        aria-describedby={`${radioName}-r${recipe.id}-tag ${radioName}-r${recipe.id}-match`}
+                        onChange={() => setRecipeId(recipe.id)}
+                      />
+                      <span className="mo-dot" aria-hidden="true" />
+                      <span className="row-main">
+                        {recipe.urgent_names.length > 0 && (
+                          <span className="sh-tag warn" id={`${radioName}-r${recipe.id}-tag`}>
+                            {urgentLabel(recipe.urgent_names)}
+                          </span>
+                        )}
+                        <span className="row-title">{recipe.title}</span>
+                        {recipe.total_count > 0 && (
+                          <span className="rc-match" id={`${radioName}-r${recipe.id}-match`}>
+                            재료 {recipe.total_count}개 중 <b>{recipe.have_count}개</b> 있어요
+                          </span>
+                        )}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </>
             ) : (
               <ListState
                 error={recipes.error}
@@ -265,30 +301,35 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
           <>
             <SearchBox label="영상 제목에서 찾기" value={videoInput} disabled={importing} onChange={setVideoInput} />
             {videos.result?.items.length ? (
-              <div className="ml-vlist" role="radiogroup" aria-label="영상">
-                {videos.result.items.map((video) => (
-                  <label key={video.id} className="r3-vrow">
-                    <input
-                      className="sr-only"
-                      type="radio"
-                      name={`${radioName}-video`}
-                      checked={video.id === videoId}
-                      disabled={importing}
-                      onChange={() => {
-                        setVideoId(video.id);
-                        setImportError("");
-                      }}
-                    />
-                    <Thumb video={video} />
-                    <span className="r3-vtext">
-                      <span className="r3-vtitle">{video.title}</span>
-                      <span className="r3-vsub">
-                        {shortChannelName(video.channel_title)} · {timeAgo(video.published_at)}
+              <>
+                {videos.error && <ListState error={videos.error} loading={false} empty="" onRetry={videos.retry} compact />}
+                <div className="ml-vlist" role="radiogroup" aria-label="영상">
+                  {videos.result.items.map((video) => (
+                    <label key={video.id} className="r3-vrow">
+                      <input
+                        className="sr-only"
+                        type="radio"
+                        name={`${radioName}-video`}
+                        checked={video.id === videoId}
+                        aria-label={video.title}
+                        aria-describedby={`${radioName}-v${video.id}-sub`}
+                        disabled={importing}
+                        onChange={() => {
+                          setVideoId(video.id);
+                          setImportError("");
+                        }}
+                      />
+                      <Thumb video={video} />
+                      <span className="r3-vtext">
+                        <span className="r3-vtitle">{video.title}</span>
+                        <span className="r3-vsub" id={`${radioName}-v${video.id}-sub`}>
+                          {shortChannelName(video.channel_title)} · {timeAgo(video.published_at)}
+                        </span>
                       </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
+                    </label>
+                  ))}
+                </div>
+              </>
             ) : (
               <ListState
                 error={videos.error}
