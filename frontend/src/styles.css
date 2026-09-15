@@ -4283,6 +4283,10 @@ button.sh-offline svg:last-child {
   font-weight: 600;
 }
 
+.ml-eaten {
+  color: var(--accent-strong);
+}
+
 .ml-add-chips {
   display: flex;
   flex-wrap: wrap;
