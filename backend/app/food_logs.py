@@ -1,6 +1,9 @@
 """먹은 기록(스펙 21·24절). 기록 CRUD·하루·한 달·사진. 영양은 저장할 때 스냅숏(결정 2·5)."""
 
+import re
 import uuid
+from datetime import date
+from itertools import groupby
 
 from flask import Blueprint, abort, g, jsonify, request
 from sqlalchemy import case
@@ -81,6 +84,62 @@ def eaten_date(value):
     if day > seoul_today():
         abort(400, FUTURE)
     return day
+
+
+_MONTH = re.compile(r"(\d{4})-(\d{2})")
+
+
+def month_start(value):
+    """'2026-09' → date(2026, 9, 1). fullmatch라야 '2026-09-01'(개정 1 D12)이 걸러진다."""
+    match = _MONTH.fullmatch(value) if isinstance(value, str) else None
+    if match is None:
+        abort(400, BAD_REQUEST)
+    year, month = int(match.group(1)), int(match.group(2))
+    if not 1 <= month <= 12:
+        abort(400, BAD_REQUEST)
+    if not 2000 <= year <= 2100:
+        abort(400, "날짜를 다시 확인해주세요.")
+    return date(year, month, 1)
+
+
+def _next_month(first):
+    return date(first.year + 1, 1, 1) if first.month == 12 else date(first.year, first.month + 1, 1)
+
+
+def month_json(user_id, first):
+    """결정 11. 그 달 내 기록(끼니 순 → created_at → id, 사진 selectinload)을 날짜별로 묶는다.
+    ponytail: 한 달 기록(최대 620줄)을 파이썬에서 묶는다 — 느리면 날짜별 GROUP BY와 첫 사진 서브쿼리로 바꾼다."""
+    logs = (
+        FoodLog.query.options(selectinload(FoodLog.photos))
+        .filter(FoodLog.user_id == user_id, FoodLog.eaten_on >= first, FoodLog.eaten_on < _next_month(first))
+        .order_by(FoodLog.eaten_on, _meal_order(FoodLog.meal), FoodLog.created_at, FoodLog.id)
+        .all()
+    )
+    days, home, out, kcal_days = [], 0, 0, []
+    for day, day_logs in groupby(logs, key=lambda log: log.eaten_on):
+        day_logs = list(day_logs)
+        counted = [log for log in day_logs if log.kcal is not None]  # kcal 있는 기록만 합·약 계산에 넣는다(결정 11)
+        kcal = sum(log.kcal for log in counted) if counted else None
+        approx = any(log.approx for log in counted)
+        photo_url = next((photo_json(log.photos[0])["url"] for log in day_logs if log.photos), None)
+        days.append({
+            "date": day.isoformat(), "meals": len({log.meal for log in day_logs}), "count": len(day_logs),
+            "kcal": kcal, "approx": approx, "photo_url": photo_url,
+        })
+        home += sum(1 for log in day_logs if log.place == "home")
+        out += sum(1 for log in day_logs if log.place == "out")
+        if kcal is not None:
+            kcal_days.append((kcal, approx))
+    return {
+        "days": days,
+        "summary": {
+            "logged_days": len(days),
+            "avg_kcal": round(sum(k for k, _ in kcal_days) / len(kcal_days)) if kcal_days else None,
+            "avg_approx": any(a for _, a in kcal_days),
+            "home": home, "out": out,
+            "home_percent": round(home * 100 / (home + out)) if home + out else None,
+        },
+    }
 
 
 def check_caps(user_id, day, moving_from=None):
@@ -286,6 +345,15 @@ def day_food_logs():
         plan_slots=[{"id": s.id, "meal": s.meal, "title": s.title, "servings": s.servings, "recipe_id": s.recipe_id} for s in slots],
         nutrition_pending_recipe_ids=sorted({log.recipe_id for log in logs if log.nutrition_pending and log.recipe_id is not None}),
     )
+    res.headers["Cache-Control"] = "no-store"  # 건강·식습관 정보
+    return res
+
+
+@bp.get("/food-logs/month")
+@login_required
+def month_food_logs():
+    first = month_start(request.args.get("month"))
+    res = jsonify(month=first.strftime("%Y-%m"), today=seoul_today().isoformat(), **month_json(g.user.id, first))
     res.headers["Cache-Control"] = "no-store"  # 건강·식습관 정보
     return res
 

@@ -108,6 +108,7 @@ recipe-ai/
 | PATCH/DELETE | `/api/food-logs/<id>` | 보낸 칸만 고치기(무엇·양을 바꾸면 영양을 다시 계산) → 200 / 삭제 204(사진 파일도 커밋 뒤 삭제)(24절 구현 세부) |
 | POST/DELETE | `/api/food-logs/<id>/photos` · `/api/food-logs/<id>/photos/<photo_id>` | 기록 사진 올리기 multipart `image` → 201 `{id, url}`(기록당 4장) / 삭제 204(24절 구현 세부) |
 | POST | `/api/food-logs/photo` | 사진만 먼저: multipart `image` → 201 기록(제목 없음, 날짜·끼니는 서버 시각의 서울 시각, 24절 구현 세부) |
+| GET | `/api/food-logs/month` | 한 달 달력·요약(24절 구현 세부, Task 4). `?month=YYYY-MM` → 200 `{month, today, days, summary}`(`Cache-Control: no-store`, 미래 달도 빈 결과). `month` 모양이 틀리면 400 `잘못된 요청이에요.`, 2000~2100년 밖이면 `날짜를 다시 확인해주세요.` |
 | GET | `/api/export/summary` | (`X-Requested-With: fetch` 필요) 내보낼 개수와 오늘(서울) 남은 횟수 `{ingredients, recipes, seasonings, shopping, memos, meals, limit: 5, remaining}`(27절) |
 | GET | `/api/export` | (`X-Requested-With: fetch` 필요) zip 내려받기(`Content-Disposition: attachment; filename="galmuri-kitchen-YYYYMMDD.zip"`, 서울 날짜). `ingredients.csv`·`recipes.csv`·`seasonings.csv`·`shopping.csv`·`shopping_memos.csv`·`meals.csv`(UTF-8 BOM, 한국어 머리글). 하루 5회(`ai_calls.kind = export`), 넘으면 429 `오늘 내보내기는 5번까지 할 수 있어요. 내일 다시 해주세요.`(27절) |
 | GET | `/api/ai-usage` | 오늘(서울) `{scan:{used, limit}, recipe:{used, limit}}` — `오늘 N번 남음`·더보기 AI 사용량 |
@@ -612,6 +613,12 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
   - 사진만 먼저 `POST /api/food-logs/photo` multipart `image` → 201 기록(`title` null, `source` `manual`, 영양 null, 사진 1장). 사진과 기록을 한 요청에 만든다(따로 보내면 사진 실패 때 빈 기록이 남아서). 순서: 저장소 off 503 → `read_image` → 서버 시각(UTC)을 서울로 바꾼 날짜로 하루 20개·전체 10,000개 상한 → 사진 합계 → 기록+사진 저장(파일·커밋이 실패하면 기록도 남지 않음). 끼니는 서울 시(時) 5–9 아침 · 10–14 점심 · 15–20 저녁 · 그 밖 간식(결정 8, 위 `아침 5–10시`의 끝 시각은 다음 끼니), 자정~5시 전은 그날 간식.
   - EXIF는 화면이 긴 변 1568px JPEG로 다시 인코딩해 빠진다(28절과 같음, 서버는 받은 바이트 그대로).
   - 체험 계정 정리(`demo.delete_demo_users`)와 앞으로의 회원 탈퇴는 `photos.user_photo_keys(user_ids)`(메모 사진 + 먹은 기록 사진 키)로 커밋 뒤 파일을 지운다(결정 17). 행은 users CASCADE로 지워진다.
+- 한 달 달력·요약(Task 4, 결정 11): `GET /api/food-logs/month?month=YYYY-MM` → 200 `{month, today, days, summary}`, `Cache-Control: no-store`. `today`는 서울 오늘. `month`은 `_MONTH = re.compile(r"(\d{4})-(\d{2})")`에 **`fullmatch`**해야 하고(`match`면 `"2026-09-01"`도 통과해버린다, 개정 1 D12) 달이 1~12 밖이면 400 `잘못된 요청이에요.`, 연도가 2000~2100 밖이면 400 `날짜를 다시 확인해주세요.`. 미래 달도 빈 결과로 받는다(화면이 달력에서 막는다).
+  - `days` = 그 달 내 기록이 있는 날만 날짜 순 `[{date, meals(그날 기록이 있는 끼니 수, 최대 4), count(기록 수), kcal(int|None), approx(bool), photo_url(str|None)}]`. 정렬은 끼니 순(아침→간식) → `created_at` → `id`(하루 GET과 같은 `_meal_order`), 사진은 `selectinload`로 한 번에.
+  - 하루 `kcal` = `kcal is not None`인 기록의 합(하나도 없으면 `None`). `approx` = 그 합에 들어간 기록 중 `approx`가 하나라도 있으면(**kcal 없는 사진 기록은 약을 붙이지 않는다**). `photo_url` = 정렬 순서로 **사진이 있는** 첫 기록의 `photos[0]` url(`FoodLogPhoto.id`가 가장 작은 사진, 결정 9) — 사진 없는 앞 기록은 건너뛴다(개정 1, 결정 11 문구 고침).
+  - `summary` = `{logged_days(기록 있는 날 수), avg_kcal(kcal 있는 날의 합 ÷ 그 날 수, `round()`, 없으면 `None`), avg_approx(그 날들 중 approx가 있으면), home, out(place별 **기록 수**, 어디서 안 고른 기록은 뺀다), home_percent(`round(home*100/(home+out))`, 둘 다 0이면 `None`)}`.
+  - `ponytail:` 한 달 기록(최대 620줄)을 파이썬에서 한 쿼리로 받아 묶는다 — 느리면 날짜별 `GROUP BY`와 첫 사진 서브쿼리로 바꾼다.
+  - 5단계 자리(결정 19): 달력 `요` 표시(요리 일기 있음)는 이번 응답에 넣지 않는다 — 5단계에서 한 달 API에 칸을 더할 때 넣는다.
 - 검증 순서·문구(body가 dict가 아니면 400 `잘못된 요청이에요.`):
   1. 무엇(만들 때, PATCH는 `meal_slot_id`·`recipe_id`·`food_code`·`title` 중 하나라도 보냈을 때): `meal_slot_id`·`recipe_id`·`food_code` 중 둘 이상이면 `잘못된 요청이에요.` → `meal_slot_id`(bool 아닌 정수, 아니면 `잘못된 요청이에요.`, 남의 칸 404, 이미 기록된 칸 `이미 먹었어요로 남긴 칸이에요.`): 제목·레시피·날짜·끼니를 칸에서 가져오고(보낸 날짜·끼니 무시) 칸 날짜가 오늘 뒤면 `아직 오지 않은 날은 남길 수 없어요.` / `recipe_id`(bool 아닌 정수, 남의 것 404): 제목 = 레시피 제목 / `food_code`: 캐시에 없으면(AI 추정 행 제외) `음식을 다시 골라주세요.`, 제목 = 식품 이름 앞 60자 / 셋 다 없으면 `title` 1~60자 `무엇을 먹었는지는 1~60자로 입력해주세요.`. PATCH로 무엇을 바꾸면 칸 연결은 끊고 `source`는 그대로 둔다(처음 어떻게 남겼는지).
   2. 날짜·끼니(만들 때 필수, 칸 기록은 칸 값): 없거나 모양이 틀리면 `날짜를 골라주세요.`, 2000~2100년 밖 `날짜를 다시 확인해주세요.`, 오늘(서울) 뒤 `아직 오지 않은 날은 남길 수 없어요.`, 끼니가 네 가지 밖이면 `끼니를 골라주세요.`.
