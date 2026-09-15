@@ -30,8 +30,9 @@ def is_seasoning(key, amount, staples):
 
 
 def round_won(value, step=10):
-    """0.5는 올린다(파이썬 round의 짝수 반올림을 쓰지 않는다). 음수는 쓰지 않는다."""
-    return int(math.floor(value / step + 0.5)) * step
+    """0.5는 올린다(파이썬 round의 짝수 반올림을 쓰지 않는다). 음수는 쓰지 않는다.
+    소수 여섯째 자리로 먼저 맞춰 0.575 × 11800 = 6784.999…처럼 부동소수 오차로 0.5 경계를 놓치지 않는다."""
+    return int(math.floor(round(value / step, 6) + 0.5)) * step
 
 
 def item_cost(used, price, price_quantity):

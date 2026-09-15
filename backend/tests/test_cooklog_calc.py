@@ -26,6 +26,8 @@ def test_round_won_and_item_cost():
     assert item_cost(1, None, 1) is None
     assert item_cost(1, 1000, None) is None
     assert item_cost(1, 1000, 0) is None
+    assert item_cost(0.575, 11800, 1) == 6790  # 6784.999… 부동소수 경계
+    assert item_cost(0.043, 10000, 2) == 220  # 214.999… 부동소수 경계
 
 
 def row(cost, excluded=None):
@@ -124,6 +126,20 @@ def test_draft_one_stock_goes_to_first_matching_row(client, login, app):
     assert [r["ingredient_id"] for r in rows] == [stock_ids(app, "대파")[0], None]
 
 
+def test_draft_marks_staple_seasoning(client, login, app):
+    login()
+    assert client.post("/api/staples", json={"name": "굴소스", "category": "소스"}).status_code == 201
+    add_ingredient(client, "굴소스", quantity=500, unit="g")
+    add_ingredient(client, "두부", quantity=1, unit="모")
+    recipe = add_recipe(client, "두부조림", [{"name": "굴소스", "amount": "30g"}, {"name": "두부", "amount": "1모"}])
+    rows = client.get(f"/api/recipes/{recipe['id']}/cook-draft").get_json()["rows"]
+    # 숟가락·약간 양이 아니어도 조미료 분류 필수품이면 양념(기본 안 빼기), 재고에는 붙는다
+    assert [(r["name"], r["seasoning"], r["ingredient_id"], r["base_amount"]) for r in rows] == [
+        ("굴소스", True, stock_ids(app, "굴소스")[0], 30.0),
+        ("두부", False, stock_ids(app, "두부")[0], 1.0),
+    ]
+
+
 def test_draft_prefers_urgent_stock(client, login, app):
     login()
     today = seoul_today()
@@ -136,6 +152,8 @@ def test_draft_prefers_urgent_stock(client, login, app):
 
 def test_draft_eat_out_and_ownership(client, login, app):
     assert client.get("/api/recipes/1/cook-draft").status_code == 401
+    login("2")
+    add_ingredient(client, "김치", quantity=1, unit="kg")  # 남의 재고는 붙지 않는다
     login()
     recipe = add_recipe(client, "김치찌개", [{"name": "김치", "amount": "300g"}])
     with app.app_context():
@@ -144,6 +162,7 @@ def test_draft_eat_out_and_ownership(client, login, app):
         db.session.commit()
     body = client.get(f"/api/recipes/{recipe['id']}/cook-draft").get_json()
     assert (body["eat_out_price"], body["eat_out_source"]) == (9000, "ai")
+    assert (body["rows"][0]["ingredient_id"], body["rows"][0]["stock_name"]) == (None, None)
     assert client.get("/api/recipes/2147483648/cook-draft").status_code == 404
-    login("2")
+    login("3")
     assert client.get(f"/api/recipes/{recipe['id']}/cook-draft").status_code == 404
