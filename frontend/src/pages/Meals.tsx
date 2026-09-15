@@ -678,6 +678,7 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
         <MealSlotSheet
           slot={openSlot}
           today={today}
+          user={user}
           onChanged={() => {
             if (sheetOpen.current) dirty.current = true;
             else {
