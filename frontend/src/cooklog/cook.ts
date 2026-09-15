@@ -1,5 +1,5 @@
 // 요리 일기 순수 로직(스펙 29절, 5단계). 브라우저 API 없음 — 오늘·시각은 인자로 받는다(scripts/check-cooklog.mjs가 node로 읽는다).
-import type { CookDraftRow, MealKind } from "../api";
+import type { CookDraftRow, CookLogItem, CookLogListItem, CookReport, MealKind } from "../api";
 import { formatQuantity, formatWon, withJosa } from "../format.ts";
 import { mealLabel } from "../meals/plan.ts";
 
@@ -71,4 +71,48 @@ export const stockText = (row: Pick<CookDraftRow, "stock_quantity" | "stock_unit
 export function cookedLine(c: { last_on: string; last_rating: number | null }, stars: (n: number) => string): string {
   const day = `마지막 ${Number(c.last_on.slice(5, 7))}월 ${Number(c.last_on.slice(8, 10))}일`;
   return c.last_rating === null ? day : `${day} · ${stars(c.last_rating)}`;
+}
+
+// ---- Task 10: 요리 일기 목록·상세(시안 3·4) ----
+/** 목록 행 아낀 돈 조각(결정 14·15). good이면 초록 글자 */
+export function savedRowText(log: Pick<CookLogListItem, "saved" | "eat_out_price" | "excluded_count">): { text: string; good: boolean } {
+  if (log.saved !== null) return log.saved >= 0 ? { text: `${aboutWon(log.saved)} 아낌`, good: true } : { text: `${aboutWon(log.saved)} 더 듦`, good: false };
+  if (log.eat_out_price === null) return { text: "사 먹으면 얼마 모름", good: false };
+  return { text: log.excluded_count ? `재료 ${log.excluded_count}개 가격 모름` : "재료 가격 모름", good: false };
+}
+/** "9월 15일 · 2인분" */
+export const diaryDateText = (log: Pick<CookLogListItem, "cooked_on" | "servings">) =>
+  `${Number(log.cooked_on.slice(5, 7))}월 ${Number(log.cooked_on.slice(8, 10))}일 · ${log.servings}인분`;
+/** 메모 첫 줄 */
+export const firstLine = (memo: string | null) => (memo ?? "").split("\n")[0].trim();
+/** 목록 위 카드 "9월 요리 12번 · 약 86,000원 아꼈어요" */
+export function diaryHeader(r: Pick<CookReport, "month" | "cooked" | "counted" | "saved_total">): string {
+  const head = `${Number(r.month.slice(5, 7))}월 요리 ${r.cooked}번`;
+  return r.counted ? `${head} · ${savedText(r.saved_total)}` : head;
+}
+/** 계산표 사 먹으면 줄 "사 먹으면 9,000원 × 2인분" */
+export const eatOutLine = (price: number, servings: number) => `사 먹으면 ${formatWon(price)} × ${servings}인분`;
+/** 계산표 재료 줄 "김치 0.3kg / 1kg 12,900원" (가격 있는 줄만) */
+export const costLine = (i: Pick<CookLogItem, "name" | "used" | "unit" | "price" | "price_quantity">) =>
+  `${i.name} ${formatQuantity(i.used ?? 0)}${i.unit ?? ""} / ${formatQuantity(i.price_quantity ?? 0)}${i.unit ?? ""} ${formatWon(i.price ?? 0)}`;
+/** 은/는(개정 1 T10②): withJosa는 한글로 안 끝나면 "은(는)"을 돌려주므로 영문 단위·숫자 끝은 읽는 소리로 고른다.
+ *  g·kg·mg(그램)→은, ml·l(리터)→는, 숫자는 끝자리(영·일·삼·육·칠·팔→은, 이·사·오·구→는), 그 밖은 withJosa */
+const UNIT_BATCHIM: Record<string, boolean> = { g: true, kg: true, mg: true, ml: false, l: false };
+const DIGIT_BATCHIM = [true, true, false, true, false, false, true, true, true, false];
+export function withEunNeun(word: string): string {
+  const unit = /([a-z]+)$/i.exec(word)?.[1].toLowerCase();
+  if (unit !== undefined && unit in UNIT_BATCHIM) return word + (UNIT_BATCHIM[unit] ? "은" : "는");
+  if (/\d$/.test(word)) return word + (DIGIT_BATCHIM[Number(word.slice(-1))] ? "은" : "는");
+  return withJosa(word, "은", "는");
+}
+/** 계산표 아래 안내(시안 4) */
+export function excludedNote(items: Pick<CookLogItem, "name" | "used" | "unit" | "amount_text" | "excluded">[]): string {
+  const unknown = items.filter((i) => i.excluded === "no_price");
+  const label = (i: (typeof unknown)[number]) => `${i.name} ${i.used !== null ? `${formatQuantity(i.used)}${i.unit ?? ""}` : (i.amount_text ?? "")}`.trim();
+  const parts = [];
+  if (unknown.length === 1) parts.push(`${withEunNeun(label(unknown[0]))} 가격 모름이라 뺐어요`);
+  if (unknown.length > 1) parts.push(`${label(unknown[0])} 외 ${unknown.length - 1}개는 가격 모름이라 뺐어요`);
+  if (items.some((i) => i.excluded === "seasoning")) parts.push("양념은 계산에 넣지 않아요");
+  parts.push("참고용이에요");
+  return parts.join(" · ");
 }

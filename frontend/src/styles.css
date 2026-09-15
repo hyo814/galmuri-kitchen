@@ -6316,3 +6316,181 @@ body:has(.ck-toast:not(:empty)) .page::after {
   font-size: 14px;
   line-height: 20px;
 }
+
+/* 5 · Task 10 */
+/* 요리 일기 목록 위 이번 달 카드(시안 3) */
+.ck-month {
+  background: var(--accent-tint);
+}
+
+.ck-month b {
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.ck-list {
+  gap: 0;
+  padding-block: 4px;
+  list-style: none;
+}
+
+/* 일기 한 줄: 사진 64px + 글, 줄 사이 선 */
+.ck-diary {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 84px;
+  padding: 10px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  overflow-wrap: anywhere; /* 띄어쓰기 없는 긴 제목·메모(주소)가 384px 화면을 가로로 밀지 않게 */
+}
+
+.ck-list li:first-child .ck-diary {
+  border-top: 0;
+}
+
+.ck-diary b {
+  font-size: 16px;
+}
+
+.ck-diary small {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--text-3);
+  word-break: keep-all;
+}
+
+/* 메모는 첫 줄만 한 줄로(시안 3) */
+.ck-diary .ck-memo-line {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ck-ph,
+.ck-noph {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  object-fit: cover;
+}
+
+.ck-noph {
+  display: grid;
+  place-items: center;
+  background: var(--field);
+  color: var(--text-3);
+}
+
+.ck-save {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+/* 일기 상세(시안 4) */
+.ck-hero {
+  width: 100%;
+  height: 150px;
+  border-radius: 16px;
+  object-fit: cover;
+}
+
+/* 시트 설명 줄 바로 아래 별점 — 시트 본문 간격(20px)을 줄여 설명 줄에 붙인다 */
+.ck-sd {
+  margin: -16px 0 0;
+  line-height: 20px;
+}
+
+/* .ck-memo는 요리했어요 시트의 메모 입력 묶음(Task 8)이라 상세 메모 글은 따로 */
+.ck-memo-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 23px;
+  white-space: pre-line;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.ck-sum {
+  display: grid;
+  gap: 4px;
+}
+
+.ck-big {
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-strong);
+}
+
+.ck-big.ck-none {
+  color: var(--text-2);
+}
+
+.ck-big.ck-over {
+  color: var(--warn);
+}
+
+/* 오른쪽 칸은 반까지만 — 긴 합계 문구가 재료 줄 폭을 뺏지 않게 */
+.ck-table {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) fit-content(50%);
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  word-break: keep-all;
+}
+
+.ck-table dt,
+.ck-table dd {
+  margin: 0;
+}
+
+.ck-table dt {
+  overflow-wrap: anywhere;
+}
+
+.ck-table dd {
+  text-align: right;
+}
+
+.ck-table .badge {
+  height: 22px;
+  padding: 0 7px;
+  font-size: 12px;
+  vertical-align: 1px;
+}
+
+.ck-tot {
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  font-weight: 700;
+}
+
+/* 별점 고르기(StarPicker, 요리했어요·고치기 시트 공용): 점수가 있으면 별 아래 오른쪽에 `별점 빼기` */
+.ck-starpick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+/* `별점 빼기`로 줄이 높아져도 앞 `별점` 이름은 별(44px) 높이에 맞춘다 */
+.ck-row:has(> .ck-starpick) {
+  align-items: flex-start;
+}
+
+.ck-row:has(> .ck-starpick) > b {
+  line-height: 44px;
+}

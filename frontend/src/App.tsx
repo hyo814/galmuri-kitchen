@@ -3,6 +3,7 @@ import { ApiError, api, onUnauthorized, type User } from "./api";
 import Splash from "./components/Splash";
 import TabBar from "./components/TabBar";
 import UndoToast, { hideUndoToast, useUndoneCount } from "./components/UndoToast";
+import CookDiary, { resetCookDiaryView } from "./pages/CookDiary";
 import FoodLogPage, { resetFoodLogView } from "./pages/FoodLog";
 import Fridge from "./pages/Fridge";
 import Login, { rememberLoginProvider } from "./pages/Login";
@@ -59,6 +60,7 @@ const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
   "/meals/:id/ai": ({ route, user }) => <MealAiDraft id={route.params.id} user={user} />,
   "/meals/:id/shopping": ({ route }) => <MealShopping id={route.params.id} />,
   "/food-log": ({ user }) => <FoodLogPage user={user} />,
+  "/cook-logs": ({ user }) => <CookDiary user={user} />,
   "/more": ({ user, onLogout }) => <More user={user} onLogout={onLogout} />,
   "/tools": () => <Tools />,
 };
@@ -153,6 +155,7 @@ export default function App() {
     resetMealsView();
     resetRecipeNutrition();
     resetFoodLogView();
+    resetCookDiaryView();
     hideUndoToast();
     scrollTops.clear();
     setUser(null);
