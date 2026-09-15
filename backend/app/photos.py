@@ -2,10 +2,10 @@ from flask import Blueprint, abort, g, request
 
 from . import storage
 from .auth import login_required
-from .models import FoodLog, FoodLogPhoto, ShoppingNote, ShoppingNotePhoto, db
+from .models import CookLog, FoodLog, FoodLogPhoto, ShoppingNote, ShoppingNotePhoto, db
 from .scan import sniff_image_type
 
-# 사진 보기(스펙 5절)와 올리기 검사(장보기 메모·먹은 기록이 함께 쓴다). 내 키이고 행이 있어야 보여준다 — 남의 키·지운 사진은 404.
+# 사진 보기(스펙 5절)와 올리기 검사(장보기 메모·먹은 기록·요리 일기가 함께 쓴다). 내 키이고 행이 있어야 보여준다 — 남의 키·지운 사진은 404.
 bp = Blueprint("photos", __name__, url_prefix="/api/photos")
 
 EXTENSIONS = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
@@ -27,16 +27,16 @@ def read_image(max_bytes):
 
 
 def user_photo_keys(user_ids):
-    """이 사용자들의 모든 사진 키(장보기 메모 + 먹은 기록). 체험 계정 정리·회원 탈퇴가 커밋 뒤 storage.delete에 넘긴다(결정 17)."""
+    """이 사용자들의 모든 사진 키(장보기 메모 + 먹은 기록 + 요리 일기). 체험 계정 정리·회원 탈퇴가 커밋 뒤 storage.delete에 넘긴다(결정 17)."""
     notes = db.session.query(ShoppingNotePhoto.photo_key).join(ShoppingNote).filter(ShoppingNote.user_id.in_(user_ids))
     logs = db.session.query(FoodLogPhoto.photo_key).join(FoodLog).filter(FoodLog.user_id.in_(user_ids))
-    return [key for (key,) in notes] + [key for (key,) in logs]
+    cooks = db.session.query(CookLog.photo_key).filter(CookLog.user_id.in_(user_ids), CookLog.photo_key.isnot(None))
+    return [key for (key,) in notes] + [key for (key,) in logs] + [key for (key,) in cooks]
 
 
 @bp.get("/<path:key>")
 @login_required
 def photo(key):
-    # ponytail: 5단계 조리 기록 사진은 접두사와 행 확인을 여기에 더한다.
     if key.startswith(f"shopping/{g.user.id}/"):
         owned = (
             ShoppingNotePhoto.query.join(ShoppingNote)
@@ -45,6 +45,8 @@ def photo(key):
         )
     elif key.startswith(f"foodlog/{g.user.id}/"):
         owned = FoodLogPhoto.query.join(FoodLog).filter(FoodLogPhoto.photo_key == key, FoodLog.user_id == g.user.id).first()
+    elif key.startswith(f"cooklog/{g.user.id}/"):
+        owned = CookLog.query.filter_by(photo_key=key, user_id=g.user.id).first()
     else:
         owned = None
     if not owned:

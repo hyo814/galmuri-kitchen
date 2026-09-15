@@ -527,6 +527,38 @@ def test_price_basis_migration(app):
         assert not {"eat_out_price", "eat_out_source"} & recipe_columns
 
 
+def test_cook_logs_migration_adds_and_removes_tables(app):
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="h2c2o2o2k2l2")
+        with db.engine.connect() as conn:
+            inspector = sa.inspect(conn)
+            columns = {t: {c["name"] for c in inspector.get_columns(t)} for t in ("cook_logs", "cook_log_items")}
+            fks = {t: {fk["referred_table"]: fk["options"].get("ondelete") for fk in inspector.get_foreign_keys(t)} for t in columns}
+            uniques = {tuple(u["column_names"]) for u in inspector.get_unique_constraints("cook_logs")}
+            index_names = {ix["name"] for t in columns for ix in inspector.get_indexes(t)}
+        assert columns["cook_logs"] == {
+            "id", "user_id", "recipe_id", "food_log_id", "title", "cooked_on", "servings", "rating", "memo", "photo_key", "photo_size",
+            "eat_out_price", "eat_out_source", "ingredient_cost", "saved", "excluded_count", "created_at", "updated_at",
+        }
+        assert columns["cook_log_items"] == {
+            "id", "cook_log_id", "ingredient_id", "removal_id", "name", "amount_text", "used", "unit", "quantity_before", "removed",
+            "location_id", "purchased_on", "expires_on", "price", "price_quantity", "cost", "excluded",
+        }
+        assert fks == {
+            "cook_logs": {"users": "CASCADE", "recipes": "SET NULL", "food_logs": "SET NULL"},
+            "cook_log_items": {"cook_logs": "CASCADE", "ingredients": "SET NULL", "ingredient_removals": "SET NULL"},
+        }
+        assert ("photo_key",) in uniques
+        assert {
+            "ix_cook_logs_recipe_id", "ix_cook_logs_food_log_id", "ix_cook_logs_user_id_cooked_on",
+            "ix_cook_log_items_cook_log_id", "ix_cook_log_items_ingredient_id",
+        } <= index_names
+
+        downgrade(directory=MIGRATIONS, revision="h1p1r1i1c1e1")
+        with db.engine.connect() as conn:
+            assert not {"cook_logs", "cook_log_items"} & set(sa.inspect(conn).get_table_names())
+
+
 def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)
