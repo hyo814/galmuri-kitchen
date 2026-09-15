@@ -91,6 +91,7 @@ def create_app(test_config=None):
     from .item_rules import bp as item_rules_bp
     from .locations import bp as locations_bp
     from .meals import bp as meals_bp
+    from .nutrition import bp as nutrition_bp
     from .photos import bp as photos_bp
     from .public_recipes import bp as public_recipes_bp
     from .recipe_ai import bp as recipe_ai_bp
@@ -113,6 +114,7 @@ def create_app(test_config=None):
     app.register_blueprint(item_rules_bp)
     app.register_blueprint(locations_bp)
     app.register_blueprint(meals_bp)
+    app.register_blueprint(nutrition_bp)
     app.register_blueprint(photos_bp)
     app.register_blueprint(public_recipes_bp)
     app.register_blueprint(recipe_ai_bp)
