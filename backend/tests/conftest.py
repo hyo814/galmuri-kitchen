@@ -22,6 +22,9 @@ TEST_CONFIG = {
     "FOODSAFETY_API_KEY": None,  # 셸에 키가 있어도 동기화 테스트는 키 없음으로 시작한다
     "FOOD_NUTRITION_API_KEY": None,  # 셸에 키가 있어도 식품영양성분 DB 테스트는 키 없음으로 시작한다
     "YOUTUBE_API_KEY": None,
+    # 한도 테스트는 기본값(20)과 무관하게 10을 기준으로 쓴다. 기본값 자체는 test_blank_ai_env_values_fall_back_to_defaults가 본다.
+    "AI_DAILY_SCAN_LIMIT": 10,
+    "AI_DAILY_RECIPE_LIMIT": 10,
     # 셸에 R2 값이 있어도 테스트는 로컬 저장소로 시작한다. UPLOAD_DIR은 make_app이 테스트마다 tmp_path로 둔다.
     "R2_ACCOUNT_ID": None,
     "R2_ACCESS_KEY_ID": None,

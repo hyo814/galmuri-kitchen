@@ -91,7 +91,7 @@ def get_owned_or_404(model, obj_id):
     return obj
 
 
-DEMO_AI_DAILY_LIMIT = 3  # 체험 계정(demo.py)의 사진 인식·AI 레시피(링크 가져오기 포함) 하루 한도
+DEMO_AI_DAILY_LIMIT = 5  # 체험 계정(demo.py)의 사진 인식·AI 레시피(링크 가져오기 포함) 하루 한도
 
 
 def ai_daily_limit(user, key):
