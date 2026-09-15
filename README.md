@@ -207,8 +207,8 @@ macOS 기준이며, 명령은 저장소 루트에서 시작합니다.
 ### 테스트
 
 ```
-backend/.venv/bin/pytest -q -W error::DeprecationWarning   # 백엔드 952개
-cd frontend && npm run check && npm run build              # 순수 로직 검사 스크립트 6개 + 타입 검사·빌드
+backend/.venv/bin/pytest -q -W error::DeprecationWarning   # 백엔드 1,067개
+cd frontend && npm run check && npm run build              # 순수 로직 검사 스크립트 7개 + 타입 검사·빌드
 ```
 
 PostgreSQL 검증, 마이그레이션 점검, Docker 스모크 테스트, Render 배포 절차는 [`docs/deploy.md`](docs/deploy.md)에 있습니다.
@@ -217,11 +217,11 @@ PostgreSQL 검증, 마이그레이션 점검, Docker 스모크 테스트, Render
 
 | 항목 | 수치 |
 |---|---|
-| 기간 | 2026-09-13 10:51 첫 커밋 → 2026-09-15 02:35 4b-1단계 병합 |
-| 커밋 | 372개(병합 137, feat 68, fix 96, docs 47) |
+| 기간 | 2026-09-13 10:51 첫 커밋 → 2026-09-15 02:35 4b-1단계 병합 → 09-15 10:06 후속 병합(`f11ed6d`) |
+| 커밋 | 396개(병합 147, feat 73, fix 103, docs 49) |
 | 설계 | [설계 문서](docs/superpowers/specs/2026-09-13-recipe-ai-design.md) 28절, [구현 계획](docs/superpowers/plans/) 10개 |
-| 화면 시안 | [`docs/design/`](docs/design/) 7묶음 69장, 사용자 승인 후 구현 |
-| 테스트 | 백엔드 952개(SQLite·PostgreSQL 모두 통과), 프론트 검사 스크립트 6개 |
+| 화면 시안 | [`docs/design/`](docs/design/) 9묶음 71장, 사용자 승인 후 구현 |
+| 테스트 | 백엔드 1,067개(SQLite·PostgreSQL 모두 통과), 프론트 검사 스크립트 7개 |
 
 단계: 1 기반·로그인 → 1b 보관 위치·필수품·품목별 경고 → 1c 하단 탭·주방 도구 → 1d 사용성 → 2 사진 인식 → 3a 레시피·추천 → 3b AI 레시피·링크·영상 → 3c 양념 비율 → 더보기 정리 → 4 장보기·오프라인·체험 계정 → 4b-1 식단 짜기.
 
