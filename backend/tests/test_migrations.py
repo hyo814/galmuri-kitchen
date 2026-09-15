@@ -348,6 +348,26 @@ def test_meal_plans_migration_adds_and_removes_tables(app):
         assert not {"meal_plans", "meal_slots"} & tables
 
 
+def test_body_profiles_migration_adds_and_removes_table(app):
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="f1b1o1d1y1p1")
+        with db.engine.connect() as conn:
+            inspector = sa.inspect(conn)
+            columns = {c["name"] for c in inspector.get_columns("body_profiles")}
+            fks = {fk["referred_table"]: fk["options"].get("ondelete") for fk in inspector.get_foreign_keys("body_profiles")}
+            uniques = {tuple(u["column_names"]) for u in inspector.get_unique_constraints("body_profiles")}
+        assert columns == {
+            "id", "user_id", "sex", "birth_year", "height_cm", "weight_kg", "activity", "goal", "updated_at",
+        }
+        assert fks == {"users": "CASCADE"}
+        assert ("user_id",) in uniques
+
+        downgrade(directory=MIGRATIONS, revision="e1p1u1r1c1h1")
+        with db.engine.connect() as conn:
+            tables = set(sa.inspect(conn).get_table_names())
+        assert "body_profiles" not in tables
+
+
 def test_ingredients_purchased_on_nullable_migration(app):
     def purchased_on_nullable(conn):
         return {c["name"]: c for c in sa.inspect(conn).get_columns("ingredients")}["purchased_on"]["nullable"]

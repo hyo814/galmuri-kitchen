@@ -55,7 +55,7 @@ recipe-ai/
 - `cook_logs`: id, user_id, recipe_id(선택, SET NULL), title, cooked_on(date), rating(1~5, 선택), memo(선택), photo_key(선택), created_at
 - `ai_calls`: id, user_id, kind(`fridge`|`receipt`|`order`|`memo`|`recipe`|`link`|`recipe_photo`|`meal`|`link_fetch`|`channel_add`|`video_refresh`|`export`), model, input_tokens, output_tokens, created_at(인덱스). 토큰은 원가 계산용(25절)이다. model은 성공하면 실제로 답한 모델, 실패하면 요청한 모델이다. AI 호출이 AiError로 끝나면(오류·타임아웃·거절·max_tokens·스키마 불일치) 토큰은 비워 둔다. 새 AI 기능도 같은 방식으로 남긴다. `link_fetch`(링크 가져오기 외부 요청)·`channel_add`(채널 추가)·`video_refresh`(영상 새로 받기)·`export`(데이터 내보내기 27절)는 AI를 부르지 않는 한도용 기록이라 model이 NULL이고 토큰이 없다(17절). **원가·사용량 집계는 model IS NOT NULL(또는 scan·recipe·link·recipe_photo·meal kind)만 센다.**
 - `ingredient_removals`: id, user_id(CASCADE, 인덱스), name(지운 재료 이름 복사, ≤50자), reason(`eaten`|`discarded`), created_at. INDEX(user_id, created_at). 재료를 이유를 골라 지울 때만 남긴다(27절)
-- `storage_locations`, `staples`, `item_rules`(14절), `shopping_items`(16절), `kitchen_tools`(18절)
+- `storage_locations`, `staples`, `item_rules`(14절), `shopping_items`(16절), `kitchen_tools`(18절), `body_profiles`(21절)
 
 ### 규칙
 
@@ -97,6 +97,7 @@ recipe-ai/
 | POST | `/api/meal-plans/<id>/ai-draft/apply` | 초안 넣기(`{dishes 1~30, slots:[{date, meal, dish, est_kcal?}] 1~28}` → 201 `{filled, kept, created_recipes}`). 아직 빈 칸만 채우고 새 요리는 요리마다 한 번 내 레시피(source `ai`)로 저장. AI를 부르지 않음(20절) |
 | PATCH/DELETE | `/api/meal-slots/<id>` | 인분 고치기(`{servings}`, `SlotDetail` −/+ 바로 저장) / 칸 비우기 |
 | GET | `/api/meal-plans/<id>/shopping-preview` | 장보기 미리보기(23절 D4) `{name, start_on, end_on, recipe_slot_count, buy, manual, skip}`. 담기는 이 API가 하지 않는다(화면이 `POST /api/shopping/items/bulk`로) |
+| GET/PUT/DELETE | `/api/body-profile` | 몸 정보(21절). GET `{profile: BodyProfile\|null}`(응답 `Cache-Control: no-store`) / PUT 통째로 저장(성별·태어난 해·키·몸무게·활동량·목표, 모두 필수) 200 `{profile}` / DELETE 204(없어도 204). 목표 kcal은 저장하지 않는다 — 화면(`src/nutrition/body.ts`)이 계산한다 |
 | GET | `/api/export/summary` | (`X-Requested-With: fetch` 필요) 내보낼 개수와 오늘(서울) 남은 횟수 `{ingredients, recipes, seasonings, shopping, memos, meals, limit: 5, remaining}`(27절) |
 | GET | `/api/export` | (`X-Requested-With: fetch` 필요) zip 내려받기(`Content-Disposition: attachment; filename="galmuri-kitchen-YYYYMMDD.zip"`, 서울 날짜). `ingredients.csv`·`recipes.csv`·`seasonings.csv`·`shopping.csv`·`shopping_memos.csv`·`meals.csv`(UTF-8 BOM, 한국어 머리글). 하루 5회(`ai_calls.kind = export`), 넘으면 429 `오늘 내보내기는 5번까지 할 수 있어요. 내일 다시 해주세요.`(27절) |
 | GET | `/api/ai-usage` | 오늘(서울) `{scan:{used, limit}, recipe:{used, limit}}` — `오늘 N번 남음`·더보기 AI 사용량 |
@@ -417,6 +418,18 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - 식품 검색(캐시 → 공공 API) 또는 내 레시피·식단 칸에서 `먹었어요`로 추가.
 - 하루 화면: 목표 대비 kcal 막대, 당류·나트륨 기준 대비 표시.
 - 의료 조언이 아니라 참고용이라는 문구를 계산기 화면에 표시.
+
+**구현 세부 (2026-09-15, 4b-2):**
+- `body_profiles`(id, user_id UNIQUE, sex, birth_year, height_cm, weight_kg, activity, goal, updated_at). 계정을 지우면 CASCADE로 함께 지운다.
+- `GET/PUT/DELETE /api/body-profile`(모두 로그인 필요). GET `{profile: {sex, birth_year, height_cm, weight_kg, activity, goal, updated_at} | null}`(`Cache-Control: no-store`). PUT은 여섯 칸 모두 필수로 통째로 바꾸고(없던 행이면 만들고, 처음 저장이 동시에 두 번 오면 400 `방금 저장했어요. 다시 불러와주세요.`), DELETE는 없어도 204.
+- 검증 순서·문구: body가 dict가 아니면 400 `잘못된 요청이에요.` / `sex`가 `female`·`male`이 아니면 `성별을 골라주세요.` / `birth_year`는 연 나이 20~99세만(서울 기준 올해 − 태어난 해) — `태어난 해는 (올해−99)~(올해−20) 사이 정수로 입력해주세요.` / `height_cm`는 120~230cm `키는 120~230 사이 숫자로 입력해주세요.` / `weight_kg`는 30~250kg(소수 첫째 자리로 반올림) `몸무게는 30~250 사이 숫자로 입력해주세요.` / `activity`가 `sedentary`·`light`·`moderate`·`active`·`very_active`가 아니면 `활동량을 골라주세요.` / `goal`이 `maintain`·`lose`·`gain`이 아니면 `목표를 골라주세요.`.
+- 계획하며 정한 것(전체 계획 문서 결정 1~4, 21, 24 중 이 태스크에 닿는 부분):
+  1. 나이는 연 나이(서울 기준 올해 − 태어난 해). 20~99세만. 키 120~230cm, 몸무게 30~250kg(소수 첫째 자리).
+  2. 목표 kcal 계산은 화면에서만 한다(`src/nutrition/body.ts`). 서버는 몸 정보만 저장하고 목표 kcal은 저장하지 않는다.
+  3. 목표 kcal: 유지=필요량, 감량=max(필요량−500, 기초대사량), 증량=min(필요량+500, 5000). 정수 반올림.
+  4. 하루 막대의 목표는 몸 정보 목표 → 없으면 식단 `goal_kcal` → 없으면 막대 없음. AI 초안 입력 목표가 비어 있으면 몸 정보 목표로 채운다.
+  21. 카드는 식단 탭(식단 있으면 머리 아래, 없으면 빈 화면 위)에 두고, 더보기 `나` 묶음에 `하루 칼로리 목표` 줄을 둔다. 새 몸 정보는 성별·활동량을 미리 고르지 않고, 목표는 `유지`로 시작한다.
+  24. 내보내기 `meals.csv`는 그대로 두고, 몸 정보는 내보내기에 넣지 않는다.
 
 ## 22. 3단계 추가: 양념 비율 계산기 (추가: 2026-09-13)
 - 레시피 탭 안 `양념 비율` 칸(추천 · 내 레시피 · 영상 · 양념 비율). 불고기·제육볶음·간장조림·초고추장·쌈장·갈비 양념 등 기본 양념을 제공하고 사용자가 추가·수정("내 비율").
