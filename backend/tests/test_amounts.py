@@ -1,6 +1,6 @@
 import pytest
 
-from app.amounts import is_spoon, parse_amount
+from app.amounts import in_unit, is_spoon, parse_amount
 
 
 @pytest.mark.parametrize(
@@ -40,3 +40,26 @@ def test_parse_amount(text, expected):
 def test_is_spoon():
     assert is_spoon("큰술") is True
     assert is_spoon("모") is False
+
+
+@pytest.mark.parametrize(
+    "amount_text, unit, expected",
+    [
+        ("300g", "g", 300.0),
+        ("300g", "kg", 0.3),
+        ("1.5kg", "g", 1500.0),
+        ("1/2모", "모", 0.5),
+        ("1L", "ml", 1000.0),
+        ("200ml", "L", 0.2),
+        ("2", "개", 2.0),
+        ("1대", "단", None),
+        ("약간", "g", None),
+        ("300g", "", None),
+        ("10개", "30구", None),
+        ("1큰술", "큰술", 1.0),
+        ("300g", "G", 300.0),
+        ("1KG", "g", 1000.0),
+    ],
+)
+def test_in_unit(amount_text, unit, expected):
+    assert in_unit(amount_text, unit) == expected

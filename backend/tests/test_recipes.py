@@ -80,6 +80,8 @@ def test_create_list_get_update_delete(client, login):
         "source_url": None,
         "public_recipe_id": None,
         "image_url": None,
+        "eat_out_price": None,
+        "eat_out_source": None,
     }
     second = create(client, title="계란국").get_json()
 

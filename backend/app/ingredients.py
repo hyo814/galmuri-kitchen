@@ -184,12 +184,24 @@ def list_ingredients():
     return jsonify([to_json(i, today, rules, seasonings) for i in items])
 
 
+def price_basis_changed(item, fields):
+    """29절 결정 10(개정 1 P17): PATCH가 보낸 price·unit이 지금 값과 다른가. setattr 전에 부른다.
+    재고 고치기 폼은 늘 전체 body(price·unit 포함)를 보내므로 '칸이 있나'로 보면 안 된다."""
+    return fields.get("price", item.price) != item.price or fields.get("unit", item.unit) != item.unit
+
+
+def sync_price_quantity(item):
+    """지금 수량을 구입 수량으로. 가격이 없으면 None."""
+    item.price_quantity = item.quantity if item.price is not None else None
+
+
 @bp.post("")
 @login_required
 def create_ingredient():
     fields = parse_fields(request.get_json(silent=True), creating=True)
     check_ingredient_cap(g.user.id, 1)
     item = Ingredient(user_id=g.user.id, **fields)
+    sync_price_quantity(item)
     db.session.add(item)
     db.session.commit()
     return jsonify(to_json(item, seoul_today(), user_rules(g.user.id), seasoning_names(g.user.id))), 201
@@ -215,6 +227,8 @@ def create_ingredients_bulk():
         first = errors[0]
         return jsonify(error=f"{first['index'] + 1}번째 재료: {first['error']}", errors=errors), 400
     created = [Ingredient(user_id=g.user.id, **fields) for fields in rows]
+    for item in created:
+        sync_price_quantity(item)
     db.session.add_all(created)
     db.session.flush()  # PK를 받되 커밋 전에 응답을 만들어 커밋 후 만료로 인한 N+1 조회를 피한다
     today, rules, seasonings = seoul_today(), user_rules(g.user.id), seasoning_names(g.user.id)
@@ -231,8 +245,12 @@ def create_ingredients_bulk():
 @login_required
 def update_ingredient(item_id):
     item = get_owned_or_404(Ingredient, item_id)
-    for key, value in parse_fields(request.get_json(silent=True), creating=False).items():
+    fields = parse_fields(request.get_json(silent=True), creating=False)
+    reset = price_basis_changed(item, fields)
+    for key, value in fields.items():
         setattr(item, key, value)
+    if reset:
+        sync_price_quantity(item)
     db.session.commit()
     return jsonify(to_json(item, seoul_today(), user_rules(g.user.id), seasoning_names(g.user.id)))
 

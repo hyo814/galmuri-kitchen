@@ -61,6 +61,8 @@ def recipe_json(recipe, stock):
         "source_url": recipe.source_url,
         "public_recipe_id": recipe.public_recipe_id,
         "image_url": recipe.image_url,
+        "eat_out_price": recipe.eat_out_price,
+        "eat_out_source": recipe.eat_out_source,
     }
 
 
