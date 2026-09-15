@@ -91,11 +91,12 @@ recipe-ai/
 | GET | `/api/recipes/choices?q=` | 식단 칸 채우기 시트의 `내 레시피` 목록(20절). 최근 200개 후보를 재고 일치 점수 순으로 최대 50개 `{items:[{id, title, servings, have_count, total_count, urgent_names}]}` |
 | GET/POST | `/api/meal-plans` | 목록(`start_on`·id 내림차순, 50개 상한, 페이지 없음) `{items:[plan_summary…], default_servings}` / 만들기 201(20절) |
 | GET/PATCH/DELETE | `/api/meal-plans/<id>` | 상세(`plan_summary` + `goal_kcal`·`goal_note`·`slots`) / 보낸 칸만 고치기(기간이 줄거나 시작일을 옮기면 새 기간 밖의 칸은 같은 커밋에서 삭제) / 삭제(칸은 CASCADE) |
-| PUT | `/api/meal-plans/<id>/slots` | 칸 채우기·바꾸기(`{date, meal, recipe_id?, title?, servings?}` → 200, 없던 칸이면 만들고 있으면 덮어씀) |
+| PUT | `/api/meal-plans/<id>/slots` | 칸 채우기·바꾸기(`{date, meal, recipe_id?, title?, servings?}` → 200, 없던 칸이면 만들고 있으면 덮어씀). 덮어쓰면 먹은 기록 연결을 끊는다(결정 6, Task 5) |
 | POST | `/api/meal-plans/<id>/copy-week` | 이번 주 복사(`{from_on, weeks}` → 200 `{plan: plan_json, copied, kept}`, 20절) |
 | POST | `/api/meal-plans/<id>/ai-draft` | AI 식단 초안(`{start_on, days 1~7, meals, goal_kcal?, goal_note?}` → 200 `{dishes, slots:[{date, meal, options}], kept, sample}`). 칸은 저장 안 함(목표 두 칸만 저장). AI 레시피 하루 한도 공유(`ai_calls.kind = meal`, 20절) |
 | POST | `/api/meal-plans/<id>/ai-draft/apply` | 초안 넣기(`{dishes 1~30, slots:[{date, meal, dish, est_kcal?}] 1~28}` → 201 `{filled, kept, created_recipes}`). 아직 빈 칸만 채우고 새 요리는 요리마다 한 번 내 레시피(source `ai`)로 저장. AI를 부르지 않음(20절) |
 | PATCH/DELETE | `/api/meal-slots/<id>` | 인분 고치기(`{servings}`, `SlotDetail` −/+ 바로 저장) / 칸 비우기 |
+| POST | `/api/meal-slots/<id>/eaten` | 칸을 1인분·집밥으로 먹은 기록에 남긴다(결정 6, 24절 구현 세부 Task 5). 이미 남겼으면 그 기록 200, 새로 남기면 201 |
 | GET | `/api/meal-plans/<id>/shopping-preview` | 장보기 미리보기(23절 D4) `{name, start_on, end_on, recipe_slot_count, buy, manual, skip}`. 담기는 이 API가 하지 않는다(화면이 `POST /api/shopping/items/bulk`로) |
 | GET/PUT/DELETE | `/api/body-profile` | 몸 정보(21절). GET `{profile: BodyProfile\|null}`(응답 `Cache-Control: no-store`) / PUT 통째로 저장(성별·태어난 해·키·몸무게·활동량·목표, 모두 필수) 200 `{profile}` / DELETE 204(없어도 204). 목표 kcal은 저장하지 않는다 — 화면(`src/nutrition/body.ts`)이 계산한다 |
 | GET | `/api/foods/search?q=` | 식품영양성분 DB 찾기(21절). `nutrition` off면 503 `영양 계산을 지금은 쓸 수 없어요.`, `q` 공백뿐이면(정규화해도 빈 문자열이면) 400 `찾을 식품 이름을 입력해주세요.`(30자 넘으면 앞 30자만) → `{items:[{food_code, name, group, kcal}], searched}`(`searched`는 찾기를 끝냈거나 30일 안에 찾아봤으면 `true`, 한도·실패면 `false`) |
@@ -504,7 +505,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - 계산 GET은 캐시만 읽고 외부 요청·AI는 채우기 POST에서만 한다(결정 13) — 식단 GET·PUT·PATCH는 `NutritionContext`를 새로 만들 뿐 식품 찾기·AI 추정은 부르지 않는다.
 - `nutrition_results(recipes)`: `None`(레시피 없는 텍스트 칸)을 뺀 레시피가 하나도 없거나 `nutrition_mode(g.user) == "off"`면 `{}`. 아니면 그 레시피들로 `NutritionContext`를 **한 번**만 만들어(id로 중복 제거) `{recipe_id: recipe_nutrition 결과}`를 돌려준다 — `plan_json`은 식단 전체 칸의 레시피를 모아 이 함수를 한 번만 부른다(ponytail: 최대 124칸, 느려지면 Task 3 캐시를 붙인다). `PUT .../slots`·`PATCH /api/meal-slots/<id>`는 그 칸의 레시피 하나만 넘겨 부른다.
 - **칸 1인분 영양(`slot_nutrition`, 결정 14·16):** 1인분은 슬롯 인분과 무관하게 늘 레시피 1인분(`recipe_nutrition`의 `per_serving`, = 레시피 전체 ÷ `max(recipe.servings, 1)`)이다. 우선순위 — ① 계산값이 있고 그 결과가 `usable`(계산된 줄이 절반 이상)이면 `{**per_serving, approx, source: "calc"}`(약 표시는 계산 결과의 `approx` 그대로) ② 아니면 칸에 AI 초안 `est_kcal`이 있으면 `{kcal: est_kcal, carbs_g·protein_g·fat_g·sugars_g·sodium_mg: null, approx: true, source: "ai"}`(탄단지 없음, 늘 약) ③ 아니면 계산값이라도 있으면 `{**per_serving, approx: true, source: "calc"}`(약 강제) ④ 계산값도 `est_kcal`도 없으면 `null`(표시 없음). 텍스트 칸(레시피 없음)은 결과가 `None`이라 ②·④만 해당한다.
-- `slot_json(slot, prepared_stock, urgent, results)`에 `"nutrition": slot_nutrition(slot, results.get(slot.recipe_id))`를 더한다(`results`는 필수 인자). `plan_json`은 `"nutrition_pending_recipe_ids": sorted(계산 중(pending)인 레시피 id)`를 함께 돌려준다(같은 레시피가 칸 여러 개에 있어도 한 번만). AI 초안(`ai-draft`·`ai-draft/apply`)·장보기 미리보기 응답은 그대로 둔다(칸을 만들 뿐 저장된 칸의 영양을 보여주는 화면이 아니다).
+- `slot_json(slot, prepared_stock, urgent, results)`에 `"nutrition": slot_nutrition(slot, results.get(slot.recipe_id))`를 더한다(`results`는 필수 인자). `plan_json`은 `"nutrition_pending_recipe_ids": sorted(계산 중(pending)인 레시피 id)`를 함께 돌려준다(같은 레시피가 칸 여러 개에 있어도 한 번만). AI 초안(`ai-draft`·`ai-draft/apply`)·장보기 미리보기 응답은 그대로 둔다(칸을 만들 뿐 저장된 칸의 영양을 보여주는 화면이 아니다). (4b-3 Task 5가 `slot_json` 끝에 `"eaten_log_id"`를 더한다, 24절 구현 세부 참고.)
 - 레시피를 지우면(모델 `MealSlot.recipe_id` `SET NULL`) 칸은 제목·`est_kcal`만 남은 직접 쓰기 칸처럼 되어(기존 동작) 이후 그 칸의 영양은 `est_kcal`이 있으면 `source "ai"`, 없으면 `null`이 된다.
 
 **구현 세부 (2026-09-15, 4b-2, Task 7 — 화면: 주 보기 kcal·하루 목표 막대·하루 영양 시트):**
@@ -612,7 +613,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
   3. 무엇 네 갈래: 식단에서 = `meal_slot_id`(source `meal_plan`), 내 레시피 = `recipe_id`, 음식 찾기 = `food_code`, 직접 = `title`만(kcal 비움, 직접 kcal 칸 없음).
   4. 양: 인분 0.5~20(0.5 단위, 기본 1), g은 음식 찾기에서만 1~3000. 1인분 무게가 없는 음식은 g으로만.
   5. kcal 계산: 레시피 = 1인분(`per_serving`) × 인분(`approx` = 레시피 approx 또는 쓸 만하지 않음), 식단 칸 = `meals.slot_nutrition`(계산값, 모자라면 AI 초안 추정 kcal) × 인분, 음식 = 100g당 × g ÷ 100(1인분이면 g = 1인분 무게 × 인분), 늘 `approx`. 반올림은 kcal·mg 정수, g 소수 첫째, .5 올림(`nutrition._round0`·`_round1`, 화면 `Math.round`와 같음). 영양 모드 `off`면 레시피·음식은 계산하지 않고 식단 칸 AI 추정 kcal만 쓴다. 값 없는 영양소는 null.
-  6. 식단 칸 기록 = 1인분(칸 인분은 응답 `slot_servings`로), 같은 칸은 한 번만(UNIQUE). 칸·식단을 지우면 기록은 남고 연결만 끊긴다(SET NULL).
+  6. 식단 칸 기록 = 1인분(칸 인분은 응답 `slot_servings`로), 같은 칸은 한 번만(UNIQUE). 칸·식단을 지우면 기록은 남고 연결만 끊긴다(SET NULL). **구현(Task 5, `meals.py`):** `POST /api/meal-slots/<id>/eaten`은 칸 규칙을 복사하지 않고 `food_logs.create_log({"meal_slot_id", "place": "home"})`를 그대로 부른다 — 미래 400·하루 상한·스냅숏·경합 처리(rollback 뒤 `None`)는 모두 `create_log`(개정 1 P5·D1) 안에서 하고, 이미 남긴 칸은 그 기록을 200으로, 경합(동시에 두 번)도 방금 생긴 기록을 찾아 200으로 돌려준다(못 찾으면 400 `잘못된 요청이에요.`). `slot_json`에 `"eaten_log_id"`, `_owned_plan_with_slots`는 `MealSlot.food_log`까지 `selectinload`(N+1 없음), `PUT .../slots`로 칸을 덮어쓰면 `slot.food_log = None`(기록은 남고 연결만 끊음, 새 칸은 그대로). `PUT .../slots`·`PATCH /api/meal-slots/<id>` 단일 칸 응답은 `slot.food_log`를 지연 로딩한다(칸 하나라 한 쿼리, ponytail).
   7. 날짜: 오늘(서울) 뒤는 400, 2000~2100년 밖은 식단과 같은 문구.
   10. 상한: 하루 20개·사용자당 10,000개. 날짜·달 단위로만 받아 커서 페이지 없음(26절 표).
   12. 만족도 1~5 선택, 메모 200자(공백 정리·NUL 400), 어디서 `home`·`out`·null.
