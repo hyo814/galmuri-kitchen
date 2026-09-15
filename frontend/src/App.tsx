@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, ty
 import { ApiError, api, onUnauthorized, type User } from "./api";
 import Splash from "./components/Splash";
 import TabBar from "./components/TabBar";
+import FoodLogPage, { resetFoodLogView } from "./pages/FoodLog";
 import Fridge from "./pages/Fridge";
 import Login, { rememberLoginProvider } from "./pages/Login";
 import MealAiDraft from "./pages/MealAiDraft";
@@ -56,6 +57,7 @@ const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
   "/meals": ({ user }) => <Meals user={user} />,
   "/meals/:id/ai": ({ route, user }) => <MealAiDraft id={route.params.id} user={user} />,
   "/meals/:id/shopping": ({ route }) => <MealShopping id={route.params.id} />,
+  "/food-log": ({ user }) => <FoodLogPage user={user} />,
   "/more": ({ user, onLogout }) => <More user={user} onLogout={onLogout} />,
   "/tools": () => <Tools />,
 };
@@ -148,6 +150,7 @@ export default function App() {
     resetRecipeDraft();
     resetMealsView();
     resetRecipeNutrition();
+    resetFoodLogView();
     scrollTops.clear();
     setUser(null);
   }, []);

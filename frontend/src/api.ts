@@ -176,6 +176,7 @@ export interface ExportSummary {
   shopping: number;
   memos: number;
   meals: number;
+  food_logs: number;
   limit: number;
   remaining: number;
 }
@@ -438,6 +439,8 @@ export interface MealSlot {
   total_count: number | null;
   urgent_names: string[];
   nutrition: SlotNutrition | null;
+  /** 먹었어요로 남긴 먹은 기록 id(24절) */
+  eaten_log_id: number | null;
 }
 
 export interface MealPlan extends MealPlanSummary {
@@ -549,3 +552,24 @@ export interface FoodSearchResult {
   items: FoodSearchItem[];
   searched: boolean;
 }
+
+// ---- 먹은 기록(스펙 24절, 4b-3) ----
+export type FoodPlace = "home" | "out";
+/** 칸 1인분 영양에서 approx·source만 뺀 모양(타입 한 벌, 개정 1 D8) — Task 9 scaleNutrition 인자도 이것 */
+export type FoodLogNutrition = Omit<SlotNutrition, "approx" | "source">;
+export interface FoodLogPhoto { id: number; url: string }
+export interface FoodLog {
+  id: number; eaten_on: string; meal: MealKind; source: "manual" | "meal_plan" | "cook_log";
+  /** null이면 사진만 먼저 남긴 `사진 기록` */
+  title: string | null; recipe_id: number | null; meal_slot_id: number | null; slot_servings: number | null;
+  food_code: string | null; servings: number | null; grams: number | null;
+  place: FoodPlace | null; rating: number | null; memo: string | null;
+  nutrition: FoodLogNutrition | null; approx: boolean; nutrition_pending: boolean; created_at: string; photos: FoodLogPhoto[];
+}
+export interface FoodLogPlanSlot { id: number; meal: MealKind; title: string; servings: number; recipe_id: number | null }
+export interface FoodLogDay { date: string; logs: FoodLog[]; plan_slots: FoodLogPlanSlot[]; nutrition_pending_recipe_ids: number[] }
+export interface FoodLogMonthDay { date: string; meals: number; count: number; kcal: number | null; approx: boolean; photo_url: string | null }
+export interface FoodLogMonthSummary { logged_days: number; avg_kcal: number | null; avg_approx: boolean; home: number; out: number; home_percent: number | null }
+export interface FoodLogMonth { month: string; today: string; days: FoodLogMonthDay[]; summary: FoodLogMonthSummary }
+export interface DishItem { food_code: string; name: string; serving_g: number | null; kcal: number; carbs_g: number | null; protein_g: number | null; fat_g: number | null; sugars_g: number | null; sodium_mg: number | null }
+export interface DishSearchResult { items: DishItem[]; searched: boolean }
