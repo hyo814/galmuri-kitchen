@@ -6576,7 +6576,12 @@ body:has(.ck-toast:not(:empty)) .page::after {
   font-variant-numeric: tabular-nums;
 }
 
+/* 긴 제목(60자까지)은 두 줄에서 자른다 */
 .ck-bar > span:first-child {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
   overflow-wrap: anywhere;
 }
 
@@ -6593,6 +6598,16 @@ body:has(.ck-toast:not(:empty)) .page::after {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+/* 긴 재료 이름(50자까지)은 칩 안에서 줄바꿈 — .badge의 한 줄·고정 높이를 여기서만 푼다 */
+.ck-chips .badge {
+  max-width: 100%;
+  height: auto;
+  min-height: 28px;
+  padding-block: 4px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* 요리 일기 목록 위 이번 달 카드를 리포트로 가는 버튼으로(R11-5) */

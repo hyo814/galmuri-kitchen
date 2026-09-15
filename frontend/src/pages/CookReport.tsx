@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { localToday, type CookReport as CookReportData } from "../api";
 import Icon from "../components/Icon";
 import LoadError from "../components/LoadError";
@@ -24,7 +24,7 @@ function ReportBody({ month, onToday }: { month: string; onToday: (today: string
     if (data) onToday(data.today);
   }, [data, onToday]);
 
-  if (!data) return error ? <LoadError error={error} onRetry={reload} /> : <p className="muted">불러오는 중…</p>;
+  if (!data) return error ? <LoadError error={error} onRetry={reload} /> : <p className="center muted">불러오는 중…</p>;
 
   const compare = compareLine(data);
   const widths = barWidths(data.top_saved);
@@ -91,7 +91,8 @@ function ReportBody({ month, onToday }: { month: string; onToday: (today: string
             {data.top_saved.map((row, i) => (
               <li key={row.title} className="ck-bar">
                 <span>{row.title}</span>
-                <div className="nt-meter" role="img" aria-label={`${row.title} ${formatWon(row.saved)}`}>
+                {/* 막대는 숨기고 보이는 제목·금액을 읽는다(BodyGoalCard와 같게) */}
+                <div className="nt-meter" aria-hidden="true">
                   <i style={{ width: `${widths[i]}%` }} />
                 </div>
                 <span>{formatWon(row.saved)}</span>
@@ -124,8 +125,9 @@ export default function CookReport() {
   const [month, setMonth] = useState(() => viewMonth ?? monthOf(localToday()));
   // `다음 달` 막기용 오늘 — 받기 전엔 기기 시계, 받으면 서버 today(FoodLog.tsx와 같게)
   const [today, setToday] = useState(() => localToday());
-  const onToday = useCallback((t: string) => setToday(t), []);
-  const prevButton = useRef<HTMLButtonElement>(null);
+  // 요리 일기 카드로 들어왔으면 뒤로가 요리 일기로 간다(history.back) — 들어올 때 한 번 읽어 이름을 맞춘다(R11-F2)
+  const [fromDiary] = useState(() => (history.state as { from?: string } | null)?.from === "/cook-logs");
+  const title = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     viewMonth = month;
@@ -133,16 +135,25 @@ export default function CookReport() {
 
   return (
     <main className="page ck-report">
-      <header className="topbar fl-top">
-        <button type="button" className="icon-btn" aria-label="더보기로 돌아가기" onClick={() => goBack("/more")}>
-          <Icon name="back" />
-        </button>
-      </header>
+      <a
+        className="back-link"
+        href={fromDiary ? "#/cook-logs" : "#/more"}
+        aria-label={fromDiary ? "요리 일기로 돌아가기" : "더보기로 돌아가기"}
+        onClick={(e) => {
+          e.preventDefault();
+          goBack("/more");
+        }}
+      >
+        <Icon name="back" size={18} />
+        {fromDiary ? "요리 일기" : "더보기"}
+      </a>
       <div className="fl-mnav">
-        <button ref={prevButton} type="button" className="icon-btn" aria-label="지난달" onClick={() => setMonth((m) => shiftMonth(m, -1))}>
+        <button type="button" className="icon-btn" aria-label="지난달" onClick={() => setMonth((m) => shiftMonth(m, -1))}>
           <Icon name="back" />
         </button>
-        <h1 aria-live="polite">{reportTitle(month)}</h1>
+        <h1 ref={title} tabIndex={-1} aria-live="polite">
+          {reportTitle(month)}
+        </h1>
         <button
           type="button"
           className="icon-btn"
@@ -151,13 +162,13 @@ export default function CookReport() {
           onClick={() => {
             const next = shiftMonth(month, 1);
             setMonth(next);
-            if (next >= monthOf(today)) prevButton.current?.focus(); // 이번 달이면 이 버튼이 막혀 포커스가 사라지니 지난달로
+            if (next >= monthOf(today)) title.current?.focus(); // 이번 달이면 이 버튼이 막혀 포커스가 사라지니 새 제목으로
           }}
         >
           <Icon name="chevron" />
         </button>
       </div>
-      <ReportBody key={month} month={month} onToday={onToday} />
+      <ReportBody key={month} month={month} onToday={setToday} />
     </main>
   );
 }
