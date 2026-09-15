@@ -231,16 +231,14 @@ def test_demo_ai_global_budget_falls_back_to_sample(demo_app, monkeypatch):
     assert imported.status_code == 200 and imported.get_json()["sample"] is True
 
 
-def test_demo_budget_counts_nutrition_calls(demo_app):
+def test_nutrition_calls_do_not_spend_demo_ai_budget(demo_app):
     c = new_client(demo_app)
     user_id = c.post("/api/demo-login").get_json()["id"]
     demo_app.config.update(ANTHROPIC_API_KEY="test-key", DEMO_AI_GLOBAL_DAILY=1)
     with demo_app.app_context():
-        user = db.session.get(User, user_id)
-        assert ai.scan_mode(user) == "on"
         db.session.add(AiCall(user_id=user_id, demo=True, kind="nutrition", created_at=utcnow()))
         db.session.commit()
-        assert ai.scan_mode(user) == "sample"
+        assert ai.scan_mode(db.session.get(User, user_id)) == "on"  # 영양 추정은 따로 센다(Ruling 11)
 
 
 def test_normal_user_ignores_demo_budget(client, login, app, fake_anthropic):

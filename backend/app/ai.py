@@ -108,12 +108,12 @@ class MemoScanResult(BaseModel):
 
 
 def demo_ai_budget_spent():
-    """체험 계정 전체가 지난 24시간 동안 쓴 사진 인식·AI 레시피·영양 추정 호출이 DEMO_AI_GLOBAL_DAILY 이상인지. 지워진 체험 계정 기록(user_id 없음)도 demo로 센다.
+    """체험 계정 전체가 지난 24시간 동안 쓴 사진 인식·AI 레시피 호출이 DEMO_AI_GLOBAL_DAILY 이상인지. 지워진 체험 계정 기록(user_id 없음)도 demo로 센다.
     ponytail: 세고 부르기라 동시에 온 체험 요청 몇 개만큼 예산을 넘을 수 있다. 크게 넘으면 전역 잠금으로."""
-    from .scan import NUTRITION_KINDS, RECIPE_KINDS, SCAN_KINDS  # scan.py가 이 모듈을 쓰므로 여기서 불러온다
+    from .scan import RECIPE_KINDS, SCAN_KINDS  # scan.py가 이 모듈을 쓰므로 여기서 불러온다
 
     used = AiCall.query.filter(
-        AiCall.demo.is_(True), AiCall.kind.in_(SCAN_KINDS + RECIPE_KINDS + NUTRITION_KINDS), AiCall.created_at >= utcnow() - timedelta(hours=24)
+        AiCall.demo.is_(True), AiCall.kind.in_(SCAN_KINDS + RECIPE_KINDS), AiCall.created_at >= utcnow() - timedelta(hours=24)
     ).count()
     return used >= current_app.config["DEMO_AI_GLOBAL_DAILY"]
 
@@ -501,7 +501,7 @@ def estimate_nutrition(weights, foods):
     """weights [(이름, 단위)], foods [이름]. (결과, 토큰 사용량)을 돌려주고, 실패하면 AiError."""
     blocks = {"단위 무게": [f"{n} | {u}" for n, u in weights], "영양 추정": list(foods)}
     prompt = NUTRITION_PROMPT + "\n\n".join(f"<{tag}>\n" + "\n".join(lines) + f"\n</{tag}>" for tag, lines in blocks.items())
-    return _parse(prompt, NutritionGuess, 4096, "nutrition estimate")
+    return _parse(prompt, NutritionGuess, 4096, "nutrition estimate", timeout=20)  # 채우기는 화면이 기다린다
 
 
 # 키가 없는 개발 모드 예시(모든 단위·식품에 같은 규칙)

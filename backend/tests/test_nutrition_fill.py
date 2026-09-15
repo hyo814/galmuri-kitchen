@@ -1,12 +1,16 @@
 import math
+from types import SimpleNamespace
 from datetime import datetime, time, timedelta, timezone
 
 import pytest
 
 from app import ai, scan
 from app.ingredients import SEOUL, seoul_today
-from app.models import AiCall, FoodNutrient, UnitWeightEstimate, User, db
-from app.nutrition import clean_guess, search_terms
+from app.models import AiCall, FoodNutrient, FoodSearch, UnitWeightEstimate, User, db
+from sqlalchemy.exc import IntegrityError
+
+from app.models import utcnow
+from app.nutrition import NutritionContext, clean_guess, search_terms, store_guess
 from tests.test_nutrition import add_foods, cached, recipe_body
 
 BAD = "잘못된 요청이에요."
@@ -85,14 +89,14 @@ def test_on_mode_searches_then_estimates_once(client, login, app, monkeypatch):
 
     monkeypatch.setattr("app.ai.estimate_nutrition", fake_ai)
     login()
-    recipe_id = make_recipe(client, ("두부", "1모"), ("배추김치", "200g"), ("참깨소스", "1큰술"), ("들깨가루", "1큰술"))
+    recipe_id = make_recipe(client, ("두부(부침용 3kg)", "1모"), ("배추김치", "200g"), ("참깨소스", "1큰술"), ("들깨가루", "1큰술"))
     assert client.put("/api/food-matches", json={"name": "참깨소스", "food_code": None}).status_code == 204
 
     res = fill(client, [recipe_id])
     assert (res.status_code, res.get_json()) == (200, {"pending_recipe_ids": []})
     assert asked == ["두부", "배추김치", "들깨가루"]  # 참깨소스는 기억이 있어 찾지 않는다
     # 들깨가루는 찾아봤지만 후보가 없어 AI 추정 목록에 들어간다(개정 1)
-    assert ai_calls == [([("두부", "모")], ["참깨소스", "들깨가루"])]
+    assert ai_calls == [([("두부", "모")], ["참깨소스", "들깨가루"])]  # 괄호 속 설명은 모델에 보내지 않는다
     with app.app_context():
         assert [(c.model, c.input_tokens, c.output_tokens) for c in AiCall.query.filter_by(kind="nutrition")] == [("m", 10, 20)]
         assert FoodNutrient.query.filter_by(food_code="ai:참깨소스").one().group_name == "추정"
@@ -135,8 +139,10 @@ def test_clean_guess_drops_bad_rows():
         {"name": "김치", **good},  # 요청 안 한 이름
         {"name": "마요네즈", **{k: v for k, v in good.items() if k != "fat_g"}},
         {"name": "케첩", **good, "sugars_g": math.inf},
+        {"name": "버터", **good, "carbs_g": 40, "protein_g": 30, "fat_g": 31},  # 탄단지 합 100 넘음
+        {"name": "꿀", **good, "carbs_g": 10, "sugars_g": 11},  # 당류가 탄수화물보다 많음
     ]
-    food_names = ["참깨소스", "들깨가루", "굴소스", "마요네즈", "케첩"]
+    food_names = ["참깨소스", "들깨가루", "굴소스", "마요네즈", "케첩", "버터", "꿀"]
     weights, foods = clean_guess({"weights": raw_weights, "foods": raw_foods}, weight_pairs, food_names)
     assert weights == {("두부", "모"): 300, ("애호박", "개"): 250.5}
     assert foods == {"참깨소스": {"name": "참깨소스", **good}}
@@ -144,36 +150,60 @@ def test_clean_guess_drops_bad_rows():
     assert clean_guess({"weights": "x", "foods": [1]}, weight_pairs, food_names) == ({}, {})
 
 
-def test_ai_limit_or_error_leaves_pending_without_error(client, login, app, monkeypatch):
-    app.config.update(FOOD_NUTRITION_API_KEY="k", ANTHROPIC_API_KEY="k")
-    monkeypatch.setattr("app.foods.fetch_page", fail)
-    add_foods(app, cached("T1", "두부"))  # 자동 맞추기 → 무게만 AI가 필요하다
+def fixed_clock(monkeypatch):
     fixed_today = seoul_today()
     fixed_now = datetime.combine(fixed_today, time(12), tzinfo=SEOUL).astimezone(timezone.utc)
     monkeypatch.setattr(scan, "seoul_today", lambda: fixed_today)
     monkeypatch.setattr(scan, "utcnow", lambda: fixed_now)
-    monkeypatch.setattr("app.ai.estimate_nutrition", fail)
+    return fixed_now
 
-    def used(user_id, count):
-        with app.app_context():
-            db.session.add_all(AiCall(user_id=user_id, kind="nutrition", created_at=fixed_now - timedelta(hours=1, minutes=i)) for i in range(count))
-            db.session.commit()
+
+def add_calls(app, user_id, count, at, kind="nutrition", demo=False):
+    with app.app_context():
+        db.session.add_all(AiCall(user_id=user_id, kind=kind, demo=demo, created_at=at - timedelta(hours=1, minutes=i)) for i in range(count))
+        db.session.commit()
+
+
+def login_demo(app, login, provider_id):
+    user = login(provider_id)
+    with app.app_context():
+        db.session.get(User, user.id).provider = "demo"
+        db.session.commit()
+    return user
+
+
+def on_mode_with_tofu(app, monkeypatch):
+    """두부는 캐시에서 자동 맞추기 → 무게만 AI가 필요하다."""
+    app.config.update(FOOD_NUTRITION_API_KEY="k", ANTHROPIC_API_KEY="k")
+    monkeypatch.setattr("app.foods.fetch_page", fail)
+    add_foods(app, cached("T1", "두부"))
+    ai_calls = []
+
+    def fake_ai(weights, foods):
+        ai_calls.append((weights, foods))
+        return guess_for(weights, foods), USAGE
+
+    monkeypatch.setattr("app.ai.estimate_nutrition", fake_ai)
+    return ai_calls
+
+
+def test_ai_limit_or_error_leaves_pending_without_error(client, login, app, monkeypatch):
+    ai_calls = on_mode_with_tofu(app, monkeypatch)
+    fixed_now = fixed_clock(monkeypatch)
 
     # ① 하루 20번
     user = login("1")
-    used(user.id, 20)
+    add_calls(app, user.id, 20, fixed_now)
     recipe_id = make_recipe(client, ("두부", "1모"))
     res = fill(client, [recipe_id])
     assert (res.status_code, res.get_json()) == (200, {"pending_recipe_ids": [recipe_id]})
 
-    # ② 체험 계정 3번
-    demo_user = login("2")
-    with app.app_context():
-        db.session.get(User, demo_user.id).provider = "demo"
-        db.session.commit()
-    used(demo_user.id, 3)
+    # ② 체험 계정은 하루 2번
+    demo_user = login_demo(app, login, "2")
+    add_calls(app, demo_user.id, 2, fixed_now, demo=True)
     recipe_id = make_recipe(client, ("두부", "1모"))
     assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": [recipe_id]}
+    assert ai_calls == []
 
     # ③ AI 실패: 기록은 남고 토큰은 없다
     def broken(weights, foods):
@@ -188,18 +218,108 @@ def test_ai_limit_or_error_leaves_pending_without_error(client, login, app, monk
         assert [(c.kind, c.input_tokens) for c in AiCall.query.filter_by(user_id=user3.id)] == [("nutrition", None)]
         assert UnitWeightEstimate.query.count() == 0
 
-    # ④ 체험 전체 AI 예산을 다 써 sample이 돼도 예시 값을 공유 캐시에 넣지 않는다
+
+def test_nutrition_limit_is_separate_from_ai_recipes_and_allows_19(client, login, app, monkeypatch):
+    ai_calls = on_mode_with_tofu(app, monkeypatch)
+    fixed_now = fixed_clock(monkeypatch)
+    user = login()
+    add_calls(app, user.id, 20, fixed_now, kind="recipe")
+    add_calls(app, user.id, 19, fixed_now)
+    recipe_id = make_recipe(client, ("두부", "1모"))
+    assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": []}
+    assert len(ai_calls) == 1
+
+
+def test_demo_user_gets_two_nutrition_calls(client, login, app, monkeypatch):
+    ai_calls = on_mode_with_tofu(app, monkeypatch)
+    fixed_now = fixed_clock(monkeypatch)
+    demo_user = login_demo(app, login, "1")
+    add_calls(app, demo_user.id, 1, fixed_now, demo=True)
+    recipe_id = make_recipe(client, ("두부", "1모"))
+    assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": []}
+    with app.app_context():
+        assert [c.demo for c in AiCall.query.filter_by(user_id=demo_user.id, input_tokens=10)] == [True]
+    assert len(ai_calls) == 1
+
+
+def test_demo_nutrition_global_cap_skips_ai_and_stops_pending(client, login, app, monkeypatch):
+    ai_calls = on_mode_with_tofu(app, monkeypatch)
+    fixed_now = fixed_clock(monkeypatch)
+    assert app.config["DEMO_NUTRITION_GLOBAL_DAILY"] == 30
+    app.config.update(DEMO_NUTRITION_GLOBAL_DAILY=2)
+    add_calls(app, None, 1, fixed_now, demo=True)
+    add_calls(app, None, 5, fixed_now)  # 일반 사용자 호출은 체험 전체 한도에 세지 않는다
+    add_calls(app, None, 3, fixed_now - timedelta(days=1), demo=True)  # 어제 호출도 세지 않는다
+    demo_user = login_demo(app, login, "1")
+    recipe_id = make_recipe(client, ("두부", "1모"))
+    assert rows_of(client, recipe_id)[0]["status"] == "pending"
+
+    add_calls(app, None, 1, fixed_now, demo=True)  # 오늘 체험 전체 2번 → 다 씀
+    assert rows_of(client, recipe_id)[0]["status"] == "needs_weight"  # 끝없이 계산 중으로 두지 않는다
+    assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": []}
+    assert ai_calls == []
+    with app.app_context():
+        assert AiCall.query.filter_by(user_id=demo_user.id).count() == 0
+
+    login("2")  # 일반 사용자는 체험 한도와 무관
+    recipe_id = make_recipe(client, ("두부", "1모"))
+    assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": []}
+    assert len(ai_calls) == 1
+
+
+def test_demo_with_spent_ai_budget_does_not_store_sample_values(client, login, app, monkeypatch):
+    on_mode_with_tofu(app, monkeypatch)
     monkeypatch.setattr("app.ai.estimate_nutrition", fail)
     app.config.update(DEMO_AI_GLOBAL_DAILY=1)
-    demo_user2 = login("4")
     with app.app_context():
-        db.session.get(User, demo_user2.id).provider = "demo"
-        db.session.add(AiCall(user_id=demo_user2.id, demo=True, kind="nutrition", created_at=fixed_now))
+        db.session.add(AiCall(user_id=None, demo=True, kind="recipe", created_at=utcnow()))
         db.session.commit()
+    login_demo(app, login, "1")
     recipe_id = make_recipe(client, ("두부", "1모"))
-    assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": [recipe_id]}
+    assert rows_of(client, recipe_id)[0]["status"] == "needs_weight"
+    assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": []}
     with app.app_context():
         assert (UnitWeightEstimate.query.count(), FoodNutrient.query.filter_by(source="ai").count()) == (0, 0)
+
+
+def test_store_guess_retries_after_concurrent_insert(app, monkeypatch):
+    with app.app_context():
+        real_commit, commits = db.session.commit, []
+
+        def racing_commit():
+            commits.append(1)
+            if len(commits) == 1:  # 다른 요청이 두부 모를 먼저 넣었다
+                db.session.rollback()
+                db.session.add(UnitWeightEstimate(name_key="두부", unit="모", grams=250, source="ai"))
+                real_commit()
+                raise IntegrityError("INSERT", {}, Exception("unique"))
+            real_commit()
+
+        monkeypatch.setattr(db.session, "commit", racing_commit)
+        store_guess({("두부", "모"): 300.0, ("대파", "대"): 100.0}, {"참깨소스": {"name": "참깨소스", **ai.SAMPLE_FOOD}}, "ai")
+        monkeypatch.undo()
+        assert len(commits) == 2
+        assert sorted((w.name_key, w.unit, w.grams) for w in UnitWeightEstimate.query) == [("대파", "대", 100), ("두부", "모", 250)]
+        assert FoodNutrient.query.filter_by(food_code="ai:참깨소스").count() == 1
+
+
+def test_deadline_after_search_skips_fallback_and_ai(client, login, app, monkeypatch):
+    app.config.update(FOOD_NUTRITION_API_KEY="k", ANTHROPIC_API_KEY="k")
+    clock = [0.0]
+    monkeypatch.setattr("app.nutrition.time", SimpleNamespace(monotonic=lambda: clock[0]))
+    asked = []
+
+    def slow_page(key, name, page):
+        asked.append(name)
+        clock[0] += 10  # 찾기 한 번에 예산(8초)을 다 썼다
+        return [], 0
+
+    monkeypatch.setattr("app.foods.fetch_page", slow_page)
+    monkeypatch.setattr("app.ai.estimate_nutrition", fail)
+    login()
+    recipe_id = make_recipe(client, ("돼지고기 앞다리살", "200g"), ("두부", "1모"))
+    assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": [recipe_id]}
+    assert asked == ["돼지고기앞다리살"]  # 두 번째 말도, 다음 재료도 찾지 않고 AI도 부르지 않는다
 
 
 def test_time_budget_and_fetch_limit_stop_searching(client, login, app, monkeypatch):
@@ -261,3 +381,16 @@ def test_fill_ownership_and_access(client, raw_client, login, app, monkeypatch):
     app.config.update(DEV_MODE=False)
     res = fill(client, [recipe_id])
     assert (res.status_code, res.get_json()["error"]) == (503, "영양 계산을 지금은 쓸 수 없어요.")
+
+
+def test_context_multiword_fallback_auto_match(app):
+    with app.app_context():
+        user = User(provider="test", provider_id="1", nickname="u")
+        db.session.add_all([user, cached("P1", "돼지고기_앞다리_생것"), cached("P2", "돼지고기_삼겹살_생것"),
+                            FoodSearch(query_key="돼지고기목살", total=0, searched_at=utcnow())])
+        db.session.commit()
+        recipe = SimpleNamespace(servings=1, ingredients=[{"name": "돼지고기 앞다리살", "amount": "300g"}, {"name": "돼지고기 목살", "amount": "300g"}])
+        context = NutritionContext(user, [recipe])
+        shoulder = context.resolve("돼지고기앞다리살")
+        assert (shoulder["state"], shoulder["food"]["food_code"]) == ("auto", "P1")
+        assert context.resolve("돼지고기목살")["state"] == "estimate_missing"  # 목살 조각이 없으면 추정 쪽 그대로
