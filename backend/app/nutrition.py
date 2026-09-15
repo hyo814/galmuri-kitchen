@@ -82,19 +82,20 @@ def daily_limit(user):
 
 def estimate_mode(user):
     """AI 추정 모드. ai.scan_mode를 따르되, 키가 있는데 ① 체험 계정이 sample(체험 전체 AI 예산을 다 씀)이거나
-    ② 오늘 체험 전체 영양 추정이 DEMO_NUTRITION_GLOBAL_DAILY에 닿았거나 ③ 이 사용자의 오늘 영양 추정이 하루 한도에 닿았으면 off —
+    ② 오늘 체험 전체 영양 추정이 DEMO_NUTRITION_GLOBAL_DAILY에 닿았거나 ③ 이 사용자의 오늘 영양 추정이 하루 한도에 닿았거나
+    ④ 일반 사용자인데 로그인 사용자 전체 AI 예산을 다 썼거나 오늘 로그인 사용자 전체 영양 추정이 USER_NUTRITION_GLOBAL_DAILY에 닿았으면 off —
     예시 값을 공유 캐시에 넣지 않고, 줄을 끝없이 계산 중으로 두지 않는다(무게 알려주기·고르기로 고칠 수 있게). 60초 연속 한도는 곧 풀려 세지 않는다."""
     mode = ai.scan_mode(user)
     if not current_app.config["ANTHROPIC_API_KEY"]:
         return mode
-    if user.provider == "demo":
-        if mode == "sample":
-            return "off"
-        # ponytail: 세고 부르기라 동시에 온 체험 요청 몇 개만큼 넘을 수 있다(demo_ai_budget_spent와 같은 여유)
-        start, end = foods._day_bounds(scan.seoul_today())
-        used = AiCall.query.filter(AiCall.demo.is_(True), AiCall.kind.in_(scan.NUTRITION_KINDS), AiCall.created_at >= start, AiCall.created_at < end).count()
-        if used >= current_app.config["DEMO_NUTRITION_GLOBAL_DAILY"]:
-            return "off"
+    demo = user.provider == "demo"
+    if (demo and mode == "sample") or (not demo and ai.user_ai_budget_spent()):  # 로그인 사용자 전체 AI 예산을 다 쓰면 오류 대신 AI 추정 없이 계산
+        return "off"
+    # ponytail: 세고 부르기라 동시에 온 요청 몇 개만큼 넘을 수 있다(demo_ai_budget_spent와 같은 여유)
+    start, end = foods._day_bounds(scan.seoul_today())
+    used = AiCall.query.filter(AiCall.demo.is_(demo), AiCall.kind.in_(scan.NUTRITION_KINDS), AiCall.created_at >= start, AiCall.created_at < end).count()
+    if used >= current_app.config["DEMO_NUTRITION_GLOBAL_DAILY" if demo else "USER_NUTRITION_GLOBAL_DAILY"]:
+        return "off"
     return "off" if scan.calls_today(user.id, scan.NUTRITION_KINDS) >= daily_limit(user) else mode
 
 

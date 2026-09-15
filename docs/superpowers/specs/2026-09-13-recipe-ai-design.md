@@ -166,6 +166,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **AI 일일 한도**: 요청 전 오늘(서버 기준 Asia/Seoul) 해당 사용자의 `ai_calls` 수를 kind 그룹(scan: fridge+receipt+order+memo / recipe: recipe+link+recipe_photo+meal+eat_out (2026-09-14, 시안 승인; meal은 20절 AI 식단 초안, recipe_photo는 17절 사진으로 가져오기, eat_out은 29절 사 먹으면 얼마 추정))별로 센다. 서울 하루를 UTC 구간으로 바꿔 created_at으로 센다.
   한도 `AI_DAILY_SCAN_LIMIT`(기본 10), `AI_DAILY_RECIPE_LIMIT`(기본 10, AI 레시피와 링크·글·사진 가져오기, AI 식단 초안을 합산) 초과 시 429. AI로 보낸 호출은 성공·실패와 관계없이 센다(실패도 비용이 들어 남용을 막기 위해). 업로드 검증에서 걸린 요청은 세지 않는다. 짧은 연속 호출은 `AI_SCAN_BURST_LIMIT`(기본 3, 60초)로 별도 429.
   `nutrition`(영양 채우기 AI 추정, 21절): 하루 20번(체험 계정 2번), 60초 10번, AI 레시피와 따로 센다. 화면 사용량(`/api/ai-usage`)에는 안 보이고 원가 집계에는 센다. **체험 전체 AI 예산(`DEMO_AI_GLOBAL_DAILY`)에는 세지 않고**, 체험 계정 전체 영양 추정은 오늘(서울) `DEMO_NUTRITION_GLOBAL_DAILY`(기본 30)번까지 따로 센다(Ruling 11 — 영양 채우기가 사진 인식·AI 레시피 체험 몫을 먹지 않게). 한도에 걸려도 429가 아니라 조용히 건너뛴다.
+  로그인 사용자 전체 AI 예산(추가: 2026-09-16, 투표 기간 Claude 잔액 보호): 체험 계정을 뺀 전체 Claude 호출(scan·recipe·nutrition 그룹)이 24시간에 `USER_AI_GLOBAL_DAILY`(코드 기본 400, render.yaml 100)번이면 429 `오늘 준비한 AI 사용량이 모두 찼어요. 조금 뒤에 다시 써주세요.`(영양 추정은 429 없이 AI 추정만 끔), 그 안에서 영양 추정은 오늘(서울) `USER_NUTRITION_GLOBAL_DAILY`(코드 기본 60, render.yaml 40)번까지 따로 센다. 체험 계정은 체험 예산만 본다.
 
 ## 8. 에러 처리
 
