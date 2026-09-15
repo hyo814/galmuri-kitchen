@@ -1,5 +1,7 @@
 """AI 레시피 제안(스펙 7절), 링크·글·사진으로 레시피 가져오기(스펙 17절), AI 사용량. AI 호출 한도·기록 흐름은 scan.py의 함수를 같이 쓴다."""
 
+import re
+
 from flask import Blueprint, abort, current_app, g, jsonify, request
 
 from . import ai, outbound, scan
@@ -148,16 +150,21 @@ def need_text(source):
     return jsonify(error=NEED_TEXT[source], need_text=True), 422
 
 
-MAX_IMPORT_PHOTOS = 3
+# 블로그 본문 글에 이 표시가 하나도 없으면 레시피가 사진에만 있는 글로 보고 본문 사진을 함께 읽는다.
+# 숫자와 단위는 같은 줄에서만 본다(꼬리말 "02218\n개인정보"), 단위 뒤에 영문이 붙으면(5GB) 양이 아니다.
+# ponytail: 낱말·단위 규칙이라 "컵케이크"처럼 표시가 섞인 글은 글만 보낸다. 놓치는 글이 많으면 표시 개수 기준으로 바꾸거나 사진 후보가 있을 때 늘 함께 보낸다(비용↑).
+RECIPE_SIGNAL = re.compile(r"재료|큰술|작은술|스푼|컵|꼬집|\d[ \t]*(?:g|ml|개|모|대|쪽)(?![a-z])", re.I)
+
+MAX_IMPORT_PHOTOS = 5
 PHOTO_NOT_FOUND = "사진에서 레시피를 찾지 못했어요. 글자가 잘 보이게 다시 찍거나 글 붙여넣기를 써주세요."
 
 
 def import_photos():
-    """요리책·캡처·손글씨 레시피 사진 1~3장(multipart `image`)을 AI로 정리한 초안. 사진은 저장하지 않는다.
+    """요리책·캡처·손글씨 레시피 사진 1~5장(multipart `image`)을 AI로 정리한 초안. 사진은 저장하지 않는다.
     업로드 검증(개수·빈 파일·형식)에서 걸린 요청은 세지 않는다. 한도는 AI 레시피와 같은 묶음(recipe_photo)."""
     files = request.files.getlist("image")  # 합쳐서 10MB 초과는 여기서 413
     if len(files) > MAX_IMPORT_PHOTOS:
-        abort(400, "사진은 3장까지 올려주세요.")
+        abort(400, "사진은 5장까지 올려주세요.")
     images = []
     for file in files:
         data = file.read()
@@ -236,6 +243,7 @@ def import_recipe():
         db.session.add(AiCall(user_id=user_id, kind="link_fetch", model=None, created_at=scan.utcnow()))
     db.session.commit()
 
+    images = []
     if link is None:
         body = text.strip()
     else:
@@ -260,16 +268,18 @@ def import_recipe():
                 body = f"{page['title']}\n\n{page['text']}"
                 source_url = page["url"] if len(page["url"]) <= outbound.MAX_LINK else value  # 저장 폼은 500자까지 받는다
                 source_card = {"title": page["title"], "author": page["site_name"], "thumbnail_url": None}
+                if page["images"] and not RECIPE_SIGNAL.search(page["text"]):  # 사진 요청 실패는 건너뛰고 기록을 더하지 않는다
+                    images = outbound.page_images(page["images"])
         except outbound.FetchError as e:
             current_app.logger.warning("import fetch failed: %s", e)  # 예외·이유 이름만(주소·키 없음)
             return need_text(source)
-        if len(body.strip()) < MIN_IMPORT_TEXT:
+        if len(body.strip()) < MIN_IMPORT_TEXT and not images:
             return need_text(source)
 
     scan.check_ai_limits(user_id, scan.RECIPE_KINDS, limit, "AI 레시피는")
     call = scan.start_ai_call(user_id, "link")
     try:
-        raw, usage = ai.extract_recipe(body)
+        raw, usage = ai.extract_recipe(body, images)
     except ai.AiError:
         abort(502, "레시피를 정리하지 못했어요. 잠시 후 다시 시도해주세요.")
     scan.finish_ai_call(call, usage)

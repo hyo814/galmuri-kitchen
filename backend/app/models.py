@@ -63,7 +63,7 @@ class Ingredient(db.Model):
     name = db.Column(db.String(50), nullable=False)
     quantity = db.Column(db.Float, nullable=False, default=1)
     unit = db.Column(db.String(10), nullable=False, default="개")
-    purchased_on = db.Column(db.Date, nullable=False)
+    purchased_on = db.Column(db.Date)  # None: 구입일 모름("기억 안 나요")
     expires_on = db.Column(db.Date)
     price = db.Column(db.Integer)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)

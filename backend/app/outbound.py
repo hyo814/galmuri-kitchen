@@ -3,6 +3,7 @@
 - 유튜브·인스타그램: 사용자가 보낸 주소를 요청하지 않고 영상 ID·게시물 코드로 고정 호스트 주소를 다시 만든다(fetch_fixed). 쿠팡 파트너스 API도 고정 호스트(coupang.py).
 - 블로그 같은 일반 주소: https·443 포트·공인 IP만(DNS 결과 전부 + 검사한 IP 하나에만 연결 + 연결된 소켓의 상대 주소),
   리다이렉트는 매번 다시 검사해 최대 3번, text/html·3MB(fetch_public_page).
+  본문 글에 레시피가 없어 보이는 페이지의 본문 사진(page_images)도 같은 검사로 받는다: 사진 형식은 파일 시그니처로 보고, 전체 10초.
 - 둘 다 프록시 환경변수를 쓰지 않고, 리다이렉트까지 합쳐 8초가 지나면 감시 타이머가 소켓을 끊는다.
 예외 메시지에는 주소·키를 넣지 않는다(FetchError는 예외·이유 이름만 담는다).
 예외: 3a의 식약처 공공 레시피 동기화 CLI(`flask sync-public-recipes`, public_recipes.py)는 고정 호스트 하나를 운영자가 직접 부르는 명령이라 이 파일을 거치지 않는다.
@@ -24,6 +25,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.connection import HTTPSConnection
 from urllib3.connectionpool import HTTPSConnectionPool
 
+from .scan import sniff_image_type
+
 MAX_BYTES = 3_000_000  # 만개의레시피 한 페이지가 1.2MB쯤이다. 조금씩 읽으며 세고(_read) 전체 시간도 TOTAL_SECONDS로 막는다
 CONNECT_SECONDS = 3.05
 TOTAL_SECONDS = 8
@@ -34,6 +37,19 @@ MAX_LABEL = 200  # 출처 카드 제목·채널 이름
 HEADERS = {"User-Agent": "galmuri-kitchen/1.0"}
 FIXED_HOSTS = {"www.googleapis.com", "www.youtube.com", "www.instagram.com", "api-gateway.coupang.com"}  # 쿠팡: 파트너스 딥링크(coupang.py)
 REDIRECT_CODES = {301, 302, 303, 307, 308}
+MAX_IMAGE_CANDIDATES = 8  # 블로그 본문 사진 후보(요청은 차례로)
+MAX_PAGE_IMAGES = 5  # AI에 함께 보내는 본문 사진
+MIN_IMAGE_BYTES = 15_000  # 이보다 작으면 아이콘·여백 이미지로 본다
+MAX_IMAGE_BYTES = 1_500_000  # 본문 사진 한 장(페이지 MAX_BYTES보다 작게)
+MAX_IMAGE_TOTAL_BYTES = 6_000_000  # 요청 하나가 AI를 기다리며 붙잡는 사진 합계(512MB 인스턴스, base64·SDK JSON으로 몇 배가 된다)
+JPEG_HEADER_BYTES = 64_000  # SOFn은 이 안에서만 찾는다
+JPEG_STANDALONE = (0x01, *range(0xD0, 0xD9))  # 길이 없는 마커(TEM·RSTn·SOI)
+IMAGE_TOTAL_SECONDS = 10  # 사진 요청 전체(페이지 요청 8초와 따로)
+MAX_IMAGE_SIDE = 8000  # AI API가 한 변이 이보다 긴 사진을 거절한다
+JPEG_SOF = {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
+# ponytail: 파일 이름·경로 규칙으로 꾸밈 이미지를 거른다. 엉뚱한 사진이 자주 섞이면 본문 영역(article·가장 긴 글 블록) 안의 <img>만 고르거나 크기(width·height) 속성을 본다.
+# loading은 요청 목록 밖에서 더했다: eggiscoming.com 게시판은 본문 사진보다 앞에 15KB가 넘는 로딩 문구 PNG 4장이 있다.
+DECOR_IMAGE = re.compile(r"logo|icon|btn|button|banner|sprite|profile|emoji|avatar|loading", re.I)
 YOUTUBE_HOSTS = {"youtube.com", "music.youtube.com", "youtube-nocookie.com"}
 YOUTUBE_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 CHANNEL_ID = re.compile(r"UC[A-Za-z0-9_-]{22}")
@@ -162,7 +178,7 @@ def _remaining(deadline):
     return left
 
 
-def _read(res, deadline, adapter):
+def _read(res, deadline, adapter, limit):
     """본문을 작게(read1) 읽으며 크기·남은 시간을 매번 확인한다. 조금씩 흘려 보내는 서버도 제한 시간 안에 끊긴다."""
     chunks, size = [], 0
     while True:
@@ -173,7 +189,7 @@ def _read(res, deadline, adapter):
         if not chunk:
             return b"".join(chunks)
         size += len(chunk)
-        if size > MAX_BYTES:
+        if size > limit:
             raise FetchError("TooLarge")
         chunks.append(chunk)
 
@@ -209,17 +225,18 @@ def _check_public_url(url):
     return _host_key(host), infos[0][4][0]  # 첫 주소 하나에만 연결한다
 
 
-def _fetch(url, params=None, public=False, json=None, headers=None, total=None):
+def _fetch(url, params=None, public=False, image=False, seconds=None, json_body=None, headers=None):
     """(본문, charset, 최종 주소). public이면 매 단계 주소를 검사하고 리다이렉트를 따라간다.
-    json을 주면 POST로 보낸다. total은 전체 제한 시간(기본 TOTAL_SECONDS)."""
-    total = total or TOTAL_SECONDS
+    image면 Content-Type을 보지 않고(부른 쪽이 파일 시그니처로 본다) MAX_IMAGE_BYTES까지만 읽는다. seconds는 리다이렉트까지 합친 제한 시간(기본 TOTAL_SECONDS).
+    json_body를 주면 POST로 보낸다(headers는 기본 헤더에 더한다)."""
+    seconds = TOTAL_SECONDS if seconds is None else seconds
     addresses = {} if public else None
     adapter = PublicOnlyAdapter(addresses)
     session = requests.Session()
     session.trust_env = False  # 프록시 환경변수·.netrc를 쓰지 않는다
     session.mount("https://", adapter)
-    deadline = time.monotonic() + total
-    watchdog = threading.Timer(total, adapter.expire)
+    deadline = time.monotonic() + seconds
+    watchdog = threading.Timer(seconds, adapter.expire)
     watchdog.daemon = True
     watchdog.start()
     try:
@@ -230,7 +247,7 @@ def _fetch(url, params=None, public=False, json=None, headers=None, total=None):
                 addresses[host] = ip
             timeout = (CONNECT_SECONDS, _remaining(deadline))
             res = session.request(
-                "POST" if json is not None else "GET", url, params=params, json=json, headers={**HEADERS, **(headers or {})},
+                "POST" if json_body is not None else "GET", url, params=params, json=json_body, headers={**HEADERS, **(headers or {})},
                 timeout=timeout, allow_redirects=False, stream=True,
             )
             with res:
@@ -242,11 +259,11 @@ def _fetch(url, params=None, public=False, json=None, headers=None, total=None):
                     continue
                 if res.status_code != 200:
                     raise FetchError(f"HTTP{res.status_code}")
-                if public and not res.headers.get("Content-Type", "").lower().startswith("text/html"):
+                if public and not image and not res.headers.get("Content-Type", "").lower().startswith("text/html"):
                     raise FetchError("NotHtml")
-                return _read(res, deadline, adapter), _charset(res), url
+                return _read(res, deadline, adapter, MAX_IMAGE_BYTES if image else MAX_BYTES), _charset(res), url
         raise FetchError("TooManyRedirects")
-    except (requests.RequestException, urllib3.exceptions.HTTPError, OSError) as e:
+    except (requests.RequestException, urllib3.exceptions.HTTPError, OSError, ValueError) as e:  # ValueError: 모양이 틀린 Location(urljoin)
         raise FetchError("TooSlow" if adapter.expired else type(e).__name__) from None
     finally:
         watchdog.cancel()
@@ -254,17 +271,73 @@ def _fetch(url, params=None, public=False, json=None, headers=None, total=None):
         session.close()
 
 
-def fetch_fixed(url, params=None, json=None, headers=None, total=None):
-    """정해 둔 호스트(유튜브 API·유튜브·인스타그램·쿠팡 API)만, 리다이렉트 없이 요청한다. (본문, charset). json을 주면 POST."""
+def fetch_fixed(url, params=None, json_body=None, headers=None, seconds=None):
+    """정해 둔 호스트(유튜브 API·유튜브·인스타그램·쿠팡 API)만, 리다이렉트 없이 요청한다. (본문, charset). json_body를 주면 POST."""
     parts = urlsplit(url)
     if parts.scheme != "https" or parts.hostname not in FIXED_HOSTS or parts.netloc != parts.hostname:
         raise FetchError("HostNotAllowed")
-    return _fetch(url, params, json=json, headers=headers, total=total)[:2]
+    return _fetch(url, params, json_body=json_body, headers=headers, seconds=seconds)[:2]
 
 
 def fetch_public_page(url):
     """사용자가 준 일반 주소(블로그 등)를 요청한다. (본문, charset, 검사를 통과한 최종 주소)."""
     return _fetch(url, public=True)
+
+
+def image_size(data):
+    """파일 머리에서 (가로, 세로)를 읽는다(JPEG SOFn · PNG IHDR · WEBP VP8/VP8L/VP8X). 읽지 못하면 None."""
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return (int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")) if data[12:16] == b"IHDR" and len(data) >= 24 else None
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        chunk, body = data[12:16], data[20:]
+        if chunk == b"VP8 " and body[3:6] == b"\x9d\x01\x2a" and len(body) >= 10:
+            return int.from_bytes(body[6:8], "little") & 0x3FFF, int.from_bytes(body[8:10], "little") & 0x3FFF
+        if chunk == b"VP8L" and body[:1] == b"\x2f" and len(body) >= 5:
+            bits = int.from_bytes(body[1:5], "little")
+            return (bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1
+        if chunk == b"VP8X" and len(body) >= 10:
+            return int.from_bytes(body[4:7], "little") + 1, int.from_bytes(body[7:10], "little") + 1
+        return None
+    if data[:2] != b"\xff\xd8":
+        return None
+    data, i = data[:JPEG_HEADER_BYTES], 2
+    while i + 4 <= len(data):  # 마커(0xFF xx)와 길이(2바이트)를 따라 SOFn까지 건너뛴다. i는 매번 1 이상 늘어 끝난다
+        if data[i] != 0xFF:
+            return None
+        marker = data[i + 1]
+        if marker == 0xFF:  # 채움 바이트
+            i += 1
+            continue
+        if marker in JPEG_STANDALONE:
+            i += 2
+            continue
+        if marker in JPEG_SOF:
+            return (int.from_bytes(data[i + 7 : i + 9], "big"), int.from_bytes(data[i + 5 : i + 7], "big")) if i + 9 <= len(data) else None
+        i += 2 + int.from_bytes(data[i + 2 : i + 4], "big")
+    return None
+
+
+def page_images(urls):
+    """블로그 본문 사진 후보 주소를 앞에서부터 8개까지 차례로 받아 [(bytes, media_type)] 최대 5장.
+    페이지와 같은 공인 주소 검사·리다이렉트 3번, 한 장 1.5MB·합계 6MB(다음 사진이 넘기면 멈춘다). JPEG·PNG·WEBP 시그니처이고 15KB 이상, 머리에서 읽은 가로·세로가 8000px 이하만.
+    실패한 사진은 건너뛴다(모두 걸러지면 빈 목록 → 글만 보낸다).
+    사진 요청 전체가 10초를 넘기지 않게 한 장마다 남은 시간만 준다. 사진은 저장하지 않는다."""
+    images, total, deadline = [], 0, time.monotonic() + IMAGE_TOTAL_SECONDS
+    for url in urls[:MAX_IMAGE_CANDIDATES]:
+        left = deadline - time.monotonic()
+        if left <= 0 or len(images) == MAX_PAGE_IMAGES:
+            break
+        try:
+            data = _fetch(url, public=True, image=True, seconds=left)[0]
+        except FetchError:
+            continue
+        media_type, size = sniff_image_type(data), image_size(data)
+        if media_type and len(data) >= MIN_IMAGE_BYTES and size and 0 < min(size) and max(size) <= MAX_IMAGE_SIDE:
+            if total + len(data) > MAX_IMAGE_TOTAL_BYTES:
+                break
+            images.append((data, media_type))
+            total += len(data)
+    return images
 
 
 def parse_link(value):
@@ -462,7 +535,7 @@ class _Page(HTMLParser):
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.meta, self.title, self.parts = {}, None, []
+        self.meta, self.title, self.parts, self.images = {}, None, [], []
         self._open, self._title = [], None
 
     def end_title(self):
@@ -481,6 +554,11 @@ class _Page(HTMLParser):
                 self.meta.setdefault(key, content)
         elif tag == "title" and self.title is None:
             self._title = []
+        elif tag == "img":  # 글과 달리 form 안의 사진도 모은다(카페24 게시판은 글 전체가 <form> 안에 있다)
+            attrs = dict(attrs)
+            src = attrs.get("data-src") or attrs.get("src")  # 늦게 불러오는 사진은 src가 자리 표시 이미지다
+            if src:
+                self.images.append(src)
         if tag not in self.VOID and tag != "title":
             self._open.append(tag)
         self._separator(tag)
@@ -526,13 +604,32 @@ def instagram_post(shortcode):
     return {"caption": caption[:MAX_TEXT], "title": title, "thumbnail_url": _https(page.meta.get("og:image"))}
 
 
+def _image_candidates(sources, base):
+    """<img> 주소 → 최종 주소 기준 절대 https 주소. svg·gif·꾸밈 이름(DECOR_IMAGE)은 빼고, 중복 없이 8개까지."""
+    found = []
+    for src in sources:
+        try:
+            url = urljoin(base, src.strip())
+            parts = urlsplit(url)
+        except ValueError:
+            continue
+        path = parts.path.lower()
+        if len(url) > MAX_LINK or parts.scheme != "https" or path.endswith((".svg", ".gif")) or DECOR_IMAGE.search(path) or url in found:
+            continue  # http 주소는 https로 바꾸지 않고 뺀다
+        found.append(url)
+        if len(found) == MAX_IMAGE_CANDIDATES:
+            break
+    return found
+
+
 def web_page(url):
-    """공개 웹 페이지의 제목·사이트 이름·본문 글, 검사를 통과한 최종 주소. 사진은 받지 않는다."""
+    """공개 웹 페이지의 제목·사이트 이름·본문 글·본문 사진 후보 주소, 검사를 통과한 최종 주소. 사진은 여기서 받지 않는다(page_images)."""
     body, encoding, final_url = fetch_public_page(url)
     page = _parse_html(body, encoding)
     return {
         "title": _label(page.meta.get("og:title") or page.title),
         "site_name": _label(page.meta.get("og:site_name")) or urlsplit(final_url).hostname,
         "text": page.text(),
+        "images": _image_candidates(page.images, final_url),
         "url": final_url,
     }

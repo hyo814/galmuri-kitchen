@@ -74,9 +74,9 @@ def deeplink(plain, access_key, secret_key):
     """일반 쿠팡 주소 → 파트너스 단축 링크. 실패하면 FetchError·ValueError 계열 예외."""
     body, _ = outbound.fetch_fixed(
         API_HOST + DEEPLINK_PATH,
-        json={"coupangUrls": [plain]},
+        json_body={"coupangUrls": [plain]},
         headers={"Authorization": authorization(access_key, secret_key, "POST", DEEPLINK_PATH)},
-        total=TIMEOUT_SECONDS,
+        seconds=TIMEOUT_SECONDS,
     )
     data = json.loads(body)
     if str(data.get("rCode")) != "0":
