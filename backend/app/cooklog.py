@@ -208,7 +208,8 @@ def new_photo_key(user_id, ext):
 
 
 def parse_usages(value):
-    """[{ingredient_id, amount}] 0~MAX_USAGES개, id 겹치지 않음(아니면 BAD_REQUEST), amount는 0 < x ≤ MAX_AMOUNT 유한수(아니면 AMOUNT_ERROR)."""
+    """[{ingredient_id, amount}] 0~MAX_USAGES개, id 겹치지 않음(아니면 BAD_REQUEST), amount는 소수 셋째 자리로 맞춘 뒤 0 < x ≤ MAX_AMOUNT 유한수(아니면 AMOUNT_ERROR).
+    셋째 자리로 맞춰야 뺀 양(used)과 되돌린 양이 재고 반올림(round 3)과 어긋나지 않는다."""
     if not isinstance(value, list) or len(value) > MAX_USAGES:
         abort(400, food_logs.BAD_REQUEST)
     seen = set()
@@ -218,7 +219,10 @@ def parse_usages(value):
             abort(400, food_logs.BAD_REQUEST)
         seen.add(item_id)
         amount = usage.get("amount")
-        if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(amount) or not 0 < amount <= MAX_AMOUNT:
+        if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(amount):
+            abort(400, AMOUNT_ERROR)
+        usage["amount"] = amount = round(amount, 3)
+        if not 0 < amount <= MAX_AMOUNT:
             abort(400, AMOUNT_ERROR)
     return value
 
@@ -239,6 +243,7 @@ def create_cook_log():
     """multipart data(JSON) + 선택 image → 201 {log, deducted_names}. 순서는 스펙 29절 구현 세부(요리 일기 저장).
     ponytail: R2에 올리는 동안(최대 수 초) 사용자 잠금·재료 행 잠금을 잡고 있다 — 같은 사용자 요청만 기다린다."""
     data = _form_json()
+    lock_user(g.user.id)  # 레시피(사 먹으면 얼마)·재료 행보다 먼저 — 모든 쓰기가 같은 순서로 잠근다(교착 방지)
     recipe = get_owned_or_404(Recipe, food_logs._id(data.get("recipe_id")))
     servings = integer(data.get("servings"), "인분은", 1, 20)
     cook_log = CookLog(user_id=g.user.id, recipe=recipe, title=recipe.title, servings=servings)
@@ -264,8 +269,7 @@ def create_cook_log():
             abort(503, storage.UPLOAD_UNAVAILABLE)
         image = photos.read_image(MAX_PHOTO_BYTES)
 
-    lock_user(g.user.id)
-    if CookLog.query.filter_by(user_id=g.user.id).count() >= MAX_COOK_LOGS:
+    if CookLog.query.filter_by(user_id=g.user.id).count() >= MAX_COOK_LOGS:  # 상한 확인은 사용자 잠금 안에서(결정 20)
         abort(400, f"요리 일기는 {MAX_COOK_LOGS}개까지 남길 수 있어요.")
     if image is not None:
         check_photo_room(g.user, len(image[0]))
@@ -286,7 +290,8 @@ def create_cook_log():
     for usage in usages:
         item = stock[usage["ingredient_id"]]
         before, amount = item.quantity, usage["amount"]
-        used, left = min(amount, before), round(before - amount, 3)
+        left = round(before - amount, 3)
+        used = min(amount, before) if left < 0.001 else round(before - left, 3)  # 남는 줄은 실제로 줄어든 양 — 되돌리면 정확히 원래 수량
         row = by_id.get(item.id)
         if row is not None:
             seasoning = row["seasoning"]
@@ -348,12 +353,13 @@ def undo_cook_log(log_id):
     cook_log = get_owned_or_404(CookLog, log_id)
     if utcnow() > aware(cook_log.created_at) + timedelta(seconds=UNDO_SECONDS):
         abort(400, UNDO_EXPIRED)
-    restored, skipped = [], []
+    restored, skipped, fallback = [], [], None
     for item in cook_log.items:
         if item.removed:
             location = db.session.get(StorageLocation, item.location_id) if item.location_id is not None else None
             if location is None or location.user_id != g.user.id:
-                location = default_location(g.user.id)
+                fallback = fallback or default_location(g.user.id)
+                location = fallback
             db.session.add(Ingredient(
                 user_id=g.user.id, name=item.name, quantity=item.quantity_before, unit=item.unit, location_id=location.id,
                 purchased_on=item.purchased_on, expires_on=item.expires_on, price=item.price, price_quantity=item.price_quantity,
@@ -363,7 +369,7 @@ def undo_cook_log(log_id):
                 db.session.delete(item.removal)
         elif item.used is not None:
             ingredient = (
-                Ingredient.query.filter_by(id=item.ingredient_id, user_id=g.user.id).with_for_update().first()
+                Ingredient.query.filter_by(id=item.ingredient_id, user_id=g.user.id).with_for_update().populate_existing().first()
                 if item.ingredient_id is not None else None
             )
             if ingredient is None or ingredient.unit != item.unit:

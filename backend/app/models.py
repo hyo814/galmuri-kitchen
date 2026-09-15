@@ -502,7 +502,7 @@ class CookLogItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     cook_log_id = db.Column(db.Integer, db.ForeignKey("cook_logs.id", ondelete="CASCADE"), nullable=False, index=True)
     ingredient_id = db.Column(db.Integer, db.ForeignKey("ingredients.id", ondelete="SET NULL"), index=True)  # 남은 재료만(지운 재료는 처음부터 NULL)
-    removal_id = db.Column(db.Integer, db.ForeignKey("ingredient_removals.id", ondelete="SET NULL"))
+    removal_id = db.Column(db.Integer, db.ForeignKey("ingredient_removals.id", ondelete="SET NULL"), index=True)  # 다 먹었어요 기록을 지울 때 SET NULL이 전체를 훑지 않게
     name = db.Column(db.String(50), nullable=False)
     amount_text = db.Column(db.String(30))  # 재고에 없던 재료의 레시피 양
     used = db.Column(db.Float)  # 뺀 양(재고 단위)

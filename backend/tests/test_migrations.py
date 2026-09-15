@@ -551,7 +551,7 @@ def test_cook_logs_migration_adds_and_removes_tables(app):
         assert ("photo_key",) in uniques
         assert {
             "ix_cook_logs_recipe_id", "ix_cook_logs_food_log_id", "ix_cook_logs_user_id_cooked_on",
-            "ix_cook_log_items_cook_log_id", "ix_cook_log_items_ingredient_id",
+            "ix_cook_log_items_cook_log_id", "ix_cook_log_items_ingredient_id", "ix_cook_log_items_removal_id",
         } <= index_names
 
         downgrade(directory=MIGRATIONS, revision="h1p1r1i1c1e1")

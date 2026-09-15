@@ -72,9 +72,11 @@ def upgrade():
     )
     op.create_index(op.f("ix_cook_log_items_cook_log_id"), "cook_log_items", ["cook_log_id"], unique=False)
     op.create_index(op.f("ix_cook_log_items_ingredient_id"), "cook_log_items", ["ingredient_id"], unique=False)
+    op.create_index(op.f("ix_cook_log_items_removal_id"), "cook_log_items", ["removal_id"], unique=False)
 
 
 def downgrade():
+    op.drop_index(op.f("ix_cook_log_items_removal_id"), table_name="cook_log_items")
     op.drop_index(op.f("ix_cook_log_items_ingredient_id"), table_name="cook_log_items")
     op.drop_index(op.f("ix_cook_log_items_cook_log_id"), table_name="cook_log_items")
     op.drop_table("cook_log_items")

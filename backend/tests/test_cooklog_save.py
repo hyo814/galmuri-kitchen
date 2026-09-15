@@ -162,7 +162,7 @@ def test_eat_out_keeps_recipe_source_and_blank_does_not_clear(client, login, app
 
 
 def test_food_log_created_and_slot_link(client, login, app, monkeypatch):
-    login()
+    owner = login()
     recipe = add_recipe(client, "김치찌개", [{"name": "김치", "amount": "300g"}])
     other = add_recipe(client, "된장찌개", [{"name": "된장", "amount": "1큰술"}])
     res = cook(client, recipe["id"], [], food_log=True, meal="dinner")
@@ -204,6 +204,10 @@ def test_food_log_created_and_slot_link(client, login, app, monkeypatch):
     assert len(client.get("/api/food-logs?date=2026-09-15").get_json()["logs"]) == before
 
     assert error(cook(client, recipe["id"], [], food_log=True, meal_slot_id=other_slot["id"])) == (400, BAD)
+    login("other")
+    others_recipe = add_recipe(client, "김치찌개", [{"name": "김치", "amount": "300g"}])
+    assert cook(client, others_recipe["id"], [], food_log=True, meal_slot_id=slot["id"]).status_code == 404  # 남의 칸
+    as_user(client, owner)
     assert error(cook(client, recipe["id"], [], food_log=True)) == (400, "끼니를 골라주세요.")
 
     tofu = stock(client, "두부", 1, "모")
@@ -411,6 +415,33 @@ def test_undo_restores_quantities_and_deleted_rows(client, login, app):
     assert counts(app) == (0, 0, 0)
     assert not any(os.path.exists(f) for f in files)
     assert client.post(f"/api/cook-logs/{log['id']}/undo").status_code == 404
+
+
+def test_undo_slot_link_clears_eaten(client, login):
+    login()
+    recipe = add_recipe(client, "김치찌개", [{"name": "김치", "amount": "300g"}])
+    plan = make_plan(client).get_json()
+    slot = put_slot(client, plan["id"], meal="dinner", recipe_id=recipe["id"]).get_json()
+
+    def eaten_log_id():
+        return next(s["eaten_log_id"] for s in client.get(f"/api/meal-plans/{plan['id']}").get_json()["slots"] if s["id"] == slot["id"])
+
+    log = cook(client, recipe["id"], [], food_log=True, meal_slot_id=slot["id"]).get_json()["log"]
+    assert eaten_log_id() == log["food_log_id"] is not None
+    assert client.post(f"/api/cook-logs/{log['id']}/undo").status_code == 200
+    assert eaten_log_id() is None
+    assert client.get("/api/food-logs?date=2026-09-15").get_json()["logs"] == []
+
+
+def test_tiny_amount_undo_restores_exactly(client, login):
+    login()
+    recipe = add_recipe(client, "소금물", [{"name": "소금", "amount": "약간"}])
+    salt = stock(client, "소금", 2, "kg")
+    log = cook(client, recipe["id"], [{"ingredient_id": salt, "amount": 0.0005}]).get_json()["log"]
+    assert log["items"][0]["used"] == round(2 - quantities(client)["소금"][0], 3)
+    assert client.post(f"/api/cook-logs/{log['id']}/undo").status_code == 200
+    assert quantities(client)["소금"] == (2.0, "kg")
+    assert error(cook(client, recipe["id"], [{"ingredient_id": salt, "amount": 0.0004}])) == (400, "쓴 양은 0보다 커야 해요.")
 
 
 def test_undo_adds_on_top_of_edits_and_skips_changed(client, login):
