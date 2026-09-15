@@ -716,7 +716,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 ### 정리 작업 결정 (추가: 2026-09-14, 시안 승인)
 - **아직 없는 기능은 만들 때 넣는다.** 표의 항목 중 기능이 없는 행(먹은 기록·요리 기록·집밥 리포트·알림 등)은 지금 더보기에 자리만 만들지 않는다.
 - **재고 화면 톱니바퀴:** `보관 위치`·`필수품`만 남긴다.
-- **재료 삭제 이유:** 삭제 확인에서 `다 먹었어요`/`버렸어요`를 고른 뒤 지운다(선택, 안 고르면 이유 없이 삭제). 서버는 `DELETE /api/ingredients/<id>?reason=eaten|discarded`로 받아 `ingredient_removals`(4절)에 이름·이유를 남긴다.
+- **재료 삭제 이유:** 삭제 확인 시트에서 `다 먹었어요 · 버렸어요 · 그냥 지우기`(기본 그냥 지우기, 5단계 시안 6) 중 고른 뒤 지운다. 서버는 `DELETE /api/ingredients/<id>?reason=eaten|discarded`로 받아 `ingredient_removals`(4절)에 이름·이유를 남기고(`그냥 지우기`는 이유 없이 지워 기록을 남기지 않음), 바뀌지 않는다(5단계 Task 12).
 - **내보내기 내용:** 지금은 재고·내 레시피·내 양념 비율·장보기·식단·먹은 기록. 요리 기록은 5단계에서 CSV를 추가한다. `GET /api/export/summary`·`GET /api/export`(5절).
   - `ingredients.csv`: 이름, 수량, 단위, 보관 위치, 구입일(모르면 빈 칸, 맨 뒤) (2026-09-15, 사용자 승인 시안 docs/design/scan-multi/), 유통기한, 가격(원)
   - `recipes.csv`(레시피 한 줄): 제목, 인분, 재료(`두부 1모; 대파 1/2대`), 만드는 법(칸 안 줄바꿈 `1. …`), 출처, 출처 링크, 사진 주소(주소만, 사진 파일은 넣지 않음)
@@ -810,3 +810,4 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **사 먹으면 얼마 칸(29절 결정 11):** `recipes.eat_out_price`(1인분, 원, 0~1,000,000)·`eat_out_source`(`user`|`ai`|`sample`). `recipe_json`에만 넣고, `PUT /api/recipes/<id>`는 이 칸을 받지 않는다(폼에서만 바꾼다, Task 4·5).
 - **마이그레이션 id(29절 결정 31):** Task 1 `h1p1r1i1c1e1`(down `g3f3l3p3h3o3`), Task 4 `h2c2o2o2k2l2`(down `h1p1r1i1c1e1`).
 - **`amounts.in_unit(amount_text, unit)`(23절 D2):** 레시피 양 글자를 재고 단위 수량으로 바꾼다. `parse_amount`로 양과 `1{unit}`을 각각 읽어 단위(대소문자 무시)가 같으면 배수를, 다르거나 못 읽으면 `None`을 돌려준다. 재고 단위에 숫자가 들었으면(`30구`처럼) 매칭하지 않고 `None`.
+- **Task 12 — 재료 지울 때 이유 시트, 화면만·결정 25):** 서버는 바꾸지 않는다(`DELETE /api/ingredients/<id>?reason=eaten|discarded`·`ingredient_removals` 그대로). 재고 `IngredientForm.tsx`의 삭제 확인 시트를 시안 6으로: 제목 `{이름} 지우기`, 설명 `구입 9일째 · 냉장`(`days_since_purchase`가 없으면 `냉장`만, `Fridge.tsx` 목록의 `구입 N일째`와 같은 값), 라디오 그룹(`role="radiogroup"`) 세 줄 `다 먹었어요`·`버렸어요`(`집밥 리포트에 세요`)·`그냥 지우기`(기본, ↑↓ 로빙 tabindex). 버튼 `취소`(`.btn.outline`, 기존 유지) + `.btn.danger-text`(연빨강 배경·테두리) `지우기`. `이 재료 삭제` 버튼은 `그냥 지우기`로 열리고, 수량 0 저장은 기존대로 `다 먹었어요`로 연다.
