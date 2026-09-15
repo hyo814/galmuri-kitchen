@@ -147,7 +147,7 @@ def test_demo_login_seeds_cook_diary(demo_app):
     assert (first["saved"], first["rating"], first["memo"]) == (10400, 4, "두부 마저 썼어요")
     assert (second["excluded_count"], second["saved"]) == (2, 14760)
 
-    month = seoul_today().strftime("%Y-%m")
+    month = (seoul_today() - timedelta(days=1)).strftime("%Y-%m")  # 애호박은 하루 전에 버린 걸로 들어가 매달 1일엔 지난달 리포트에 있다
     report = a.get(f"/api/cook-report?month={month}").get_json()
     assert "애호박" in report["discarded_names"]
 
