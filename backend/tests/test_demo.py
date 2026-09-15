@@ -10,6 +10,7 @@ from app import ai, demo, outbound, scan
 from app.ingredients import SEOUL, seoul_today
 from app.models import (
     AiCall,
+    FoodLog,
     Ingredient,
     ItemRule,
     MealPlan,
@@ -92,6 +93,43 @@ def test_demo_users_are_isolated(demo_app):
     assert a_item not in b_ids
     assert b.delete(f"/api/ingredients/{a_item}").status_code == 404
     assert len(a.get("/api/ingredients").get_json()) == len(demo.INGREDIENTS)
+
+
+def test_demo_login_seeds_food_logs(demo_app, make_app):
+    a, b = new_client(demo_app, "10.0.0.1"), new_client(demo_app, "10.0.0.2")
+    a_id = a.post("/api/demo-login").get_json()["id"]
+    b_id = b.post("/api/demo-login").get_json()["id"]
+    with demo_app.app_context():
+        assert FoodLog.query.filter_by(user_id=a_id).count() == len(demo.FOOD_LOGS) == 3
+        assert FoodLog.query.filter_by(user_id=b_id).count() == 3
+        a_ids = {log.id for log in FoodLog.query.filter_by(user_id=a_id)}
+        b_ids = {log.id for log in FoodLog.query.filter_by(user_id=b_id)}
+        assert a_ids.isdisjoint(b_ids)  # 다른 체험 계정과 섞이지 않음
+
+    today = seoul_today()
+    yesterday = (today - timedelta(days=1)).isoformat()
+
+    # ① 기존 demo_app(DEV_MODE=False, 키 없음 = 영양 off): pending은 값 없이 꺼진다
+    body = a.get(f"/api/food-logs?date={yesterday}").get_json()
+    by_meal = {log["meal"]: log for log in body["logs"]}
+    dinner = by_meal["dinner"]
+    assert dinner["title"] == "김치찌개" and dinner["recipe_id"] is not None
+    assert (dinner["nutrition"], dinner["nutrition_pending"]) == (None, False)
+    assert body["nutrition_pending_recipe_ids"] == []
+    lunch = by_meal["lunch"]
+    assert (lunch["title"], lunch["place"], lunch["memo"]) == ("제육덮밥", "out", "회사 앞 · 조금 짰어요")
+
+    today_body = a.get(f"/api/food-logs?date={today.isoformat()}").get_json()
+    assert [log["title"] for log in today_body["logs"]] == ["토스트"]
+
+    # ② sample 모드(DEV_MODE=True, 키 없음): 캐시에 FoodSearch가 없어 김치찌개는 계산 중으로 남는다
+    sample_app = make_app(DEMO_LOGIN=True, DEV_MODE=True, DEMO_IP_HOURLY_LIMIT=3, DEMO_IP_DAILY_LIMIT=10)
+    sc = new_client(sample_app)
+    sc.post("/api/demo-login")
+    sample_body = sc.get(f"/api/food-logs?date={yesterday}").get_json()
+    sample_dinner = next(log for log in sample_body["logs"] if log["meal"] == "dinner")
+    assert sample_dinner["nutrition_pending"] is True
+    assert sample_dinner["recipe_id"] in sample_body["nutrition_pending_recipe_ids"]
 
 
 def test_demo_login_seeds_shopping_list(demo_app):

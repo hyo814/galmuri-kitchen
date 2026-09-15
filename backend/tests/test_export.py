@@ -6,7 +6,7 @@ from datetime import date, datetime, time, timedelta, timezone
 import app.export as export_module
 from app import scan
 from app.ingredients import SEOUL, seoul_today
-from app.models import AiCall, MealSlot, PublicRecipe, ShoppingItem, ShoppingNote, ShoppingNotePhoto, User, db, utcnow
+from app.models import AiCall, FoodLog, FoodLogPhoto, MealSlot, PublicRecipe, ShoppingItem, ShoppingNote, ShoppingNotePhoto, User, db, utcnow
 
 RECIPE = {
     "title": "두부조림",
@@ -28,6 +28,7 @@ SEASONING_HEADER = ["이름", "기준", "기준 양", "기준 단위", "주재�
 SHOPPING_HEADER = ["이름", "수량", "단위", "생활용품", "살 날", "넣을 위치", "체크", "산 날(재고에 넣은 날)", "출처", "출처 이름", "담은 날"]
 MEMO_HEADER = ["장소", "메모", "사진 수", "사진 파일 이름", "고친 시각"]
 MEALS_HEADER = ["식단 이름", "날짜", "끼니", "요리", "인분", "레시피에서", "1인분 추정 kcal"]
+FOOD_LOG_HEADER = export_module.FOOD_LOG_HEADER
 
 
 def read_zip(res):
@@ -104,6 +105,7 @@ def test_summary_counts_only_my_data(client, login, app):
     client.post("/api/shopping/notes", json={"body": "남의 메모"})
     other_plan = add_plan(client)
     fill_slot(client, other_plan["id"], title="남의 식단")
+    client.post("/api/food-logs", json={"eaten_on": day(), "meal": "dinner", "title": "남의 기록"})
     login()
     client.post("/api/ingredients", json={"name": "두부", "purchased_on": day()})
     client.post("/api/recipes", json=RECIPE)
@@ -115,6 +117,8 @@ def test_summary_counts_only_my_data(client, login, app):
     plan = add_plan(client)
     fill_slot(client, plan["id"], meal="breakfast", title="토스트")
     fill_slot(client, plan["id"], meal="lunch", title="김밥")
+    client.post("/api/food-logs", json={"eaten_on": day(), "meal": "dinner", "title": "제육덮밥"})
+    client.post("/api/food-logs", json={"eaten_on": day(1), "meal": "lunch", "title": "김밥"})
     me = user_id(app)
     with app.app_context():  # 7일 안에 산 것은 shopping.csv에 들어가므로 센다, 7일 지난 것은 세지 않는다
         db.session.add(ShoppingItem(user_id=me, name="계란", stocked_at=seoul_noon(3)))
@@ -129,6 +133,7 @@ def test_summary_counts_only_my_data(client, login, app):
         "shopping": 3,
         "memos": 1,
         "meals": 2,
+        "food_logs": 2,
         "limit": 5,
         "remaining": 5,
     }
@@ -145,6 +150,7 @@ def test_export_empty_data_has_header_only_csvs(client, login):
         "shopping.csv": [SHOPPING_HEADER],
         "shopping_memos.csv": [MEMO_HEADER],
         "meals.csv": [MEALS_HEADER],
+        "food_logs.csv": [FOOD_LOG_HEADER],
     }
 
 
@@ -217,7 +223,9 @@ def test_export_zip_contents(client, login, app):
     assert res.headers["Cache-Control"] == "no-store"
     assert res.headers["X-Content-Type-Options"] == "nosniff"
     files = read_zip(res)
-    assert set(files) == {"ingredients.csv", "recipes.csv", "seasonings.csv", "shopping.csv", "shopping_memos.csv", "meals.csv"}
+    assert set(files) == {
+        "ingredients.csv", "recipes.csv", "seasonings.csv", "shopping.csv", "shopping_memos.csv", "meals.csv", "food_logs.csv",
+    }
 
     assert files["ingredients.csv"] == [  # 구입일, id 순(구입일 모름은 맨 뒤)
         INGREDIENT_HEADER,
@@ -269,6 +277,58 @@ def test_export_zip_contents(client, login, app):
     assert client.get("/api/export/summary").get_json()["remaining"] == 4
     usage = client.get("/api/ai-usage").get_json()
     assert (usage["scan"]["used"], usage["recipe"]["used"]) == (0, 0)
+
+
+def test_export_includes_food_logs_csv(client, login, app):
+    login("other")
+    with app.app_context():
+        other = user_id(app, "other")
+        db.session.add(FoodLog(user_id=other, eaten_on=seoul_today() - timedelta(days=1), meal="dinner", source="manual", title="남의 기록"))
+        db.session.commit()
+    login()
+    with app.app_context():
+        me = user_id(app)
+        dinner = FoodLog(
+            user_id=me, eaten_on=seoul_today() - timedelta(days=1), meal="dinner", source="manual", title="제육덮밥",
+            food_code="D1", servings=0.5, place="out", rating=3, memo="=1+1",
+            kcal=370, carbs_g=44.0, protein_g=None, fat_g=None, sugars_g=11.0, sodium_mg=820, approx=True,
+            created_at=seoul_noon(1) + timedelta(hours=6),
+        )
+        dinner.photos = [
+            FoodLogPhoto(photo_key=f"foodlog/{me}/a.jpg", size=10),
+            FoodLogPhoto(photo_key=f"foodlog/{me}/b.png", size=20),
+        ]
+        db.session.add(dinner)
+        breakfast = FoodLog(
+            user_id=me, eaten_on=seoul_today() - timedelta(days=1), meal="breakfast", source="manual", title=None,
+            created_at=seoul_noon(1) - timedelta(hours=5),
+        )
+        db.session.add(breakfast)
+        snack = FoodLog(
+            user_id=me, eaten_on=seoul_today() - timedelta(days=2), meal="snack", source="meal_plan", title="라면",
+            servings=1.0, created_at=seoul_noon(2),
+        )
+        db.session.add(snack)
+        db.session.commit()
+
+    files = read_zip(client.get("/api/export"))
+    assert files["food_logs.csv"][0] == FOOD_LOG_HEADER
+    rows = files["food_logs.csv"][1:]
+    assert [row[:3] for row in rows] == [
+        [day(2), "간식", "라면"],
+        [day(1), "아침", "사진 기록"],
+        [day(1), "저녁", "제육덮밥"],
+    ]
+    breakfast_row, dinner_row = rows[1], rows[2]
+    assert dinner_row == [
+        day(1), "저녁", "제육덮밥", "외식", "0.5", "", "370", "44", "", "", "11", "820", "예", "3", "'=1+1", "직접",
+        "2", "a.jpg; b.png", kst(seoul_noon(1) + timedelta(hours=6)),
+    ]
+    assert breakfast_row == [
+        day(1), "아침", "사진 기록", "", "", "", "", "", "", "", "", "", "", "", "", "직접",
+        "0", "", kst(seoul_noon(1) - timedelta(hours=5)),
+    ]
+    assert rows[0][15] == "식단"  # 남긴 방법
 
 
 def test_safe_cell_blocks_formulas():
