@@ -99,6 +99,7 @@ test.describe("먹은 기록", () => {
     await expect(preview).toBeVisible();
 
     await amountField.getByRole("button", { name: "g" }).click();
+    await expect(addSheet.getByLabel("먹은 양(g)")).not.toHaveValue(""); // g로 바뀐 기본값이 그려진 뒤에 기준 글자를 읽는다
     const beforeGrams = (await preview.textContent()) ?? "";
     await addSheet.getByLabel("먹은 양(g)").fill("300");
     await expect(preview).not.toHaveText(beforeGrams); // 무게를 바꾸면 kcal 미리보기가 다시 계산된다

@@ -90,7 +90,9 @@ test("쇼핑몰에서 찾기를 누르면 쇼핑몰 링크 시트가 열린다",
   const dialog = page.getByRole("dialog"); // 시트 안 링크만(탭 막대에도 "장보기" 등 링크가 있어 페이지 전체에서 찾으면 안 된다)
   await expect(dialog.getByRole("heading", { name: "두부 찾기" })).toBeVisible();
   await expect(dialog.getByRole("link", { name: "쿠팡 검색 결과로 두부 찾기 (새 창)" })).toBeVisible();
-  await expect(dialog.getByRole("link")).toHaveCount(7); // 쇼핑몰 7곳, 각각 최소 "검색 결과" 링크 하나
+  // 쇼핑몰 7곳마다 링크가 하나 이상(확인된 쇼핑몰은 정렬 칩 여러 개로 바뀌어 총 개수는 고정하지 않는다, storeLinks.ts verified)
+  for (const store of ["쿠팡", "네이버 쇼핑", "컬리", "이마트몰", "홈플러스", "롯데마트", "G마켓"])
+    await expect(dialog.getByRole("link", { name: new RegExp(`^${store} .*두부 찾기 \\(새 창\\)$`) }).first()).toBeVisible();
 });
 
 test("장보기 메모를 지우고 새로 쓰면 카드에 나타나고 새로고침해도 남는다", async ({ page }) => {
