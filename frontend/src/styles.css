@@ -5861,3 +5861,39 @@ button.sh-offline svg:last-child {
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
+
+/* 요리 일기 (5) */
+
+/* 5 · Task 12 */
+.ck-reason {
+  display: grid;
+  gap: 8px;
+}
+
+.ck-reason-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--field);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.ck-reason-opt[aria-checked="true"] {
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.ck-reason-opt small {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+}
