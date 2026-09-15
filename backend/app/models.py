@@ -331,6 +331,66 @@ class UserChannel(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
 
+class FoodNutrient(db.Model):
+    """식품 한 행의 100g(100ml)당 영양. 사용자 소유가 아닌 공유 캐시(스펙 21절).
+    source: api(공공데이터포털) | sample(키 없는 개발 모드) | ai('추정으로 두기' AI 추정, food_code 'ai:<재료 키>')."""
+
+    __tablename__ = "food_nutrients"
+
+    id = db.Column(db.Integer, primary_key=True)
+    food_code = db.Column(db.String(80), nullable=False, unique=True)
+    name = db.Column(db.String(100), nullable=False)
+    name_key = db.Column(db.String(60), nullable=False, index=True)  # foods.food_name_key(name)
+    group_name = db.Column(db.String(20), nullable=False, default="")  # 음식 | 가공식품 | 원재료성 | 추정
+    kcal = db.Column(db.Float, nullable=False)
+    carbs_g = db.Column(db.Float)
+    protein_g = db.Column(db.Float)
+    fat_g = db.Column(db.Float)
+    sugars_g = db.Column(db.Float)
+    sodium_mg = db.Column(db.Float)
+    source = db.Column(db.String(10), nullable=False)
+    fetched_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class FoodSearch(db.Model):
+    """이 이름으로 식품 DB를 찾아봤다는 기록(결과 행은 food_nutrients). 30일 지나면 다시 찾는다(결정 11)."""
+
+    __tablename__ = "food_searches"
+
+    id = db.Column(db.Integer, primary_key=True)
+    query_key = db.Column(db.String(60), nullable=False, unique=True)  # normalize(검색어)
+    total = db.Column(db.Integer, nullable=False, default=0)  # API totalCount
+    searched_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class FoodMatch(db.Model):
+    """재료 이름 → 고른 식품(사용자별 기억, 결정 B). food_code가 NULL이면 '추정으로 두기'. unit_grams는 사용자가 고친 한 단위 무게 {"모": 300}."""
+
+    __tablename__ = "food_matches"
+    __table_args__ = (db.UniqueConstraint("user_id", "ingredient_key"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    ingredient_key = db.Column(db.String(60), nullable=False)
+    food_code = db.Column(db.String(80))
+    unit_grams = db.Column(db.JSON, nullable=False, default=dict)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
+class UnitWeightEstimate(db.Model):
+    """재료 한 단위 무게 추정(모든 사용자가 함께 쓴다, 결정 7). 사용자가 고친 값은 food_matches.unit_grams."""
+
+    __tablename__ = "unit_weight_estimates"
+    __table_args__ = (db.UniqueConstraint("name_key", "unit"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    name_key = db.Column(db.String(60), nullable=False)
+    unit = db.Column(db.String(10), nullable=False)
+    grams = db.Column(db.Float, nullable=False)
+    source = db.Column(db.String(10), nullable=False)  # ai | sample
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
 class YoutubeVideo(db.Model):
     """채널 최근 영상 캐시. 새로 받을 때 채널 영상을 통째로 바꾸고, 30일 넘게 새로 받지 못한 행은 지운다(유튜브 약관)."""
 

@@ -35,7 +35,10 @@ MAX_LINK = 500
 MAX_TEXT = 10_000
 MAX_LABEL = 200  # 출처 카드 제목·채널 이름
 HEADERS = {"User-Agent": "galmuri-kitchen/1.0"}
-FIXED_HOSTS = {"www.googleapis.com", "www.youtube.com", "www.instagram.com", "api-gateway.coupang.com"}  # 쿠팡: 파트너스 딥링크(coupang.py)
+FIXED_HOSTS = {
+    "www.googleapis.com", "www.youtube.com", "www.instagram.com", "api-gateway.coupang.com",  # 쿠팡: 파트너스 딥링크(coupang.py)
+    "apis.data.go.kr",  # 식품영양성분 DB(foods.py)
+}
 REDIRECT_CODES = {301, 302, 303, 307, 308}
 MAX_IMAGE_CANDIDATES = 8  # 블로그 본문 사진 후보(요청은 차례로)
 MAX_PAGE_IMAGES = 5  # AI에 함께 보내는 본문 사진

@@ -136,6 +136,15 @@ def test_me_includes_videos_mode(client, app):
     assert client.get("/api/me").get_json()["videos"] == "off"
 
 
+def test_me_nutrition_mode(client, login, app):
+    login()
+    assert client.get("/api/me").get_json()["nutrition"] == "sample"
+    app.config.update(FOOD_NUTRITION_API_KEY="k")
+    assert client.get("/api/me").get_json()["nutrition"] == "on"
+    app.config.update(FOOD_NUTRITION_API_KEY=None, DEV_MODE=False)
+    assert client.get("/api/me").get_json()["nutrition"] == "off"
+
+
 def test_coupang_partners_id_from_env(make_app, monkeypatch):
     monkeypatch.setenv("COUPANG_PARTNERS_ID", "")
     assert make_app().config["COUPANG_PARTNERS_ID"] is None

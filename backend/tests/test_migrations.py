@@ -368,6 +368,41 @@ def test_body_profiles_migration_adds_and_removes_table(app):
         assert "body_profiles" not in tables
 
 
+def test_food_tables_migration_adds_and_removes_tables(app):
+    tables = {"food_nutrients", "food_searches", "food_matches", "unit_weight_estimates"}
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="f1b1o1d1y1p1")
+        upgrade(directory=MIGRATIONS, revision="f2f2o2o2d2s2")
+        with db.engine.connect() as conn:
+            inspector = sa.inspect(conn)
+            assert tables <= set(inspector.get_table_names())
+            nutrient_columns = {c["name"] for c in inspector.get_columns("food_nutrients")}
+            search_columns = {c["name"] for c in inspector.get_columns("food_searches")}
+            match_columns = {c["name"] for c in inspector.get_columns("food_matches")}
+            estimate_columns = {c["name"] for c in inspector.get_columns("unit_weight_estimates")}
+            match_fks = {fk["referred_table"]: fk["options"].get("ondelete") for fk in inspector.get_foreign_keys("food_matches")}
+            uniques = {
+                table: {tuple(u["column_names"]) for u in inspector.get_unique_constraints(table)} for table in tables
+            }
+            index_names = {ix["name"] for table in tables for ix in inspector.get_indexes(table)}
+        assert nutrient_columns == {
+            "id", "food_code", "name", "name_key", "group_name", "kcal", "carbs_g", "protein_g", "fat_g", "sugars_g", "sodium_mg", "source", "fetched_at",
+        }
+        assert search_columns == {"id", "query_key", "total", "searched_at"}
+        assert match_columns == {"id", "user_id", "ingredient_key", "food_code", "unit_grams", "updated_at"}
+        assert estimate_columns == {"id", "name_key", "unit", "grams", "source", "created_at"}
+        assert match_fks == {"users": "CASCADE"}
+        assert ("food_code",) in uniques["food_nutrients"]
+        assert ("query_key",) in uniques["food_searches"]
+        assert ("user_id", "ingredient_key") in uniques["food_matches"]
+        assert ("name_key", "unit") in uniques["unit_weight_estimates"]
+        assert {"ix_food_nutrients_name_key", "ix_food_matches_user_id"} <= index_names
+
+        downgrade(directory=MIGRATIONS, revision="f1b1o1d1y1p1")
+        with db.engine.connect() as conn:
+            assert not tables & set(sa.inspect(conn).get_table_names())
+
+
 def test_ingredients_purchased_on_nullable_migration(app):
     def purchased_on_nullable(conn):
         return {c["name"]: c for c in sa.inspect(conn).get_columns("ingredients")}["purchased_on"]["nullable"]
