@@ -93,7 +93,7 @@ def test_create_list_get_update_delete(client, login):
     ]
     assert set(listed[0]) == {"id", "title", "servings", "source", "image_url", "ingredient_count", "updated_at"}
     assert listed_body["next_cursor"] is None
-    assert client.get(f"/api/recipes/{recipe['id']}").get_json() == recipe
+    assert client.get(f"/api/recipes/{recipe['id']}").get_json() == {**recipe, "cooked": None}  # GET 상세에만 cooked가 붙는다(29절 결정 26)
 
     res = client.put(
         f"/api/recipes/{recipe['id']}",
@@ -501,7 +501,9 @@ def test_recipe_detail_annotate_is_fast_with_large_inventory(client, login, app)
     elapsed = time.perf_counter() - started
     assert res.status_code == 200
     assert all(row["have"] for row in res.get_json()["ingredients"])
-    assert elapsed < 0.15, f"{elapsed:.3f}s"
+    # 0.3초: 상세가 이제 cooked 계산으로 인덱스된 COUNT 쿼리 하나를 더 한다(29절 결정 26, Task 5).
+    # 이 테스트가 잡으려는 회귀(재고 미준비 O(n²) 매칭, 2,000×50에서 초 단위로 느려짐)에 비하면 여전히 넉넉히 빠르다.
+    assert elapsed < 0.3, f"{elapsed:.3f}s"
 
 
 # --- 4b-1 Task 1: stock_context/match_summary, /api/recipes/choices ---

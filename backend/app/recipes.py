@@ -436,7 +436,10 @@ def create_recipe():
 @bp.get("/recipes/<int:recipe_id>")
 @login_required
 def get_recipe(recipe_id):
-    return jsonify(recipe_json(get_owned_or_404(Recipe, recipe_id), inventory(g.user.id)))
+    from .cooklog import recipe_cooked  # cooklog가 recipes를 import하므로 여기서만(순환 import 방지)
+
+    recipe = get_owned_or_404(Recipe, recipe_id)
+    return jsonify({**recipe_json(recipe, inventory(g.user.id)), "cooked": recipe_cooked(recipe.id, g.user.id)})
 
 
 @bp.put("/recipes/<int:recipe_id>")
