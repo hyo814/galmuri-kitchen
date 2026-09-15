@@ -267,6 +267,23 @@ class MealSlot(db.Model):
     recipe = db.relationship("Recipe")
 
 
+class BodyProfile(db.Model):
+    """하루 칼로리 목표 계산용 몸 정보(스펙 21절). 건강 정보라 본인만 보고, 계정을 지우면 함께 지운다. 목표 kcal은 화면이 계산한다."""
+
+    __tablename__ = "body_profiles"
+    __table_args__ = (db.UniqueConstraint("user_id"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    sex = db.Column(db.String(6), nullable=False)  # female | male
+    birth_year = db.Column(db.Integer, nullable=False)
+    height_cm = db.Column(db.Float, nullable=False)
+    weight_kg = db.Column(db.Float, nullable=False)
+    activity = db.Column(db.String(12), nullable=False)  # sedentary | light | moderate | active | very_active
+    goal = db.Column(db.String(10), nullable=False)  # maintain | lose | gain
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+
 class Seasoning(db.Model):
     """사용자 "내 비율"(스펙 22절). 기본 양념은 화면 데이터 파일(frontend/src/data/seasoningPresets.ts)에 있다."""
 
