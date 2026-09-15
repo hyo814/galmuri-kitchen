@@ -179,6 +179,7 @@ export interface ExportSummary {
   memos: number;
   meals: number;
   food_logs: number;
+  cook_logs: number;
   limit: number;
   remaining: number;
 }
@@ -208,6 +209,10 @@ export interface MyRecipe extends RecipeDetailBase {
   source: RecipeSource;
   source_url: string | null;
   public_recipe_id: number | null;
+  eat_out_price: number | null;
+  eat_out_source: EatOutSource | null;
+  /** 상세 GET에만 */
+  cooked?: RecipeCooked | null;
 }
 
 export interface PublicRecipeDetail extends RecipeDetailBase {
@@ -569,9 +574,41 @@ export interface FoodLog {
   nutrition: FoodLogNutrition | null; approx: boolean; nutrition_pending: boolean; created_at: string; photos: FoodLogPhoto[];
 }
 export interface FoodLogPlanSlot { id: number; meal: MealKind; title: string; servings: number; recipe_id: number | null }
-export interface FoodLogDay { date: string; logs: FoodLog[]; plan_slots: FoodLogPlanSlot[]; nutrition_pending_recipe_ids: number[] }
-export interface FoodLogMonthDay { date: string; meals: number; count: number; kcal: number | null; approx: boolean; photo_url: string | null }
+export interface FoodLogDay { date: string; logs: FoodLog[]; plan_slots: FoodLogPlanSlot[]; nutrition_pending_recipe_ids: number[]; cook_logs: FoodLogCookLog[] }
+export interface FoodLogMonthDay { date: string; meals: number; count: number; kcal: number | null; approx: boolean; photo_url: string | null; cooked: boolean }
 export interface FoodLogMonthSummary { logged_days: number; avg_kcal: number | null; avg_approx: boolean; home: number; out: number; home_percent: number | null }
 export interface FoodLogMonth { month: string; today: string; days: FoodLogMonthDay[]; summary: FoodLogMonthSummary }
 export interface DishItem { food_code: string; name: string; /** "음식" 또는 "가공식품"(음식 먼저) */ group: string; serving_g: number | null; kcal: number; carbs_g: number | null; protein_g: number | null; fat_g: number | null; sugars_g: number | null; sodium_mg: number | null }
 export interface DishSearchResult { items: DishItem[]; searched: boolean }
+
+// ---- 요리 일기·집밥 리포트(스펙 29절, 5단계) ----
+export type EatOutSource = "user" | "ai" | "sample";
+export interface CookDraftRow {
+  name: string; amount: string; ingredient_id: number | null; stock_name: string | null;
+  stock_quantity: number | null; stock_unit: string | null;
+  /** 레시피 인분 기준 재고 단위 양. 단위가 다르면 null(기본 1) */
+  base_amount: number | null; seasoning: boolean;
+}
+export interface CookDraft { recipe_id: number; title: string; servings: number; eat_out_price: number | null; eat_out_source: EatOutSource | null; rows: CookDraftRow[] }
+export interface EatOutEstimate { eat_out_price: number; eat_out_source: EatOutSource }
+export interface CookLogItem {
+  name: string; amount_text: string | null; used: number | null; unit: string | null; removed: boolean;
+  price: number | null; price_quantity: number | null; cost: number | null; excluded: "seasoning" | "no_price" | null;
+}
+export interface CookLogListItem {
+  id: number; recipe_id: number | null; title: string; cooked_on: string; servings: number; rating: number | null; memo: string | null;
+  photo_url: string | null; eat_out_price: number | null; eat_out_source: EatOutSource | null;
+  ingredient_cost: number; saved: number | null; excluded_count: number; created_at: string;
+}
+export interface CookLogDetail extends CookLogListItem { items: CookLogItem[]; food_log_id: number | null; undo_until: string }
+export interface CookLogPage { items: CookLogListItem[]; next_cursor: string | null }
+export interface CookSaveResult { log: CookLogDetail; deducted_names: string[] }
+export interface CookUndoResult { restored: string[]; skipped: string[] }
+export interface RecipeCooked { count: number; last_on: string; last_rating: number | null }
+export interface CookReport {
+  month: string; today: string; cooked: number; counted: number; saved_total: number; excluded_ingredients: number;
+  logged_days: number; home: number; out: number; home_percent: number | null;
+  discarded: number; discarded_names: string[]; discarded_more: number;
+  top_saved: { title: string; saved: number }[]; previous: { cooked: number; discarded: number };
+}
+export interface FoodLogCookLog { id: number; title: string; photo_url: string | null }

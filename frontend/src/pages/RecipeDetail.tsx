@@ -1,8 +1,12 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api, type MyRecipe, type RecipeDetail as Detail, type RecipeIngredientStatus, type User } from "../api";
+import { cookedLine } from "../cooklog/cook.ts";
+import CookSheet, { toastSaved } from "../components/CookSheet";
 import Icon from "../components/Icon";
 import RecipeNutrition from "../components/RecipeNutrition";
 import ShoppingAddButton from "../components/ShoppingAddButton";
+import { useUndoToastVisible } from "../components/UndoToast";
+import { starsText } from "../foodlog/log.ts";
 import { SOURCE_LABEL, imageSrc, scaleAmount, withJosa } from "../format";
 import { recipeQuantity } from "../shopping/sync";
 import { useAsyncAction } from "../useAsyncAction";
@@ -132,6 +136,10 @@ export function RecipeBody({
   );
 }
 
+/** 지금 떠 있는 레시피 상세의 다시 받기. 알림의 되돌리기는 화면을 떠난 뒤에도 누를 수 있어, 떠난 화면은 빠지고
+ * 같은 레시피를 다시 연 새 화면은 들어 있게 인스턴스가 아니라 여기서 부른다(떠났다 돌아온 화면이 옛 `요리 1번`을 보이지 않게) */
+const shownDetails = new Set<() => void>();
+
 export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "public"; id: string; user: User }) {
   const {
     data: recipe,
@@ -140,6 +148,14 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
     reload,
   } = useResource<Detail>(kind === "mine" ? `/api/recipes/${id}` : `/api/public-recipes/${id}`);
   const { busy, error: actionError, run } = useAsyncAction();
+  const [cooking, setCooking] = useState(false);
+  const toastVisible = useUndoToastVisible();
+  useEffect(() => {
+    shownDetails.add(reload);
+    return () => {
+      shownDetails.delete(reload);
+    };
+  }, [reload]);
 
   if (!recipe)
     return (
@@ -214,6 +230,15 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
           )}
         </p>
       </header>
+      {recipe.kind === "mine" && recipe.cooked && (
+        <p className="ck-cooked">
+          <span className="badge info">요리 {recipe.cooked.count}번</span>
+          <span className="muted" aria-hidden="true">
+            {cookedLine(recipe.cooked, starsText)}
+          </span>
+          <span className="sr-only">{cookedLine(recipe.cooked, (n) => `별점 ${n}점`)}</span>
+        </p>
+      )}
 
       <RecipeBody
         title={recipe.title}
@@ -242,15 +267,35 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
       )}
 
       {recipe.kind === "mine" ? (
-        <div className="rc-actions">
-          <button className="btn outline" onClick={() => navigate(`/recipes/mine/${recipe.id}/edit`)}>
-            <Icon name="pencil" />
-            수정
-          </button>
-          <button className="btn danger-text" disabled={busy} onClick={remove}>
-            이 레시피 삭제
-          </button>
-        </div>
+        <>
+          <div className="rc-actions">
+            <button className="btn outline" onClick={() => navigate(`/recipes/mine/${recipe.id}/edit`)}>
+              <Icon name="pencil" />
+              수정
+            </button>
+            <button className="btn danger-text" disabled={busy} onClick={remove}>
+              이 레시피 삭제
+            </button>
+          </div>
+          {/* 알림이 떠 있으면 버튼을 알림 위로 올린다(시안 2) */}
+          <div className={toastVisible ? "cta-bar ck-lift" : "cta-bar"}>
+            <button className="btn primary" aria-haspopup="dialog" disabled={busy} onClick={() => setCooking(true)}>
+              <Icon name="pan" />
+              요리했어요
+            </button>
+          </div>
+          {cooking && (
+            <CookSheet
+              recipeId={recipe.id}
+              user={user}
+              onSaved={(result) => {
+                toastSaved(result, () => shownDetails.forEach((reloadShown) => reloadShown())); // 되돌린 뒤에도 재고 표시·요리 표시를 새로
+                void reload();
+              }}
+              onClose={() => setCooking(false)}
+            />
+          )}
+        </>
       ) : (
         <div className="cta-bar">
           <button className="btn primary" disabled={busy} onClick={save}>
