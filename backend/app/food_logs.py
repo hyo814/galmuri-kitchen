@@ -1,17 +1,20 @@
 """먹은 기록(스펙 21·24절). 기록 CRUD·하루·한 달·사진. 영양은 저장할 때 스냅숏(결정 2·5)."""
 
+import uuid
+
 from flask import Blueprint, abort, g, jsonify, request
 from sqlalchemy import case
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from . import meals
+from . import meals, storage
 from .auth import get_owned_or_404, login_required
 from .foods import NUTRIENTS, food_by_code, nutrition_mode
-from .ingredients import seoul_today
+from .ingredients import SEOUL, seoul_today
 from .meals import MEALS, meal_date
-from .models import FoodLog, MealPlan, MealSlot, Recipe, db
+from .models import FoodLog, FoodLogPhoto, MealPlan, MealSlot, Recipe, db, utcnow
 from .nutrition import _round0, _round1
+from .photos import read_image
 from .validation import integer, iso_datetime, text
 
 bp = Blueprint("food_logs", __name__, url_prefix="/api")
@@ -28,6 +31,22 @@ SERVINGS_ERROR = "인분은 0.5~20 사이로 입력해주세요."
 GRAMS_ERROR = "먹은 양은 1~3000g 사이로 입력해주세요."
 FIELDS_WHAT = ("meal_slot_id", "recipe_id", "food_code", "title")
 FIELDS_AMOUNT = ("servings", "grams")
+MAX_PHOTOS = 4
+# 장보기 메모 사진과 같은 숫자(결정 9). 테스트가 app.shopping.*·app.food_logs.*를 따로 monkeypatch하고 합계도 따로 세서 공유하지 않는다(개정 1 D6)
+MAX_PHOTO_BYTES = 3 * 1024 * 1024
+MAX_USER_PHOTO_BYTES = 200 * 1024 * 1024
+MAX_DEMO_PHOTO_BYTES = 20 * 1024 * 1024
+PHOTO_FULL = "사진 저장 공간이 가득 찼어요. 오래된 기록 사진을 지워주세요."
+
+
+def meal_for_time(moment):
+    """결정 8: 서울 시(時) 5–9 아침 · 10–14 점심 · 15–20 저녁 · 그 밖 간식."""
+    hour = moment.astimezone(SEOUL).hour
+    return "breakfast" if 5 <= hour < 10 else "lunch" if 10 <= hour < 15 else "dinner" if 15 <= hour < 21 else "snack"
+
+
+def photo_json(photo):
+    return {"id": photo.id, "url": f"/api/photos/{photo.photo_key}"}
 
 
 def log_json(log):
@@ -40,6 +59,7 @@ def log_json(log):
         "nutrition": None if log.kcal is None else {k: getattr(log, k) for k in NUTRIENTS},
         "approx": log.approx, "nutrition_pending": log.nutrition_pending,
         "created_at": iso_datetime(log.created_at),
+        "photos": [photo_json(p) for p in log.photos],
     }
 
 
@@ -237,7 +257,7 @@ def day_food_logs():
     if day is None:
         abort(400, "날짜를 다시 확인해주세요.")
     logs = (
-        FoodLog.query.options(selectinload(FoodLog.meal_slot), selectinload(FoodLog.recipe))
+        FoodLog.query.options(selectinload(FoodLog.meal_slot), selectinload(FoodLog.recipe), selectinload(FoodLog.photos))
         .filter_by(user_id=g.user.id, eaten_on=day)
         .order_by(_meal_order(FoodLog.meal), FoodLog.created_at, FoodLog.id)
         .all()
@@ -309,6 +329,85 @@ def update_food_log(log_id):
 @bp.delete("/food-logs/<int:log_id>")
 @login_required
 def delete_food_log(log_id):
-    db.session.delete(get_owned_or_404(FoodLog, log_id))
+    log = get_owned_or_404(FoodLog, log_id)
+    keys = [p.photo_key for p in log.photos]
+    db.session.delete(log)
     db.session.commit()
+    storage.delete(keys)  # 커밋 뒤에 — 커밋이 실패하면 파일은 남아 있어야 한다
     return "", 204
+
+
+def _check_photo_room(log, size):
+    """기록당 MAX_PHOTOS장(400 '사진은 기록 하나에 4장까지 넣을 수 있어요.'), 사용자 먹은 기록 사진 합계(체험은 20MB, 400 PHOTO_FULL).
+    ponytail: 사진 수·합계 확인은 잠그지 않는다 — 동시에 올리면 5장이 될 수 있다(메모 사진은 사용자 잠금을 쓰지만 먹은 기록은 오프라인 재전송이 없어 드묾)."""
+    if len(log.photos) >= MAX_PHOTOS:
+        abort(400, f"사진은 기록 하나에 {MAX_PHOTOS}장까지 넣을 수 있어요.")
+    used = (
+        db.session.query(db.func.coalesce(db.func.sum(FoodLogPhoto.size), 0))
+        .join(FoodLog)
+        .filter(FoodLog.user_id == g.user.id)
+        .scalar()
+    )
+    if used + size > (MAX_DEMO_PHOTO_BYTES if g.user.provider == "demo" else MAX_USER_PHOTO_BYTES):
+        abort(400, PHOTO_FULL)
+
+
+def _store_photo(log, data, media_type, ext):
+    """키 foodlog/<uid>/<hex>.<ext>로 storage.put → FoodLogPhoto 추가 → 커밋. 커밋이 실패하면 방금 올린 파일을 지우고
+    IntegrityError면 400 BAD_REQUEST(그사이 기록이 지워짐), 그 밖 예외는 다시 던진다(shopping.upload_photo와 같은 모양, 개정 1 T3①).
+    EXIF는 화면이 다시 인코딩해 빠진다(결정 9, 서버는 받은 바이트 그대로)."""
+    key = f"foodlog/{g.user.id}/{uuid.uuid4().hex}.{ext}"
+    storage.put(key, data, media_type)
+    photo = FoodLogPhoto(photo_key=key, size=len(data))
+    log.photos.append(photo)
+    try:
+        db.session.commit()
+    except Exception as e:  # 행이 없으면 방금 올린 파일도 남기지 않는다(사진만 먼저면 기록도 함께 되돌린다)
+        db.session.rollback()
+        storage.delete([key])
+        if isinstance(e, IntegrityError):
+            abort(400, BAD_REQUEST)
+        raise
+    return photo
+
+
+@bp.post("/food-logs/<int:log_id>/photos")
+@login_required
+def upload_food_log_photo(log_id):
+    if storage.mode() == "off":
+        abort(503, storage.UPLOAD_UNAVAILABLE)
+    log = get_owned_or_404(FoodLog, log_id)
+    data, media_type, ext = read_image(MAX_PHOTO_BYTES)
+    _check_photo_room(log, len(data))
+    return jsonify(photo_json(_store_photo(log, data, media_type, ext))), 201
+
+
+@bp.delete("/food-logs/<int:log_id>/photos/<int:photo_id>")
+@login_required
+def delete_food_log_photo(log_id, photo_id):
+    log = get_owned_or_404(FoodLog, log_id)
+    photo = db.session.get(FoodLogPhoto, photo_id) if photo_id <= 2**31 - 1 else None
+    if photo is None or photo.log_id != log.id:
+        abort(404, "찾을 수 없어요.")
+    key = photo.photo_key
+    db.session.delete(photo)
+    db.session.commit()
+    storage.delete([key])
+    return "", 204
+
+
+@bp.post("/food-logs/photo")
+@login_required
+def create_photo_log():
+    """사진만 먼저(결정 8). 사진과 기록을 한 요청에 — 따로 보내면 사진 실패 때 빈 기록이 남아서. 끼니·날짜는 서버 시각의 서울 시각."""
+    if storage.mode() == "off":
+        abort(503, storage.UPLOAD_UNAVAILABLE)
+    data, media_type, ext = read_image(MAX_PHOTO_BYTES)
+    now = utcnow()
+    day = now.astimezone(SEOUL).date()
+    check_caps(g.user.id, day)
+    log = FoodLog(user_id=g.user.id, eaten_on=day, meal=meal_for_time(now), source="manual")
+    _check_photo_room(log, len(data))
+    db.session.add(log)
+    _store_photo(log, data, media_type, ext)
+    return jsonify(log_json(log)), 201

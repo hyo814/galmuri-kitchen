@@ -1,6 +1,6 @@
 """체험하기 계정(심사·둘러보기용). DEMO_LOGIN=1일 때만 켜진다(DEV_MODE와 무관, 운영에서도 켤 수 있다).
 누를 때마다 예시 재고가 든 새 사용자를 만들고, 24시간 지나면 `flask purge-demo-users`(와 체험하기 요청 때 조금씩)로 지운다.
-사용자 데이터는 모두 users.id에 ON DELETE CASCADE로 묶여 있어 users 행만 지우면 된다. 메모 사진 파일만 커밋 뒤 storage.delete로 따로 지운다."""
+사용자 데이터는 모두 users.id에 ON DELETE CASCADE로 묶여 있어 users 행만 지우면 된다. 사진 파일(메모·먹은 기록)만 커밋 뒤 storage.delete로 따로 지운다."""
 
 import hashlib
 import hmac
@@ -14,7 +14,7 @@ import click
 from flask import Blueprint, abort, current_app, jsonify, request
 from sqlalchemy import text
 
-from . import storage
+from . import photos, storage
 from .auth import login_user, user_json
 from .defaults import seed_user_defaults
 from .ingredients import seoul_today
@@ -26,7 +26,6 @@ from .models import (
     Seasoning,
     ShoppingItem,
     ShoppingNote,
-    ShoppingNotePhoto,
     Staple,
     StorageLocation,
     User,
@@ -215,18 +214,17 @@ def seed_demo_data(user_id):
 
 def delete_demo_users(query, limit=None):
     """query(User.id를 고른 체험 계정, 지울 순서대로)의 앞 limit개를 지운다(데이터는 CASCADE, AI 호출 기록은 남음).
-    (지운 수, 메모 사진 키)를 돌려준다. commit은 호출 측에서, 사진 파일은 커밋 뒤 storage.delete(키)로(DB가 파일을 지우지 않는다)."""
+    (지운 수, 사진 키)를 돌려준다. commit은 호출 측에서, 사진 파일은 커밋 뒤 storage.delete(키)로(DB가 파일을 지우지 않는다)."""
     ids = [user_id for (user_id,) in (query.limit(limit) if limit else query)]
     keys = []
     if ids:
-        photos = db.session.query(ShoppingNotePhoto.photo_key).join(ShoppingNote).filter(ShoppingNote.user_id.in_(ids))
-        keys = [key for (key,) in photos]
+        keys = photos.user_photo_keys(ids)
         User.query.filter(User.id.in_(ids)).delete(synchronize_session=False)
     return len(ids), keys
 
 
 def purge_expired(limit=None):
-    """24시간 지난 체험 계정을 지운다. (지운 수, 메모 사진 키)를 돌려준다."""
+    """24시간 지난 체험 계정을 지운다. (지운 수, 사진 키)를 돌려준다."""
     query = db.session.query(User.id).filter(User.provider == PROVIDER, User.created_at < utcnow() - TTL).order_by(User.id)
     return delete_demo_users(query, limit)
 
