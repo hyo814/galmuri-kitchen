@@ -41,22 +41,26 @@ def test_row_fields_reads_serving():
 # --- dish_items ---
 
 
-def test_dish_items_only_dishes_in_order(app):
+def test_dish_items_dishes_then_packaged_in_order(app):
     add_foods(
         app,
         cached("D1", "제육덮밥", 185.4, group="음식", source="api", serving_g=400),
         cached("D2", "제육볶음", 190, group="음식", source="api"),
         cached("D3", "제육덮밥소스", 50, group="가공식품", source="api"),
         cached("ai:제육덮밥", "제육덮밥", 500, group="추정", source="ai"),
+        cached("D4", "돼지고기 덮밥", 170, group="음식", source="api"),
+        cached("R1", "돼지고기_앞다리_생것", 132, group="원재료성", source="api"),
     )
     with app.app_context():
-        assert [r["name"] for r in foods.dish_items("제육덮밥")] == ["제육덮밥"]
-        assert [r["name"] for r in foods.dish_items("제육 덮밥")] == ["제육덮밥"]
-        assert [r["name"] for r in foods.dish_items("제육")] == ["제육덮밥", "제육볶음"]
+        assert [r["name"] for r in foods.dish_items("제육덮밥")] == ["제육덮밥", "제육덮밥소스"]
+        assert [r["name"] for r in foods.dish_items("제육 덮밥")] == ["제육덮밥", "제육덮밥소스"]
+        assert [r["name"] for r in foods.dish_items("제육")] == ["제육덮밥", "제육볶음", "제육덮밥소스"]
+        assert [r["name"] for r in foods.dish_items("돼지고기덮밥")] == ["돼지고기 덮밥"]  # 이름 공백을 빼고 비교
+        assert "돼지고기_앞다리_생것" not in [r["name"] for r in foods.dish_items("돼지고기")]  # 원재료성은 사 먹은 음식 후보가 아니다
         assert foods.dish_items("100%") == []
 
         first = foods.dish_items("제육덮밥")[0]
-        assert set(first) == {"food_code", "name", "serving_g", "kcal", "carbs_g", "protein_g", "fat_g", "sugars_g", "sodium_mg"}
+        assert set(first) == {"food_code", "name", "group", "serving_g", "kcal", "carbs_g", "protein_g", "fat_g", "sugars_g", "sodium_mg"}
         assert first["kcal"] == 185.4  # 반올림하지 않는다(search_items와 다름)
 
 
@@ -104,7 +108,7 @@ def test_dishes_endpoint(client, raw_client, login, app, monkeypatch):
     body = res.get_json()
     assert res.status_code == 200
     assert body["items"][0] == {
-        "food_code": "SAMPLE-18", "name": "제육덮밥", "serving_g": 400.0, "kcal": 185.0,
+        "food_code": "SAMPLE-18", "name": "제육덮밥", "group": "음식", "serving_g": 400.0, "kcal": 185.0,
         "carbs_g": 22.0, "protein_g": 8.5, "fat_g": 6.8, "sugars_g": 5.5, "sodium_mg": 410.0,
     }
     assert body["searched"] is True

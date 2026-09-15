@@ -42,6 +42,7 @@ FIELDS = {"code": "FOOD_CD", "name": "FOOD_NM_KR", "group": "DB_GRP_NM", "basis"
 FIELDS["serving"] = "Z10500"  # 식품중량 '400g'. Task 1 Step 0 실측(결정 24) 확인: 값 모양은 '270.000g'처럼 소수도 온다
 NUTRIENTS = ("kcal", "carbs_g", "protein_g", "fat_g", "sugars_g", "sodium_mg")
 DISH_GROUP = "음식"
+PACKAGED_GROUP = "가공식품"
 MAX_SERVING_G = 5000
 
 
@@ -344,23 +345,26 @@ def search_items(q):
 
 
 def dish_items(q):
-    """search_items와 같은 key = query_key(q)·이스케이프한 ilike(escape='\\')로 캐시에서 음식 행(group_name == DISH_GROUP,
-    source != 'ai') 200개까지 → (key가 name_parts(이름)에 없음, 이름 길이, 이름) → 앞 SEARCH_LIMIT개.
-    [{food_code, name, serving_g, kcal, carbs_g, protein_g, fat_g, sugars_g, sodium_mg}] — 100g당 원값(화면이 양으로 곱한다)."""
+    """search_items와 같은 key = query_key(q)로 캐시에서 사 먹은 음식 후보를 찾는다: 음식(DISH_GROUP)과 가공식품 행(source != 'ai').
+    이름은 소문자·공백을 뺀 값에 LIKE(`돼지고기덮밥`으로 `돼지고기 덮밥`도). 식약처 음식 이름은 `덮밥_돼지고기(제육)` 모양이라
+    `제육덮밥`은 편의점 제품 같은 가공식품에만 있는 경우가 많아 가공식품도 뒤에 보여준다(2026-09-15 실측).
+    음식 먼저 200개까지 → (key가 name_parts(이름)에 없음, 음식 먼저, 이름 길이, 이름) → 앞 SEARCH_LIMIT개.
+    [{food_code, name, group, serving_g, kcal, carbs_g, protein_g, fat_g, sugars_g, sodium_mg}] — 100g당 원값(화면이 양으로 곱한다)."""
     key = query_key(q)
     escaped = key.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     rows = (
         FoodNutrient.query.filter(
-            FoodNutrient.source != "ai", FoodNutrient.group_name == DISH_GROUP,
-            func.lower(FoodNutrient.name).like(f"%{escaped}%", escape="\\"),  # search_items와 같게(키 하나만 찾는 곳)
+            FoodNutrient.source != "ai", FoodNutrient.group_name.in_((DISH_GROUP, PACKAGED_GROUP)),
+            func.replace(func.lower(FoodNutrient.name), " ", "").like(f"%{escaped}%", escape="\\"),  # 키 하나만 찾는 곳
         )
+        .order_by(case((FoodNutrient.group_name == DISH_GROUP, 0), else_=1))
         .limit(200)
         .all()
     )
-    rows.sort(key=lambda row: (key not in name_parts(row.name), len(row.name), row.name))
+    rows.sort(key=lambda row: (key not in name_parts(row.name), row.group_name != DISH_GROUP, len(row.name), row.name))
     return [
         {
-            "food_code": r.food_code, "name": r.name, "serving_g": r.serving_g, "kcal": r.kcal,
+            "food_code": r.food_code, "name": r.name, "group": r.group_name, "serving_g": r.serving_g, "kcal": r.kcal,
             "carbs_g": r.carbs_g, "protein_g": r.protein_g, "fat_g": r.fat_g, "sugars_g": r.sugars_g, "sodium_mg": r.sodium_mg,
         }
         for r in rows[:SEARCH_LIMIT]
