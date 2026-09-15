@@ -16,6 +16,8 @@ export interface DaySum {
   fat_g: number;
   sugars_g: number;
   sodium_mg: number;
+  /** source calc 칸 kcal만 더한 값(당류 비율의 분모 — ai 칸의 kcal은 당류가 없어 총 kcal을 쓰면 비율이 실제보다 낮게 나온다) */
+  calcKcal: number;
   filled: number;
   counted: number;
   approx: boolean;
@@ -33,6 +35,7 @@ export function daySum(slots: Pick<MealSlot, "nutrition">[]): DaySum | null {
     fat_g: 0,
     sugars_g: 0,
     sodium_mg: 0,
+    calcKcal: 0,
     filled: slots.length,
     counted: withKcal.length,
     approx: withKcal.length < slots.length,
@@ -42,7 +45,10 @@ export function daySum(slots: Pick<MealSlot, "nutrition">[]): DaySum | null {
     sum.kcal += n!.kcal;
     sum.approx ||= n!.approx;
     if (n!.source === "ai") sum.hasAi = true;
-    else for (const k of ["carbs_g", "protein_g", "fat_g", "sugars_g", "sodium_mg"] as const) sum[k] += n![k] ?? 0;
+    else {
+      sum.calcKcal += n!.kcal;
+      for (const k of ["carbs_g", "protein_g", "fat_g", "sugars_g", "sodium_mg"] as const) sum[k] += n![k] ?? 0;
+    }
   }
   return sum;
 }
@@ -82,7 +88,18 @@ export function sodiumDay(mg: number) {
 /** 막대 목표(결정 4): 몸 정보 목표 → 식단 goal_kcal → null */
 export const goalFor = (profileTarget: number | null, planGoal: number | null) => profileTarget ?? planGoal ?? null;
 
-/** 채우기를 부를 레시피: 보이는 날짜 칸의 레시피 중 pending 목록에 있는 것(중복 없이, 31개까지) */
-export function fillTargets(slots: Pick<MealSlot, "date" | "recipe_id">[], dates: string[], pending: number[]): number[] {
-  return [...new Set(slots.filter((s) => s.recipe_id !== null && dates.includes(s.date) && pending.includes(s.recipe_id)).map((s) => s.recipe_id!))].slice(0, 31);
+/** 채우기를 부를 레시피: 보이는 날짜 칸의 레시피 중 pending 목록에 있는 것(중복 없이, 이미 시도한 건 빼고, 31개까지) */
+export function fillTargets(
+  slots: Pick<MealSlot, "date" | "recipe_id">[],
+  dates: string[],
+  pending: number[],
+  attempted: Set<number> = new Set(),
+): number[] {
+  return [
+    ...new Set(
+      slots
+        .filter((s) => s.recipe_id !== null && dates.includes(s.date) && pending.includes(s.recipe_id) && !attempted.has(s.recipe_id))
+        .map((s) => s.recipe_id!),
+    ),
+  ].slice(0, 31);
 }

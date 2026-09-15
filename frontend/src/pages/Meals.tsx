@@ -24,8 +24,10 @@ import { cache, forgetResources, useResource } from "../useResource";
 import { forgetMealDraft } from "../meals/draftStore";
 import { urgentLabel } from "./Recipes";
 
-/** 채운 뒤 다시 부르지 않을 `${planId}|${recipe_ids}`(결정 13). resetMealsView가 비운다 */
-const filledOnce = new Set<string>();
+/** 채우기를 이미 부른 레시피 `${planId}|${recipe_id}`(결정 13). pending 목록이 나중에 줄어도(다른 레시피가 먼저 풀려도)
+ * 이미 부른 레시피는 다시 넣지 않는다 — 레시피별로 한 번만 시도한다(합쳐 부른 목록으로 판단하면 pending이 줄 때마다
+ * 새 조합으로 보여 계속 다시 불렀다). resetMealsView가 비운다 */
+const attempted = new Set<string>();
 
 // 탭을 오가도 보던 식단·보기·주를 기억한다(로그아웃 때 resetMealsView)
 let lastPlanId: number | null = null;
@@ -39,7 +41,7 @@ export function resetMealsView() {
   lastView = "week";
   lastWeek = {};
   notice = null;
-  filledOnce.clear();
+  attempted.clear();
   forgetMealDraft();
 }
 
@@ -228,7 +230,7 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
   const dirty = useRef(false);
   const sheetOpen = useRef(false);
 
-  const { data: bodyProfile, reload: reloadBodyProfile } = useResource<BodyProfileResponse>("/api/body-profile");
+  const { data: bodyProfile, set: setBodyProfile } = useResource<BodyProfileResponse>("/api/body-profile");
   const profileTarget = bodyProfile?.profile ? dailyTarget(bodyProfile.profile, today).target : null;
   const goal = goalFor(profileTarget, plan?.goal_kcal ?? null);
 
@@ -236,23 +238,22 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
     lastWeek[summary.id] = week;
   }, [summary.id, week]);
 
-  // 채우기(결정 13): 보이는 주의 pending 레시피만, 식단마다 한 번
+  // 채우기(결정 13): 주 보기에서 보이는 주의 pending 레시피 중 아직 안 시도한 것만, 레시피마다 한 번
   useEffect(() => {
-    if (!plan || user.nutrition === "off") return;
-    const ids = fillTargets(plan.slots, weekDates(week, plan), plan.nutrition_pending_recipe_ids);
+    if (!plan || view !== "week" || user.nutrition === "off") return;
+    const attemptedIds = new Set(plan.nutrition_pending_recipe_ids.filter((id) => attempted.has(`${plan.id}|${id}`)));
+    const ids = fillTargets(plan.slots, weekDates(week, plan), plan.nutrition_pending_recipe_ids, attemptedIds);
     if (!ids.length) return;
-    const key = `${plan.id}|${ids.join(",")}`;
-    if (filledOnce.has(key)) return;
-    filledOnce.add(key);
+    for (const id of ids) attempted.add(`${plan.id}|${id}`); // 요청 전에 표시(pending이 줄어도 같은 레시피를 다시 부르지 않게)
     (async () => {
       try {
         await api("/api/nutrition/fill", { method: "POST", body: { recipe_ids: ids } });
       } catch {
-        // 조용히 실패: 다음에 다시 보면 그때 채운다
+        // 조용히 실패: 다음에 다시 보면 그때 채운다(레시피는 그대로 시도한 것으로 남는다)
       }
       await reload();
     })();
-  }, [plan, week, user.nutrition, reload]);
+  }, [plan, view, week, user.nutrition, reload]);
 
   // 복사 결과 한 줄은 주·보기가 바뀌면 지운다(식단이 바뀌면 key로 새로 그린다). 처음 그릴 때는 지우지 않는다(AI 초안 결과)
   const shownFor = useRef(`${week}|${view}`);
@@ -397,7 +398,7 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
       <p className="ml-copied" role="status">
         {copied}
       </p>
-      <BodyGoalCard today={today} todayTotal={todayTotal} onProfileChanged={() => void reloadBodyProfile()} />
+      <BodyGoalCard today={today} todayTotal={todayTotal} onProfileChanged={setBodyProfile} />
       <div className="ml-row2">
         <button type="button" className="ml-plan" aria-haspopup="dialog" aria-label={`${shown.name}, 다른 식단 고르기`} onClick={onPick}>
           <span>{shown.name}</span>
@@ -575,7 +576,7 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
                     type="button"
                     className="ml-day-head nt-head-btn"
                     aria-haspopup="dialog"
-                    aria-label={`${head.day} ${head.dow} 식단 영양 보기, ${dayHeadText(sum, goal)}`}
+                    aria-label={`${head.day} ${head.dow}${date === today ? " · 오늘" : ""} 식단 영양 보기, ${dayHeadText(sum, goal)}`}
                     onClick={() => setNutritionDate(date)}
                   >
                     <span className="ml-date">{head.day}</span>
@@ -595,7 +596,7 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
                   <div
                     className={over ? "nt-meter nt-dmeter warn" : "nt-meter nt-dmeter"}
                     role="img"
-                    aria-label={`목표의 ${meterPercent(sum.kcal, goal)}%`}
+                    aria-label={`목표의 ${Math.round((sum.kcal / goal) * 100)}%`}
                   >
                     <i style={{ width: `${meterPercent(sum.kcal, goal)}%` }} />
                   </div>

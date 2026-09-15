@@ -135,19 +135,29 @@ assert.equal(goalFor(1272, 1800), 1272);
 
 // fillTargets: 날짜 밖·pending 아님·직접 쓰기 칸 제외·중복 한 번
 const fillDates = ["2026-09-14", "2026-09-15", "2026-09-16"];
+const fillSlots = [
+  { date: "2026-09-15", recipe_id: 1 },
+  { date: "2026-09-16", recipe_id: 1 }, // 중복
+  { date: "2026-09-20", recipe_id: 2 }, // 날짜 밖
+  { date: "2026-09-15", recipe_id: 3 }, // pending 아님
+  { date: "2026-09-15", recipe_id: null }, // 직접 쓰기 칸
+];
+assert.deepEqual(fillTargets(fillSlots, fillDates, [1]), [1]);
+
+// fillTargets: 이미 시도한 레시피는 pending에 남아 있어도 다시 부르지 않는다(I1 — 계속 fill을 부르지 않게)
+assert.deepEqual(fillTargets(fillSlots, fillDates, [1], new Set([1])), []);
 assert.deepEqual(
-  fillTargets(
-    [
-      { date: "2026-09-15", recipe_id: 1 },
-      { date: "2026-09-16", recipe_id: 1 }, // 중복
-      { date: "2026-09-20", recipe_id: 2 }, // 날짜 밖
-      { date: "2026-09-15", recipe_id: 3 }, // pending 아님
-      { date: "2026-09-15", recipe_id: null }, // 직접 쓰기 칸
-    ],
-    fillDates,
-    [1],
-  ),
-  [1],
+  fillTargets([...fillSlots, { date: "2026-09-14", recipe_id: 4 }], fillDates, [1, 4], new Set([1])),
+  [4],
 );
+
+// daySum calcKcal(I2): ai 칸의 kcal은 당류가 없어 당류 비율 분모에서 뺀다
+const mixedDay = daySum([{ nutrition: N(200, "calc", false, { sugars_g: 20 }) }, { nutrition: N(1200, "ai", true) }]);
+assert.equal(mixedDay.kcal, 1400);
+assert.equal(mixedDay.calcKcal, 200);
+assert.equal(mixedDay.sugars_g, 20);
+// 전체 kcal로 나누면 6%(WHO 기준 안전으로 잘못 보임), calcKcal로 나누면 40%(실제로는 초과)
+assert.equal(sugarDay(mixedDay.sugars_g, mixedDay.kcal).warn, false);
+assert.deepEqual(sugarDay(mixedDay.sugars_g, mixedDay.calcKcal), { text: "총 에너지의 40% · WHO 10% 미만", percent: 100, warn: true });
 
 console.log("check-nutrition: ok");

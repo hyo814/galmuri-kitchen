@@ -21,8 +21,8 @@ function focusAfterClose(selector: string) {
 interface Props {
   today: string;
   todayTotal?: TodayTotal | null;
-  /** 몸 정보를 저장·삭제했다: 이 화면 말고 몸 정보를 따로 불러 쓰는 곳(주 보기 목표 막대)도 다시 받게 알린다 */
-  onProfileChanged?: () => void;
+  /** 몸 정보를 저장·삭제했다: 이 화면 말고 몸 정보를 따로 불러 쓰는 곳(주 보기 목표 막대)에 받은 응답을 그대로 넘긴다(다시 받지 않는다) */
+  onProfileChanged?: (res: BodyProfileResponse) => void;
 }
 
 /** 시안 BODY CARD EMPTY / WEEK WITH KCAL: 식단 탭 맨 위 하루 칼로리 목표 카드 + 시트 */
@@ -78,14 +78,14 @@ export default function BodyGoalCard({ today, todayTotal, onProfileChanged }: Pr
           profile={profile}
           onSaved={(res) => {
             set(res);
-            onProfileChanged?.();
+            onProfileChanged?.(res);
             setOpen(false);
             // 없음 → 있음으로 바뀌면 열었던 "목표 정하기" 버튼이 사라져 포커스를 잃는다 → 새로 생긴 "고치기"로
             if (!profile) focusAfterClose('[aria-label="하루 칼로리 목표 고치기"]');
           }}
           onDeleted={() => {
             set({ profile: null });
-            onProfileChanged?.();
+            onProfileChanged?.({ profile: null });
             setOpen(false);
             // 있음 → 없음으로 바뀌면 열었던 "고치기" 버튼이 사라져 포커스를 잃는다 → 새로 생긴 "목표 정하기"로
             focusAfterClose(".nt-card .btn.secondary");

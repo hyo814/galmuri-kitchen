@@ -74,11 +74,14 @@ function Draft({ plan, reloadPlan }: { plan: MealPlan; reloadPlan: () => Promise
   const bodyProfile = useResource<BodyProfileResponse>("/api/body-profile");
   const ids = { meals: useId(), kcal: useId(), kcalErr: useId() };
 
-  // 목표 칸이 비어 있으면 몸 정보 목표로 채운다(결정 4). 이미 만졌으면 덮어쓰지 않는다
+  // 목표 칸이 비어 있으면 몸 정보 목표로 채운다(결정 4). 이미 만졌으면 덮어쓰지 않는다.
+  // 이 칸이 받는 값은 500~5000만이라(위 kcalBad) 그 밖의 목표는 채우지 않고 비워 둔다.
   useEffect(() => {
     if (plan.goal_kcal !== null || touchedKcal.current) return;
     const profile = bodyProfile.data?.profile;
-    if (profile) setKcal(String(dailyTarget(profile, today).target));
+    if (!profile) return;
+    const target = dailyTarget(profile, today).target;
+    if (target >= 500 && target <= 5000) setKcal(String(target));
   }, [bodyProfile.data, plan.goal_kcal, today]);
 
   const phase = loading ? "loading" : store ? "review" : "input";

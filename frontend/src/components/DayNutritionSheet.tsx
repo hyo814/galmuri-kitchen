@@ -24,7 +24,7 @@ export default function DayNutritionSheet({ date, slots, goal, onClose }: Props)
   const over = goal !== null && sum.kcal > goal;
   const hasCalc = slots.some((s) => s.nutrition?.source === "calc");
   const [carbPct, proteinPct, fatPct] = macroSplit(sum.carbs_g, sum.protein_g, sum.fat_g);
-  const sugar = sugarDay(sum.sugars_g, sum.kcal);
+  const sugar = sugarDay(sum.sugars_g, sum.calcKcal);
   const sodium = sodiumDay(sum.sodium_mg);
   const bySlot = new Map(slots.map((s) => [s.meal, s]));
 

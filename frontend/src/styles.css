@@ -5228,6 +5228,7 @@ button.sh-offline svg:last-child {
 .nt-kv b {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+  justify-self: end;
 }
 
 .nt-src {
