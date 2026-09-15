@@ -1,17 +1,22 @@
-"""레시피 1인분 영양 계산과 식품 고르기 저장(스펙 21절 구현 세부, 4b-2 Task 3). 윗부분은 DB 없이 테스트하는 순수 함수."""
+"""레시피 1인분 영양 계산과 식품 고르기 저장(스펙 21절 구현 세부, 4b-2 Task 3), 영양 채우기(Task 4). 윗부분은 DB 없이 테스트하는 순수 함수."""
 
 import math
+import time
 from collections import defaultdict
+from types import SimpleNamespace
 
-from flask import Blueprint, abort, g, jsonify, request
+from flask import Blueprint, abort, current_app, g, jsonify, request
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
+from werkzeug.exceptions import TooManyRequests
 
+from . import ai, foods, scan
 from .ai import scan_mode
 from .amounts import parse_amount
-from .auth import get_owned_or_404, login_required
+from .auth import DEMO_AI_DAILY_LIMIT, get_owned_or_404, login_required
 from .foods import NUTRIENTS, OFF, name_parts, nutrition_mode
 from .matching import normalize
-from .models import FoodMatch, FoodNutrient, FoodSearch, Recipe, UnitWeightEstimate, db
+from .models import FoodMatch, FoodNutrient, FoodSearch, Recipe, UnitWeightEstimate, db, utcnow
 from .recipe_parse import ingredient_key
 from .recipes import ALWAYS_HAVE
 from .validation import commit_or_duplicate, text
@@ -28,6 +33,12 @@ MAX_UNITS = 20  # 재료 하나에 고친 단위 무게 수(unit_grams JSON이 �
 IN_CHUNK, LIKE_CHUNK = 500, 50
 WEIGHT_ERROR = "무게는 0.1~5000g 사이로 입력해주세요."
 SAVE_RACE = "방금 저장했어요. 다시 불러와주세요."
+FILL_SECONDS = 8
+MAX_FILL_RECIPES = 31
+NUTRITION_DAILY_LIMIT = 20
+NUTRITION_BURST = 10
+MAX_WEIGHT_GUESSES, MAX_FOOD_GUESSES = 60, 30
+LIMITS = {"grams": (0.1, 5000), "kcal": (0, 900), "carbs_g": (0, 100), "protein_g": (0, 100), "fat_g": (0, 100), "sugars_g": (0, 100), "sodium_mg": (0, 40000)}
 
 
 def match_key(name):
@@ -57,6 +68,62 @@ def auto_match(key, rows):
         return min(raw, key=order)
     exact = [r for r in rows if normalize(r.name) == key]
     return exact[0] if len(exact) == 1 else None
+
+
+def search_terms(key_text):
+    """[전체 이름] + 여러 낱말이면 [가장 긴 낱말(같으면 앞)] (결정 11). key_text는 ingredient_key(이름)."""
+    words = key_text.split()
+    return [key_text, max(words, key=len)] if len(words) > 1 else [key_text]
+
+
+def _in_limits(value, field):
+    lo, hi = LIMITS[field]
+    return not isinstance(value, bool) and isinstance(value, (int, float)) and math.isfinite(value) and lo <= value <= hi
+
+
+def clean_guess(raw, weight_pairs, food_names):
+    """모델 출력은 믿지 않는다. weights는 요청한 (match_key(name), unit)만·유한수·LIMITS 안, 처음 나온 것만.
+    foods는 요청한 match_key만, 일곱 칸이 모두 LIMITS 안일 때만(이름은 요청한 원래 이름). → ({(key, unit): grams}, {key: {name, 영양소…}})"""
+    raw = raw if isinstance(raw, dict) else {}
+    wanted_weights = {(match_key(n), u) for n, u in weight_pairs}
+    wanted_foods = {}
+    for name in food_names:
+        wanted_foods.setdefault(match_key(name), name)
+    weights, foods_out = {}, {}
+    for row in raw.get("weights") if isinstance(raw.get("weights"), list) else []:
+        if not isinstance(row, dict) or not isinstance(row.get("name"), str) or not isinstance(row.get("unit"), str):
+            continue
+        pair = (match_key(row["name"]), row["unit"])
+        if pair in wanted_weights and pair not in weights and _in_limits(row.get("grams"), "grams"):
+            weights[pair] = float(row["grams"])
+    for row in raw.get("foods") if isinstance(raw.get("foods"), list) else []:
+        if not isinstance(row, dict) or not isinstance(row.get("name"), str):
+            continue
+        key = match_key(row["name"])
+        if key in wanted_foods and key not in foods_out and all(_in_limits(row.get(n), n) for n in NUTRIENTS):
+            foods_out[key] = {"name": wanted_foods[key], **{n: float(row[n]) for n in NUTRIENTS}}
+    return weights, foods_out
+
+
+def store_guess(weights, foods_by_key, source):
+    """UnitWeightEstimate(source)·FoodNutrient(food_code 'ai:<키>', name 원래 이름 100자, name_key 키, group_name '추정', source 'ai')를 넣는다.
+    이미 있는 행은 두고, 동시 요청이 먼저 넣어 IntegrityError가 나면 rollback하고 남은 행만 한 번 더 넣는다."""
+    for _ in range(2):
+        keys = {key for key, _ in weights}
+        have_weights = {(w.name_key, w.unit) for w in UnitWeightEstimate.query.filter(UnitWeightEstimate.name_key.in_(keys))} if keys else set()
+        codes = [f"ai:{key}" for key in foods_by_key]
+        have_codes = {code for (code,) in db.session.query(FoodNutrient.food_code).filter(FoodNutrient.food_code.in_(codes))} if codes else set()
+        now = utcnow()
+        db.session.add_all(UnitWeightEstimate(name_key=key, unit=unit, grams=grams, source=source, created_at=now)
+                           for (key, unit), grams in weights.items() if (key, unit) not in have_weights)
+        db.session.add_all(FoodNutrient(food_code=f"ai:{key}", name=food["name"][:100], name_key=key, group_name="추정", source="ai", fetched_at=now,
+                                        **{n: food[n] for n in NUTRIENTS})
+                           for key, food in foods_by_key.items() if f"ai:{key}" not in have_codes)
+        try:
+            db.session.commit()
+            return
+        except IntegrityError:
+            db.session.rollback()
 
 
 def _round1(value):
@@ -267,3 +334,87 @@ def put_food_match():
         match.unit_grams = unit_grams
     commit_or_duplicate(SAVE_RACE)
     return "", 204
+
+
+def _fill_recipe_ids(data):
+    """1~31개의 서로 다른 bool 아닌 양의 정수(DB int 범위 안). 아니면 None."""
+    ids = data.get("recipe_ids") if isinstance(data, dict) else None
+    if not isinstance(ids, list) or not 1 <= len(ids) <= MAX_FILL_RECIPES or not all(type(i) is int and 0 < i < 2**31 for i in ids):
+        return None
+    return ids if len(set(ids)) == len(ids) else None
+
+
+def _rows(user, recipes):
+    context = NutritionContext(user, recipes)
+    return [row for recipe in recipes for row in context.recipe(recipe)["ingredients"]]
+
+
+@bp.post("/nutrition/fill")
+@login_required
+def fill_nutrition():
+    """영양 채우기(스펙 21절, 결정 8·11·12·13). 계산 GET은 캐시만 읽고, 외부 요청·AI는 여기서만 한다."""
+    _require_nutrition()
+    ids = _fill_recipe_ids(request.get_json(silent=True))
+    if ids is None:
+        abort(400, "잘못된 요청이에요.")
+    user = g.user
+    # 찾기가 커밋할 때마다 객체가 만료돼 다시 읽지 않도록 쓸 값만 꺼내 둔다
+    by_id = {r.id: SimpleNamespace(id=r.id, servings=r.servings, ingredients=r.ingredients)
+             for r in Recipe.query.filter(Recipe.user_id == user.id, Recipe.id.in_(ids))}
+    recipes = [by_id[i] for i in ids if i in by_id]
+
+    # 1) 식품 DB 찾기: 아직 안 찾아본 재료 키마다 한 번, 한도·실패·시간 예산이면 조용히 멈춘다(결정 11·12)
+    deadline = time.monotonic() + FILL_SECONDS
+    rows = _rows(user, recipes)
+    names = {}
+    for row in rows:
+        if row["pending_reason"] == "search":
+            names.setdefault(row["key"], row["name"])
+    for name in names.values():
+        if time.monotonic() >= deadline:
+            break
+        first, *rest = search_terms(ingredient_key(name))
+        if not foods.search_and_cache(first, user):
+            break
+        searched = FoodSearch.query.filter_by(query_key=foods.query_key(first)).first()
+        if rest and searched is not None and searched.total == 0 and not foods.search_and_cache(rest[0], user):
+            break
+
+    # 2) AI 추정: 단위 무게(키·단위로 중복 제거 60개)와 식품 영양(키로 중복 제거 30개)을 한 번에(결정 8)
+    rows = _rows(user, recipes)
+    weights, food_names = {}, {}
+    for row in rows:
+        name = " ".join(row["name"].split())  # 줄바꿈으로 프롬프트 태그를 흉내 내지 못하게
+        if row["pending_reason"] == "weight" and len(weights) < MAX_WEIGHT_GUESSES:
+            weights.setdefault((row["key"], row["unit"]), (name, row["unit"]))
+        elif row["pending_reason"] == "food" and len(food_names) < MAX_FOOD_GUESSES:
+            food_names.setdefault(row["key"], name)
+    if weights or food_names:
+        weight_pairs, food_list = list(weights.values()), list(food_names.values())
+        mode = ai.scan_mode(user)
+        if mode == "sample" and not current_app.config["ANTHROPIC_API_KEY"]:  # 개발 모드 예시, 기록 없음
+            store_guess(*clean_guess(ai.sample_nutrition_guess(weight_pairs, food_list), weight_pairs, food_list), "sample")
+        elif mode == "on":
+            _estimate(user, weight_pairs, food_list)
+        # 키가 있는데 sample(체험 전체 AI 예산을 다 씀)이면 건너뛴다: 예시 값이 모두가 함께 쓰는 추정 캐시에 들어가면 안 된다
+
+    # 3) 아직 계산 중인 레시피(요청 순서)
+    context = NutritionContext(user, recipes)
+    return jsonify(pending_recipe_ids=[r.id for r in recipes if context.recipe(r)["pending"]])
+
+
+def _estimate(user, weight_pairs, food_list):
+    """한도(하루 20번·체험 3번·60초 10번)나 AI 실패면 오류 없이 넘어간다(줄은 계산 중으로 남는다)."""
+    limit = min(NUTRITION_DAILY_LIMIT, DEMO_AI_DAILY_LIMIT) if user.provider == "demo" else NUTRITION_DAILY_LIMIT
+    try:
+        scan.check_ai_limits(user.id, scan.NUTRITION_KINDS, limit, "영양 추정은", burst=NUTRITION_BURST)
+    except TooManyRequests:
+        db.session.rollback()  # PostgreSQL 잠금을 푼다
+        return
+    call = scan.start_ai_call(user.id, "nutrition")
+    try:
+        raw, usage = ai.estimate_nutrition(weight_pairs, food_list)
+    except ai.AiError:
+        return
+    scan.finish_ai_call(call, usage)
+    store_guess(*clean_guess(raw, weight_pairs, food_list), "ai")
