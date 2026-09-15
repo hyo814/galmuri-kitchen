@@ -1,0 +1,301 @@
+<title>4b-3 먹은 기록 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+  :root {
+    --board: #e6e8eb; --bg: #f3f4f6; --surface: #ffffff; --field: #f3f4f6; --text: #17191c; --text-2: #5b616b; --text-3: #63697a; --line: #eef0f2; --chip-line: #d3d7dd; --scrim: rgb(15 17 20 / 0.48);
+    --accent: #0b7a4c; --accent-strong: #086a41; --accent-tint: #e7f6ef; --on-accent: #ffffff; --warn: #8f5500; --warn-tint: #fff3dc; --danger: #c4262e; --danger-tint: #fdeded; --danger-line: #f5c2c4; --note: #3a3f46; --track: #e9ecef; --star: #e0a100;
+    --ph1: #d9c3a1; --ph2: #b9cfa8; --ph3: #c7b3c9; --ph4: #e3b8a4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --scrim: rgb(0 0 0 / 0.6); --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --danger: #ff6b6f; --danger-tint: #3b1c1f; --danger-line: #6b2b30; --note: #d3d7dc; --track: #2a2d32; --star: #f5c542; --ph1: #5a4a33; --ph2: #3f5436; --ph3: #4d3f50; --ph4: #5e4133; }
+  }
+  :root[data-theme="dark"] { --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --scrim: rgb(0 0 0 / 0.6); --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --danger: #ff6b6f; --danger-tint: #3b1c1f; --danger-line: #6b2b30; --note: #d3d7dc; --track: #2a2d32; --star: #f5c542; --ph1: #5a4a33; --ph2: #3f5436; --ph3: #4d3f50; --ph4: #5e4133; }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 16px 56px; background: var(--board); color: var(--text); font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .intro, .asks, .board { max-width: 1700px; margin-inline: auto; }
+  .intro { margin-bottom: 20px; }
+  .intro h1 { margin: 0 0 8px; font-size: 26px; line-height: 34px; text-wrap: balance; }
+  .intro p { margin: 0 0 6px; max-width: 70ch; font-size: 15px; line-height: 24px; color: var(--text-2); word-break: keep-all; }
+  .intro b { color: var(--note); }
+  .asks { margin-bottom: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; }
+  .ask { padding: 14px 16px; border-radius: 16px; background: var(--surface); }
+  .ask h3 { margin: 0 0 4px; font-size: 15px; }
+  .ask p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+  .ask .rec { color: var(--accent-strong); font-weight: 600; }
+  .board { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(384px, 100%), 1fr)); gap: 32px 24px; align-items: start; }
+  .option { display: grid; gap: 12px; justify-items: center; }
+  .cap { width: min(384px, 100%); display: grid; gap: 4px; }
+  .tag { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: 0.06em; color: var(--text-3); }
+  .cap h2 { margin: 0; font-size: 18px; line-height: 26px; }
+  .cap p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+
+  .phone { position: relative; width: min(384px, 100%); height: 820px; overflow: hidden; border-radius: 28px; background: var(--bg); padding: 16px 16px; display: grid; align-content: start; gap: 12px; }
+  .back { margin: 0 4px; font-size: 15px; color: var(--text-2); }
+  .h1 { margin: 0 4px; font-size: 26px; font-weight: 700; }
+  .card { border-radius: 20px; background: var(--surface); padding: 14px 16px; display: grid; gap: 10px; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .grow { flex: 1; min-width: 0; }
+  .muted { color: var(--text-3); font-size: 13px; line-height: 19px; }
+  .num { font-variant-numeric: tabular-nums; }
+  .link { color: var(--accent-strong); font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .pill { display: inline-flex; align-items: center; height: 22px; padding: 0 7px; border-radius: 7px; font-size: 12px; font-weight: 600; background: var(--accent-tint); color: var(--accent-strong); white-space: nowrap; }
+  .pill.gray { background: var(--field); color: var(--text-2); }
+  .pill.warn { background: var(--warn-tint); color: var(--warn); }
+  .meter { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
+  .meter i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 52px; border-radius: 16px; font-size: 16px; font-weight: 600; white-space: nowrap; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); }
+  .btn.secondary { background: var(--field); color: var(--text); }
+  .btn.danger { background: var(--danger-tint); color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger-line); }
+  .src { font-size: 12px; line-height: 18px; color: var(--text-3); word-break: keep-all; }
+
+  /* 요약 */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .stat { display: grid; gap: 2px; }
+  .stat b { font-size: 18px; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 12px; color: var(--text-3); }
+  .split { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; }
+  .split i:first-child { background: var(--accent); } .split i:last-child { background: var(--chip-line); }
+
+  /* 달력 */
+  .mnav { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; font-size: 17px; font-weight: 700; }
+  .mnav span { color: var(--text-3); font-weight: 400; font-size: 20px; }
+  .cal { border-radius: 20px; background: var(--surface); padding: 10px 8px 12px; }
+  .dow, .wk { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .dow span { text-align: center; font-size: 12px; color: var(--text-3); padding: 4px 0 6px; }
+  .wk + .wk { margin-top: 4px; }
+  .cell { position: relative; display: grid; justify-items: center; align-content: start; gap: 2px; height: 76px; padding-top: 4px; border-radius: 12px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .cell.dim { color: var(--chip-line); }
+  .cell.today .d { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 12px; background: var(--accent); color: var(--on-accent); font-weight: 700; }
+  .cell.sel { background: var(--accent-tint); }
+  .th { width: 34px; height: 34px; border-radius: 9px; }
+  .dots { display: flex; gap: 3px; height: 34px; align-items: center; }
+  .dots i { width: 6px; height: 6px; border-radius: 3px; background: var(--accent); }
+  .kc { font-size: 10px; color: var(--text-3); letter-spacing: -0.02em; }
+  .cook { position: absolute; top: 2px; right: 3px; width: 14px; height: 14px; border-radius: 7px; background: var(--warn-tint); color: var(--warn); font-size: 9px; font-weight: 700; display: grid; place-items: center; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--text-3); padding: 0 6px; }
+
+  /* 시트 */
+  .scrim { position: absolute; inset: 0; background: var(--scrim); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 7%; overflow: hidden; padding: 12px 20px 20px; border-radius: 24px 24px 0 0; background: var(--surface); display: grid; align-content: start; gap: 12px; }
+  .handle { justify-self: center; width: 40px; height: 4px; border-radius: 2px; background: var(--chip-line); }
+  .st { margin: 0; font-size: 21px; font-weight: 700; } .sd { margin: 2px 0 0; font-size: 14px; color: var(--text-2); word-break: keep-all; }
+  .meal { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+  .mealh { display: flex; align-items: center; font-size: 14px; font-weight: 600; color: var(--text-2); }
+  .mealh .k { margin-left: auto; font-weight: 500; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .log { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; align-items: center; }
+  .log .ph { width: 52px; height: 52px; border-radius: 12px; }
+  .log .noph { width: 52px; height: 52px; border-radius: 12px; background: var(--field); display: grid; place-items: center; color: var(--text-3); }
+  .log b { font-size: 15px; }
+  .log small { display: block; font-size: 12px; color: var(--text-3); margin-top: 1px; }
+  .stars { color: var(--star); font-size: 12px; letter-spacing: 1px; }
+  .addrow { display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--chip-line); color: var(--text-2); font-size: 14px; font-weight: 600; width: fit-content; }
+  .addrow b { color: var(--accent-strong); }
+  .plan { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: var(--field); font-size: 14px; }
+  .plan .link { margin-left: auto; }
+
+  .seg { display: grid; grid-template-columns: repeat(4, 1fr); padding: 4px; border-radius: 14px; background: var(--field); }
+  .seg span { display: grid; place-items: center; height: 38px; border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--text-2); }
+  .seg span.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+  .fld { display: grid; gap: 6px; }
+  .fld > span { font-size: 13px; font-weight: 600; color: var(--text-2); }
+  .inp { min-height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-radius: 12px; background: var(--field); font-size: 16px; }
+  .inp em { font-style: normal; color: var(--text-3); font-size: 14px; }
+  .chrow { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ch { display: inline-flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 20px; background: var(--field); color: var(--text-2); font-size: 14px; font-weight: 600; }
+  .ch.on { background: var(--accent-tint); color: var(--accent-strong); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .photos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .photos .ph, .photos .add { aspect-ratio: 1; max-width: 100%; border-radius: 12px; }
+  .photos .add { display: grid; place-items: center; align-content: center; gap: 2px; box-shadow: inset 0 0 0 1.5px var(--chip-line); color: var(--text-2); font-size: 12px; font-weight: 600; }
+  .bigstars { display: flex; gap: 6px; font-size: 26px; color: var(--star); }
+  .bigstars .off { color: var(--chip-line); }
+  .stepper { display: grid; grid-template-columns: 48px 1fr 48px; gap: 8px; }
+  .stepper span { display: grid; place-items: center; height: 48px; border-radius: 12px; background: var(--field); font-size: 16px; font-weight: 600; }
+  svg { flex: none; }
+</style>
+
+<header class="intro">
+  <h1>4b-3 먹은 기록 — 달력 · 사진 · 만족도</h1>
+  <p>식단(계획)과 따로 두는 <b>음식 일기</b>예요(설계 24절). 더보기 &gt; <b>먹은 기록</b>에서 한 달을 달력으로 보고, 날짜를 누르면 끼니별로 먹은 것·사진·메모·만족도를 남겨요. kcal은 4b-2 영양 계산을 그대로 써요. 요리 일기(5단계)가 생기면 그날 달력에 <b>요리함</b> 표시가 붙어요.</p>
+  <p>화면: ① 달력 → ② 날짜 상세 → ③ 먹은 것 추가 → ④ 사진만 먼저 → ⑤ 식단 칸에서 먹었어요 → ⑥ 달력 다크.</p>
+</header>
+
+<section class="asks" aria-label="정할 것">
+  <div class="ask"><h3>A. 외식·사 먹은 음식 kcal</h3><p>시안: 이름으로 <span class="rec">식품영양성분 DB의 ‘음식’에서 찾고</span>, 없으면 `추정 없이` 비워둬요. 사진으로 AI 추정은 하지 않아요(횟수·비용).</p></div>
+  <div class="ask"><h3>B. 식단에서 먹었어요</h3><p>시안: 식단 칸 상세에 <span class="rec">먹었어요</span> 버튼 — 그 칸의 요리·인분으로 바로 기록하고 집밥으로 표시해요. 날짜 상세에도 “식단에 있던 칸” 한 줄 제안.</p></div>
+  <div class="ask"><h3>C. 사진 한도</h3><p>시안: 기록 하나에 <span class="rec">사진 4장</span>, 장보기 메모와 같은 저장소·크기 제한(긴 변 1568px).</p></div>
+  <div class="ask"><h3>D. 달력 칸 표시</h3><p>시안: 사진이 있으면 <span class="rec">첫 사진</span>, 없으면 끼니 수만큼 점, 아래 작은 kcal. 추정이 섞이면 `약`.</p></div>
+</section>
+
+<main class="board">
+
+  <!-- 1 달력 -->
+  <section class="option" aria-labelledby="f1">
+    <div class="cap"><span class="tag">1 · MONTH</span><h2 id="f1">먹은 기록 달력</h2><p>위에 이번 달 요약(기록한 날·하루 평균 kcal·집밥 비율), 좌우로 달 이동, 오늘은 초록 원. 사진 썸네일 또는 끼니 점, 작은 kcal.</p></div>
+    <div class="phone">
+      <p class="back">‹ 더보기</p>
+      <p class="h1">먹은 기록</p>
+      <div class="card">
+        <div class="stats">
+          <div class="stat"><b>12일</b><span>기록한 날</span></div>
+          <div class="stat"><b>약 1,640</b><span>하루 평균 kcal</span></div>
+          <div class="stat"><b>72%</b><span>집밥</span></div>
+        </div>
+        <div class="split"><i style="flex:72"></i><i style="flex:28"></i></div>
+        <p class="muted" style="margin:0">집밥 18끼 · 외식 7끼 · 기록한 날 기준이에요</p>
+      </div>
+      <div class="mnav"><span>‹</span>2026년 9월<span>›</span></div>
+      <div class="cal">
+        <div class="dow"><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span></div>
+        <div class="wk">
+          <div class="cell dim"><span class="d">31</span></div>
+          <div class="cell"><span class="d">1</span><span class="dots"><i></i><i></i></span><span class="kc">1,420</span></div>
+          <div class="cell"><span class="d">2</span><div class="th" style="background:linear-gradient(150deg,var(--ph1),var(--ph2))"></div><span class="kc">약 1,780</span></div>
+          <div class="cell"><span class="d">3</span><span class="dots"></span></div>
+          <div class="cell"><span class="d">4</span><span class="dots"><i></i><i></i><i></i></span><span class="kc">1,690</span></div>
+          <div class="cell"><span class="d">5</span><div class="th" style="background:linear-gradient(150deg,var(--ph4),var(--ph3))"></div><span class="kc">약 2,120</span></div>
+          <div class="cell"><span class="d">6</span><div class="th" style="background:linear-gradient(150deg,var(--ph2),var(--ph1))"></div><span class="kc">1,510</span><span class="cook">요</span></div>
+        </div>
+        <div class="wk">
+          <div class="cell"><span class="d">7</span><span class="dots"><i></i></span><span class="kc">약 640</span></div>
+          <div class="cell"><span class="d">8</span><span class="dots"></span></div>
+          <div class="cell"><span class="d">9</span><span class="dots"><i></i><i></i><i></i></span><span class="kc">1,740</span></div>
+          <div class="cell"><span class="d">10</span><div class="th" style="background:linear-gradient(150deg,var(--ph3),var(--ph2))"></div><span class="kc">1,580</span></div>
+          <div class="cell"><span class="d">11</span><span class="dots"></span></div>
+          <div class="cell"><span class="d">12</span><span class="dots"><i></i><i></i></span><span class="kc">1,300</span></div>
+          <div class="cell"><span class="d">13</span><div class="th" style="background:linear-gradient(150deg,var(--ph1),var(--ph4))"></div><span class="kc">약 1,960</span><span class="cook">요</span></div>
+        </div>
+        <div class="wk">
+          <div class="cell sel"><span class="d">14</span><div class="th" style="background:linear-gradient(150deg,var(--ph2),var(--ph3))"></div><span class="kc">약 1,190</span></div>
+          <div class="cell today"><span class="d">15</span><span class="dots"><i></i></span><span class="kc">310</span></div>
+          <div class="cell"><span class="d">16</span></div><div class="cell"><span class="d">17</span></div><div class="cell"><span class="d">18</span></div><div class="cell"><span class="d">19</span></div><div class="cell"><span class="d">20</span></div>
+        </div>
+      </div>
+      <div class="legend"><span>● 끼니 기록</span><span>사진 = 첫 사진</span><span>요 = 요리 일기 있음</span></div>
+    </div>
+  </section>
+
+  <!-- 2 날짜 상세 -->
+  <section class="option" aria-labelledby="f2">
+    <div class="cap"><span class="tag">2 · DAY</span><h2 id="f2">날짜 상세</h2><p>목표 대비 kcal 막대(하루 칼로리 목표가 있으면), 끼니별 기록: 사진·이름·양·kcal·집밥/외식·만족도·메모. 끼니마다 <b>+ 먹은 것</b>. 식단에 있던 칸은 한 줄로 제안해요.</p></div>
+    <div class="phone" style="padding:0">
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <div><p class="st">9월 14일 월요일</p><p class="sd">약 1,190 / 목표 1,294kcal · 당류 22g · 나트륨 2,380mg</p></div>
+        <div class="meter" style="height:10px"><i style="width:92%"></i></div>
+        <div class="meal">
+          <div class="mealh">아침<span class="k">310kcal</span></div>
+          <div class="log"><div class="ph" style="background:linear-gradient(150deg,var(--ph1),var(--ph2))"></div><span><b>토스트</b> <span class="pill">집밥</span><small>1인분 · 310kcal · <span class="stars">★★★★☆</span></small></span></div>
+        </div>
+        <div class="meal">
+          <div class="mealh">점심<span class="k">약 400kcal</span></div>
+          <div class="log"><div class="ph" style="background:linear-gradient(150deg,var(--ph4),var(--ph3))"></div><span><b>제육덮밥</b> <span class="pill gray">외식</span><small>1인분 · 약 400kcal · <span class="stars">★★★☆☆</span></small><small>회사 앞 · 조금 짰어요</small></span></div>
+        </div>
+        <div class="meal">
+          <div class="mealh">저녁<span class="k">약 480kcal</span></div>
+          <div class="log"><div class="ph" style="background:linear-gradient(150deg,var(--ph2),var(--ph3))"></div><span><b>김치찌개</b> <span class="pill">집밥</span><small>2인분 중 1인분 · 약 480kcal · <span class="stars">★★★★★</span></small></span></div>
+        </div>
+        <div class="meal">
+          <div class="mealh">간식</div>
+          <div class="plan"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg><span>식단에 <b>요거트</b>가 있었어요</span><span class="link">먹었어요</span></div>
+          <span class="addrow"><b>+</b>먹은 것</span>
+        </div>
+        <p class="src">의료 조언이 아니라 참고용이에요.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 먹은 것 추가 -->
+  <section class="option" aria-labelledby="f3">
+    <div class="cap"><span class="tag">3 · ADD</span><h2 id="f3">먹은 것 추가</h2><p>무엇을: <b>식단에서 · 내 레시피 · 음식 찾기 · 직접</b>. 양은 인분 −/+(음식 찾기는 g도), 어디서(집밥·외식), 만족도 별 5개, 메모 200자, 사진 4장.</p></div>
+    <div class="phone" style="padding:0">
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <div><p class="st">점심 · 먹은 것 추가</p><p class="sd">9월 14일 월요일</p></div>
+        <div class="seg"><span>식단에서</span><span>내 레시피</span><span class="on">음식 찾기</span><span>직접</span></div>
+        <div class="inp"><span>제육덮밥</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></div>
+        <div class="plan" style="background:var(--accent-tint)"><span><b>제육덮밥</b> <span class="muted">음식 · 1인분(400g) 약 740kcal</span></span></div>
+        <div class="fld"><span>얼마나 먹었어요?</span><div class="stepper"><span>−</span><span>½인분</span><span>+</span></div><span class="muted">약 370kcal · 당류 11g · 나트륨 820mg</span></div>
+        <div class="fld"><span>어디서</span><div class="chrow"><span class="ch">집밥</span><span class="ch on">외식</span></div></div>
+        <div class="fld"><span>만족도 (선택)</span><div class="bigstars">★★★<span class="off">★★</span></div></div>
+        <div class="fld"><span>사진 (선택)</span><div class="photos"><div class="ph" style="background:linear-gradient(150deg,var(--ph4),var(--ph3))"></div><div class="add"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h2l1.5-2h6l1.5 2h2A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.5"/></svg>찍기</div><div class="add"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="M20 16l-5-5-8 8"/></svg>앨범</div></div></div>
+        <div class="fld"><span>메모 (선택)</span><div class="inp" style="color:var(--text-3)">회사 앞 · 조금 짰어요<em>12 / 200</em></div></div>
+        <div style="display:grid;grid-template-columns:1fr 1.6fr;gap:8px"><span class="btn secondary">취소</span><span class="btn primary">남기기</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 사진만 먼저 -->
+  <section class="option" aria-labelledby="f4">
+    <div class="cap"><span class="tag">4 · PHOTO FIRST</span><h2 id="f4">사진만 먼저</h2><p>먹기 전에 사진만 찍어두고, 이름·양은 나중에. 이름이 없으면 <b>사진 기록</b>으로 보이고 kcal은 비어요. 누르면 이어서 채워요.</p></div>
+    <div class="phone" style="padding:0">
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <div><p class="st">9월 15일 화요일</p><p class="sd">310kcal · 이름을 넣으면 kcal을 계산해요</p></div>
+        <div class="meal">
+          <div class="mealh">아침<span class="k">310kcal</span></div>
+          <div class="log"><div class="ph" style="background:linear-gradient(150deg,var(--ph1),var(--ph2))"></div><span><b>토스트</b> <span class="pill">집밥</span><small>1인분 · 310kcal</small></span></div>
+        </div>
+        <div class="meal">
+          <div class="mealh">점심</div>
+          <div class="log"><div class="ph" style="background:linear-gradient(150deg,var(--ph3),var(--ph4))"></div><span><b>사진 기록</b> <span class="pill warn">이름 없음</span><small>12:41 · 누르면 무엇을 먹었는지 채워요</small></span></div>
+        </div>
+        <div class="meal">
+          <div class="mealh">저녁</div>
+          <span class="addrow"><b>+</b>먹은 것</span>
+        </div>
+        <div class="card" style="background:var(--field)">
+          <b style="font-size:15px">빠르게 사진만 남기기</b>
+          <p class="muted" style="margin:0">먹은 기록 화면 오른쪽 위 카메라 버튼 → 지금 시간의 끼니(아침 5–10시·점심 10–15시·저녁 15–21시·그 밖은 간식)에 사진 기록이 생겨요.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><span class="btn secondary">앨범에서 고르기</span><span class="btn primary">카메라로 찍기</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 식단 칸에서 먹었어요 -->
+  <section class="option" aria-labelledby="f5">
+    <div class="cap"><span class="tag">5 · FROM MEAL PLAN</span><h2 id="f5">식단 칸 → 먹었어요</h2><p>식단 탭 칸 상세 맨 위에 <b>먹었어요</b>. 누르면 그 날짜·끼니·요리·인분으로 기록(집밥), 칸에는 <b>먹었어요</b> 표시가 남아요. 다시 누르면 기록 보기.</p></div>
+    <div class="phone" style="padding:0">
+      <div class="scrim"></div>
+      <div class="sheet" style="top:32%">
+        <div class="handle"></div>
+        <div><p class="st">김치찌개</p><p class="sd">9월 14일 월요일 · 저녁</p></div>
+        <div class="row"><span class="pill warn">두부 마저 써요</span><span class="muted">재료 8개 중 <b style="color:var(--accent-strong)">6개</b> 있어요</span></div>
+        <span class="btn primary"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>먹었어요 · 먹은 기록에 남기기</span>
+        <div class="fld"><span>인분</span><div class="stepper"><span>−</span><span>2인분</span><span>+</span></div></div>
+        <span class="btn secondary">레시피 보기</span>
+        <span class="btn secondary">다른 걸로 바꾸기</span>
+        <span class="btn danger">칸 비우기</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 더보기 입구 -->
+  <section class="option" aria-labelledby="f6">
+    <div class="cap"><span class="tag">6 · MORE ENTRY</span><h2 id="f6">더보기 입구</h2><p>더보기 <b>기록</b> 묶음 맨 위에 <b>먹은 기록</b>(오늘 남긴 끼니 수). 요리 기록(5단계)·집밥 리포트는 그 단계에서 같은 묶음에 들어가요(설계 27절).</p></div>
+    <div class="phone">
+      <p class="h1">더보기</p>
+      <div class="card" style="gap:0;padding:6px 16px">
+        <p class="muted" style="margin:8px 0 4px;font-weight:600">기록</p>
+        <div class="row" style="min-height:56px"><span class="grow"><b style="font-size:15px">먹은 기록</b><br><span class="muted">오늘 1끼 남겼어요</span></span><span class="muted">›</span></div>
+      </div>
+      <div class="card" style="gap:0;padding:6px 16px">
+        <p class="muted" style="margin:8px 0 4px;font-weight:600">우리 부엌</p>
+        <div class="row" style="min-height:52px">보관 위치<span class="grow"></span><span class="muted">›</span></div>
+        <div class="row" style="min-height:52px;border-top:1px solid var(--line)">주방 도구<span class="grow"></span><span class="muted">›</span></div>
+      </div>
+      <div class="card" style="gap:0;padding:6px 16px">
+        <p class="muted" style="margin:8px 0 4px;font-weight:600">나</p>
+        <div class="row" style="min-height:56px"><span class="grow"><b style="font-size:15px">하루 칼로리 목표</b><br><span class="muted">감량 · 1,294kcal</span></span><span class="muted">›</span></div>
+        <div class="row" style="min-height:52px;border-top:1px solid var(--line)">AI 사용량<span class="grow"></span><span class="muted">›</span></div>
+      </div>
+    </div>
+  </section>
+
+</main>
