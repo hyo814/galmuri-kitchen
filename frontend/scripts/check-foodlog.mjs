@@ -1,6 +1,20 @@
-// 먹은 기록 달력 순수 로직 검사 (4b-3 Task 7). `npm run check` — Node 24가 .ts를 바로 읽는다.
+// 먹은 기록 달력·날짜 상세 순수 로직 검사 (4b-3 Task 7·8). `npm run check` — Node 24가 .ts를 바로 읽는다.
 import assert from "node:assert/strict";
-import { cellKcalText, cellLabel, monthLabel, shiftMonth, summaryView, todayRowSub } from "../src/foodlog/log.ts";
+import {
+  cellKcalText,
+  cellLabel,
+  dayDescription,
+  dayTotals,
+  logSubText,
+  mealKcalText,
+  monthLabel,
+  servingsText,
+  shiftMonth,
+  starsText,
+  summaryView,
+  timeText,
+  todayRowSub,
+} from "../src/foodlog/log.ts";
 
 // 달 이동
 assert.equal(shiftMonth("2026-01", -1), "2025-12");
@@ -47,5 +61,68 @@ assert.deepEqual(summaryView({ logged_days: 0, avg_kcal: null, avg_approx: false
 assert.equal(todayRowSub([{ meal: "breakfast" }, { meal: "breakfast" }, { meal: "lunch" }]), "오늘 2끼 남겼어요");
 assert.equal(todayRowSub([]), "먹은 것·사진을 달력에 남겨요");
 assert.equal(todayRowSub(undefined), "");
+
+// 날짜 상세(Task 8) — 시안 DAY 세 기록: 토스트 310 exact, 제육덮밥 400 approx(당류 11·나트륨 820), 김치찌개 480 approx(당류 6·나트륨 1160)
+const dayLogs = [
+  { title: "토스트", nutrition: { kcal: 310, carbs_g: 40, protein_g: 10, fat_g: 8, sugars_g: 5, sodium_mg: 400 }, approx: false },
+  { title: "제육덮밥", nutrition: { kcal: 400, carbs_g: 30, protein_g: 20, fat_g: 15, sugars_g: 11, sodium_mg: 820 }, approx: true },
+  { title: "김치찌개", nutrition: { kcal: 480, carbs_g: 25, protein_g: 22, fat_g: 20, sugars_g: 6, sodium_mg: 1160 }, approx: true },
+];
+const dayT = dayTotals(dayLogs);
+assert.equal(dayT.kcal, 1190);
+assert.equal(dayT.approx, true);
+assert.equal(dayDescription(dayLogs, 1294), "약 1,190 / 목표 1,294kcal · 당류 22g · 나트륨 2,380mg");
+assert.equal(dayDescription(dayLogs, null), "약 1,190kcal · 당류 22g · 나트륨 2,380mg");
+
+// 사진만 먼저: 토스트 + 이름 없는 사진 기록
+assert.equal(
+  dayDescription(
+    [{ title: "토스트", nutrition: { kcal: 310, carbs_g: null, protein_g: null, fat_g: null, sugars_g: null, sodium_mg: null }, approx: false }, { title: null, nutrition: null, approx: false }],
+    null,
+  ),
+  "310kcal · 이름을 넣으면 kcal을 계산해요",
+);
+assert.equal(dayDescription([], null), "아직 남긴 기록이 없어요");
+assert.equal(dayDescription([{ title: "샐러드", nutrition: null, approx: false }], null), "kcal을 계산할 수 있는 기록이 없어요");
+
+assert.equal(mealKcalText([]), "");
+
+// 인분 글자
+assert.equal(servingsText(0.5), "½인분");
+assert.equal(servingsText(1.5), "1½인분");
+assert.equal(servingsText(2), "2인분");
+
+// 서울 시각
+assert.equal(timeText("2026-09-15T03:41:00+00:00"), "12:41");
+
+// 기록 줄 보조 글자(시안 DAY 세 줄 + 변형)
+const n480 = { kcal: 480, carbs_g: 25, protein_g: 22, fat_g: 20, sugars_g: 6, sodium_mg: 1160 };
+assert.equal(
+  logSubText({ title: "토스트", servings: 1, grams: null, slot_servings: null, nutrition: { kcal: 310, carbs_g: 40, protein_g: 10, fat_g: 8, sugars_g: 5, sodium_mg: 400 }, approx: false, created_at: "2026-09-14T00:00:00+00:00" }),
+  "1인분 · 310kcal",
+);
+assert.equal(
+  logSubText({ title: "제육덮밥", servings: 1, grams: null, slot_servings: null, nutrition: { kcal: 400, carbs_g: 30, protein_g: 20, fat_g: 15, sugars_g: 11, sodium_mg: 820 }, approx: true, created_at: "2026-09-14T00:00:00+00:00" }),
+  "1인분 · 약 400kcal",
+);
+assert.equal(
+  logSubText({ title: "김치찌개", servings: 1, grams: null, slot_servings: 2, nutrition: n480, approx: true, created_at: "2026-09-14T00:00:00+00:00" }),
+  "2인분 중 1인분 · 약 480kcal",
+);
+assert.equal(
+  logSubText({ title: "떡볶이", servings: null, grams: 300, slot_servings: null, nutrition: { kcal: 555, carbs_g: 90, protein_g: 8, fat_g: 12, sugars_g: 20, sodium_mg: 1500 }, approx: true, created_at: "2026-09-14T00:00:00+00:00" }),
+  "300g · 약 555kcal",
+);
+assert.equal(
+  logSubText({ title: null, servings: null, grams: null, slot_servings: null, nutrition: null, approx: false, created_at: "2026-09-15T03:41:00+00:00" }),
+  "12:41 · 누르면 무엇을 먹었는지 채워요",
+);
+assert.equal(
+  logSubText({ title: "샐러드", servings: 1, grams: null, slot_servings: null, nutrition: null, approx: false, created_at: "2026-09-14T00:00:00+00:00" }),
+  "1인분",
+);
+
+// 만족도 별 글자
+assert.equal(starsText(4), "★★★★☆");
 
 console.log("check-foodlog: ok");

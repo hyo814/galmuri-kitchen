@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { localToday, type FoodLogMonth, type User } from "../api";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { localToday, type FoodLog, type FoodLogDay, type FoodLogMonth, type MealKind, type User } from "../api";
+import FoodLogDaySheet, { fillAttempted } from "../components/FoodLogDaySheet";
 import Icon from "../components/Icon";
 import LoadError from "../components/LoadError";
 import { monthGrid } from "../meals/plan";
 import { cellKcalText, cellLabel, monthLabel, monthOf, shiftMonth, summaryView } from "../foodlog/log";
 import { goBack } from "../useHashRoute";
-import { useResource } from "../useResource";
+import { forgetResources, useResource } from "../useResource";
 
 const DOW = ["월", "화", "수", "목", "금", "토", "일"];
 
@@ -23,6 +24,7 @@ export function openFoodLog(target: { date: string; logId?: number }): void {
 export function resetFoodLogView(): void {
   viewMonth = null;
   pendingOpen = null;
+  fillAttempted.clear();
 }
 
 /** 한 달의 요약 카드·달 이동·달력(리뷰 fix round 1, I1 / fix round 2). `key={month}`로 달마다 새로 마운트해
@@ -35,12 +37,15 @@ function MonthBody({
   selected,
   onSelect,
   onToday,
+  onReload,
   nav,
 }: {
   month: string;
   selected: string | null;
   onSelect: (date: string) => void;
   onToday: (today: string) => void;
+  /** 날짜 상세 시트가 기록을 바꾼 뒤 이 달을 다시 불러오도록 부모에 reload를 건네준다 */
+  onReload: (reload: () => Promise<void>) => void;
   nav: ReactNode;
 }) {
   const { data, error, reload } = useResource<FoodLogMonth>(`/api/food-logs/month?month=${month}`);
@@ -48,6 +53,9 @@ function MonthBody({
   useEffect(() => {
     if (data) onToday(data.today);
   }, [data, onToday]);
+  useEffect(() => {
+    onReload(reload);
+  }, [reload, onReload]);
 
   if (!data)
     return (
@@ -151,11 +159,14 @@ function MonthBody({
 
 /** 컴포넌트 이름은 FoodLogPage — 같은 파일이 `import type { FoodLog } from "../api"`를 쓰므로 `FoodLog`로 지으면 TS2440 이름 충돌(개정 1 D9) */
 export default function FoodLogPage({ user }: { user: User }) {
-  void user; // 카메라 버튼(Task 10)에서 쓴다
   const [month, setMonth] = useState(() => (pendingOpen ? monthOf(pendingOpen.date) : (viewMonth ?? monthOf(localToday()))));
   const [selected, setSelected] = useState<string | null>(() => pendingOpen?.date ?? null);
+  const [open, setOpen] = useState(() => pendingOpen !== null);
+  // Task 9가 이 값으로 고치기·추가 시트를 그린다
+  const [editing, setEditing] = useState<{ meal: MealKind; log?: FoodLog; day: FoodLogDay } | null>(null);
   // 서버 today(개정 1 P14) — 받기 전엔 기기 시계로 `다음 달` 막기를 어림하고, 어느 달이든 한 번 받으면 그 값으로 굳힌다
   const [today, setToday] = useState(() => localToday());
+  const monthReload = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
     pendingOpen = null;
@@ -165,6 +176,20 @@ export default function FoodLogPage({ user }: { user: User }) {
   }, [month]);
 
   const onToday = useCallback((t: string) => setToday(t), []);
+  const onReload = useCallback((reload: () => Promise<void>) => {
+    monthReload.current = reload;
+  }, []);
+  const onSelect = useCallback((date: string) => {
+    setSelected(date);
+    setOpen(true);
+  }, []);
+  const onChanged = useCallback(() => {
+    void monthReload.current();
+    forgetResources("/api/food-logs?date=");
+  }, []);
+  const onOpenLog = useCallback((log: FoodLog, day: FoodLogDay) => setEditing({ meal: log.meal, log, day }), []);
+  const onAdd = useCallback((meal: MealKind, day: FoodLogDay) => setEditing({ meal, day }), []);
+  void editing; // Task 9가 이 값으로 고치기·추가 시트를 그린다
 
   // `MonthBody`가 요약과 달력 사이에 그대로 끼워 넣는다(시안 순서 유지) — 그래서 그 달이 불러오는 중·오류여도 이건 산다
   const nav = (
@@ -194,7 +219,19 @@ export default function FoodLogPage({ user }: { user: User }) {
         <h1>먹은 기록</h1>
       </header>
 
-      <MonthBody key={month} month={month} selected={selected} onSelect={setSelected} onToday={onToday} nav={nav} />
+      <MonthBody key={month} month={month} selected={selected} onSelect={onSelect} onToday={onToday} onReload={onReload} nav={nav} />
+
+      {open && selected && (
+        <FoodLogDaySheet
+          date={selected}
+          today={today}
+          user={user}
+          onOpenLog={onOpenLog}
+          onAdd={onAdd}
+          onChanged={onChanged}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </main>
   );
 }

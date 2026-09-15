@@ -44,3 +44,60 @@ export function todayRowSub(logs: Pick<FoodLog, "meal">[] | undefined): string {
   const meals = new Set(logs.map((l) => l.meal)).size;
   return meals ? `오늘 ${meals}끼 남겼어요` : "먹은 것·사진을 달력에 남겨요";
 }
+
+// ---- 날짜 상세 시트(Task 8) ----
+
+export interface DayTotals { kcal: number; approx: boolean; sugars_g: number; sodium_mg: number }
+/** kcal 있는 기록만 더한다(결정 11·15). 당류·나트륨은 값 있는 것만. kcal 있는 기록이 없으면 null.
+ *  (이름 없는 사진 기록 수는 세지 않는다 — dayDescription이 logs.some으로 본다, 개정 1 D7) */
+export function dayTotals(logs: Pick<FoodLog, "nutrition" | "approx">[]): DayTotals | null {
+  const counted = logs.filter((l) => l.nutrition);
+  if (!counted.length) return null;
+  const t: DayTotals = { kcal: 0, approx: false, sugars_g: 0, sodium_mg: 0 };
+  for (const l of counted) {
+    t.kcal += l.nutrition!.kcal;
+    t.approx ||= l.approx;
+    t.sugars_g += l.nutrition!.sugars_g ?? 0;
+    t.sodium_mg += l.nutrition!.sodium_mg ?? 0;
+  }
+  return t;
+}
+
+/** 시트 설명(시안 DAY·PHOTO FIRST) */
+export function dayDescription(logs: Pick<FoodLog, "nutrition" | "approx" | "title">[], goal: number | null): string {
+  if (!logs.length) return "아직 남긴 기록이 없어요";
+  const t = dayTotals(logs);
+  const hint = logs.some((l) => l.title === null) ? "이름을 넣으면 kcal을 계산해요" : "";
+  if (!t) return hint || "kcal을 계산할 수 있는 기록이 없어요";
+  return [
+    `${t.approx ? "약 " : ""}${kcalNumber(t.kcal)}${goal ? ` / 목표 ${kcalNumber(goal)}` : ""}kcal`,
+    t.sugars_g ? `당류 ${Math.round(t.sugars_g)}g` : "",
+    t.sodium_mg ? `나트륨 ${kcalNumber(t.sodium_mg)}mg` : "",
+    hint,
+  ].filter(Boolean).join(" · ");
+}
+
+/** 끼니 머리 오른쪽 "310kcal" / "약 400kcal" / "" */
+export const mealKcalText = (logs: Pick<FoodLog, "nutrition" | "approx" | "title">[]) => {
+  const t = dayTotals(logs);
+  return t ? `${t.approx ? "약 " : ""}${kcalNumber(t.kcal)}kcal` : "";
+};
+
+/** 0.5 → "½인분", 1.5 → "1½인분", 2 → "2인분" */
+export const servingsText = (n: number) => `${Math.floor(n) || ""}${n % 1 ? "½" : ""}인분`;
+
+/** 서울 시각 "12:41" */
+export const timeText = (iso: string) => new Date(iso).toLocaleString("sv-SE", { timeZone: "Asia/Seoul" }).slice(11, 16);
+
+/** 기록 줄 보조 글자 "1인분 · 310kcal" / "2인분 중 1인분 · 약 480kcal" / "300g · 약 555kcal" / 사진 기록 "12:41 · 누르면 무엇을 먹었는지 채워요" */
+export function logSubText(log: Pick<FoodLog, "title" | "servings" | "grams" | "slot_servings" | "nutrition" | "approx" | "created_at">): string {
+  if (log.title === null) return `${timeText(log.created_at)} · 누르면 무엇을 먹었는지 채워요`;
+  const amount = log.grams !== null ? `${log.grams}g`
+    : log.servings === null ? ""
+    : log.slot_servings && log.slot_servings > log.servings ? `${log.slot_servings}인분 중 ${servingsText(log.servings)}` : servingsText(log.servings);
+  const kcal = log.nutrition ? `${log.approx ? "약 " : ""}${kcalNumber(log.nutrition.kcal)}kcal` : "";
+  return [amount, kcal].filter(Boolean).join(" · ");
+}
+
+/** 만족도 별 글자 "★★★★☆"(aria는 "만족도 4점") */
+export const starsText = (rating: number) => "★".repeat(rating) + "☆".repeat(5 - rating);
