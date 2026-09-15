@@ -101,7 +101,7 @@ export default function DayNutritionSheet({ date, slots, goal, onClose }: Props)
         })}
       </div>
       <p className="nt-src">
-        식단은 계획이라 실제로 먹은 양과 달라요. 먹은 기록은 다음에 ‘먹은 기록’에서 남길 수 있어요. 의료 조언이 아니라 참고용이에요.
+        식단은 계획이라 실제로 먹은 양과 달라요. 먹은 기록은 더보기 ‘먹은 기록’에서 남길 수 있어요. 의료 조언이 아니라 참고용이에요.
       </p>
     </Sheet>
   );
