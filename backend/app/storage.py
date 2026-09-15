@@ -80,12 +80,12 @@ def delete(keys):
     if mode() == "r2":
         # ponytail: 실패하면 R2에 파일이 남는다(행은 이미 없음). 쌓이면 접두사로 훑어 지우는 정리 작업을 더한다.
         try:
-            res = _client().delete_objects(
-                Bucket=current_app.config["R2_BUCKET"],
-                Delete={"Objects": [{"Key": k} for k in keys], "Quiet": True},  # 한 번에 1000개까지, 메모 하나는 10장
-            )
-            if res.get("Errors"):
-                log.warning("photo delete failed: %d objects", len(res["Errors"]))
+            client, bucket = _client(), current_app.config["R2_BUCKET"]
+            for i in range(0, len(keys), 1000):  # delete_objects는 한 번에 1000개까지만 받는다
+                batch = keys[i : i + 1000]
+                res = client.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": k} for k in batch], "Quiet": True})
+                if res.get("Errors"):
+                    log.warning("photo delete failed: %d objects", len(res["Errors"]))
         except (BotoCoreError, ClientError) as e:
             log.warning("photo delete failed: %s", type(e).__name__)
         return

@@ -270,8 +270,8 @@ def put_meal_slot(plan_id):
     if slot is None:
         slot = MealSlot(plan_id=plan.id, date=date, meal=meal)
         db.session.add(slot)
-    else:
-        slot.food_log = None  # 결정 6: 다른 요리로 바꾸면 연결만 끊고 기록은 남긴다
+    elif slot.recipe_id != recipe_id or slot.title != title:
+        slot.food_log = None  # 결정 6: 다른 요리로 바꾸면 연결만 끊고 기록은 남긴다(같은 요리 재선택은 유지)
     slot.recipe_id = recipe_id
     slot.title = title
     slot.servings = servings
