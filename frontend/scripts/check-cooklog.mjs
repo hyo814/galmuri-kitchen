@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import {
   aboutWon,
+  amountHint,
   cookMeal,
   cookedLine,
   dateChip,
@@ -46,6 +47,17 @@ assert.equal(parseAmountInput("0"), null);
 assert.equal(parseAmountInput(""), null);
 assert.equal(parseAmountInput("abc"), null);
 assert.equal(parseAmountInput("100001"), null);
+// 서버가 소수 셋째 자리로 반올림한 뒤 0이면 400 — 화면도 같은 기준(리뷰 M1)
+assert.equal(parseAmountInput("0.0004"), null);
+assert.equal(parseAmountInput("0.0005"), 0.0005);
+
+// 저장을 누른 뒤 쓴 양 안내(리뷰 M7): 비었거나 0 이하·숫자 아님 → 체크 끄기 안내, 서버 상한 초과 → 서버 문구(cooklog.AMOUNT_ERROR)
+assert.equal(amountHint("0.3"), null);
+assert.equal(amountHint(""), "쓴 양을 입력하거나, 안 썼으면 체크를 꺼주세요");
+assert.equal(amountHint("0"), "쓴 양을 입력하거나, 안 썼으면 체크를 꺼주세요");
+assert.equal(amountHint("0.0004"), "쓴 양을 입력하거나, 안 썼으면 체크를 꺼주세요");
+assert.equal(amountHint("abc"), "쓴 양을 입력하거나, 안 썼으면 체크를 꺼주세요");
+assert.equal(amountHint("100001"), "쓴 양은 0보다 커야 해요.");
 
 // 사 먹으면 얼마 입력
 assert.equal(parseWon("9,000원"), 9000);

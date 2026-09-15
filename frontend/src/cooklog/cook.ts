@@ -12,10 +12,19 @@ export const defaultAmount = (row: Pick<CookDraftRow, "base_amount">, servings: 
 export const defaultChecked = (row: Pick<CookDraftRow, "ingredient_id" | "seasoning">) => row.ingredient_id !== null && !row.seasoning;
 /** 결정 6: 쓴 양이 재고 이상이면 `마저 써요` */
 export const usesUp = (amount: number, stock: number) => amount >= stock - 0.0005;
-/** 쓴 양 입력 "1.5"·"0,3" → 0 < n ≤ 100000, 아니면 null */
+const MAX_AMOUNT = 100_000; // 서버 cooklog.MAX_AMOUNT
+/** 서버처럼 소수 셋째 자리로 반올림(cooklog.parse_usages) */
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+/** 쓴 양 입력 "1.5"·"0,3" → 셋째 자리 반올림 뒤 0 < n ≤ 100000, 아니면 null */
 export function parseAmountInput(text: string): number | null {
   const n = Number(text.trim().replace(",", "."));
-  return text.trim() !== "" && Number.isFinite(n) && n > 0 && n <= 100000 ? n : null;
+  return text.trim() !== "" && Number.isFinite(n) && round3(n) > 0 && round3(n) <= MAX_AMOUNT ? n : null;
+}
+/** 저장을 누른 뒤 쓴 양 칸 안내(없으면 null). 서버 상한을 넘으면 서버가 돌려주는 문구 그대로(cooklog.AMOUNT_ERROR) */
+export function amountHint(text: string): string | null {
+  if (parseAmountInput(text) !== null) return null;
+  const n = Number(text.trim().replace(",", "."));
+  return Number.isFinite(n) && round3(n) > MAX_AMOUNT ? "쓴 양은 0보다 커야 해요." : "쓴 양을 입력하거나, 안 썼으면 체크를 꺼주세요";
 }
 /** 사 먹으면 얼마 입력 "9,000원" → 9000, "" → null, 틀리면 undefined */
 export function parseWon(text: string): number | null | undefined {

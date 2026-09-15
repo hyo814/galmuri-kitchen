@@ -13,6 +13,7 @@ import {
 } from "../api";
 import {
   MAX_COOK_SERVINGS,
+  amountHint,
   cookMeal,
   dateChip,
   deductedText,
@@ -31,7 +32,7 @@ import {
 import { addDays } from "../format.ts";
 import { resizeImage } from "../image.ts";
 import { useAsyncAction } from "../useAsyncAction";
-import { forgetRecipeCaches, forgetResources, useResource } from "../useResource";
+import { forgetRecipeCaches, forgetResources } from "../useResource";
 import Icon from "./Icon";
 import Sheet from "./Sheet";
 import StarPicker from "./StarPicker";
@@ -47,9 +48,6 @@ interface Props {
   onSaved: (result: CookSaveResult) => void;
   onClose: () => void;
 }
-
-/** 자동 추정을 이미 부른 레시피 id — 실패·한도여도 시트를 열 때마다 AI를 다시 부르지 않게(개정 1 P16) */
-const estimatedOnce = new Set<number>();
 
 /** 저장·되돌리기 뒤 옛 재고·요리 표시를 보여주지 않게(Task 10 요리 일기 화면도 가져다 쓴다) */
 export function forgetCookCaches() {
@@ -71,6 +69,8 @@ export function toastSaved(result: CookSaveResult, onUndone?: () => void): void 
   showUndoToast({
     message: deductedText(result.deducted_names),
     strong: result.log.saved === null ? undefined : savedText(result.log.saved),
+    // 서버가 되돌리기를 받는 길이(undo_until − created_at, 120초)를 응답을 받은 순간부터 잰다 — 기기 시계가 서버와 달라도 같은 길이
+    undoUntil: Date.now() + (Date.parse(result.log.undo_until) - Date.parse(result.log.created_at)),
     onUndo: async () => {
       const text = await undoCook(result.log.id);
       onUndone?.();
@@ -283,20 +283,28 @@ export function PhotoPicker({
 
 /** 시안 1 · COOKED: 요리했어요 시트. 초안을 받은 뒤에 폼을 그린다 */
 export default function CookSheet({ recipeId, user, start, onSaved, onClose }: Props) {
-  const url = `/api/recipes/${recipeId}/cook-draft`;
-  const draft = useResource<CookDraft>(url);
-  // ponytail: 초안은 지금 재고·사 먹으면 얼마라 닫으면 캐시를 버린다 — 다시 열 때 옛 값으로 폼을 채우지 않게
-  useEffect(() => () => forgetResources(url), [url]);
+  const [draft, setDraft] = useState<CookDraft>();
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  // 초안은 지금 재고·사 먹으면 얼마라 캐시에 두지 않고 열 때마다 받는다. 닫히면 요청을 끊어 닫힌 시트에 쓰지 않는다
+  useEffect(() => {
+    const controller = new AbortController();
+    setError("");
+    api<CookDraft>(`/api/recipes/${recipeId}/cook-draft`, { signal: controller.signal }).then(setDraft, (e: Error) => {
+      if (!controller.signal.aborted) setError(e.message);
+    });
+    return () => controller.abort();
+  }, [recipeId, attempt]);
 
-  if (!draft.data) {
+  if (!draft) {
     return (
       <Sheet title="요리했어요" onClose={onClose}>
-        {draft.error ? (
+        {error ? (
           <>
             <p className="error" role="alert">
-              {draft.error}
+              {error}
             </p>
-            <button type="button" className="btn secondary" onClick={draft.reload}>
+            <button type="button" className="btn secondary" onClick={() => setAttempt((n) => n + 1)}>
               <Icon name="refresh" size={16} />
               다시 불러오기
             </button>
@@ -309,7 +317,7 @@ export default function CookSheet({ recipeId, user, start, onSaved, onClose }: P
       </Sheet>
     );
   }
-  return <CookForm draft={draft.data} user={user} start={start} onSaved={onSaved} onClose={onClose} />;
+  return <CookForm draft={draft} user={user} start={start} onSaved={onSaved} onClose={onClose} />;
 }
 
 function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeId"> & { draft: CookDraft }) {
@@ -332,27 +340,39 @@ function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeI
   const [memo, setMemo] = useState("");
   const slotEaten = start?.slotEaten ?? false;
   const [foodLog, setFoodLog] = useState(!slotEaten);
+  const [submitted, setSubmitted] = useState(false); // 쓴 양 안내는 저장을 누른 뒤부터
   const save = useAsyncAction();
   const id = useId();
   const meal = cookMeal(date, today, seoulHour(new Date()), start?.meal);
+  // 열려 있는 동안만 true(effect 안에서 켜야 StrictMode 다시 마운트에도 true) — 닫힌 뒤 도착한 추정은 쓰지 않는다
+  const alive = useRef(false);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  const autoEstimated = useRef(false);
 
   async function estimate() {
     setEstimating(true);
     setEstimateError("");
     try {
       const result = await api<EatOutEstimate>(`/api/recipes/${draft.recipe_id}/eat-out-estimate`, { method: "POST" });
-      if (priceTouched.current) return; // 기다리는 사이 직접 넣은 값을 덮지 않는다
+      if (!alive.current || priceTouched.current) return; // 닫힌 시트, 기다리는 사이 직접 넣은 값에는 쓰지 않는다
       setPriceText(wonFieldText(result.eat_out_price, ""));
       setSource(result.eat_out_source);
     } finally {
-      setEstimating(false);
+      forgetResources("/api/ai-usage"); // 다른 화면이 남은 AI 횟수를 옛 값으로 먼저 보이지 않게(Shopping.tsx와 같게)
+      if (alive.current) setEstimating(false);
     }
   }
 
-  // 자동 추정(개정 1 P16): 값이 없고 AI를 쓸 수 있고 체험 계정이 아니면 레시피마다 한 번. 실패·한도는 조용히 빈 칸
+  // 자동 추정(개정 1 P16): 값이 없고 AI를 쓸 수 있고 체험 계정이 아니면 시트를 열 때마다 한 번, 실패·한도는 조용히 빈 칸.
+  // 닫혀서 결과를 못 쓴 채 다시 열면 또 부른다(추정이 끝나 레시피에 저장됐으면 초안에 값이 있어 부르지 않는다)
   useEffect(() => {
-    if (draft.eat_out_price !== null || user.scan === "off" || user.provider === "demo" || estimatedOnce.has(draft.recipe_id)) return;
-    estimatedOnce.add(draft.recipe_id);
+    if (autoEstimated.current || draft.eat_out_price !== null || user.scan === "off" || user.provider === "demo") return;
+    autoEstimated.current = true;
     estimate().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -360,10 +380,13 @@ function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeI
   // 체험 계정은 시트만 열어 체험 AI를 쓰지 않게 누를 때만 부른다
   const demoEstimate =
     user.provider === "demo" && user.scan !== "off" && draft.eat_out_price === null
-      ? () =>
-          void estimate().catch((e: unknown) =>
-            setEstimateError(e instanceof ApiError && typeof e.body?.error === "string" ? e.body.error : "추정하지 못했어요. 직접 입력해주세요"),
-          )
+      ? () => {
+          priceTouched.current = false; // 칸을 만졌다 비운 뒤 눌러도 받은 값으로 채운다
+          estimate().catch((e: unknown) => {
+            if (alive.current)
+              setEstimateError(e instanceof ApiError && typeof e.body?.error === "string" ? e.body.error : "추정하지 못했어요. 직접 입력해주세요");
+          });
+        }
       : undefined;
 
   function changeServings(next: number) {
@@ -376,9 +399,10 @@ function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeI
   const missing = rows.filter((row) => row.ingredient_id === null).map((row) => row.name);
 
   function submit(e: MouseEvent<HTMLButtonElement>) {
+    setSubmitted(true);
     if (invalid) {
-      // 쓴 양 줄이 사 먹으면 얼마보다 위라 문서 순서의 첫 틀린 칸이 곧 화면 위 첫 칸
-      e.currentTarget.closest("dialog")?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+      // 쓴 양 줄이 사 먹으면 얼마보다 위라 문서 순서의 첫 틀린 칸이 곧 화면 위 첫 칸(쓴 양은 안내가 뜨기 전이라 data-bad로 찾는다)
+      e.currentTarget.closest("dialog")?.querySelector<HTMLElement>('[data-bad], [aria-invalid="true"]')?.focus();
       return;
     }
     void save.run(async () => {
@@ -414,7 +438,7 @@ function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeI
   }
 
   return (
-    <Sheet title={`${draft.title} 요리했어요`} description="쓴 재료는 재고에서 빼요" onClose={onClose}>
+    <Sheet title={`${draft.title} 요리했어요`} description="쓴 재료는 재고에서 빼요" locked={save.busy} onClose={onClose}>
       <div className="ck-row">
         <span className="field-label">인분</span>
         <div className="stepper">
@@ -447,6 +471,7 @@ function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeI
               const name = row.stock_name ?? row.name;
               const amount = parseAmountInput(amounts[i]);
               const bad = amountInvalid(i);
+              const hint = submitted && bad ? amountHint(amounts[i]) : null;
               return (
                 <Fragment key={i}>
                   <div className="ck-use">
@@ -471,8 +496,9 @@ function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeI
                         inputMode="decimal"
                         autoComplete="off"
                         aria-label={`${name} 쓴 양`}
-                        aria-invalid={bad || undefined}
-                        aria-describedby={bad ? `${id}-bad-${i}` : undefined}
+                        data-bad={bad || undefined}
+                        aria-invalid={hint ? true : undefined}
+                        aria-describedby={hint ? `${id}-bad-${i}` : undefined}
                         disabled={!checked[i]}
                         value={amounts[i]}
                         onChange={(e) => {
@@ -486,9 +512,9 @@ function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeI
                       </span>
                     </span>
                   </div>
-                  {bad && (
+                  {hint && (
                     <p id={`${id}-bad-${i}`} className="hint ck-invalid">
-                      쓴 양은 0보다 커야 해요
+                      {hint}
                     </p>
                   )}
                 </Fragment>

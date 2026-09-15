@@ -23,7 +23,8 @@ export default function StarPicker({ value, label, onChange }: { value: number |
           aria-label={`${n}점`}
           tabIndex={n === (value ?? 1) ? 0 : -1}
           className={value !== null && n <= value ? "on" : undefined}
-          onClick={() => onChange(value === n ? null : n)}
+          // 같은 별 다시 누르기로 지우는 것은 손가락·마우스만(detail > 0) — 화살표로 고른 뒤 Space·Enter·스크린리더 두 번 탭은 그 점수 그대로
+          onClick={(e) => onChange(value === n && e.detail > 0 ? null : n)}
           onKeyDown={starKey}
         >
           ★

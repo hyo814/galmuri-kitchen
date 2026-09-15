@@ -10,6 +10,9 @@ interface Props {
   hideHeader?: boolean;
   /** 첫 칸이 입력 칸이어도 제목에 포커스한다(고치기 시트처럼 열자마자 키보드가 올라오면 안 될 때) */
   focusTitle?: boolean;
+  /** 저장 중처럼 지금 닫히면 안 될 때 Esc·뒤로가기·배경 탭으로 닫지 않는다.
+   * ponytail: 브라우저(CloseWatcher)가 다른 동작 없이 연달아 누른 Esc·뒤로가기는 두 번째부터 취소를 막지 못하게 해서 그때는 닫힌다 */
+  locked?: boolean;
   onClose: () => void;
   children: ReactNode;
 }
@@ -19,7 +22,7 @@ interface Props {
 let lastClosed: { el: HTMLElement; claimed: boolean } | null = null;
 
 /** 네이티브 <dialog> 바텀시트. Esc·안드로이드 뒤로가기·배경 탭으로 닫힌다. */
-export default function Sheet({ title, description, action, className, hideHeader, focusTitle, onClose, children }: Props) {
+export default function Sheet({ title, description, action, className, hideHeader, focusTitle, locked, onClose, children }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const pointerDownOnDialog = useRef(false);
   const titleId = useId();
@@ -73,13 +76,16 @@ export default function Sheet({ title, description, action, className, hideHeade
       aria-labelledby={titleId}
       aria-describedby={description ? descId : undefined}
       onClose={onClose}
+      onCancel={(e) => {
+        if (locked) e.preventDefault();
+      }}
       onPointerDown={(e) => {
         pointerDownOnDialog.current = e.target === e.currentTarget;
       }}
       onClick={(e) => {
         // 배경(::backdrop) 탭: 누르기 시작도 배경(다이얼로그 자신)이었을 때만 —
         // 입력창에서 배경으로 드래그해 놓는 동작은 닫지 않는다.
-        if (e.target === e.currentTarget && pointerDownOnDialog.current) ref.current?.close();
+        if (!locked && e.target === e.currentTarget && pointerDownOnDialog.current) ref.current?.close();
       }}
     >
       <div className="sheet-body">

@@ -6035,8 +6035,18 @@ button.sh-offline svg:last-child {
   word-break: keep-all;
 }
 
+/* 알림이 없을 때도 읽힘 영역(role=status)은 남겨 두고 크기만 0(리뷰 I1) */
+.ck-toast:empty {
+  padding: 0;
+}
+
 .ck-toast p {
   margin: 0;
+}
+
+/* 기본 포커스 선(--accent)은 다크 모드 밝은 알림 바탕에서 잘 안 보여 글자색을 따른다 */
+.ck-toast :focus-visible {
+  outline-color: currentColor;
 }
 
 /* --accent 그대로는 알림 바탕(라이트 어두움·다크 밝음)에서 글자 대비가 모자라 알림 글자색 쪽으로 섞는다(라이트 6.6:1 · 다크 4.8:1) */
@@ -6058,14 +6068,22 @@ button.sh-offline svg:last-child {
   white-space: nowrap;
 }
 
-.ck-toast-undo:disabled {
+/* 되돌리는 중: disabled면 포커스가 빠져 aria-disabled(누름은 UndoToast가 무시) */
+.ck-toast-undo[aria-disabled="true"] {
   opacity: 0.7;
   cursor: default;
 }
 
-/* 알림(72px) + 사이 12px만큼 버튼을 올린다 */
-.cta-bar.ck-lift {
-  padding-bottom: calc(16px + 84px);
+/* 알림이 떠 있는 동안 모든 화면의 아래 버튼을 알림 위로 올리고 페이지 끝에 같은 만큼 여백을 더한다 —
+   --ck-toast-h는 UndoToast가 잰 실제 높이(줄바꿈 포함). 화면마다 다른 아래 여백은 그대로 두고 더하기만 한다 */
+body:has(.ck-toast:not(:empty)) .cta-bar {
+  transform: translateY(calc(-12px - var(--ck-toast-h, 72px)));
+}
+
+body:has(.ck-toast:not(:empty)) .page::after {
+  content: "";
+  display: block;
+  height: calc(12px + var(--ck-toast-h, 72px));
 }
 
 .ck-row {
