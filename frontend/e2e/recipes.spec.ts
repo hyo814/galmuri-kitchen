@@ -65,6 +65,8 @@ test("레시피를 삭제하면 목록에서 사라지고 새로고침해도 안
 
   await page.reload();
   await openRecipes(page, "내 레시피");
+  // 목록이 실제로 불러와졌는지부터 확인한다(그래야 아래 없음 검사가 "아직 안 불러옴"으로 통과하지 않는다)
+  await expect(page.getByRole("link", { name: "된장찌개" })).toBeVisible();
   await expect(page.getByRole("link", { name: "지울 요리" })).toHaveCount(0);
 });
 
@@ -150,6 +152,8 @@ test("내 양념 비율을 추가하면 목록에 생기고 삭제하면 사라�
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "이 비율 삭제" }).click();
   await openRecipes(page, "양념 비율");
+  // 목록이 실제로 불러와졌는지부터 확인한다(그래야 아래 없음 검사가 "아직 안 불러옴"으로 통과하지 않는다)
+  await expect(page.getByRole("link", { name: "우리집 제육볶음 양념" })).toBeVisible();
   await expect(page.getByRole("link", { name: "테스트 양념" })).toHaveCount(0);
 });
 

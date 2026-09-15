@@ -4,6 +4,7 @@ import { expect, openTab, test } from "./fixtures";
 // ---- 날짜 계산(브라우저 locale·timezoneId는 Asia/Seoul, api.ts localToday()와 같은 방식) ----
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const seoulToday = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
+const monthOf = (iso: string) => iso.slice(0, 7);
 function addDays(iso: string, delta: number): string {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d + delta)).toISOString().slice(0, 10);
@@ -27,36 +28,44 @@ async function openFoodLog(page: Page) {
   await expect(page.getByRole("heading", { name: "먹은 기록", level: 1 })).toBeVisible();
 }
 
-/** 달력에서 날짜 칸을 눌러 날짜 상세 시트를 연다 */
-async function openDayCell(page: Page, iso: string, todaySuffix = false) {
-  const name = new RegExp(`^${dateLabel(iso)}${todaySuffix ? " · 오늘" : ""}`);
+/** 달력에서 날짜 칸을 눌러 날짜 상세 시트를 연다. 지금 보이는 달과 날짜의 달이 다르면(달 경계) 먼저 지난달로 옮긴다 */
+async function openDayCell(page: Page, iso: string, opts: { today?: boolean } = {}) {
+  if (monthOf(iso) !== monthOf(seoulToday())) await page.getByRole("button", { name: "지난달" }).click();
+  const name = new RegExp(`^${dateLabel(iso)}${opts.today ? " · 오늘" : ""}`);
   await page.getByRole("button", { name }).click();
+}
+
+/** 열려 있는 날짜 상세 시트(제목은 날짜뿐 — FoodLogDaySheet가 "오늘" 접미사 없이 부른다) */
+function daySheetOf(page: Page, iso: string) {
+  return page.getByRole("dialog", { name: new RegExp(`^${dateLabel(iso)}`) });
 }
 
 test.describe("먹은 기록", () => {
   test("식단 칸을 '먹었어요'로 남기면 달력·시트에 보이고 새로고침해도 남는다", async ({ page }) => {
     const today = seoulToday();
     await openFoodLog(page);
-    await openDayCell(page, today, true);
+    await openDayCell(page, today, { today: true });
 
-    const daySheet = page.getByRole("dialog", { name: new RegExp(`^${dateLabel(today)}`) });
+    const daySheet = daySheetOf(page, today);
     await expect(daySheet.getByText("식단에")).toBeVisible();
     await daySheet.getByRole("button", { name: "식단 된장찌개 먹었어요" }).click();
 
-    // 식단 제안 줄이 사라지고(먼저 기다린다) 저녁 목록에 기록으로 바뀐다
+    // 식단 제안 줄(이름이 "식단 된장찌개 먹었어요"로 겹친다)이 사라지고, 저녁 목록에 기록 버튼(이름이 "된장찌개"로 시작)이 생긴다
     await expect(daySheet.getByRole("button", { name: "식단 된장찌개 먹었어요" })).toHaveCount(0);
-    await expect(daySheet.getByRole("button", { name: /된장찌개/ })).toBeVisible();
+    await expect(daySheet.getByRole("button", { name: /^된장찌개/ })).toBeVisible();
 
     await page.reload();
     await openFoodLog(page);
-    await openDayCell(page, today, true);
-    await expect(page.getByRole("dialog").getByRole("button", { name: /된장찌개/ })).toBeVisible();
+    await openDayCell(page, today, { today: true });
+    const daySheet2 = daySheetOf(page, today);
+    await expect(daySheet2.getByRole("button", { name: "식단 된장찌개 먹었어요" })).toHaveCount(0);
+    await expect(daySheet2.getByRole("button", { name: /^된장찌개/ })).toBeVisible();
   });
 
   test("내 레시피를 찾아 추가하면 목록에 생기고 새로고침해도 남는다", async ({ page }) => {
     const today = seoulToday();
     await openFoodLog(page);
-    await openDayCell(page, today, true);
+    await openDayCell(page, today, { today: true });
     await page.getByRole("button", { name: "점심 먹은 것 추가" }).click();
 
     const addSheet = page.getByRole("dialog", { name: /먹은 것 추가/ });
@@ -67,19 +76,18 @@ test.describe("먹은 기록", () => {
     await addSheet.getByRole("button", { name: "남기기" }).click();
     await expect(addSheet).toHaveCount(0);
 
-    const daySheet = page.getByRole("dialog", { name: new RegExp(`^${dateLabel(today)}`) });
-    await expect(daySheet.getByRole("button", { name: /김치찌개/ })).toBeVisible();
+    await expect(daySheetOf(page, today).getByRole("button", { name: /^김치찌개/ })).toBeVisible();
 
     await page.reload();
     await openFoodLog(page);
-    await openDayCell(page, today, true);
-    await expect(page.getByRole("dialog").getByRole("button", { name: /김치찌개/ })).toBeVisible();
+    await openDayCell(page, today, { today: true });
+    await expect(daySheetOf(page, today).getByRole("button", { name: /^김치찌개/ })).toBeVisible();
   });
 
-  test("음식을 찾아 무게(g)로 추가하면 미리보기가 보이고 목록에 생긴다", async ({ page }) => {
+  test("음식을 찾아 무게(g)로 추가하면 미리보기가 다시 계산되고 목록에 생긴다", async ({ page }) => {
     const today = seoulToday();
     await openFoodLog(page);
-    await openDayCell(page, today, true);
+    await openDayCell(page, today, { today: true });
     await page.getByRole("button", { name: "간식 먹은 것 추가" }).click();
 
     const addSheet = page.getByRole("dialog", { name: /먹은 것 추가/ });
@@ -87,29 +95,31 @@ test.describe("먹은 기록", () => {
     await addSheet.getByLabel("먹은 음식 이름").fill("비빔밥");
     await addSheet.getByRole("radiogroup", { name: "음식" }).getByText("비빔밥").click();
     const amountField = addSheet.getByRole("group", { name: "얼마나 먹었어요?" });
-    await expect(amountField.getByText(/kcal/)).toBeVisible();
+    const preview = amountField.getByText(/kcal/);
+    await expect(preview).toBeVisible();
 
     await amountField.getByRole("button", { name: "g" }).click();
+    const beforeGrams = (await preview.textContent()) ?? "";
     await addSheet.getByLabel("먹은 양(g)").fill("300");
-    await expect(amountField.getByText(/kcal/)).toBeVisible();
+    await expect(preview).not.toHaveText(beforeGrams); // 무게를 바꾸면 kcal 미리보기가 다시 계산된다
 
     await addSheet.getByRole("button", { name: "남기기" }).click();
     await expect(addSheet).toHaveCount(0);
 
-    const daySheet = page.getByRole("dialog", { name: new RegExp(`^${dateLabel(today)}`) });
-    await expect(daySheet.getByRole("button", { name: /비빔밥/ })).toBeVisible();
+    const daySheet = daySheetOf(page, today);
+    await expect(daySheet.getByRole("button", { name: /^비빔밥/ })).toBeVisible();
     await expect(daySheet.getByText("300g")).toBeVisible();
 
     await page.reload();
     await openFoodLog(page);
-    await openDayCell(page, today, true);
-    await expect(page.getByRole("dialog").getByRole("button", { name: /비빔밥/ })).toBeVisible();
+    await openDayCell(page, today, { today: true });
+    await expect(daySheetOf(page, today).getByRole("button", { name: /^비빔밥/ })).toBeVisible();
   });
 
   test("이름만 직접 남기면 목록에 생기고 새로고침해도 남는다", async ({ page }) => {
     const today = seoulToday();
     await openFoodLog(page);
-    await openDayCell(page, today, true);
+    await openDayCell(page, today, { today: true });
     await page.getByRole("button", { name: "저녁 먹은 것 추가" }).click();
 
     const addSheet = page.getByRole("dialog", { name: /먹은 것 추가/ });
@@ -119,53 +129,55 @@ test.describe("먹은 기록", () => {
     await addSheet.getByRole("button", { name: "남기기" }).click();
     await expect(addSheet).toHaveCount(0);
 
-    const daySheet = page.getByRole("dialog", { name: new RegExp(`^${dateLabel(today)}`) });
-    await expect(daySheet.getByRole("button", { name: /닭가슴살 샐러드/ })).toBeVisible();
+    await expect(daySheetOf(page, today).getByRole("button", { name: /^닭가슴살 샐러드/ })).toBeVisible();
 
     await page.reload();
     await openFoodLog(page);
-    await openDayCell(page, today, true);
-    await expect(page.getByRole("dialog").getByRole("button", { name: /닭가슴살 샐러드/ })).toBeVisible();
+    await openDayCell(page, today, { today: true });
+    await expect(daySheetOf(page, today).getByRole("button", { name: /^닭가슴살 샐러드/ })).toBeVisible();
   });
 
   test("먹은 기록을 고치면(이름·별점·메모) 목록에 반영되고 새로고침해도 남는다", async ({ page }) => {
     const today = seoulToday();
     await openFoodLog(page);
-    await openDayCell(page, today, true);
-    await page.getByRole("dialog").getByRole("button", { name: /토스트/ }).click();
+    await openDayCell(page, today, { today: true });
+    await daySheetOf(page, today).getByRole("button", { name: /^토스트/ }).click();
 
     const editSheet = page.getByRole("dialog", { name: /먹은 것 고치기/ });
     await expect(editSheet.getByText("토스트")).toBeVisible();
     await editSheet.getByRole("button", { name: "바꾸기" }).click();
     await editSheet.getByLabel("무엇을 먹었나요?").fill("구운 계란과 시금치");
     await editSheet.getByRole("radiogroup", { name: "만족도" }).getByRole("radio", { name: "2점" }).click();
-    await editSheet.locator("textarea").fill("아점 대신 제대로 챙겼어요");
+    await editSheet.getByLabel("메모").fill("아점 대신 제대로 챙겼어요");
     await editSheet.getByRole("button", { name: "저장" }).click();
     await expect(editSheet).toHaveCount(0);
 
-    const daySheet = page.getByRole("dialog", { name: new RegExp(`^${dateLabel(today)}`) });
-    await expect(daySheet.getByRole("button", { name: /구운 계란과 시금치/ })).toBeVisible();
+    const daySheet = daySheetOf(page, today);
+    await expect(daySheet.getByRole("button", { name: /^구운 계란과 시금치/ })).toBeVisible();
     await expect(daySheet.getByText("아점 대신 제대로 챙겼어요")).toBeVisible();
     await expect(daySheet.getByRole("img", { name: "만족도 2점" })).toBeVisible();
 
     await page.reload();
     await openFoodLog(page);
-    await openDayCell(page, today, true);
-    await expect(page.getByRole("dialog").getByRole("button", { name: /구운 계란과 시금치/ })).toBeVisible();
+    await openDayCell(page, today, { today: true });
+    await expect(daySheetOf(page, today).getByRole("button", { name: /^구운 계란과 시금치/ })).toBeVisible();
   });
 
   test("사진을 추가했다가 빼고 저장하면, 다시 열어 지운 사진도 서버에서 없어진다", async ({ page }) => {
     const today = seoulToday();
     await openFoodLog(page);
-    await openDayCell(page, today, true);
+    await openDayCell(page, today, { today: true });
     await page.getByRole("button", { name: "간식 먹은 것 추가" }).click();
 
     const addSheet = page.getByRole("dialog", { name: /먹은 것 추가/ });
     await addSheet.getByRole("group", { name: "무엇을 먹었나요" }).getByRole("button", { name: "직접" }).click();
     await addSheet.getByLabel("무엇을 먹었나요?").fill("심야간식");
 
-    const albumInput = addSheet.locator('input[type="file"][multiple]');
-    await albumInput.setInputFiles([pngFile("a.png"), pngFile("b.png")]);
+    const [chooser1] = await Promise.all([
+      page.waitForEvent("filechooser"),
+      addSheet.getByRole("button", { name: "앨범" }).click(),
+    ]);
+    await chooser1.setFiles([pngFile("a.png"), pngFile("b.png")]);
     await expect(addSheet.getByRole("button", { name: "사진 1 빼기" })).toBeVisible();
     await expect(addSheet.getByRole("button", { name: "사진 2 빼기" })).toBeVisible();
     await addSheet.getByRole("button", { name: "사진 2 빼기" }).click();
@@ -174,8 +186,8 @@ test.describe("먹은 기록", () => {
     await addSheet.getByRole("button", { name: "남기기" }).click();
     await expect(addSheet).toHaveCount(0);
 
-    const daySheet = page.getByRole("dialog", { name: new RegExp(`^${dateLabel(today)}`) });
-    const logButton = daySheet.getByRole("button", { name: /심야간식/ });
+    const daySheet = daySheetOf(page, today);
+    const logButton = daySheet.getByRole("button", { name: /^심야간식/ });
     await expect(logButton).toBeVisible();
     await expect(logButton.locator("img")).toHaveCount(1);
 
@@ -185,12 +197,23 @@ test.describe("먹은 기록", () => {
     await editSheet.getByRole("button", { name: "사진 1 빼기" }).click();
     await editSheet.getByRole("button", { name: "저장" }).click();
     await expect(editSheet).toHaveCount(0);
+    await expect(logButton).toBeVisible(); // 기록 자체는 남는다
     await expect(logButton.locator("img")).toHaveCount(0);
 
     await page.reload();
     await openFoodLog(page);
-    await openDayCell(page, today, true);
-    await expect(page.getByRole("dialog").getByRole("button", { name: /심야간식/ }).locator("img")).toHaveCount(0);
+    await openDayCell(page, today, { today: true });
+    const daySheet2 = daySheetOf(page, today);
+    const logButton2 = daySheet2.getByRole("button", { name: /^심야간식/ });
+    await expect(logButton2).toBeVisible();
+    await expect(logButton2.locator("img")).toHaveCount(0);
+
+    // 화면뿐 아니라 서버 값도 사진이 빠졌는지 확인
+    const res = await page.request.get(`/api/food-logs?date=${today}`);
+    expect(res.ok(), await res.text()).toBeTruthy();
+    const day: { logs: { title: string | null; photos: unknown[] }[] } = await res.json();
+    const log = day.logs.find((l) => l.title === "심야간식");
+    expect(log?.photos).toEqual([]);
   });
 
   test("먹은 기록을 지우면 목록에서 사라지고 새로고침해도 없다", async ({ page }) => {
@@ -198,37 +221,44 @@ test.describe("먹은 기록", () => {
     await openFoodLog(page);
     await openDayCell(page, yesterday);
 
-    const daySheet = page.getByRole("dialog", { name: new RegExp(`^${dateLabel(yesterday)}`) });
-    await daySheet.getByRole("button", { name: /김치찌개/ }).click();
+    const daySheet = daySheetOf(page, yesterday);
+    await daySheet.getByRole("button", { name: /^김치찌개/ }).click();
 
     const editSheet = page.getByRole("dialog", { name: /먹은 것 고치기/ });
     page.once("dialog", (d) => d.accept()); // "이 기록을 지울까요?"
     await editSheet.getByRole("button", { name: "기록 지우기" }).click();
     await expect(editSheet).toHaveCount(0);
-    await expect(daySheet.getByRole("button", { name: /김치찌개/ })).toHaveCount(0);
+    // 그날 다른 기록(점심 제육덮밥)은 그대로 있는지 먼저 확인한 뒤 — 시트가 아예 못 불러온 게 아님을 보장 — 지운 것만 없는지 본다
+    await expect(daySheet.getByRole("button", { name: /^제육덮밥/ })).toBeVisible();
+    await expect(daySheet.getByRole("button", { name: /^김치찌개/ })).toHaveCount(0);
 
     await page.reload();
     await openFoodLog(page);
     await openDayCell(page, yesterday);
-    await expect(page.getByRole("dialog").getByRole("button", { name: /김치찌개/ })).toHaveCount(0);
+    const daySheet2 = daySheetOf(page, yesterday);
+    await expect(daySheet2.getByRole("button", { name: /^제육덮밥/ })).toBeVisible();
+    await expect(daySheet2.getByRole("button", { name: /^김치찌개/ })).toHaveCount(0);
   });
 
   test("사진만 먼저 남기면 오늘 자리에 사진 기록이 생긴다", async ({ page }) => {
+    const today = seoulToday();
     await openFoodLog(page);
     await page.getByRole("button", { name: "사진만 먼저 남기기" }).click();
 
     const quickSheet = page.getByRole("dialog", { name: "빠르게 사진만 남기기" });
-    const albumInput = quickSheet.locator('input[type="file"]:not([capture])');
-    await albumInput.setInputFiles(pngFile("quick.png"));
+    const [chooser] = await Promise.all([
+      page.waitForEvent("filechooser"),
+      quickSheet.getByRole("button", { name: "앨범에서 고르기" }).click(),
+    ]);
+    await chooser.setFiles(pngFile("quick.png"));
     await expect(quickSheet).toHaveCount(0);
 
-    const daySheet = page.getByRole("dialog", { name: new RegExp(`^${dateLabel(seoulToday())}`) });
-    await expect(daySheet.getByRole("button", { name: /사진 기록/ })).toBeVisible();
+    await expect(daySheetOf(page, today).getByRole("button", { name: /^사진 기록/ })).toBeVisible();
 
     await page.reload();
     await openFoodLog(page);
-    await openDayCell(page, seoulToday(), true);
-    await expect(page.getByRole("dialog").getByRole("button", { name: /사진 기록/ })).toBeVisible();
+    await openDayCell(page, today, { today: true });
+    await expect(daySheetOf(page, today).getByRole("button", { name: /^사진 기록/ })).toBeVisible();
   });
 });
 

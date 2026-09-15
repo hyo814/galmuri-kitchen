@@ -28,7 +28,7 @@ test("살 것을 추가해 체크하고 재고에 넣으면 목록에서 빠지�
     page.waitForResponse((r) => r.url().includes("/api/shopping/items/") && r.request().method() === "PATCH" && r.ok()),
     page.getByRole("checkbox", { name: "새우깡 샀어요" }).click(),
   ]);
-  await expect(page.locator(".sh-offline")).not.toBeVisible();
+  await expect(page.getByText("저장 전")).toHaveCount(0); // 이 체크가 서버까지 저장돼 "저장 전" 표시가 없어질 때까지
 
   await page.getByRole("button", { name: "재고에 넣기" }).click();
   await expect(page).toHaveURL(/#\/shopping\/stock/);
@@ -40,6 +40,8 @@ test("살 것을 추가해 체크하고 재고에 넣으면 목록에서 빠지�
   ]);
 
   await expect(page).toHaveURL(/#\/shopping$/);
+  // 재고에 넣기 뒤 목록이 새로 받아질 때까지(대파·우유도 체크돼 있어 함께 재고로 들어간다 — 체크 안 한 두부로 로딩 완료를 확인)
+  await expect(page.getByText("두부")).toBeVisible();
   await expect(page.getByText("새우깡")).toHaveCount(0); // 접힌 "산 것"에만 남아 화면엔 안 보인다
 
   await openTab(page, "재고");
@@ -78,14 +80,17 @@ test("살 것을 목록에서 빼면 사라지고 새로고침해도 돌아오�
 
   await expect(page.getByText("건포도")).toHaveCount(0);
   await page.reload();
+  await expect(page.getByText("두부")).toBeVisible(); // 목록이 다시 불러와질 때까지 기다린 뒤
   await expect(page.getByText("건포도")).toHaveCount(0);
 });
 
 test("쇼핑몰에서 찾기를 누르면 쇼핑몰 링크 시트가 열린다", async ({ page }) => {
   await openTab(page, "장보기");
   await page.getByRole("button", { name: "두부 쇼핑몰에서 찾기" }).click();
-  await expect(page.getByRole("heading", { name: "두부 찾기" })).toBeVisible();
-  await expect(page.getByRole("link").first()).toBeVisible();
+  const dialog = page.getByRole("dialog"); // 시트 안 링크만(탭 막대에도 "장보기" 등 링크가 있어 페이지 전체에서 찾으면 안 된다)
+  await expect(dialog.getByRole("heading", { name: "두부 찾기" })).toBeVisible();
+  await expect(dialog.getByRole("link", { name: "쿠팡 검색 결과로 두부 찾기 (새 창)" })).toBeVisible();
+  await expect(dialog.getByRole("link")).toHaveCount(7); // 쇼핑몰 7곳, 각각 최소 "검색 결과" 링크 하나
 });
 
 test("장보기 메모를 지우고 새로 쓰면 카드에 나타나고 새로고침해도 남는다", async ({ page }) => {
@@ -112,7 +117,7 @@ test("장보기 메모를 지우고 새로 쓰면 카드에 나타나고 새로�
   await expect(page.getByText("우유 사기")).toBeVisible();
 });
 
-test("사진에서 살 것을 뽑으면(예시 결과) 담은 것만 장보기 목록에 들어간다", async ({ page }) => {
+test("사진에서 살 것을 뽑으면(예시 결과) 체크한 것만 장보기 목록에 들어가고 새로고침해도 남는다", async ({ page }) => {
   await openTab(page, "장보기");
   await page.getByRole("button", { name: "항목 추가" }).click();
   await page.getByRole("button", { name: "사진에서 뽑기" }).click();
@@ -123,12 +128,23 @@ test("사진에서 살 것을 뽑으면(예시 결과) 담은 것만 장보기 �
     .setInputFiles({ name: "memo.png", mimeType: "image/png", buffer: PNG });
 
   await expect(page.getByText(/찾은 살 것 \d+개/)).toBeVisible();
+  // 예시 결과(backend/app/ai.py SAMPLES["memo"]): 대파·두부·계란·수세미는 이미 목록에 있어 기본으로 꺼져 있고,
+  // 참기름·양파만 기본으로 켜져 있다(양파는 이미 재고로 들어간 "산 것"이라 목록엔 없어 켜짐)
+  await expect(page.getByRole("checkbox", { name: "참기름 담기" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("checkbox", { name: "대파 담기" })).toHaveAttribute("aria-checked", "false");
   await Promise.all([
     page.waitForResponse((r) => r.url().includes("/api/shopping/items/bulk") && r.ok()),
     page.getByRole("button", { name: /\d+개 장보기에 담기/ }).click(),
   ]);
 
   await expect(page.getByText(/장보기에 \d+개 담았어요/)).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "참기름 샀어요" })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "양파 샀어요" })).toBeVisible();
+  await expect(page.getByText("대파")).toHaveCount(1); // 이미 있던 대파는 다시 담기지 않아 한 줄 그대로
+
+  await page.reload();
+  await expect(page.getByRole("checkbox", { name: "참기름 샀어요" })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "양파 샀어요" })).toBeVisible();
 });
 
 test("오프라인에서 체크하면 연결된 뒤 서버에 저장된다", async ({ page, context }) => {
@@ -140,12 +156,14 @@ test("오프라인에서 체크하면 연결된 뒤 서버에 저장된다", asy
   await expect(page.getByRole("checkbox", { name: "두부 샀어요" })).toHaveAttribute("aria-checked", "true");
 
   await context.setOffline(false);
-  await expect(page.locator(".sh-offline")).not.toBeVisible(); // 오프라인 띠 → 저장 중 띠가 사라질 때까지
-
-  const res = await page.request.get("/api/shopping");
-  const body = await res.json();
-  const item = body.items.find((i: { name: string }) => i.name === "두부");
-  expect(item?.done_at).toBeTruthy();
+  // 화면 상태가 아니라 서버 값으로 저장됐는지 직접 기다린다(연결되는 대로 밀린 변경을 보낸다)
+  await expect
+    .poll(async () => {
+      const res = await page.request.get("/api/shopping");
+      const body = await res.json();
+      return body.items.find((i: { name: string }) => i.name === "두부")?.done_at ?? null;
+    })
+    .toBeTruthy();
 
   await page.reload();
   await expect(page.getByRole("checkbox", { name: "두부 샀어요" })).toHaveAttribute("aria-checked", "true");

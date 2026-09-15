@@ -34,32 +34,52 @@ test("재료를 직접 추가하면 목록에 생기고 새로고침해도 남�
   await expect(page.getByRole("button", { name: /브로콜리/ })).toBeVisible();
 });
 
-test("재료를 수정하면 목록에 반영된다", async ({ page }) => {
+test("재료를 수정하면 목록에 반영되고 새로고침해도 남는다", async ({ page }) => {
   const dialog = await openItem(page, /애호박/);
   await dialog.getByRole("spinbutton", { name: "수량" }).fill("2");
   await dialog.getByRole("button", { name: "저장", exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("button", { name: /애호박/ })).toContainText("2개");
+
+  await page.reload();
+  await expect(page.getByRole("navigation", { name: "주요 메뉴" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /애호박/ })).toContainText("2개");
 });
 
-test("수량을 0으로 저장하면 다 먹은 재료로 자동 삭제된다", async ({ page }) => {
+test("수량을 0으로 저장하면 다 먹은 재료로 자동 삭제되고 새로고침해도 남지 않는다", async ({ page }) => {
   const dialog = await openItem(page, /두부/);
   await dialog.getByRole("spinbutton", { name: "수량" }).fill("0");
   await dialog.getByRole("button", { name: "다 먹었어요 (삭제)" }).click();
   await page.getByRole("dialog", { name: "두부 지우기" }).getByRole("button", { name: "지우기" }).click();
+
+  // 목록이 실제로 다시 불러와진 뒤(달걀은 그대로 남아 있다) 두부가 없어졌는지 본다 —
+  // 그냥 toHaveCount(0)만 보면 목록이 아직 불러와지기 전(빈 화면)에도 통과해 버릴 수 있다.
+  await expect(page.getByRole("button", { name: /달걀/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /두부/ })).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByRole("navigation", { name: "주요 메뉴" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /달걀/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /두부/ })).toHaveCount(0);
 });
 
-test("재료 삭제 이유를 골라 지울 수 있다", async ({ page }) => {
+test("재료 삭제 이유를 골라 지울 수 있고 새로고침해도 남지 않는다", async ({ page }) => {
   const dialog = await openItem(page, /김치/);
   await dialog.getByRole("button", { name: "이 재료 삭제" }).click();
   const confirmDialog = page.getByRole("dialog", { name: "김치 지우기" });
   await confirmDialog.getByRole("radio", { name: /버렸어요/ }).click();
   await confirmDialog.getByRole("button", { name: "지우기" }).click();
+
+  await expect(page.getByRole("button", { name: /달걀/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /김치/ })).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByRole("navigation", { name: "주요 메뉴" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /달걀/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /김치/ })).toHaveCount(0);
 });
 
-test("필수품이 떨어지면 배너가 보이고, 채워 넣으면 배너가 사라진다", async ({ page }) => {
+test("필수품이 떨어지면 배너가 보이고, 채워 넣으면 배너가 사라지며 새로고침해도 그대로다", async ({ page }) => {
   const banner = page.getByRole("button", { name: /필수품 1개가 떨어졌어요/ });
   await expect(banner).toBeVisible();
   await expect(banner).toContainText("간장");
@@ -73,6 +93,12 @@ test("필수품이 떨어지면 배너가 보이고, 채워 넣으면 배너가 
   await addDialog.getByRole("button", { name: "저장", exact: true }).click();
   await expect(addDialog).toBeHidden();
 
+  await expect(page.getByRole("button", { name: /간장/ })).toBeVisible(); // 재고에 실제로 들어갔다
+  await expect(page.getByRole("button", { name: /필수품.*떨어졌어요/ })).toHaveCount(0);
+
+  await page.reload();
+  await expect(page.getByRole("navigation", { name: "주요 메뉴" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /간장/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /필수품.*떨어졌어요/ })).toHaveCount(0);
 });
 
