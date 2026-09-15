@@ -1,9 +1,9 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, type AiUsage, type RecipeSummary, type RecommendationCard, type Recommendations, type User } from "../api";
 import AddRecipeSheet from "../components/AddRecipeSheet";
 import Icon from "../components/Icon";
 import InfiniteSentinel from "../components/InfiniteSentinel";
-import { SOURCE_LABEL, imageSrc, namesLabel, remainingText } from "../format";
+import { SOURCE_LABEL, imageSrc, namesLabel, remainingText, withJosa } from "../format";
 import { navigate } from "../useHashRoute";
 import { useInfiniteList, type Page } from "../useInfiniteList";
 import { cache, useResource } from "../useResource";
@@ -22,10 +22,12 @@ const SEGMENTS: [Segment, string][] = [
 
 // ponytail: 상세에서 돌아와도 보던 칸을 유지한다(모듈 변수, 새로고침하면 추천). 칸을 공유 링크로 열 일이 생기면 경로로 옮긴다.
 let lastSegment: Segment = "recommend";
+let lastPublicQuery = ""; // 식약처 레시피 검색어도 같은 이유로 유지한다
 
 /** 로그아웃 때 다른 계정에서 이전 탭이 그대로 보이지 않게 (M9) */
 export function resetRecipesSegment() {
   lastSegment = "recommend";
+  lastPublicQuery = "";
   resetVideoFilter();
 }
 
@@ -88,7 +90,7 @@ function RecommendCardView({ card }: { card: RecommendationCard }) {
       <span className="rc-body">
         {urgent && <span className="badge old">{urgent}</span>}
         <span className="row-title">{card.title}</span>
-        <MatchLine have={card.have_count} total={card.total_count} />
+        {card.total_count > 0 && <MatchLine have={card.have_count} total={card.total_count} />}
       </span>
       {missing > 0 && (
         <span className="rc-missing">
@@ -170,8 +172,75 @@ function AiEntry() {
   );
 }
 
+/** 식약처 레시피 제목 검색 결과: 재고와 안 겹치는 레시피도 일치 점수 순으로 보여 준다 */
+function PublicSearchResults({ q }: { q: string }) {
+  const fetchPage = useCallback(
+    async (cursor: string | null): Promise<Page<RecommendationCard>> => {
+      const params = new URLSearchParams({ section: "public", q, offset: cursor ?? "0", limit: "20" });
+      const data = await api<Recommendations>(`/api/recommendations?${params}`);
+      return { items: data.public, next: data.next_offset !== null ? String(data.next_offset) : null };
+    },
+    [q],
+  );
+  const { items, loading, error, hasMore, multiPage, loadMore, reload } = useInfiniteList<RecommendationCard>(fetchPage, ["recs-search", q]);
+  const noMatch = `'${q}'${withJosa(q, "이", "가").slice(q.length)} 들어간 레시피가 없어요.`;
+  let status = "";
+  if (!loading && !error) status = items.length ? "레시피를 찾았어요" : noMatch;
+
+  return (
+    <>
+      <p className="sr-only" role="status" aria-live="polite">
+        {status}
+      </p>
+      {items.length === 0 ? (
+        error ? (
+          <div className="list-end">
+            <p className="error" role="alert">
+              {error}
+            </p>
+            <button className="btn secondary inline" onClick={reload}>
+              <Icon name="refresh" size={16} />
+              다시 불러오기
+            </button>
+          </div>
+        ) : loading || hasMore ? (
+          <p className="center muted">찾는 중…</p>
+        ) : (
+          <div className="empty">
+            <p>{noMatch}</p>
+          </div>
+        )
+      ) : (
+        <>
+          <ul className="rc-cards">
+            {items.map((card) => (
+              <li key={`search-${card.id}`}>
+                <RecommendCardView card={card} />
+              </li>
+            ))}
+          </ul>
+          <InfiniteSentinel onVisible={loadMore} hasMore={hasMore} multiPage={multiPage} loading={loading} error={error} onRetry={loadMore} />
+        </>
+      )}
+    </>
+  );
+}
+
 function RecommendList({ onShowMine, showAi }: { onShowMine: () => void; showAi: boolean }) {
   const { meta, items, loading, error, hasMore, multiPage, loadMore, reload } = useRecommendations();
+  const [input, setInput] = useState(lastPublicQuery);
+  const [q, setQ] = useState(lastPublicQuery);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // 입력을 멈추고 300ms 뒤에 찾는다(영상 칸과 같게)
+  useEffect(() => {
+    const timer = setTimeout(() => setQ(input.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [input]);
+
+  useEffect(() => {
+    lastPublicQuery = q;
+  }, [q]);
   // 재고 수를 알기 전에는 그리지 않고, 재고가 비었으면 숨긴다(만들 재료가 없다. 깜빡임 방지)
   const ai = showAi && meta !== undefined && meta.inventoryCount > 0 && <AiEntry />;
 
@@ -210,6 +279,7 @@ function RecommendList({ onShowMine, showAi }: { onShowMine: () => void; showAi:
       </section>
     );
 
+  const publicLabel = meta.sample ? "예시 레시피" : "식약처 레시피";
   const noneFound = meta.mine.length === 0 && items.length === 0 && !loading && !hasMore;
   if (noneFound)
     // M11: 카탈로그 자체가 비었을 때(재고와 안 겹치는 것까지 다 세도 공공 레시피가 0)는 "재료를 더 넣어보라"는
@@ -259,17 +329,61 @@ function RecommendList({ onShowMine, showAi }: { onShowMine: () => void; showAi:
       )}
       {/* M6: 공공 레시피가 하나도 없으면(내 레시피만 있을 때) 빈 섹션 자체를 그리지 않는다 */}
       {items.length > 0 && (
-        <section aria-label={meta.sample ? "예시 레시피" : "식약처 레시피"}>
-          <h2 className="section-label rc-group">{meta.sample ? "예시 레시피" : "식약처 레시피"}</h2>
-          <ul className="rc-cards">
-            {items.map((card) => (
-              <li key={`public-${card.id}`}>
-                <RecommendCardView card={card} />
-              </li>
-            ))}
-          </ul>
-          {items.length > 0 && (
-            <InfiniteSentinel onVisible={loadMore} hasMore={hasMore} multiPage={multiPage} loading={loading} error={error} onRetry={loadMore} />
+        <section aria-label={publicLabel}>
+          {/* 식약처 레시피 위 제목 검색 칸(2026-09-15 사용자 요청). 검색어가 있으면 아래 목록이 검색 결과로 바뀐다 */}
+          <form
+            role="search"
+            className="rc-search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setQ(input.trim());
+              inputRef.current?.blur(); // 키보드를 닫아 결과가 보이게
+            }}
+          >
+            <div className="r3-search">
+              <label>
+                <Icon name="search" size={20} />
+                <span className="sr-only">{publicLabel}에서 찾기</span>
+                <input
+                  ref={inputRef}
+                  type="search"
+                  placeholder={`${publicLabel}에서 찾기`}
+                  maxLength={50}
+                  enterKeyHint="search"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                />
+              </label>
+              {input && (
+                <button
+                  type="button"
+                  className="r3-search-clear"
+                  aria-label="검색어 지우기"
+                  onClick={() => {
+                    setInput("");
+                    setQ("");
+                    inputRef.current?.focus();
+                  }}
+                >
+                  <Icon name="close" size={18} />
+                </button>
+              )}
+            </div>
+          </form>
+          <h2 className="section-label rc-group">{publicLabel}</h2>
+          {q ? (
+            <PublicSearchResults q={q} />
+          ) : (
+            <>
+              <ul className="rc-cards">
+                {items.map((card) => (
+                  <li key={`public-${card.id}`}>
+                    <RecommendCardView card={card} />
+                  </li>
+                ))}
+              </ul>
+              <InfiniteSentinel onVisible={loadMore} hasMore={hasMore} multiPage={multiPage} loading={loading} error={error} onRetry={loadMore} />
+            </>
           )}
         </section>
       )}

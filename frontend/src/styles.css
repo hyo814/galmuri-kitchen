@@ -1549,6 +1549,15 @@ button.row-btn > svg {
   margin: 20px 20px 0;
 }
 
+/* 식약처 레시피 검색 칸: 위 섹션과는 떨어뜨리고 아래 제목과는 붙인다 */
+.rc-search .r3-search {
+  margin-top: 20px;
+}
+
+.rc-search + .rc-group {
+  margin-top: 16px;
+}
+
 .rc-cards {
   display: flex;
   flex-direction: column;
