@@ -39,9 +39,12 @@ def ingredient_status(purchased_on, expires_on, today, kind="fridge", rule=None)
     2. 냉동(freezer) 위치면 품목 규칙을 쓰지 않고 위치 종류 기준(60일).
     3. 그 외 매칭되는 품목 규칙이 있으면 규칙.
     4. 없으면 위치 종류 기준.
+    구입일을 모르면(purchased_on None) 구입 경과로 보는 2~4는 건너뛴다(2026-09-15 결정 B).
     """
     if expires_on is not None:
         return "urgent" if (expires_on - today).days <= URGENT_DAYS else "ok"
+    if purchased_on is None:
+        return "ok"
     age = (today - purchased_on).days
     if kind != "freezer" and rule is not None:
         warn_days, danger_days = rule
@@ -82,14 +85,14 @@ def to_json(item, today, rules, seasonings=()):
         "name": item.name,
         "quantity": item.quantity,
         "unit": item.unit,
-        "purchased_on": item.purchased_on.isoformat(),
+        "purchased_on": item.purchased_on.isoformat() if item.purchased_on else None,
         "expires_on": item.expires_on.isoformat() if item.expires_on else None,
         "status": status_of(item, today, rules, seasonings),
         "location_id": item.location_id,
         "location_name": item.location.name,
         "location_kind": item.location.kind,
         "days_left": (item.expires_on - today).days if item.expires_on else None,
-        "days_since_purchase": (today - item.purchased_on).days,
+        "days_since_purchase": (today - item.purchased_on).days if item.purchased_on else None,
         "price": item.price,
     }
 
@@ -135,7 +138,9 @@ def parse_fields(data, creating, locations=None):
             fields["unit"] = "개"
         else:
             fields["unit"] = text(raw, "단위는", 10)
-    if creating or "purchased_on" in data:
+    if "purchased_on" in data and data["purchased_on"] is None:
+        fields["purchased_on"] = None  # 기억 안 나요. 키가 아예 없으면(만들 때) 아래에서 400 — 모름도 골라서 보낸다
+    elif creating or "purchased_on" in data:
         fields["purchased_on"] = _date(data.get("purchased_on"), "구입일")
         if fields["purchased_on"] > seoul_today():  # 단건·일괄·수정이 모두 여기를 지난다
             abort(400, "구입일은 오늘보다 뒤일 수 없어요.")
@@ -171,7 +176,8 @@ def list_ingredients():
         key=lambda i: (
             STATUS_RANK[status_of(i, today, rules, seasonings)],
             i.expires_on or date.max,
-            i.purchased_on,
+            i.purchased_on is None,  # 구입일 모름은 같은 상태 안에서 맨 뒤
+            i.purchased_on or date.min,
             i.id,
         )
     )

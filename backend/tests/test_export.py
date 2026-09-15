@@ -6,7 +6,7 @@ from datetime import date, datetime, time, timedelta, timezone
 import app.export as export_module
 from app import scan
 from app.ingredients import SEOUL, seoul_today
-from app.models import AiCall, PublicRecipe, ShoppingItem, ShoppingNote, ShoppingNotePhoto, User, db, utcnow
+from app.models import AiCall, MealSlot, PublicRecipe, ShoppingItem, ShoppingNote, ShoppingNotePhoto, User, db, utcnow
 
 RECIPE = {
     "title": "두부조림",
@@ -27,6 +27,7 @@ RECIPE_HEADER = ["제목", "인분", "재료", "만드는 법", "출처", "출�
 SEASONING_HEADER = ["이름", "기준", "기준 양", "기준 단위", "주재료", "양념"]
 SHOPPING_HEADER = ["이름", "수량", "단위", "생활용품", "살 날", "넣을 위치", "체크", "산 날(재고에 넣은 날)", "출처", "출처 이름", "담은 날"]
 MEMO_HEADER = ["장소", "메모", "사진 수", "사진 파일 이름", "고친 시각"]
+MEALS_HEADER = ["식단 이름", "날짜", "끼니", "요리", "인분", "레시피에서", "1인분 추정 kcal"]
 
 
 def read_zip(res):
@@ -84,6 +85,16 @@ def test_requires_fetch_header_and_uses_no_quota(client, login, app):
     assert client.get("/api/export/summary").get_json()["remaining"] == 5
 
 
+def add_plan(client, **overrides):
+    return client.post(
+        "/api/meal-plans", json={"name": "식단", "start_on": day(0), "days": 7, "default_servings": 2, **overrides}
+    ).get_json()
+
+
+def fill_slot(client, plan_id, **overrides):
+    return client.put(f"/api/meal-plans/{plan_id}/slots", json={"date": day(0), "meal": "dinner", **overrides}).get_json()
+
+
 def test_summary_counts_only_my_data(client, login, app):
     login("other")
     client.post("/api/recipes", json=RECIPE)
@@ -91,6 +102,8 @@ def test_summary_counts_only_my_data(client, login, app):
     client.post("/api/seasonings", json=SEASONING)
     client.post("/api/shopping/items", json={"name": "남의 우유"})
     client.post("/api/shopping/notes", json={"body": "남의 메모"})
+    other_plan = add_plan(client)
+    fill_slot(client, other_plan["id"], title="남의 식단")
     login()
     client.post("/api/ingredients", json={"name": "두부", "purchased_on": day()})
     client.post("/api/recipes", json=RECIPE)
@@ -99,6 +112,9 @@ def test_summary_counts_only_my_data(client, login, app):
     client.post("/api/shopping/items", json={"name": "두부"})
     client.post("/api/shopping/items", json={"name": "대파"})
     client.post("/api/shopping/notes", json={"body": "메모"})
+    plan = add_plan(client)
+    fill_slot(client, plan["id"], meal="breakfast", title="토스트")
+    fill_slot(client, plan["id"], meal="lunch", title="김밥")
     me = user_id(app)
     with app.app_context():  # 7일 안에 산 것은 shopping.csv에 들어가므로 센다, 7일 지난 것은 세지 않는다
         db.session.add(ShoppingItem(user_id=me, name="계란", stocked_at=seoul_noon(3)))
@@ -112,6 +128,7 @@ def test_summary_counts_only_my_data(client, login, app):
         "seasonings": 1,
         "shopping": 3,
         "memos": 1,
+        "meals": 2,
         "limit": 5,
         "remaining": 5,
     }
@@ -127,6 +144,7 @@ def test_export_empty_data_has_header_only_csvs(client, login):
         "seasonings.csv": [SEASONING_HEADER],
         "shopping.csv": [SHOPPING_HEADER],
         "shopping_memos.csv": [MEMO_HEADER],
+        "meals.csv": [MEALS_HEADER],
     }
 
 
@@ -137,6 +155,8 @@ def test_export_zip_contents(client, login, app):
     client.post("/api/seasonings", json={**SEASONING, "name": "남의 양념"})
     client.post("/api/shopping/items", json={"name": "남의 우유"})
     client.post("/api/shopping/notes", json={"body": "남의 메모"})
+    other_plan = add_plan(client, name="남의 식단")
+    fill_slot(client, other_plan["id"], title="남의 저녁")
     login()
     kimchi = client.post("/api/locations", json={"name": "김치냉장고", "kind": "fridge"}).get_json()
     client.post("/api/ingredients", json={"name": "두부", "purchased_on": day(1)})
@@ -145,6 +165,7 @@ def test_export_zip_contents(client, login, app):
         json={"name": "@우유", "quantity": 1.5, "unit": "L", "purchased_on": day(2), "expires_on": "2026-12-01", "price": 2980},
     )
     client.post("/api/ingredients", json={"name": "김치🥬", "quantity": 1 / 3, "purchased_on": day(1), "location_id": kimchi["id"]})
+    client.post("/api/ingredients", json={"name": "고추장", "purchased_on": None})  # 구입일 모름 → 빈 칸, 맨 뒤
     client.post("/api/recipes", json=RECIPE)
     client.post(
         "/api/recipes",
@@ -159,6 +180,19 @@ def test_export_zip_contents(client, login, app):
         "/api/seasonings",
         json={"name": " 간장조림", "basis": "servings", "basis_amount": 2, "basis_unit": "인분", "items": [{"name": "간장", "amount": 3, "unit": "큰술"}]},
     )
+    tubu = client.get("/api/recipes").get_json()["items"]
+    tubu_id = next(r["id"] for r in tubu if r["title"] == "두부조림")
+
+    # 식단: 시작일이 늦은 것부터 만들어 정렬이 시작일 기준임을 확인한다(같은 날은 끼니 순, 아침→점심→저녁→간식)
+    plan_a = add_plan(client, name="다음주 식단", start_on=day(-2))
+    fill_slot(client, plan_a["id"], date=day(-2), meal="dinner", recipe_id=tubu_id, servings=2)
+    plan_b = add_plan(client, name="=이번주 식단", start_on=day(0))
+    fill_slot(client, plan_b["id"], date=day(0), meal="lunch", title="=토스트", servings=1)
+    fill_slot(client, plan_b["id"], date=day(0), meal="breakfast", recipe_id=tubu_id, servings=2)
+    dinner = fill_slot(client, plan_b["id"], date=day(-1), meal="dinner", title="김밥", servings=3)
+    with app.app_context():  # est_kcal은 AI 초안 적용 때만 채워진다 — 직접 값을 넣어 "빈 칸 아님" 경로를 확인
+        db.session.query(MealSlot).filter_by(id=dinner["id"]).update({"est_kcal": 550})
+        db.session.commit()
 
     client.post("/api/shopping/items", json={"name": "두부"})
     daepa = client.post(
@@ -183,13 +217,14 @@ def test_export_zip_contents(client, login, app):
     assert res.headers["Cache-Control"] == "no-store"
     assert res.headers["X-Content-Type-Options"] == "nosniff"
     files = read_zip(res)
-    assert set(files) == {"ingredients.csv", "recipes.csv", "seasonings.csv", "shopping.csv", "shopping_memos.csv"}
+    assert set(files) == {"ingredients.csv", "recipes.csv", "seasonings.csv", "shopping.csv", "shopping_memos.csv", "meals.csv"}
 
-    assert files["ingredients.csv"] == [  # 구입일, id 순
+    assert files["ingredients.csv"] == [  # 구입일, id 순(구입일 모름은 맨 뒤)
         INGREDIENT_HEADER,
         ["'@우유", "1.5", "L", "냉장실", day(2), "2026-12-01", "2980"],
         ["두부", "1", "개", "냉장실", day(1), "", ""],
         ["김치🥬", str(1 / 3), "개", "김치냉장고", day(1), "", ""],
+        ["고추장", "1", "개", "냉장실", "", "", ""],
     ]
     assert files["recipes.csv"][0] == RECIPE_HEADER
     steps = "1. 두부를 썰어요.\n2. 양념을 붓고 졸여요."
@@ -219,6 +254,13 @@ def test_export_zip_contents(client, login, app):
     assert files["shopping_memos.csv"] == [
         MEMO_HEADER,
         ["이마트", "'=SUM(A1)", "2", "abc.jpg; def.png", kst(datetime.fromisoformat(note["updated_at"]))],
+    ]
+    assert files["meals.csv"] == [  # 식단 시작일(이른 것부터) → 날짜 → 끼니(아침·점심·저녁·간식) 순, 남의 식단은 빠진다
+        MEALS_HEADER,
+        ["'=이번주 식단", day(0), "아침", "두부조림", "2", "예", ""],
+        ["'=이번주 식단", day(0), "점심", "'=토스트", "1", "아니요", ""],
+        ["'=이번주 식단", day(-1), "저녁", "김밥", "3", "아니요", "550"],
+        ["다음주 식단", day(-2), "저녁", "두부조림", "2", "예", ""],
     ]
 
     with app.app_context():

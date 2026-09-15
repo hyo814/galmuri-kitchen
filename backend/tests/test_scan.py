@@ -146,7 +146,7 @@ def test_extract_sends_image_prompt_and_schema(app, fake_anthropic):
     )
     app.config.update(ANTHROPIC_API_KEY="test-key", CLAUDE_MODEL="claude-sonnet-5")
     with app.app_context():
-        result, tokens = ai.extract("receipt", b"\xff\xd8jpeg", "image/jpeg")
+        result, tokens = ai.extract("receipt", [(b"\xff\xd8jpeg", "image/jpeg")])
 
     assert tokens == {"model": "claude-sonnet-5-answered", "input_tokens": 1500, "output_tokens": 120}
 
@@ -185,7 +185,7 @@ def test_extract_failures_raise_ai_error(app, fake_anthropic, response, error):
     fake_anthropic(response=response, error=error)
     app.config["ANTHROPIC_API_KEY"] = "test-key"
     with app.app_context(), pytest.raises(ai.AiError):
-        ai.extract("fridge", b"img", "image/png")
+        ai.extract("fridge", [(b"img", "image/png")])
 
 
 # --- POST /api/scan ---
@@ -252,8 +252,8 @@ def test_real_scan_cleans_result_and_logs_call(client, login, app, monkeypatch):
     app.config["ANTHROPIC_API_KEY"] = "test-key"
     seen = []
 
-    def fake_extract(kind, image_bytes, media_type):
-        seen.append((kind, image_bytes, media_type))
+    def fake_extract(kind, images):
+        seen.append((kind, images))
         raw = {
             "items": [{"name": " 우유 ", "quantity": 0, "unit": "", "location_kind": "fridge", "price": 2980}],
             "purchased_on": "2999-01-01",
@@ -269,7 +269,7 @@ def test_real_scan_cleans_result_and_logs_call(client, login, app, monkeypatch):
         "purchased_on": None,
         "sample": False,
     }
-    assert seen == [("order", PNG_BYTES, "image/png")]
+    assert seen == [("order", [(PNG_BYTES, "image/png")])]
     assert ai_calls(app) == [(user.id, "order")]
     assert ai_call_costs(app) == [("claude-sonnet-5-answered", 1500, 120)]  # 실제로 답한 모델로 덮어쓴다
 
@@ -351,6 +351,133 @@ def test_burst_limit_ignores_calls_older_than_a_minute(client, login, app, monke
     assert upload(client).status_code == 200
 
 
+# --- 사진 여러 장(1~5장, 2026-09-15) ---
+
+
+def upload_many(client, *photos, kind="fridge"):
+    files = [(io.BytesIO(data), f"photo{i}.jpg", "image/jpeg") for i, data in enumerate(photos)]
+    return client.post(f"/api/scan?kind={kind}", data={"image": files})
+
+
+def test_extract_sends_all_images_in_order_with_multi_prompt(app, fake_anthropic):
+    parsed = ai.ScanResult(items=[], purchased_on=None)
+    usage = SimpleNamespace(input_tokens=1, output_tokens=1)
+    calls = fake_anthropic(response=SimpleNamespace(stop_reason="end_turn", parsed_output=parsed, usage=usage, model="m"))
+    app.config["ANTHROPIC_API_KEY"] = "test-key"
+    photos = [(b"one", "image/jpeg"), (b"two", "image/png"), (b"three", "image/webp")]
+    with app.app_context():
+        ai.extract("receipt", photos)
+    request = calls["parse"]
+    *images, prompt = request["messages"][0]["content"]
+    assert [(i["source"]["media_type"], base64.standard_b64decode(i["source"]["data"])) for i in images] == [
+        ("image/jpeg", b"one"), ("image/png", b"two"), ("image/webp", b"three"),
+    ]
+    assert request["max_tokens"] == 8192
+    assert prompt["text"].startswith(ai.PROMPTS["receipt"])
+    assert "사진 3장은 같은 냉장고·같은 영수증·같은 주문을 나눠 찍은 것일 수 있다." in prompt["text"]
+    assert "한 번만 적는다" in prompt["text"] and "가장 늦은 날짜" in prompt["text"]
+
+
+def test_extract_timeout_is_longer_for_many_photos(app, fake_anthropic):
+    parsed = ai.ScanResult(items=[], purchased_on=None)
+    usage = SimpleNamespace(input_tokens=1, output_tokens=1)
+    calls = fake_anthropic(response=SimpleNamespace(stop_reason="end_turn", parsed_output=parsed, usage=usage, model="m"))
+    app.config["ANTHROPIC_API_KEY"] = "test-key"
+    with app.app_context():
+        ai.extract("fridge", [(b"one", "image/jpeg")])
+        assert calls["client"]["timeout"] == 45
+        ai.extract("fridge", [(b"one", "image/jpeg"), (b"two", "image/jpeg")])
+        assert calls["client"]["timeout"] == 90
+
+
+def test_extract_fridge_multi_prompt_has_no_date_rule(app, fake_anthropic):
+    parsed = ai.ScanResult(items=[], purchased_on=None)
+    usage = SimpleNamespace(input_tokens=1, output_tokens=1)
+    calls = fake_anthropic(response=SimpleNamespace(stop_reason="end_turn", parsed_output=parsed, usage=usage, model="m"))
+    app.config["ANTHROPIC_API_KEY"] = "test-key"
+    with app.app_context():
+        ai.extract("fridge", [(b"one", "image/jpeg"), (b"two", "image/jpeg")])
+    text = calls["parse"]["messages"][0]["content"][-1]["text"]
+    assert "사진 2장은" in text and "가장 늦은 날짜" not in text
+
+
+@pytest.mark.parametrize("count", [2, 5])
+def test_scan_many_photos_is_one_ai_call(client, login, app, monkeypatch, count):
+    user = login()
+    app.config["ANTHROPIC_API_KEY"] = "test-key"
+    seen = []
+
+    def fake_extract(kind, images):
+        seen.append((kind, images))
+        return {"items": [], "purchased_on": None}, USAGE
+
+    monkeypatch.setattr(ai, "extract", fake_extract)
+    photos = [JPEG_BYTES, PNG_BYTES, WEBP_BYTES, JPEG_BYTES + b"4", PNG_BYTES + b"5"][:count]
+    res = upload_many(client, *photos)
+    assert res.status_code == 200
+    assert seen == [("fridge", [(p, scan.sniff_image_type(p)) for p in photos])]
+    assert ai_calls(app) == [(user.id, "fridge")]
+
+
+def test_scan_rejects_six_photos_or_any_bad_photo_without_recording(client, login, app, monkeypatch):
+    login()
+    app.config["ANTHROPIC_API_KEY"] = "test-key"
+    monkeypatch.setattr(ai, "extract", fail_if_called)
+    res = upload_many(client, *[JPEG_BYTES] * 6)
+    assert (res.status_code, res.get_json()) == (400, {"error": "사진은 5장까지 올려주세요."})
+    res = upload_many(client, JPEG_BYTES, b"not-an-image", PNG_BYTES)
+    assert (res.status_code, res.get_json()) == (415, {"error": "사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요."})
+    res = upload_many(client, JPEG_BYTES, b"")
+    assert (res.status_code, res.get_json()) == (400, {"error": "사진을 올려주세요."})
+    assert ai_calls(app) == []
+
+
+def test_scan_many_photos_in_sample_mode(client, login, app, monkeypatch):
+    login()
+    monkeypatch.setattr(ai, "extract", fail_if_called)
+    one = upload(client, kind="fridge").get_json()
+    three = upload_many(client, JPEG_BYTES, PNG_BYTES, WEBP_BYTES).get_json()
+    assert three == one and three["sample"] is True
+    assert ai_calls(app) == []
+
+
+def test_clean_result_merge_keeps_larger_quantity_and_first_price():
+    raw = {
+        "items": [
+            {"name": "계란", "quantity": 6, "unit": "개", "location_kind": "fridge", "price": None},
+            {"name": "대파", "quantity": 1, "unit": "단", "location_kind": "fridge", "price": 2500},
+            {"name": "달걀 (특란)", "quantity": 10, "unit": "개", "location_kind": "fridge", "price": 5980},  # 계란 = 달걀
+            {"name": "대파", "quantity": 1, "unit": "단", "location_kind": "fridge", "price": 3000},
+            {"name": "대파", "quantity": 300, "unit": "g", "location_kind": "fridge", "price": None},  # 단위가 다르면 따로
+            {"name": "대파", "quantity": 1, "unit": "단", "location_kind": "freezer", "price": None},  # 위치가 다르면 따로
+        ],
+        "purchased_on": None,
+    }
+    assert clean_result("receipt", raw, TODAY, merge=True)["items"] == [
+        {"name": "계란", "quantity": 10, "unit": "개", "location_kind": "fridge", "price": 5980},
+        {"name": "대파", "quantity": 1, "unit": "단", "location_kind": "fridge", "price": 2500},
+        {"name": "대파", "quantity": 300, "unit": "g", "location_kind": "fridge", "price": None},
+        {"name": "대파", "quantity": 1, "unit": "단", "location_kind": "freezer", "price": None},
+    ]
+    assert len(clean_result("receipt", raw, TODAY)["items"]) == 6  # 한 장이면 합치지 않는다(지금과 같음)
+
+
+def test_clean_result_merge_counts_limit_after_merging():
+    rows = [{"name": "우유", "quantity": 1, "unit": "개", "location_kind": "fridge"}] * 10
+    rows += [{"name": f"재료{i}", "quantity": 1, "unit": "개", "location_kind": "room"} for i in range(55)]
+    items = clean_result("order", {"items": rows}, TODAY, merge=True)["items"]
+    assert len(items) == MAX_ITEMS and items[0]["name"] == "우유" and items[-1]["name"] == "재료48"
+
+
+def test_scan_many_photos_merges_overlap(client, login, app, monkeypatch):
+    login()
+    app.config["ANTHROPIC_API_KEY"] = "test-key"
+    row = {"name": "두부", "quantity": 1, "unit": "모", "location_kind": "fridge", "price": None}
+    monkeypatch.setattr(ai, "extract", lambda kind, images: ({"items": [row, {**row, "quantity": 2}], "purchased_on": None}, USAGE))
+    assert [i["quantity"] for i in upload_many(client, JPEG_BYTES, PNG_BYTES).get_json()["items"]] == [2]
+    assert [i["quantity"] for i in upload(client, kind="fridge").get_json()["items"]] == [1, 2]  # 한 장은 그대로
+
+
 def test_scan_requires_fetch_header(raw_client):
     res = raw_client.post("/api/scan?kind=fridge")
     assert (res.status_code, res.get_json()) == (400, {"error": "잘못된 요청이에요."})
@@ -413,7 +540,7 @@ def test_extract_memo_uses_memo_prompt(app, fake_anthropic):
     calls = fake_anthropic(response=SimpleNamespace(stop_reason="end_turn", parsed_output=parsed, usage=usage, model="m"))
     app.config["ANTHROPIC_API_KEY"] = "test-key"
     with app.app_context():
-        ai.extract("memo", b"\xff\xd8jpeg", "image/jpeg")
+        ai.extract("memo", [(b"\xff\xd8jpeg", "image/jpeg")])
     assert calls["parse"]["messages"][0]["content"][1] == {"type": "text", "text": ai.PROMPTS["memo"]}
     assert calls["parse"]["output_format"] is ai.MemoScanResult
     assert ai.PROMPTS["memo"].endswith(ai._COMMON)
@@ -425,7 +552,7 @@ def test_scan_memo_calls_ai_and_counts_in_scan_group(client, login, app, monkeyp
     app.config.update(ANTHROPIC_API_KEY="test-key", AI_DAILY_SCAN_LIMIT=10)
     seen = []
 
-    def fake_extract(kind, image_bytes, media_type):
+    def fake_extract(kind, images):
         seen.append(kind)
         raw = {
             "items": [

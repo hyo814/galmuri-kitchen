@@ -20,6 +20,8 @@ from .defaults import seed_user_defaults
 from .ingredients import seoul_today
 from .models import (
     Ingredient,
+    MealPlan,
+    MealSlot,
     Recipe,
     Seasoning,
     ShoppingItem,
@@ -83,6 +85,25 @@ SHOPPING_ITEMS = [
 ]
 STOCKED_SHOPPING_ITEM = ("양파", 1, "망")  # 어제 재고에 넣어 '산 것' 접힘이 보이게
 SHOPPING_MEMO = {"place": "이마트 성수점", "body": "세일 수요일까지\n계란은 30구로\n두부 2+1 행사 확인"}
+MEAL_PLAN_DAYS = 7
+MEAL_PLAN_SERVINGS = 2
+_ORDINALS = ["첫째", "둘째", "셋째", "넷째", "다섯째", "여섯째"]
+# (오늘부터 며칠 뒤, 끼니, RECIPE_SAMPLES 인덱스(None=직접 쓰기), 직접 쓸 때 제목)
+MEAL_PLAN_SLOTS = [
+    (0, "dinner", 0, None),  # 오늘 저녁: 된장찌개(SAMPLE-01)
+    (1, "lunch", 1, None),  # 내일 점심: 김치찌개(SAMPLE-02)
+    (1, "breakfast", None, "토스트"),  # 내일 아침: 직접 쓰기(레시피 없음)
+    (2, "dinner", 0, None),  # 모레 저녁: 된장찌개 재사용
+]
+
+
+def default_plan_name(start, days):
+    """식단 기본 이름(스펙 20절). frontend/src/meals/plan.ts의 defaultPlanName과 같은 규칙 — 둘 다 고치기."""
+    if days >= 28:
+        return f"{start.month}월 식단"
+    first_offset = start.replace(day=1).weekday()  # 월=0(파이썬 date.weekday()가 JS의 (getDay()+6)%7과 같다)
+    index = (start.day - 1 + first_offset) // 7
+    return f"{start.month}월 {_ORDINALS[index]} 주"
 
 
 def ip_key(ip):
@@ -119,8 +140,9 @@ def seed_demo_data(user_id):
         db.session.add(Staple(user_id=user_id, name=name, category=category))
     samples = {item["rcp_seq"]: item for item in json.loads(SAMPLE_FILE.read_text(encoding="utf-8"))}
     recipes = [samples[seq] for seq in RECIPE_SAMPLES]
+    recipe_rows = []  # 식단 칸이 붙일 실제 Recipe 행(recipes는 원본 샘플 dict라 여기 따로 둔다)
     for item in recipes:
-        db.session.add(
+        recipe_rows.append(
             Recipe(
                 user_id=user_id,
                 title=item["title"],
@@ -130,6 +152,7 @@ def seed_demo_data(user_id):
                 source="mine",
             )
         )
+    db.session.add_all(recipe_rows)
     db.session.add(Seasoning(user_id=user_id, **SEASONING))
 
     def recipe_label(name):
@@ -168,6 +191,26 @@ def seed_demo_data(user_id):
         )
     )
     db.session.add(ShoppingNote(user_id=user_id, **SHOPPING_MEMO))
+
+    plan = MealPlan(
+        user_id=user_id,
+        name=default_plan_name(today, MEAL_PLAN_DAYS),
+        start_on=today,
+        days=MEAL_PLAN_DAYS,
+        default_servings=MEAL_PLAN_SERVINGS,
+    )
+    for days_ahead, meal, recipe_index, free_title in MEAL_PLAN_SLOTS:
+        recipe = recipe_rows[recipe_index] if recipe_index is not None else None
+        plan.slots.append(
+            MealSlot(
+                date=today + timedelta(days=days_ahead),
+                meal=meal,
+                recipe=recipe,
+                title=recipe.title if recipe else free_title,
+                servings=MEAL_PLAN_SERVINGS,
+            )
+        )
+    db.session.add(plan)
 
 
 def delete_demo_users(query, limit=None):

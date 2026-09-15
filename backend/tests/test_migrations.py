@@ -1,4 +1,5 @@
 import os
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -345,6 +346,37 @@ def test_meal_plans_migration_adds_and_removes_tables(app):
         with db.engine.connect() as conn:
             tables = set(sa.inspect(conn).get_table_names())
         assert not {"meal_plans", "meal_slots"} & tables
+
+
+def test_ingredients_purchased_on_nullable_migration(app):
+    def purchased_on_nullable(conn):
+        return {c["name"]: c for c in sa.inspect(conn).get_columns("ingredients")}["purchased_on"]["nullable"]
+
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="d1m1e1a1l1s1")
+        with db.engine.begin() as conn:
+            conn.execute(sa.text("INSERT INTO users (id, provider, provider_id, nickname, created_at) VALUES (1, 'test', '1', 'u', CURRENT_TIMESTAMP)"))
+            conn.execute(sa.text("INSERT INTO storage_locations (id, user_id, name, kind, sort_order, created_at) VALUES (1, 1, '냉장실', 'fridge', 0, CURRENT_TIMESTAMP)"))
+            conn.execute(sa.text(
+                "INSERT INTO ingredients (id, user_id, location_id, name, quantity, unit, purchased_on, created_at) "
+                "VALUES (1, 1, 1, '우유', 1, '개', '2026-09-01', '2026-09-10 20:00:00+00:00')"
+            ))
+
+        upgrade(directory=MIGRATIONS, revision="e1p1u1r1c1h1")
+        with db.engine.begin() as conn:
+            assert purchased_on_nullable(conn) is True
+            assert conn.execute(sa.text("SELECT purchased_on FROM ingredients WHERE id = 1")).scalar_one() in (date(2026, 9, 1), "2026-09-01")
+            conn.execute(sa.text(
+                "INSERT INTO ingredients (id, user_id, location_id, name, quantity, unit, purchased_on, created_at) "
+                "VALUES (2, 1, 1, '두부', 1, '모', NULL, '2026-09-10 20:00:00+00:00')"
+            ))
+
+        downgrade(directory=MIGRATIONS, revision="d1m1e1a1l1s1")
+        with db.engine.connect() as conn:
+            assert purchased_on_nullable(conn) is False
+            rows = conn.execute(sa.text("SELECT id, purchased_on FROM ingredients ORDER BY id")).all()
+        # 모르던 구입일은 넣은 날(서울 날짜)로 채운다: UTC 9/10 20시 = 서울 9/11
+        assert [(i, str(d)) for i, d in rows] == [(1, "2026-09-01"), (2, "2026-09-11")]
 
 
 def test_upgrade_to_head_and_back_to_base(app):

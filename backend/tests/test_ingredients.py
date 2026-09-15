@@ -163,7 +163,7 @@ def test_create_and_list_sorted_by_urgency(client, login):
         {"quantity": 0},
         {"quantity": "많이"},
         {"purchased_on": "2026-13-01"},
-        {"purchased_on": None},
+        {"purchased_on": ""},
         {"expires_on": "내일"},
         {"name": 123},
         {"quantity": True},
@@ -592,3 +592,62 @@ def test_huge_integer_quantity_is_400(client, login):
     res = create(client, quantity=10**400, purchased_on=seoul_today().isoformat())
     assert res.status_code == 400
     assert res.get_json() == {"error": "수량은 0보다 커야 해요."}
+
+
+# --- 구입일 모름("기억 안 나요", 2026-09-15) ---
+
+
+@pytest.mark.parametrize(
+    "expires, kind, rule, expected",
+    [
+        (None, "fridge", None, "ok"),  # 구입 경과 규칙 없음 → 오래됨도 없음
+        (None, "freezer", None, "ok"),
+        (None, "fridge", (25, 30), "ok"),  # 품목 규칙(계란 25/30일)도 경과일로는 쓰지 않는다
+        (TODAY + timedelta(days=1), "fridge", None, "urgent"),  # 유통기한 임박은 그대로
+        (TODAY - timedelta(days=1), "room", (25, 30), "urgent"),
+        (TODAY + timedelta(days=10), "fridge", None, "ok"),
+    ],
+)
+def test_status_without_purchase_date(expires, kind, rule, expected):
+    assert ingredient_status(None, expires, TODAY, kind, rule) == expected
+
+
+def test_create_bulk_and_patch_with_unknown_purchase_date(client, login):
+    login()
+    today = seoul_today()
+    body = create(client, name="유정란 계란", purchased_on=None).get_json()
+    assert (body["purchased_on"], body["days_since_purchase"], body["status"]) == (None, None, "ok")
+    soon = create(client, name="우유", purchased_on=None, expires_on=(today + timedelta(days=1)).isoformat()).get_json()
+    assert (soon["status"], soon["days_left"]) == ("urgent", 1)
+
+    rows = bulk(client, {"name": "대파", "purchased_on": None}, {"name": "두부", "purchased_on": today.isoformat()}).get_json()
+    assert [(r["name"], r["purchased_on"]) for r in rows] == [("대파", None), ("두부", today.isoformat())]
+
+    old = create(client, name="애호박", purchased_on=(today - timedelta(days=30)).isoformat()).get_json()
+    assert old["status"] == "old"
+    cleared = client.patch(f"/api/ingredients/{old['id']}", json={"purchased_on": None}).get_json()
+    assert (cleared["purchased_on"], cleared["days_since_purchase"], cleared["status"]) == (None, None, "ok")
+    filled = client.patch(f"/api/ingredients/{old['id']}", json={"purchased_on": today.isoformat()}).get_json()
+    assert (filled["purchased_on"], filled["days_since_purchase"]) == (today.isoformat(), 0)
+
+
+def test_purchase_date_key_still_required_on_create(client, login):
+    login()
+    error = {"error": "구입일은 YYYY-MM-DD 형식으로 입력해주세요."}
+    res = client.post("/api/ingredients", json={"name": "우유"})
+    assert (res.status_code, res.get_json()) == (400, error)
+    res = bulk(client, {"name": "우유"})
+    assert (res.status_code, res.get_json()["errors"]) == (400, [{"index": 0, **error}])
+    assert client.get("/api/ingredients").get_json() == []
+
+
+def test_list_puts_unknown_purchase_date_last_within_status(client, login):
+    login()
+    today = seoul_today()
+    first_unknown = create(client, name="두부", purchased_on=None).get_json()["id"]
+    create(client, name="대파", purchased_on=today.isoformat())
+    second_unknown = create(client, name="양파", purchased_on=None).get_json()["id"]
+    create(client, name="우유", purchased_on=None, expires_on=today.isoformat())
+    items = client.get("/api/ingredients").get_json()
+    assert [(i["name"], i["status"]) for i in items] == [("우유", "urgent"), ("대파", "ok"), ("두부", "ok"), ("양파", "ok")]
+    assert [i["id"] for i in items[2:]] == [first_unknown, second_unknown]

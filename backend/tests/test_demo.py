@@ -12,6 +12,8 @@ from app.models import (
     AiCall,
     Ingredient,
     ItemRule,
+    MealPlan,
+    MealSlot,
     Recipe,
     Seasoning,
     ShoppingItem,
@@ -24,7 +26,7 @@ from app.models import (
 )
 from tests.test_shopping_notes import add_note, photo_path, upload
 
-USER_TABLES = (Ingredient, StorageLocation, ItemRule, Staple, Recipe, Seasoning, ShoppingItem, ShoppingNote, AiCall)
+USER_TABLES = (Ingredient, StorageLocation, ItemRule, Staple, Recipe, Seasoning, ShoppingItem, ShoppingNote, MealPlan, AiCall)
 
 
 @pytest.fixture
@@ -140,6 +142,45 @@ def test_demo_users_shopping_is_isolated(demo_app):
         assert ShoppingItem.query.filter_by(user_id=b_id).count() == len(demo.SHOPPING_ITEMS) + 1
         assert ShoppingNote.query.filter_by(user_id=a_id).count() == 1
         assert ShoppingNote.query.filter_by(user_id=b_id).count() == 1
+
+
+def test_demo_login_creates_meal_plan(demo_app):
+    c = new_client(demo_app)
+    me = c.post("/api/demo-login").get_json()
+    today = seoul_today()
+    tomorrow = (today + timedelta(days=1)).isoformat()
+    day_after = (today + timedelta(days=2)).isoformat()
+
+    plans = c.get("/api/meal-plans").get_json()["items"]
+    assert len(plans) == 1
+    summary = plans[0]
+    assert summary["name"] == demo.default_plan_name(today, demo.MEAL_PLAN_DAYS)
+    assert (summary["start_on"], summary["days"], summary["default_servings"]) == (today.isoformat(), demo.MEAL_PLAN_DAYS, demo.MEAL_PLAN_SERVINGS)
+    assert summary["filled"] == len(demo.MEAL_PLAN_SLOTS) == 4
+
+    plan = c.get(f"/api/meal-plans/{summary['id']}").get_json()
+    slots = {(s["date"], s["meal"]): s for s in plan["slots"]}
+    assert slots[(today.isoformat(), "dinner")]["title"] == "된장찌개"
+    assert slots[(today.isoformat(), "dinner")]["recipe_id"] is not None
+    assert slots[(tomorrow, "lunch")]["title"] == "김치찌개"
+    assert slots[(tomorrow, "lunch")]["recipe_id"] is not None
+    assert slots[(day_after, "dinner")]["title"] == "된장찌개"
+    breakfast = slots[(tomorrow, "breakfast")]
+    assert (breakfast["title"], breakfast["recipe_id"], breakfast["servings"]) == ("토스트", None, demo.MEAL_PLAN_SERVINGS)
+
+    with demo_app.app_context():
+        assert MealSlot.query.join(MealPlan).filter(MealPlan.user_id == me["id"]).count() == len(demo.MEAL_PLAN_SLOTS)
+
+
+def test_demo_users_meal_plan_is_isolated(demo_app):
+    a, b = new_client(demo_app), new_client(demo_app)
+    a_id = a.post("/api/demo-login").get_json()["id"]
+    b_id = b.post("/api/demo-login").get_json()["id"]
+    a_plan_id = a.get("/api/meal-plans").get_json()["items"][0]["id"]
+    assert b.get(f"/api/meal-plans/{a_plan_id}").status_code == 404
+    with demo_app.app_context():
+        assert MealPlan.query.filter_by(user_id=a_id).count() == 1
+        assert MealPlan.query.filter_by(user_id=b_id).count() == 1
 
 
 def test_demo_ai_limits_are_lower(demo_app, monkeypatch):
@@ -341,6 +382,7 @@ def test_purge_deletes_only_expired_demo_users(demo_app):
         db.session.get(User, old_demo).created_at = long_ago
         db.session.commit()
         assert all(counts(old_demo)[:-1])
+        assert MealSlot.query.join(MealPlan).filter(MealPlan.user_id == old_demo).count() == len(demo.MEAL_PLAN_SLOTS)
 
     result = demo_app.test_cli_runner().invoke(args=["purge-demo-users"])
     assert result.exit_code == 0 and "1개" in result.output
@@ -348,6 +390,7 @@ def test_purge_deletes_only_expired_demo_users(demo_app):
     with demo_app.app_context():
         assert db.session.get(User, old_demo) is None
         assert counts(old_demo) == [0] * len(USER_TABLES)
+        assert MealSlot.query.join(MealPlan).filter(MealPlan.user_id == old_demo).count() == 0  # CASCADE: 칸도 함께 지워진다
         kept = AiCall.query.filter_by(user_id=None).all()  # AI 호출 기록은 사용자만 비우고 남는다(원가·체험 예산)
         assert [(a.kind, a.demo) for a in kept] == [("recipe", True)]
         assert db.session.get(User, fresh_demo) is not None
