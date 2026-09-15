@@ -106,6 +106,24 @@ def test_on_mode_searches_then_estimates_once(client, login, app, monkeypatch):
     assert (len(asked), len(ai_calls)) == (3, 1)
 
 
+def test_countable_unmatched_food_gets_weight_and_food_in_one_fill(client, login, app, monkeypatch):
+    """I1: 찾아봤지만 후보가 없는 셀 수 있는 재료는 식품 영양과 단위 무게를 한 번에 추정한다(채우기는 레시피마다 한 번)."""
+    app.config.update(FOOD_NUTRITION_API_KEY="k", ANTHROPIC_API_KEY="k")
+    fake_pages(monkeypatch, {})
+    ai_calls = []
+
+    def fake_ai(weights, foods):
+        ai_calls.append((weights, foods))
+        return guess_for(weights, foods), USAGE
+
+    monkeypatch.setattr("app.ai.estimate_nutrition", fake_ai)
+    login()
+    recipe_id = make_recipe(client, ("새송이버섯", "2개"), ("느타리버섯", "100g"))
+    assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": []}
+    assert ai_calls == [([("새송이버섯", "개")], ["새송이버섯", "느타리버섯"])]
+    assert [r["status"] for r in rows_of(client, recipe_id)] == ["estimated", "estimated"]
+
+
 def test_multiword_fallback_search(client, login, app, monkeypatch):
     app.config.update(FOOD_NUTRITION_API_KEY="k", DEV_MODE=False)
     asked = fake_pages(monkeypatch, {"돼지고기": [api_row("P1", "돼지고기_앞다리_생것", "원재료성")]})
@@ -187,20 +205,33 @@ def on_mode_with_tofu(app, monkeypatch):
     return ai_calls
 
 
-def test_ai_limit_or_error_leaves_pending_without_error(client, login, app, monkeypatch):
+def test_ai_limit_or_error_without_error(client, login, app, monkeypatch):
     ai_calls = on_mode_with_tofu(app, monkeypatch)
     fixed_now = fixed_clock(monkeypatch)
 
-    # ① 하루 20번
+    # ① 하루 20번을 다 쓰면 계산 중으로 두지 않고 무게를 알려달라고 한다(I2, 고르기로 고칠 수 있게)
     user = login("1")
-    add_calls(app, user.id, 20, fixed_now)
+    add_calls(app, user.id, 19, fixed_now)
     recipe_id = make_recipe(client, ("두부", "1모"))
+    assert rows_of(client, recipe_id)[0]["status"] == "pending"
+    add_calls(app, user.id, 1, fixed_now)
+    assert rows_of(client, recipe_id)[0]["status"] == "needs_weight"
     res = fill(client, [recipe_id])
-    assert (res.status_code, res.get_json()) == (200, {"pending_recipe_ids": [recipe_id]})
+    assert (res.status_code, res.get_json()) == (200, {"pending_recipe_ids": []})
 
     # ② 체험 계정은 하루 2번
     demo_user = login_demo(app, login, "2")
     add_calls(app, demo_user.id, 2, fixed_now, demo=True)
+    recipe_id = make_recipe(client, ("두부", "1모"))
+    assert rows_of(client, recipe_id)[0]["status"] == "needs_weight"
+    assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": []}
+    assert ai_calls == []
+
+    # ②-1 60초 10번(연속)은 곧 풀리므로 계산 중으로 남는다
+    user4 = login("4")
+    with app.app_context():
+        db.session.add_all(AiCall(user_id=user4.id, kind="nutrition", created_at=fixed_now - timedelta(seconds=5)) for _ in range(10))
+        db.session.commit()
     recipe_id = make_recipe(client, ("두부", "1모"))
     assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": [recipe_id]}
     assert ai_calls == []
@@ -342,6 +373,22 @@ def test_time_budget_and_fetch_limit_stop_searching(client, login, app, monkeypa
     monkeypatch.setattr("app.foods.search_and_cache", limited)
     assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": [recipe_id]}
     assert searched == ["두부"]
+
+
+def test_fetch_limit_makes_unsearched_rows_pickable_not_pending(client, login, app, monkeypatch):
+    """I2: 오늘 식품 DB 찾기 한도를 다 쓰면 안 찾아본 재료는 '맞는 식품을 골라주세요'(unmatched)로 — 끝없이 계산 중으로 두지 않는다."""
+    app.config.update(FOOD_NUTRITION_API_KEY="k", ANTHROPIC_API_KEY="k")
+    monkeypatch.setattr("app.foods.fetch_page", fail)
+    monkeypatch.setattr("app.ai.estimate_nutrition", fail)
+    user = login()
+    recipe_id = make_recipe(client, ("두부", "1모"))
+    assert rows_of(client, recipe_id)[0]["status"] == "pending"
+    with app.app_context():
+        db.session.add_all(AiCall(user_id=user.id, kind="food_fetch", created_at=utcnow()) for _ in range(300))
+        db.session.commit()
+    row = rows_of(client, recipe_id)[0]
+    assert (row["status"], row["pending_reason"]) == ("unmatched", None)
+    assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": []}
 
 
 def test_ai_off_makes_needs_weight_not_pending(client, login, app, monkeypatch):

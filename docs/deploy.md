@@ -63,16 +63,17 @@
 | `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | 선택 | 로그인 | 네이버 개발자센터 |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 선택 | 로그인 | Google Cloud Console |
 | `ANTHROPIC_API_KEY` / `CLAUDE_MODEL` | 선택 | 2단계 사진으로 추가, 3단계 AI 레시피(없으면 개발 모드는 예시 결과, 운영은 버튼 숨김) | console.anthropic.com |
-| `AI_DAILY_SCAN_LIMIT` / `AI_DAILY_RECIPE_LIMIT` | 선택 | 사진 인식 / AI 레시피 하루 한도(기본 10, 서울 날짜) | 직접 설정 |
+| `AI_DAILY_SCAN_LIMIT` / `AI_DAILY_RECIPE_LIMIT` | 선택 | 사진 인식 / AI 레시피 하루 한도(기본 20, 서울 날짜). 체험 계정은 설정과 관계없이 5번까지 | 직접 설정 |
 | `AI_SCAN_BURST_LIMIT` | 선택 | 사진 인식·AI 레시피 짧은 연속 호출 한도(기본 3, 60초) | 직접 설정 |
 | `FOODSAFETY_API_KEY` | 선택 | 3단계 레시피 추천. 배포 후 한 번 `flask sync-public-recipes`(없으면 `flask seed-sample-recipes` 예시 레시피) | 식약처 공공데이터포털(COOKRCP01) |
-| `FOOD_NUTRITION_API_KEY` | 선택 | 영양 계산기 구현 후 | 식약처 공공데이터포털(식품영양성분 DB) |
+| `FOOD_NUTRITION_API_KEY` | 선택(영양 계산에는 필수) | 영양 계산(레시피 1인분 영양·식단 kcal·식품 고르기). 공공데이터포털 **Decoding** 키를 그대로 넣는다(Encoding 키나 다시 인코딩하면 403). Blueprint에서는 `sync: false`라 처음 만들 때 입력 칸이 뜬다. 없으면 개발 모드는 예시 식품, 운영은 영양 칸을 숨긴다. 배포 뒤 아래 1-B 3번의 `warm-food-nutrients`로 캐시를 채운다 | 식약처 공공데이터포털(식품의약품안전처_식품영양성분DB정보, 15127578) |
 | `YOUTUBE_API_KEY` | 선택 | 3단계 요리 채널 영상·유튜브 링크 가져오기(없으면 개발 모드는 예시 영상, 운영은 영상 칸 숨김). 설정은 아래 5-2 | Google Cloud Console(YouTube Data API v3) |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` | 선택(운영에서 사진을 쓰려면 필수) | 장보기 메모 사진. 네 값이 모두 있으면 R2(비공개 버킷, 토큰은 해당 버킷만 "개체 읽기 및 쓰기")에 올리고, 보기는 `/api/photos/<key>`가 소유자 확인 뒤 R2에서 받아 앱 주소로 흘려보낸다(버킷 공개·CORS 필요 없음). 하나라도 비면 운영에서는 사진 올리기·보기 503(`DEV_MODE`가 아니면 로컬 디스크에 두지 않는다 — Render 디스크는 배포 때 지워진다). 로컬 개발은 값 없이 `backend/uploads/`(gitignore). 발급 순서는 `backend/.env.example` | Cloudflare 대시보드 R2 |
 | `DEMO_LOGIN` | 선택 | `1`이면 로그인 화면에 `로그인 없이 체험하기`(심사·둘러보기용). 누를 때마다 예시 재고가 든 새 계정을 만들고 24시간 뒤 지운다. 설정은 아래 5-3 | 직접 설정 |
 | `DEMO_IP_HOURLY_LIMIT` | 선택 | 같은 IP(IPv6는 /64)에서 1시간에 만들 수 있는 체험 계정 수(기본 30). 한 사무실 주소 뒤 여러 심사위원을 생각한 값 | 직접 설정 |
 | `DEMO_IP_DAILY_LIMIT` | 선택 | 같은 IP에서 24시간에 만들 수 있는 체험 계정 수(기본 100) | 직접 설정 |
-| `DEMO_AI_GLOBAL_DAILY` | 선택 | 체험 계정 전체의 사진 인식·AI 레시피 호출 24시간 예산(기본 300). 넘으면 체험 계정은 예시 결과로 동작 | 직접 설정 |
+| `DEMO_AI_GLOBAL_DAILY` | 선택 | 체험 계정 전체의 사진 인식·AI 레시피 호출 24시간 예산(코드 기본 300, `render.yaml` 80). 넘으면 체험 계정은 예시 결과로 동작 | 직접 설정 |
+| `DEMO_NUTRITION_GLOBAL_DAILY` | 선택 | 체험 계정 전체의 영양 추정(AI) 하루(서울 날짜) 횟수(기본 30, `render.yaml` 30). 위 AI 예산과 따로 센다. 넘으면 체험 계정은 AI 추정 없이 계산하고 모자란 재료는 `고르기`로 남긴다 | 직접 설정 |
 | `TRUSTED_PROXY_HOPS` | 선택 | `X-Forwarded-For`를 붙이는 앞단 프록시 수(기본 1, Render). 체험 계정 IP 한도가 이 값으로 접속 주소를 고른다. 확인은 아래 5-3 | 직접 설정 |
 | `COUPANG_ACCESS_KEY` / `COUPANG_SECRET_KEY` | 선택 | 쿠팡 파트너스 제휴 링크. 둘 다 있으면(체험 계정 제외) `/api/me`의 `shop_affiliates`가 `{"coupang": true}`가 되고, 쿠팡 칩이 `/api/shop-links/coupang/go`를 거쳐 딥링크 API의 단축 링크로 열리며 `광고`·파트너스 안내 문구가 보인다. 없거나 API 실패·3초 초과·호출 한도(1시간 전체 80·사용자 10)면 일반 검색 링크. 웹 서비스에만 넣는다 | 쿠팡 파트너스 → 파트너스 API(최종 승인 뒤 발급) |
 | `COUPANG_PARTNERS_ID` | 선택 | 트래킹 코드(AF…). 참고용 — 링크에는 쓰지 않는다 | 쿠팡 파트너스 |
@@ -94,8 +95,8 @@
 ## 1-B. Blueprint로 한 번에 만들기 (2·3·5-3 Cron 대신)
 저장소 루트의 `render.yaml`이 웹(`0.5c-512mb`, 잠들지 않음)·Postgres(`0.1c-256mb`, 만료 없음)·체험 계정 지우기 Cron을 Singapore에 만든다.
 1. https://dashboard.render.com → New → **Blueprint** → GitHub 저장소 선택
-2. 입력 칸이 뜨는 키(`ANTHROPIC_API_KEY`·`YOUTUBE_API_KEY`·`FOODSAFETY_API_KEY`·`COUPANG_ACCESS_KEY`·`COUPANG_SECRET_KEY`·`COUPANG_PARTNERS_ID`·`R2_*`)를 채운다. R2 네 값은 웹과 Cron에 두 번 넣는다. `SECRET_KEY`는 자동 생성돼 둘이 같이 쓴다.
-3. 배포가 끝나면 웹 서비스 → **Shell**에서 한 번 `flask --app app sync-public-recipes`
+2. 입력 칸이 뜨는 키(`ANTHROPIC_API_KEY`·`YOUTUBE_API_KEY`·`FOODSAFETY_API_KEY`·`FOOD_NUTRITION_API_KEY`·`COUPANG_ACCESS_KEY`·`COUPANG_SECRET_KEY`·`COUPANG_PARTNERS_ID`·`R2_*`)를 채운다. R2 네 값은 웹과 Cron에 두 번 넣는다. `SECRET_KEY`는 자동 생성돼 둘이 같이 쓴다.
+3. 배포가 끝나면 웹 서비스 → **Shell**에서 한 번 `flask --app app sync-public-recipes`, 그다음 `flask --app app warm-food-nutrients --limit 100`(공공 레시피에 많이 나오는 재료 100개를 식품 DB에서 미리 찾아 둔다). 100개로 시작해 레시피 상세 영양이 뜨는 시간을 재 보고 괜찮으면 `--limit`을 올려 다시 돌린다(캐시 행이 늘수록 영양 계산의 이름 찾기가 느려진다)
 4. 주소가 나오면 4번 카카오 로그인을 등록하고 `KAKAO_CLIENT_ID`/`KAKAO_CLIENT_SECRET`를 웹 서비스 Environment에 추가한다.
 5. 5-3의 5번(IP 한도 확인)을 한 번 한다.
 
@@ -159,7 +160,7 @@
    - 같은 IP(IPv6는 /64 대역)에서 1시간에 `DEMO_IP_HOURLY_LIMIT`(기본 30)개, 24시간에 `DEMO_IP_DAILY_LIMIT`(기본 100)개. 공유 사무실 네트워크처럼 여럿이 주소 하나를 쓰면 한도를 함께 나눠 쓰니 필요하면 늘린다. IP는 저장하지 않고 `SECRET_KEY`에서 뽑은 키로 서명한 해시 앞 16자만 계정 식별값에 붙인다.
    - 체험 계정 전체 5,000개. 가득 차면 거절하지 않고 가장 오래된 체험 계정부터 지우고 새로 만든다(한 번에 50개까지, 그래도 차 있으면 거절).
    - 체험 계정의 메모 사진은 계정당 20MB까지(일반 사용자 200MB).
-   - 체험 계정의 사진 인식·AI 레시피(링크 가져오기 포함) 하루 한도는 각각 5번. 체험 계정 전체가 24시간에 `DEMO_AI_GLOBAL_DAILY`(기본 300)번을 쓰면 AI를 부르지 않고 예시 결과를 보여 준다.
+   - 체험 계정의 사진 인식·AI 레시피(링크 가져오기 포함) 하루 한도는 각각 5번. 체험 계정 전체가 24시간에 `DEMO_AI_GLOBAL_DAILY`(코드 기본 300, `render.yaml` 80)번을 쓰면 AI를 부르지 않고 예시 결과를 보여 준다.
    - 영상 칸은 유튜브 할당량을 쓰지 않게 체험 계정에는 늘 예시 목록이다(채널 추가·새로 받기 없음).
 4. **지우기 Cron Job:** New → **Cron Job** → 같은 GitHub 저장소, Language **Docker**, Region Singapore
    - Schedule: `0 * * * *` (한 시간마다)

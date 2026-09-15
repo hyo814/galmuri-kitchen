@@ -501,7 +501,7 @@ def estimate_nutrition(weights, foods):
     """weights [(이름, 단위)], foods [이름]. (결과, 토큰 사용량)을 돌려주고, 실패하면 AiError."""
     blocks = {"단위 무게": [f"{n} | {u}" for n, u in weights], "영양 추정": list(foods)}
     prompt = NUTRITION_PROMPT + "\n\n".join(f"<{tag}>\n" + "\n".join(lines) + f"\n</{tag}>" for tag, lines in blocks.items())
-    return _parse(prompt, NutritionGuess, 4096, "nutrition estimate", timeout=20)  # 채우기는 화면이 기다린다
+    return _parse(prompt, NutritionGuess, 8192, "nutrition estimate", timeout=20)  # 채우기는 화면이 기다린다
 
 
 # 키가 없는 개발 모드 예시(모든 단위·식품에 같은 규칙)

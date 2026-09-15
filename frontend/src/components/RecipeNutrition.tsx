@@ -14,6 +14,11 @@ export function resetRecipeNutrition() {
   filled.clear();
 }
 
+/** 레시피를 고쳐 저장했을 때(RecipeForm): 새 재료를 다시 채우도록 그 레시피를 시도 목록에서 뺀다 */
+export function forgetRecipeNutritionFill(recipeId: number) {
+  filled.delete(recipeId);
+}
+
 /** 시안 RECIPE NUTRITION: 재료 아래 영양 칸(1인분)과 재료별 kcal·식품 고르기 진입점 */
 export default function RecipeNutrition({ recipeId, user }: { recipeId: number; user: User }) {
   const { data, error, reload } = useResource<RecipeNutrition>(`/api/recipes/${recipeId}/nutrition`);

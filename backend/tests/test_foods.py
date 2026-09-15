@@ -510,6 +510,52 @@ def test_search_endpoint_reports_not_searched_when_fetch_fails(make_app, monkeyp
     assert body["searched"] is False and body["items"] == []
 
 
+def test_search_endpoint_is_cache_only_for_jamo_or_one_letter(client, login, app, monkeypatch):
+    """I3: 입력 중인 자모('ㄷ')·한 글자는 외부 요청 없이 캐시만 찾는다(searched false). 채우기의 한 글자 재료('파')는 그대로 찾는다."""
+    app.config.update(FOOD_NUTRITION_API_KEY="k")
+    user = login()
+    with app.app_context():
+        db.session.add(FoodNutrient(food_code="P1", name="파_대파_생것", name_key="파", group_name="원재료성", kcal=30, source="api", fetched_at=utcnow()))
+        db.session.commit()
+    fetch, calls = make_fetch([page([item("P2", "파_쪽파_생것")], 1)])
+    monkeypatch.setattr(outbound, "fetch_fixed", fetch)
+    for q in ("ㄷ", "ㄷㅐㅈ", "ㅏ", "a"):
+        body = client.get("/api/foods/search", query_string={"q": q}).get_json()
+        assert (body["searched"], body["items"]) == (False, [])
+    body = client.get("/api/foods/search", query_string={"q": "파"}).get_json()
+    assert (body["searched"], [i["food_code"] for i in body["items"]]) == (False, ["P1"])
+    assert calls == []
+    with app.app_context():
+        me = db.session.get(User, user.id)
+        assert foods.search_and_cache("ㄱㄴ", me) is False
+        assert calls == []
+        assert foods.search_and_cache("파", me) is True
+        assert len(calls) == 1
+
+
+def test_fetch_burst_limit_per_user(make_app, monkeypatch):
+    """I3: 사용자마다 60초에 food_fetch 20번까지(하루 한도처럼 조용히 멈춘다). CLI(사용자 없음)는 세지 않는다."""
+    app = make_app(FOOD_NUTRITION_API_KEY="k")
+    with app.app_context():
+        user = make_user()
+        recent = [AiCall(user_id=user.id, kind="food_fetch", created_at=utcnow() - timedelta(seconds=30)) for _ in range(20)]
+        db.session.add_all(recent)
+        db.session.commit()
+        fetch, calls = make_fetch([page([item("F1", "두부")], 1), page([item("F1", "두부")], 1)])
+        monkeypatch.setattr(outbound, "fetch_fixed", fetch)
+        assert foods.search_and_cache("두부", user) is False
+        assert (calls, FoodSearch.query.count()) == ([], 0)
+        assert foods.search_and_cache("두부", None) is True
+        assert len(calls) == 1
+
+        FoodSearch.query.delete()
+        for call in recent:
+            call.created_at = utcnow() - timedelta(seconds=61)
+        db.session.commit()
+        assert foods.search_and_cache("두부", user) is True
+        assert len(calls) == 2
+
+
 # --- CLI ---
 
 
