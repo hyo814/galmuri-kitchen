@@ -5233,5 +5233,6 @@ button.sh-offline svg:last-child {
 }
 
 .nt-invalid {
+  word-break: keep-all;
   color: var(--danger);
 }

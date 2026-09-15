@@ -35,6 +35,16 @@ assert.equal(
   "필요량 − 500kcal이지만 기초대사량보다 낮게는 제안하지 않아요. Mifflin–St Jeor 식 × 활동계수 1.375 · 의료 조언이 아니라 참고용이에요.",
 );
 assert.equal(targetNote(maintain, "maintain"), "Mifflin–St Jeor 식 × 활동계수 1.375 · 의료 조언이 아니라 참고용이에요.");
+// 감량인데 기초대사량에 안 걸림(남성 케이스): 앞부분이 다른 문구
+assert.equal(
+  targetNote(male, "lose"),
+  "필요량 − 500kcal이에요. Mifflin–St Jeor 식 × 활동계수 1.55 · 의료 조언이 아니라 참고용이에요.",
+);
+// 증량 상한(bigGain): 앞부분이 5,000kcal 안내
+assert.equal(
+  targetNote(bigGain, "gain"),
+  "필요량 + 500kcal이지만 5,000kcal까지만 제안해요. Mifflin–St Jeor 식 × 활동계수 1.9 · 의료 조언이 아니라 참고용이에요.",
+);
 
 // parseProfileInput
 const empty = parseProfileInput({ sex: null, birthYear: "", height: "", weight: "", activity: null, goal: "maintain" }, TODAY);
@@ -51,6 +61,13 @@ assert.equal(decimals.value.weight_kg, 58.5);
 
 const noSex = parseProfileInput({ sex: null, birthYear: "1994", height: "162", weight: "58", activity: "light", goal: "lose" }, TODAY);
 assert.equal(noSex.value, null);
+
+// 키·몸무게 범위 밖 안내 문구
+const P = (height, weight) => parseProfileInput({ sex: "female", birthYear: "1994", height, weight, activity: "light", goal: "lose" }, TODAY);
+assert.equal(P("119", "58").errors.height, "120~230cm 사이로 입력해주세요");
+assert.equal(P("231", "58").errors.height, "120~230cm 사이로 입력해주세요");
+assert.equal(P("162", "29").errors.weight, "30~250kg 사이로 입력해주세요");
+assert.equal(P("162", "251").errors.weight, "30~250kg 사이로 입력해주세요");
 
 assert.equal(kcalNumber(1748.4), "1,748");
 

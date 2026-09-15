@@ -97,23 +97,28 @@ function Row({ icon, iconClass = "", title, sub, value, className = "", onClick,
   );
 }
 
-/** 더보기 `나` 묶음 맨 위 줄(스펙 27절). 키와 관계없이 늘 보인다 */
-function BodyGoalRow({ onOpen }: { onOpen: () => void }) {
-  const { data } = useResource<BodyProfileResponse>("/api/body-profile");
+/** 더보기 `나` 묶음 맨 위 줄(스펙 27절). 키와 관계없이 늘 보인다.
+ * data는 More가 하나만 받아 이 줄과 아래 시트가 함께 쓴다(따로 받으면 시트에서 저장·삭제해도 이 줄이 그대로 남는다). */
+function BodyGoalRow({ data, onOpen }: { data: BodyProfileResponse | undefined; onOpen: () => void }) {
   const profile = data?.profile;
-  return (
-    <Row
-      icon={<Icon name="bowl" />}
-      title="하루 칼로리 목표"
-      sub={profile ? `${goalLabel(profile.goal)} · 하루 ${kcalNumber(dailyTarget(profile, localToday()).target)}kcal` : "키·몸무게로 하루 필요 칼로리를 알려줘요"}
-      onClick={onOpen}
-    />
-  );
+  const sub = !data ? "" : profile ? `${goalLabel(profile.goal)} · 하루 ${kcalNumber(dailyTarget(profile, localToday()).target)}kcal` : "키·몸무게로 하루 필요 칼로리를 알려줘요";
+  return <Row icon={<Icon name="bowl" />} title="하루 칼로리 목표" sub={sub} onClick={onOpen} />;
 }
 
 /** 더보기에서 여는 하루 칼로리 목표 시트: 받아온 뒤에야 시트를 그린다(불러오는 중·오류는 안에서) */
-function BodyPanel({ onClose }: { onClose: () => void }) {
-  const { data, error, reload } = useResource<BodyProfileResponse>("/api/body-profile");
+function BodyPanel({
+  data,
+  error,
+  reload,
+  set,
+  onClose,
+}: {
+  data: BodyProfileResponse | undefined;
+  error: string;
+  reload: () => Promise<void>;
+  set: (next: BodyProfileResponse) => void;
+  onClose: () => void;
+}) {
   if (!data)
     return (
       <Sheet title="하루 칼로리 목표 정하기" onClose={onClose}>
@@ -137,10 +142,15 @@ function BodyPanel({ onClose }: { onClose: () => void }) {
     <BodyGoalSheet
       today={localToday()}
       profile={data.profile}
-      onClose={() => {
+      onSaved={(res) => {
+        set(res);
         onClose();
-        void reload();
       }}
+      onDeleted={() => {
+        set({ profile: null });
+        onClose();
+      }}
+      onClose={onClose}
     />
   );
 }
@@ -343,6 +353,8 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
   const [panel, setPanel] = useState<Panel | null>(null);
   const [theme, setTheme] = useState<Theme>(() => (document.documentElement.dataset.theme as Theme | undefined) ?? "system");
   const provider = PROVIDERS[user.provider];
+  // 줄과 시트가 하나만 받아 나눠 쓴다(따로 받으면 시트에서 저장·삭제해도 줄이 갱신되지 않는다)
+  const body = useResource<BodyProfileResponse>("/api/body-profile");
 
   const onInstallClick = async () => {
     if (canPrompt) await prompt();
@@ -402,7 +414,7 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
 
       <h2 className="mo-group">나</h2>
       <ul className="list">
-        <BodyGoalRow onOpen={() => setPanel("body")} />
+        <BodyGoalRow data={body.data} onOpen={() => setPanel("body")} />
         {user.scan !== "off" && <AiUsageRow />}
       </ul>
 
@@ -477,7 +489,7 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
           {(data, onChanged) => <RulesSheet rules={data} onChanged={onChanged} onClose={() => setPanel(null)} />}
         </LoadedSheet>
       )}
-      {panel === "body" && <BodyPanel onClose={() => setPanel(null)} />}
+      {panel === "body" && <BodyPanel data={body.data} error={body.error} reload={body.reload} set={body.set} onClose={() => setPanel(null)} />}
       {panel === "theme" && <ThemeSheet value={theme} onChange={chooseTheme} onClose={() => setPanel(null)} />}
       {panel === "export" && <ExportSheet onClose={() => setPanel(null)} />}
       {panel === "credits" && (

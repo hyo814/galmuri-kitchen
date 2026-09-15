@@ -10,9 +10,17 @@ export interface TodayTotal {
   over: boolean;
 }
 
+/** 저장·삭제 뒤 열던 버튼(목표 정하기 ↔ 고치기)이 다른 자리로 바뀌어 시트의 자동 포커스 복원이 못 찾을 때 새 버튼으로 옮긴다 */
+function focusAfterClose(selector: string) {
+  setTimeout(() => {
+    if (document.activeElement !== document.body) return; // 복원이 이미 됐으면 그대로 둔다
+    document.querySelector<HTMLElement>(selector)?.focus();
+  });
+}
+
 /** 시안 BODY CARD EMPTY / WEEK WITH KCAL: 식단 탭 맨 위 하루 칼로리 목표 카드 + 시트 */
 export default function BodyGoalCard({ today, todayTotal }: { today: string; todayTotal?: TodayTotal | null }) {
-  const { data, reload } = useResource<BodyProfileResponse>("/api/body-profile");
+  const { data, set } = useResource<BodyProfileResponse>("/api/body-profile");
   const [open, setOpen] = useState(false);
 
   if (!data) return null; // 아직 못 받았거나 오류면 아무것도 그리지 않는다(자리 튐 없음)
@@ -61,10 +69,19 @@ export default function BodyGoalCard({ today, todayTotal }: { today: string; tod
         <BodyGoalSheet
           today={today}
           profile={profile}
-          onClose={() => {
+          onSaved={(res) => {
+            set(res);
             setOpen(false);
-            void reload();
+            // 없음 → 있음으로 바뀌면 열었던 "목표 정하기" 버튼이 사라져 포커스를 잃는다 → 새로 생긴 "고치기"로
+            if (!profile) focusAfterClose('[aria-label="하루 칼로리 목표 고치기"]');
           }}
+          onDeleted={() => {
+            set({ profile: null });
+            setOpen(false);
+            // 있음 → 없음으로 바뀌면 열었던 "고치기" 버튼이 사라져 포커스를 잃는다 → 새로 생긴 "목표 정하기"로
+            focusAfterClose(".nt-card .btn.secondary");
+          }}
+          onClose={() => setOpen(false)}
         />
       )}
     </>
