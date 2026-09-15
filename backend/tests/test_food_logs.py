@@ -1,6 +1,7 @@
 from datetime import date
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app import food_logs
 from app.models import FoodLog, FoodSearch, UnitWeightEstimate, User, db, utcnow
@@ -182,6 +183,41 @@ def test_create_slot_race_400(client, login, app, monkeypatch):
     assert error(post_log(client, meal_slot_id=slot["id"])) == (400, food_logs.SLOT_TAKEN)
     with app.app_context():
         assert FoodLog.query.count() == 0
+
+
+def test_create_without_slot_integrity_error_is_bad_request(client, login, monkeypatch):
+    login()
+
+    def boom():
+        raise IntegrityError("x", {}, Exception("dup"))
+
+    monkeypatch.setattr(db.session, "commit", boom)
+    assert error(post_log(client, title="직접 쓰기")) == (400, BAD)
+
+
+def test_patch_without_slot_integrity_error_is_bad_request(client, login, monkeypatch):
+    login()
+    log = post_log(client, title="직접 쓰기").get_json()
+
+    def boom():
+        raise IntegrityError("x", {}, Exception("dup"))
+
+    monkeypatch.setattr(db.session, "commit", boom)
+    assert error(patch_log(client, log["id"], title="다른 제목")) == (400, BAD)
+
+
+def test_patch_with_slot_integrity_error_is_slot_taken(client, login, monkeypatch):
+    login()
+    plan = make_plan(client).get_json()
+    slot = put_slot(client, plan["id"], date="2026-09-14", meal="lunch").get_json()
+    other = put_slot(client, plan["id"], date="2026-09-14", meal="dinner").get_json()
+    log = post_log(client, meal_slot_id=other["id"]).get_json()
+
+    def boom():
+        raise IntegrityError("x", {}, Exception("dup"))
+
+    monkeypatch.setattr(db.session, "commit", boom)
+    assert error(patch_log(client, log["id"], meal_slot_id=slot["id"])) == (400, food_logs.SLOT_TAKEN)
 
 
 def test_patch_fields_and_recompute(client, login, app):

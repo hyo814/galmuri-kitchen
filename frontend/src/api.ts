@@ -61,6 +61,8 @@ export interface User {
   nutrition: ScanMode;
   /** 제휴 링크를 쓸 수 있는 쇼핑몰만 true(쿠팡은 서버에 파트너스 키가 있을 때). 링크는 storeLinks.ts에서 만든다 */
   shop_affiliates: Partial<Record<StoreId, boolean>>;
+  /** 사진 저장소가 꺼져 있으면 false — 사진 추가 칸을 숨긴다(이미 있는 사진은 그대로 보인다) */
+  photos: boolean;
 }
 
 /** 재료를 지우는 이유(선택): 다 먹었어요 / 버렸어요 */
