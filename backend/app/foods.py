@@ -417,7 +417,8 @@ def warm_food_nutrients(limit):
     counter = Counter()
     for (keys,) in db.session.query(PublicRecipe.ingredient_keys):
         counter.update(key for key in (keys or []) if key)
-    names = [name for name, _ in counter.most_common(limit)]
+    # 찾을 수 없는 이름(정규화하면 빈 이름·자모뿐)은 요청 없이 늘 False라 실패로 세지 않게 미리 뺀다(리뷰 I1)
+    names = [name for name, _ in counter.most_common() if (key := query_key(name)) and not JAMO_ONLY.fullmatch(key)][:limit]
     done = failures_in_a_row = 0
     for name in names:
         if search_and_cache(name, None):

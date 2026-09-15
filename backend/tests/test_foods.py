@@ -638,6 +638,32 @@ def test_warm_cli_stops_after_failures_in_a_row(make_app, monkeypatch):
         assert "식품 이름 0개를 찾아봤어요. 요청이 실패해 5개는 다음에 찾아요." in result.output
 
 
+def test_warm_cli_failure_count_resets_after_success_and_skips_unsearchable_names(make_app, monkeypatch):
+    # 성공하면 연달아 실패한 수를 0부터 다시 센다. 자모뿐·빈 이름은 요청 없이 늘 False라 목록에서 미리 빼 실패로 세지 않는다
+    app = make_app(FOOD_NUTRITION_API_KEY="k")
+    with app.app_context():
+        names = ["가지", "감자", "고추", "김치", "당근", "대파", "두부"]
+        db.session.add_all([
+            PublicRecipe(rcp_seq="1", title="a", ingredient_keys=["ㄷ", "ㅁ", "ㅂ", "()"]),  # 가장 많이 나오지만 찾을 수 없는 이름
+            PublicRecipe(rcp_seq="2", title="b", ingredient_keys=["ㄷ", "ㅁ", "ㅂ", "()"]),
+            *[PublicRecipe(rcp_seq=f"n{i}", title=name, ingredient_keys=[name]) for i, name in enumerate(names)],
+        ])
+        db.session.commit()
+
+        seen = []
+        results = iter([False, False, True, False, False, False, True])
+
+        def fake_search(name, user):
+            seen.append(name)
+            return next(results)
+
+        monkeypatch.setattr(foods, "search_and_cache", fake_search)
+        result = app.test_cli_runner().invoke(args=["warm-food-nutrients", "--limit", "7"])
+        assert result.exit_code == 0
+        assert seen == names[:6]  # 3번째 실패 묶음(4·5·6번째)에서 멈춰 7번째는 부르지 않는다
+        assert "식품 이름 1개를 찾아봤어요. 요청이 실패해 6개는 다음에 찾아요." in result.output
+
+
 def test_cli_search_waits_longer_than_user_search_and_logs_reason(make_app, monkeypatch, caplog):
     # 사람이 기다리는 검색은 5초, CLI 미리 받기(user None)는 쪽마다 20초. 실패 로그에 이유 이름(주소·키 없음)을 남긴다
     app = make_app(FOOD_NUTRITION_API_KEY="secret-key")
