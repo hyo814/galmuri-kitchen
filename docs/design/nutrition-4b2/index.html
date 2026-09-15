@@ -1,0 +1,259 @@
+<title>4b-2 영양 계산 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+  :root {
+    --board: #e6e8eb; --bg: #f3f4f6; --surface: #ffffff; --field: #f3f4f6; --text: #17191c; --text-2: #5b616b; --text-3: #63697a; --line: #eef0f2; --chip-line: #d3d7dd; --scrim: rgb(15 17 20 / 0.48);
+    --accent: #0b7a4c; --accent-strong: #086a41; --accent-tint: #e7f6ef; --on-accent: #ffffff; --warn: #8f5500; --warn-tint: #fff3dc; --danger: #c4262e; --danger-tint: #fdeded; --danger-line: #f5c2c4; --note: #3a3f46;
+    --carb: #d99a2b; --protein: #2f7fd1; --fat: #b45fa8; --track: #e9ecef;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --scrim: rgb(0 0 0 / 0.6); --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --danger: #ff6b6f; --danger-tint: #3b1c1f; --danger-line: #6b2b30; --note: #d3d7dc; --carb: #e9b04d; --protein: #5aa2ea; --fat: #cf82c3; --track: #2a2d32; }
+  }
+  :root[data-theme="dark"] { --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --scrim: rgb(0 0 0 / 0.6); --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --danger: #ff6b6f; --danger-tint: #3b1c1f; --danger-line: #6b2b30; --note: #d3d7dc; --carb: #e9b04d; --protein: #5aa2ea; --fat: #cf82c3; --track: #2a2d32; }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 16px 56px; background: var(--board); color: var(--text); font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .intro, .asks, .board { max-width: 1700px; margin-inline: auto; }
+  .intro { margin-bottom: 20px; }
+  .intro h1 { margin: 0 0 8px; font-size: 26px; line-height: 34px; text-wrap: balance; }
+  .intro p { margin: 0 0 6px; max-width: 70ch; font-size: 15px; line-height: 24px; color: var(--text-2); word-break: keep-all; }
+  .intro b { color: var(--note); }
+  .asks { margin-bottom: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; }
+  .ask { padding: 14px 16px; border-radius: 16px; background: var(--surface); }
+  .ask h3 { margin: 0 0 4px; font-size: 15px; }
+  .ask p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+  .ask .rec { color: var(--accent-strong); font-weight: 600; }
+
+  .board { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(384px, 100%), 1fr)); gap: 32px 24px; align-items: start; }
+  .option { display: grid; gap: 12px; justify-items: center; }
+  .cap { width: min(384px, 100%); display: grid; gap: 4px; }
+  .tag { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: 0.06em; color: var(--text-3); }
+  .cap h2 { margin: 0; font-size: 18px; line-height: 26px; }
+  .cap p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+
+  .phone { position: relative; width: min(384px, 100%); height: 820px; overflow: hidden; border-radius: 28px; background: var(--bg); padding: 20px 16px; display: grid; align-content: start; gap: 12px; }
+  .h1 { margin: 0 4px; font-size: 26px; font-weight: 700; }
+  .sub { margin: -8px 4px 0; font-size: 14px; color: var(--text-3); }
+  .card { border-radius: 20px; background: var(--surface); padding: 16px; display: grid; gap: 10px; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .row .grow { flex: 1; min-width: 0; }
+  .muted { color: var(--text-3); font-size: 13px; line-height: 19px; }
+  .big { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .num { font-variant-numeric: tabular-nums; }
+  .link { color: var(--accent-strong); font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .pill { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: 8px; font-size: 12px; font-weight: 600; background: var(--accent-tint); color: var(--accent-strong); white-space: nowrap; }
+  .pill.warn { background: var(--warn-tint); color: var(--warn); }
+  .pill.gray { background: var(--field); color: var(--text-2); }
+  .meter { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
+  .meter i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+  .meter.warn i { background: var(--warn); }
+  .split { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; }
+  .split i:nth-child(1) { background: var(--carb); } .split i:nth-child(2) { background: var(--protein); } .split i:nth-child(3) { background: var(--fat); }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--text-2); }
+  .legend span::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 4px; margin-right: 5px; vertical-align: 1px; background: currentColor; }
+  .legend .c { color: var(--carb); } .legend .p { color: var(--protein); } .legend .f { color: var(--fat); }
+  .legend b { color: var(--text); font-weight: 600; }
+  .kv { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 14px; }
+  .kv span:nth-child(odd) { color: var(--text-2); }
+  .kv b { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .src { font-size: 12px; line-height: 18px; color: var(--text-3); word-break: keep-all; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 52px; border-radius: 16px; font-size: 16px; font-weight: 600; white-space: nowrap; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); }
+  .btn.secondary { background: var(--field); color: var(--text); }
+  .btn.danger { background: var(--danger-tint); color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger-line); }
+
+  /* 주 보기 (B안) */
+  .day { border-radius: 20px; background: var(--surface); padding: 2px 0 4px; position: relative; }
+  .day.today::after { content: ""; position: absolute; inset: 0; border-radius: 20px; box-shadow: inset 0 0 0 1.5px var(--accent); pointer-events: none; }
+  .dh { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px; }
+  .dh .d { font-size: 17px; font-weight: 700; } .dh .w { color: var(--text-2); font-size: 15px; }
+  .dh .k { margin-left: auto; font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .dmeter { margin: -4px 16px 8px; }
+  .sr { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; column-gap: 8px; align-items: center; min-height: 58px; padding: 6px 16px; border-top: 1px solid var(--line); }
+  .sr .m { font-size: 13px; font-weight: 600; color: var(--text-3); }
+  .sr .t { font-size: 16px; font-weight: 600; } .sr .s { display: block; font-size: 13px; color: var(--text-3); margin-top: 2px; }
+  .sr .s .use { color: var(--warn); font-weight: 600; }
+  .sr .kc { font-size: 14px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 16px 8px; border-top: 1px solid var(--line); }
+  .chip { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 16px; box-shadow: inset 0 0 0 1px var(--chip-line); font-size: 14px; font-weight: 600; color: var(--text-2); }
+  .chip b { color: var(--accent-strong); margin-right: 3px; }
+  .ch { display: inline-flex; align-items: center; height: 36px; padding: 0 12px; border-radius: 18px; background: var(--field); color: var(--text-2); font-size: 14px; font-weight: 600; }
+  .ch.on { background: var(--accent-tint); color: var(--accent-strong); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .chrow { display: flex; flex-wrap: wrap; gap: 6px; }
+  .fld { display: grid; gap: 6px; }
+  .fld > span { font-size: 13px; font-weight: 600; color: var(--text-2); }
+  .inp { height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-radius: 12px; background: var(--field); font-size: 16px; font-variant-numeric: tabular-nums; }
+  .inp em { font-style: normal; color: var(--text-3); font-size: 14px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  .scrim { position: absolute; inset: 0; background: var(--scrim); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 6%; overflow: hidden; padding: 12px 20px 20px; border-radius: 24px 24px 0 0; background: var(--surface); display: grid; align-content: start; gap: 12px; }
+  .handle { justify-self: center; width: 40px; height: 4px; border-radius: 2px; background: var(--chip-line); }
+  .st { margin: 0; font-size: 21px; font-weight: 700; } .sd { margin: 2px 0 0; font-size: 14px; color: var(--text-2); word-break: keep-all; }
+
+  .ing { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 15px; }
+  .ing small { grid-column: 1; font-size: 12px; color: var(--text-3); }
+  .ing .kc { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 14px; color: var(--text-2); font-variant-numeric: tabular-nums; text-align: right; }
+  .cand { display: grid; grid-template-columns: 24px minmax(0,1fr) auto; gap: 10px; align-items: center; padding: 12px; border-radius: 14px; background: var(--field); }
+  .cand.on { background: var(--accent-tint); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .radio { width: 20px; height: 20px; border-radius: 10px; box-shadow: inset 0 0 0 2px var(--chip-line); }
+  .cand.on .radio { box-shadow: inset 0 0 0 6px var(--accent); }
+  .cand b { font-size: 15px; } .cand small { display: block; font-size: 12px; color: var(--text-3); }
+  svg { flex: none; }
+</style>
+
+<header class="intro">
+  <h1>4b-2 영양 계산 · 하루 칼로리 목표</h1>
+  <p>레시피 재료를 식약처 <b>식품영양성분 DB</b>(공공데이터포털, 100g당 값)에서 찾아 <b>1인분 kcal·탄단지·당류·나트륨</b>을 계산하고, 식단 칸·하루·기간으로 더해요. 식단 탭 맨 위 <b>하루 칼로리 목표</b> 카드로 하루 필요 칼로리(Mifflin–St Jeor × 활동계수)를 보여줘요. 먹은 기록 달력은 다음 단계(4b-3)예요.</p>
+  <p>기준값: 당류 1일 기준치 100g · 나트륨 1일 기준치 2,000mg(식품 표시 기준, 하루 2,000kcal), WHO 유리당 총 에너지의 10% 미만. 모든 계산 화면에 <b>의료 조언이 아니라 참고용</b> 문구를 둬요.</p>
+</header>
+
+<section class="asks" aria-label="정할 것">
+  <div class="ask"><h3>A. 무게를 모르는 단위(개·모·단)</h3><p>시안: <span class="rec">식품별 대표 무게를 AI로 한 번 추정해 사용자별로 기억</span>하고 `추정` 표시. 사용자가 g으로 고치면 그 값을 써요.</p></div>
+  <div class="ask"><h3>B. 이름으로 식품 맞추기</h3><p>시안: 이름이 똑같은 원재료가 있으면 <span class="rec">자동으로 맞추고</span>, 애매하면 레시피 영양 칸에서 한 번 골라요(사용자별 기억).</p></div>
+  <div class="ask"><h3>C. 감량 목표의 하한</h3><p>시안: 필요량 − 500kcal, 단 <span class="rec">기초대사량보다 낮게는 제안하지 않아요</span>(공식 최저치 대신 안전한 규칙).</p></div>
+  <div class="ask"><h3>D. 주 보기에 kcal</h3><p>시안: 채운 칸 오른쪽에 1인분 kcal, 하루 머리에 합계와 목표 막대. 계산 못 한 칸이 있으면 `약`을 붙여요.</p></div>
+</section>
+
+<main class="board">
+
+  <!-- 1 하루 칼로리 목표 카드 (없음) -->
+  <section class="option" aria-labelledby="n1">
+    <div class="cap"><span class="tag">1 · BODY CARD EMPTY</span><h2 id="n1">하루 칼로리 목표 카드 — 처음</h2><p>식단 탭 제목 아래. 넣기 전에는 무엇을 알려주는지만 한 줄로.</p></div>
+    <div class="phone">
+      <p class="h1">식단</p><p class="sub">28칸 중 9칸 채웠어요</p>
+      <div class="card">
+        <div class="row"><span class="grow"><b style="font-size:16px">하루에 얼마나 먹으면 될까요?</b><br><span class="muted">키·몸무게·활동량을 넣으면 하루 필요 칼로리와 목표를 알려줘요</span></span></div>
+        <span class="btn secondary">목표 정하기</span>
+      </div>
+      <div class="day today">
+        <div class="dh"><span class="d">15일</span><span class="w">화요일</span><span class="k">약 1,420kcal</span></div>
+        <div class="sr"><span class="m">아침</span><span><span class="t">토스트</span><span class="s">1인분</span></span><span class="kc">310kcal</span></div>
+        <div class="sr"><span class="m">저녁</span><span><span class="t">김치찌개</span><span class="s">2인분 · <span class="use">두부 마저 써요</span></span></span><span class="kc">약 480kcal</span></div>
+        <div class="chips"><span class="chip"><b>+</b>점심</span><span class="chip"><b>+</b>간식</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 하루 칼로리 목표 시트 -->
+  <section class="option" aria-labelledby="n2">
+    <div class="cap"><span class="tag">2 · BODY SHEET</span><h2 id="n2">하루 칼로리 목표 정하기</h2><p>성별·태어난 해·키·몸무게·활동량 5단계, 목표(유지·감량·증량). 아래에 계산 결과를 바로 보여줘요. 맨 아래 연빨강 <b>입력한 정보 지우기</b>.</p></div>
+    <div class="phone" style="padding:0">
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <div><p class="st">하루 칼로리 목표 정하기</p><p class="sd">나만 볼 수 있고 언제든 지울 수 있어요</p></div>
+        <div class="grid2">
+          <div class="fld"><span>성별</span><div class="chrow"><span class="ch on">여성</span><span class="ch">남성</span></div></div>
+          <div class="fld"><span>태어난 해</span><div class="inp">1994<em>32세</em></div></div>
+          <div class="fld"><span>키</span><div class="inp">162<em>cm</em></div></div>
+          <div class="fld"><span>몸무게</span><div class="inp">58<em>kg</em></div></div>
+        </div>
+        <div class="fld"><span>활동량</span><div class="chrow"><span class="ch">거의 없음</span><span class="ch on">가벼움</span><span class="ch">보통</span><span class="ch">많음</span><span class="ch">매우 많음</span></div><span class="muted">주 1~3번 가볍게 걷거나 운동해요</span></div>
+        <div class="fld"><span>목표</span><div class="chrow"><span class="ch">유지</span><span class="ch on">감량</span><span class="ch">증량</span></div></div>
+        <div class="card" style="background:var(--field);padding:14px">
+          <div class="kv"><span>기초대사량</span><b>1,294kcal</b><span>하루 필요량</span><b>1,779kcal</b><span>감량 목표</span><b style="color:var(--accent-strong)">1,294kcal</b></div>
+          <p class="src">필요량 − 500kcal이지만 기초대사량보다 낮게는 제안하지 않아요. Mifflin–St Jeor 식 × 활동계수 1.375 · 의료 조언이 아니라 참고용이에요.</p>
+        </div>
+        <div style="display:grid;gap:8px;margin-top:auto"><span class="btn primary">저장</span><span class="btn danger">입력한 정보 지우기</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 식단 탭 카드 + kcal -->
+  <section class="option" aria-labelledby="n3">
+    <div class="cap"><span class="tag">3 · WEEK WITH KCAL</span><h2 id="n3">주 보기 — 목표 대비</h2><p>카드에 목표와 오늘 식단 합계. 하루 머리에 합계, 그 아래 목표 막대(넘으면 주황). 칸마다 1인분 kcal, 재료 일부를 못 찾으면 `약`.</p></div>
+    <div class="phone">
+      <p class="h1">식단</p><p class="sub">28칸 중 9칸 채웠어요</p>
+      <div class="card">
+        <div class="row"><span class="grow"><span class="muted">하루 목표 · 감량</span><br><span class="big">1,294</span><span class="muted"> kcal</span></span><span class="link">고치기</span></div>
+        <div class="row" style="gap:10px"><span class="muted" style="white-space:nowrap">오늘 식단</span><div class="meter grow" style="height:10px"><i style="width:92%"></i></div><span class="num" style="font-size:14px;font-weight:600">약 1,190</span></div>
+      </div>
+      <div class="day today">
+        <div class="dh"><span class="d">15일</span><span class="w">화요일</span><span class="k">약 1,190 / 1,294kcal</span></div>
+        <div class="meter dmeter"><i style="width:92%"></i></div>
+        <div class="sr"><span class="m">아침</span><span><span class="t">토스트</span><span class="s">1인분</span></span><span class="kc">310kcal</span></div>
+        <div class="sr"><span class="m">점심</span><span><span class="t">두부김치찜</span><span class="s">1인분 · <span class="use">두부 마저 써요</span></span></span><span class="kc">400kcal</span></div>
+        <div class="sr"><span class="m">저녁</span><span><span class="t">김치찌개</span><span class="s">2인분</span></span><span class="kc">약 480kcal</span></div>
+        <div class="chips"><span class="chip"><b>+</b>간식</span></div>
+      </div>
+      <div class="day">
+        <div class="dh"><span class="d">16일</span><span class="w">수요일</span><span class="k" style="color:var(--warn)">1,520 / 1,294kcal</span></div>
+        <div class="meter dmeter warn"><i style="width:100%"></i></div>
+        <div class="sr"><span class="m">저녁</span><span><span class="t">제육볶음</span><span class="s">2인분</span></span><span class="kc">640kcal</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 레시피 상세 영양 -->
+  <section class="option" aria-labelledby="n4">
+    <div class="cap"><span class="tag">4 · RECIPE NUTRITION</span><h2 id="n4">레시피 상세 — 영양(1인분)</h2><p>재료 목록 아래 영양 칸. 탄단지 비율 막대, 당류·나트륨은 1일 기준치 대비. 인분 −/+를 바꾸면 따라 바뀌지 않고 늘 1인분이에요.</p></div>
+    <div class="phone">
+      <p class="h1" style="font-size:22px">김치찌개</p><p class="sub">2인분 기준 레시피</p>
+      <div class="card">
+        <div class="row"><b class="grow" style="font-size:17px">영양 · 1인분</b><span class="pill warn">재료 1개 추정</span></div>
+        <div class="row"><span class="big">약 480</span><span class="muted" style="margin-left:2px">kcal</span></div>
+        <div class="split"><i style="flex:38"></i><i style="flex:27"></i><i style="flex:35"></i></div>
+        <div class="legend"><span class="c">탄수화물 <b>41g</b></span><span class="p">단백질 <b>29g</b></span><span class="f">지방 <b>17g</b></span></div>
+        <div style="display:grid;gap:8px;margin-top:4px">
+          <div class="row"><span class="muted grow" style="font-size:14px;color:var(--text-2)">당류 <b style="color:var(--text)">6g</b></span><span class="muted">1일 기준치의 6%</span></div>
+          <div class="meter"><i style="width:6%"></i></div>
+          <div class="row"><span class="muted grow" style="font-size:14px;color:var(--text-2)">나트륨 <b style="color:var(--text)">1,720mg</b></span><span class="muted" style="color:var(--warn)">1일 기준치의 86%</span></div>
+          <div class="meter warn"><i style="width:86%"></i></div>
+        </div>
+        <p class="src">식약처 식품영양성분 DB(100g당)로 계산했어요. 당류 100g·나트륨 2,000mg은 하루 2,000kcal 기준 1일 기준치예요. 의료 조언이 아니라 참고용이에요.</p>
+      </div>
+      <div class="card" style="gap:0">
+        <div class="row" style="padding-bottom:8px"><b class="grow">재료별</b><span class="muted">1인분 kcal</span></div>
+        <div class="ing"><span>돼지고기 앞다리살 150g</span><small>돼지고기, 앞다리, 생것</small><span class="kc">198</span></div>
+        <div class="ing"><span>김치 1/4포기 <span class="pill warn" style="height:20px">추정</span></span><small>배추김치 · 1/4포기 ≈ 250g으로 추정</small><span class="kc">약 45</span></div>
+        <div class="ing"><span>두부 1/2모</span><small>두부 · 맞는 식품을 골라주세요 <span class="link" style="font-size:12px">고르기</span></small><span class="kc">—</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 식품 고르기 시트 -->
+  <section class="option" aria-labelledby="n5">
+    <div class="cap"><span class="tag">5 · MATCH FOOD</span><h2 id="n5">식품 고르기</h2><p>이름이 애매하면 한 번 골라요. 고른 건 <b>내 모든 레시피에 기억</b>해요. 무게를 모르는 단위는 대표 무게(추정)를 g으로 고칠 수 있어요.</p></div>
+    <div class="phone" style="padding:0">
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <div><p class="st">‘두부’는 어떤 식품인가요?</p><p class="sd">고른 식품은 다른 레시피에도 똑같이 써요</p></div>
+        <div class="inp"><span style="color:var(--text-3)">식품 이름으로 찾기</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></div>
+        <div class="cand on"><span class="radio"></span><span><b>두부</b><small>원재료 · 100g당 84kcal</small></span><span class="pill gray">가장 비슷</span></div>
+        <div class="cand"><span class="radio"></span><span><b>순두부</b><small>원재료 · 100g당 46kcal</small></span></div>
+        <div class="cand"><span class="radio"></span><span><b>연두부</b><small>원재료 · 100g당 58kcal</small></span></div>
+        <div class="fld" style="margin-top:4px"><span>1/2모는 몇 g인가요?</span><div class="inp">150<em>g · 1모 ≈ 300g 추정</em></div></div>
+        <p class="src">숫자를 고치면 추정 표시가 없어져요.</p>
+        <div style="display:grid;grid-template-columns:1fr 1.6fr;gap:8px;margin-top:auto"><span class="btn secondary">추정으로 두기</span><span class="btn primary">이 식품으로</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 하루 영양 시트 -->
+  <section class="option" aria-labelledby="n6">
+    <div class="cap"><span class="tag">6 · DAY SUMMARY</span><h2 id="n6">하루 영양 — 날짜 머리 누르면</h2><p>그날 식단 칸을 모두 더한 값. 목표 대비 kcal, 탄단지, 당류는 WHO 권고(총 에너지의 10%) 대비, 나트륨은 2,000mg 대비.</p></div>
+    <div class="phone" style="padding:0">
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <div><p class="st">15일 화요일 식단 영양</p><p class="sd">채운 칸 3개 · 1인분씩 더했어요</p></div>
+        <div class="row"><span class="big">약 1,190</span><span class="muted" style="margin-left:4px">/ 목표 1,294kcal</span></div>
+        <div class="meter" style="height:10px"><i style="width:92%"></i></div>
+        <div class="split" style="margin-top:6px"><i style="flex:48"></i><i style="flex:24"></i><i style="flex:28"></i></div>
+        <div class="legend"><span class="c">탄수화물 <b>143g</b></span><span class="p">단백질 <b>71g</b></span><span class="f">지방 <b>37g</b></span></div>
+        <div class="card" style="background:var(--field);padding:14px;gap:8px">
+          <div class="row"><span class="grow" style="font-size:14px;color:var(--text-2)">당류 <b style="color:var(--text)">22g</b></span><span class="muted">총 에너지의 7% · WHO 10% 미만</span></div>
+          <div class="meter"><i style="width:74%"></i></div>
+          <div class="row"><span class="grow" style="font-size:14px;color:var(--text-2)">나트륨 <b style="color:var(--text)">2,380mg</b></span><span class="muted" style="color:var(--warn)">1일 기준치 넘었어요</span></div>
+          <div class="meter warn"><i style="width:100%"></i></div>
+        </div>
+        <div class="kv"><span>아침 · 토스트</span><b>310kcal</b><span>점심 · 두부김치찜</span><b>400kcal</b><span>저녁 · 김치찌개</span><b>약 480kcal</b></div>
+        <p class="src">식단은 계획이라 실제로 먹은 양과 달라요. 먹은 기록은 다음에 ‘먹은 기록’에서 남길 수 있어요. 의료 조언이 아니라 참고용이에요.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
