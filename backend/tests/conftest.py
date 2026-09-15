@@ -20,6 +20,7 @@ TEST_CONFIG = {
     "ANTHROPIC_API_KEY": None,  # 셸에 키가 있어도 테스트는 예시 모드로 시작한다
     "CLAUDE_MODEL": "claude-sonnet-5",  # 셸의 CLAUDE_MODEL이 ai_calls.model 확인을 흔들지 않게 고정한다
     "FOODSAFETY_API_KEY": None,  # 셸에 키가 있어도 동기화 테스트는 키 없음으로 시작한다
+    "FOOD_NUTRITION_API_KEY": None,  # 셸에 키가 있어도 식품영양성분 DB 테스트는 키 없음으로 시작한다
     "YOUTUBE_API_KEY": None,
     # 셸에 R2 값이 있어도 테스트는 로컬 저장소로 시작한다. UPLOAD_DIR은 make_app이 테스트마다 tmp_path로 둔다.
     "R2_ACCOUNT_ID": None,

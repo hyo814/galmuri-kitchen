@@ -35,6 +35,8 @@ services:
         sync: false
       - key: FOODSAFETY_API_KEY
         sync: false
+      - key: FOOD_NUTRITION_API_KEY
+        sync: false
       - key: COUPANG_PARTNERS_ID
         sync: false
       - key: COUPANG_ACCESS_KEY  # 쿠팡 파트너스 API. 둘 다 있어야 제휴 링크(backend/app/coupang.py)

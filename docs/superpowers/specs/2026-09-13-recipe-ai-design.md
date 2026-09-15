@@ -53,9 +53,9 @@ recipe-ai/
 - `recipes`: id, user_id, title(1~60자), servings(1~20, 기본 2), ingredients(JSON `[{name, amount}]` 1~50개), steps(JSON `[str]` 0~30개), source(`mine`|`public`|`ai`|`youtube`|`instagram`|`blog`|`text`|`photo`), source_url(선택), public_recipe_id(선택, SET NULL), image_url(선택, AI 레시피는 비슷한 공공 레시피 사진 17절), created_at, updated_at. UNIQUE(user_id, public_recipe_id)
 - `public_recipes`: id, rcp_seq(UNIQUE), title, category(RCP_PAT2), method(RCP_WAY2), kcal(INFO_ENG), servings(원문 `N인분`, 없으면 2), ingredients_text(원문), ingredients(JSON `[{name, amount}]`, 파싱), ingredient_keys(JSON, ingredients와 같은 순서의 매칭용 이름), steps(JSON), image_url, is_sample(키 없을 때 넣는 예시 레시피), updated_at. 사용자 소유 아님.
 - `cook_logs`: id, user_id, recipe_id(선택, SET NULL), title, cooked_on(date), rating(1~5, 선택), memo(선택), photo_key(선택), created_at
-- `ai_calls`: id, user_id, kind(`fridge`|`receipt`|`order`|`memo`|`recipe`|`link`|`recipe_photo`|`meal`|`link_fetch`|`channel_add`|`video_refresh`|`export`), model, input_tokens, output_tokens, created_at(인덱스). 토큰은 원가 계산용(25절)이다. model은 성공하면 실제로 답한 모델, 실패하면 요청한 모델이다. AI 호출이 AiError로 끝나면(오류·타임아웃·거절·max_tokens·스키마 불일치) 토큰은 비워 둔다. 새 AI 기능도 같은 방식으로 남긴다. `link_fetch`(링크 가져오기 외부 요청)·`channel_add`(채널 추가)·`video_refresh`(영상 새로 받기)·`export`(데이터 내보내기 27절)는 AI를 부르지 않는 한도용 기록이라 model이 NULL이고 토큰이 없다(17절). **원가·사용량 집계는 model IS NOT NULL(또는 scan·recipe·link·recipe_photo·meal kind)만 센다.**
+- `ai_calls`: id, user_id, kind(`fridge`|`receipt`|`order`|`memo`|`recipe`|`link`|`recipe_photo`|`meal`|`link_fetch`|`channel_add`|`video_refresh`|`export`|`food_fetch`), model, input_tokens, output_tokens, created_at(인덱스). 토큰은 원가 계산용(25절)이다. model은 성공하면 실제로 답한 모델, 실패하면 요청한 모델이다. AI 호출이 AiError로 끝나면(오류·타임아웃·거절·max_tokens·스키마 불일치) 토큰은 비워 둔다. 새 AI 기능도 같은 방식으로 남긴다. `link_fetch`(링크 가져오기 외부 요청)·`channel_add`(채널 추가)·`video_refresh`(영상 새로 받기)·`export`(데이터 내보내기 27절)·`food_fetch`(식품영양성분 DB 요청, 21절)는 AI를 부르지 않는 한도용 기록이라 model이 NULL이고 토큰이 없다(17절). **원가·사용량 집계는 model IS NOT NULL(또는 scan·recipe·link·recipe_photo·meal kind)만 센다.**
 - `ingredient_removals`: id, user_id(CASCADE, 인덱스), name(지운 재료 이름 복사, ≤50자), reason(`eaten`|`discarded`), created_at. INDEX(user_id, created_at). 재료를 이유를 골라 지울 때만 남긴다(27절)
-- `storage_locations`, `staples`, `item_rules`(14절), `shopping_items`(16절), `kitchen_tools`(18절), `body_profiles`(21절)
+- `storage_locations`, `staples`, `item_rules`(14절), `shopping_items`(16절), `kitchen_tools`(18절), `body_profiles`(21절), `food_nutrients`·`food_searches`·`food_matches`·`unit_weight_estimates`(21절, 식품영양성분 DB 캐시)
 
 ### 규칙
 
@@ -76,7 +76,7 @@ recipe-ai/
 | GET | `/auth/login/<provider>` | OAuth 시작 |
 | GET | `/auth/callback/<provider>` | OAuth 콜백 → 세션 발급 → `/`로 리다이렉트 |
 | POST | `/api/logout` | 세션 삭제 |
-| GET | `/api/me` | 현재 사용자 `{id, nickname, scan: "on"\|"sample"\|"off", scan_limit, recipe_limit, videos: "on"\|"sample"\|"off"}` (비로그인 401). `scan`은 사진으로 추가·AI 레시피 입구 표시에 함께 쓴다. `videos`는 영상 칸 표시용(17절). `recipe_limit`은 호환용으로 남겨 두고, 화면의 남은 횟수는 `/api/ai-usage`를 읽는다. 개발용 로그인 응답도 같은 모양 |
+| GET | `/api/me` | 현재 사용자 `{id, nickname, scan: "on"\|"sample"\|"off", scan_limit, recipe_limit, videos: "on"\|"sample"\|"off", nutrition: "on"\|"sample"\|"off"}` (비로그인 401). `scan`은 사진으로 추가·AI 레시피 입구 표시에 함께 쓴다. `videos`는 영상 칸 표시용(17절). `nutrition`은 영양 계산 칸 표시용(21절, `FOOD_NUTRITION_API_KEY` 유무). `recipe_limit`은 호환용으로 남겨 두고, 화면의 남은 횟수는 `/api/ai-usage`를 읽는다. 개발용 로그인 응답도 같은 모양 |
 | GET/POST | `/api/ingredients` | 목록(임박 순, status 포함) / 생성 |
 | POST | `/api/ingredients/bulk` | 스캔 확인 후 일괄 생성 `{items:[{name, quantity, unit, purchased_on(YYYY-MM-DD 또는 null=모름), expires_on?, price?, location_id?}]}` 1~50개. 하나라도 틀리면 아무것도 만들지 않고 400 `{error: "N번째 재료: …", errors:[{index, error}]}` |
 | PATCH/DELETE | `/api/ingredients/<id>` | 수정 / 삭제. 삭제는 `?reason=eaten\|discarded`(선택)를 주면 같은 커밋에 `ingredient_removals` 행을 남긴다. 없거나 비면 기록 없이 지우고, 다른 값이면 400 `잘못된 요청이에요.`(지우지 않음) (27절) |
@@ -98,6 +98,7 @@ recipe-ai/
 | PATCH/DELETE | `/api/meal-slots/<id>` | 인분 고치기(`{servings}`, `SlotDetail` −/+ 바로 저장) / 칸 비우기 |
 | GET | `/api/meal-plans/<id>/shopping-preview` | 장보기 미리보기(23절 D4) `{name, start_on, end_on, recipe_slot_count, buy, manual, skip}`. 담기는 이 API가 하지 않는다(화면이 `POST /api/shopping/items/bulk`로) |
 | GET/PUT/DELETE | `/api/body-profile` | 몸 정보(21절). GET `{profile: BodyProfile\|null}`(응답 `Cache-Control: no-store`) / PUT 통째로 저장(성별·태어난 해·키·몸무게·활동량·목표, 모두 필수) 200 `{profile}` / DELETE 204(없어도 204). 목표 kcal은 저장하지 않는다 — 화면(`src/nutrition/body.ts`)이 계산한다 |
+| GET | `/api/foods/search?q=` | 식품영양성분 DB 찾기(21절). `nutrition` off면 503 `영양 계산을 지금은 쓸 수 없어요.`, `q` 공백뿐이면 400 `찾을 식품 이름을 입력해주세요.`(30자 넘으면 앞 30자만) → `{items:[{food_code, name, group, kcal}], searched}`(`searched`는 이번 요청이 새로 찾아봤는지 — 캐시가 있으면 안 부른다) |
 | GET | `/api/export/summary` | (`X-Requested-With: fetch` 필요) 내보낼 개수와 오늘(서울) 남은 횟수 `{ingredients, recipes, seasonings, shopping, memos, meals, limit: 5, remaining}`(27절) |
 | GET | `/api/export` | (`X-Requested-With: fetch` 필요) zip 내려받기(`Content-Disposition: attachment; filename="galmuri-kitchen-YYYYMMDD.zip"`, 서울 날짜). `ingredients.csv`·`recipes.csv`·`seasonings.csv`·`shopping.csv`·`shopping_memos.csv`·`meals.csv`(UTF-8 BOM, 한국어 머리글). 하루 5회(`ai_calls.kind = export`), 넘으면 429 `오늘 내보내기는 5번까지 할 수 있어요. 내일 다시 해주세요.`(27절) |
 | GET | `/api/ai-usage` | 오늘(서울) `{scan:{used, limit}, recipe:{used, limit}}` — `오늘 N번 남음`·더보기 AI 사용량 |
@@ -118,7 +119,7 @@ recipe-ai/
 | DELETE | `/api/cook-logs/<id>` | 기록 삭제(재고 복원 안 함) |
 | GET | `/api/photos/<key>` | 소유자 확인(내 접두사 + 사진 행) 후 로컬은 파일 전송(`private, max-age=3600`·nosniff·`Content-Security-Policy: default-src 'none'; sandbox`), R2는 같은 소유자 확인 뒤 R2에서 받아 같은 헤더로 흘려보냄(없는 객체 404, R2 오류 503 `사진을 지금은 볼 수 없어요.`)(28절). 남의 키·지운 사진 404 |
 
-CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를 1,000건 단위로 받아 upsert(`FOODSAFETY_API_KEY` 필요, 받으면 예시 레시피는 지움). `flask seed-sample-recipes` — 키 없이 화면을 확인하는 직접 쓴 예시 레시피 12개(`is_sample`).
+CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를 1,000건 단위로 받아 upsert(`FOODSAFETY_API_KEY` 필요, 받으면 예시 레시피는 지움). `flask seed-sample-recipes` — 키 없이 화면을 확인하는 직접 쓴 예시 레시피 12개(`is_sample`). `flask warm-food-nutrients --limit N`(기본 300) — 공공 레시피 재료 이름 중 많이 쓰이는 순 N개를 식품영양성분 DB에서 미리 찾아 캐시에 넣는다(`FOOD_NUTRITION_API_KEY` 필요, 21절).
 
 ## 6. 화면 흐름
 
@@ -163,7 +164,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - CSRF: 상태 변경 요청에 커스텀 헤더 요구.
 - 사진: 비공개 버킷, 소유자 확인 후 만료 5분 presigned URL.
 - 체험하기 계정(추가: 2026-09-14, 사용자 결정 "체험 계정 + 카카오 로그인"): `DEMO_LOGIN=1`일 때만 `POST /api/demo-login`이 열린다. 누를 때마다 새 계정(`provider=demo`)과 예시 데이터를 만들고 24시간 뒤 `flask purge-demo-users`로 지운다. IP(IPv6는 /64)별 1시간 3개·하루 10개, 전체 5,000개(차면 오래된 체험 계정부터 재활용), IP는 `SECRET_KEY`에서 뽑은 키의 HMAC 해시만 남긴다. 체험 계정 AI 하루 한도 3번, 체험 전체 AI 24시간 예산(`DEMO_AI_GLOBAL_DAILY`)을 넘으면 예시 결과, 영상은 늘 예시 목록. 세션은 `user_id`와 `provider_id`가 함께 맞아야 한다. `ai_calls`는 사용자를 지워도 남는다(`SET NULL`, `demo` 표시).
-- 비밀값(ANTHROPIC_API_KEY, FOODSAFETY_API_KEY, KAKAO_CLIENT_ID/SECRET, NAVER_CLIENT_ID/SECRET, GOOGLE_CLIENT_ID/SECRET, R2_*, DATABASE_URL, SECRET_KEY)은 환경변수. `.env`는 gitignore.
+- 비밀값(ANTHROPIC_API_KEY, FOODSAFETY_API_KEY, FOOD_NUTRITION_API_KEY, KAKAO_CLIENT_ID/SECRET, NAVER_CLIENT_ID/SECRET, GOOGLE_CLIENT_ID/SECRET, R2_*, DATABASE_URL, SECRET_KEY)은 환경변수. `.env`는 gitignore.
 
 ## 10. 테스트
 
@@ -430,6 +431,22 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
   4. 하루 막대의 목표는 몸 정보 목표 → 없으면 식단 `goal_kcal` → 없으면 막대 없음. AI 초안 입력 목표가 비어 있으면 몸 정보 목표로 채운다.
   21. 카드는 식단 탭(식단 있으면 머리 아래, 없으면 빈 화면 위)에 두고, 더보기 `나` 묶음에 `하루 칼로리 목표` 줄을 둔다. 새 몸 정보는 성별·활동량을 미리 고르지 않고, 목표는 `유지`로 시작한다.
   24. 내보내기 `meals.csv`는 그대로 두고, 몸 정보는 내보내기에 넣지 않는다.
+
+**구현 세부 (2026-09-15, 4b-2, Task 2 — 식품영양성분 DB 요청·캐시·검색):**
+- 테이블 4개(모두 마이그레이션 `f2f2o2o2d2s2`, down_revision `f1b1o1d1y1p1`):
+  - `food_nutrients`(id, food_code UNIQUE, name, name_key 인덱스, group_name, kcal, carbs_g, protein_g, fat_g, sugars_g, sodium_mg, source(`api`|`sample`|`ai`), fetched_at) — 식품 한 행의 100g(100ml)당 영양, 사용자 소유 아닌 공유 캐시.
+  - `food_searches`(id, query_key UNIQUE, total, searched_at) — 이 이름으로 찾아봤다는 기록. 30일 지나면 다시 찾는다.
+  - `food_matches`(id, user_id CASCADE 인덱스, ingredient_key, food_code(선택), unit_grams JSON, updated_at, UNIQUE(user_id, ingredient_key)) — 재료 이름 → 고른 식품(사용자별 기억). 매칭 UI는 이후 태스크.
+  - `unit_weight_estimates`(id, name_key, unit, grams, source(`ai`|`sample`), created_at, UNIQUE(name_key, unit)) — 재료 한 단위 무게 추정(전체 공유). 이후 태스크에서 채운다.
+- 요청 방식(`app/foods.py`): 공공데이터포털 15127578 `GET https://apis.data.go.kr/1471000/FoodNtrCpntDbInfo02/getFoodNtrCpntDbInq02`, `outbound.fetch_fixed`로만(호스트 `apis.data.go.kr`을 `outbound.FIXED_HOSTS`에 추가). `serviceKey`는 Decoding 키를 그대로 주소에 붙인다(다시 인코딩하면 403). 한 쪽 100행(`numOfRows`), 1쪽에서 `totalCount`가 100보다 크고 정확히 같은 이름(정규화)인 행이 없으면 2쪽까지(`MAX_PAGES=2`). 기준량이 `100g`·`100ml`(공백·대소문자 무시)가 아닌 행은 버린다. 빈 영양소(`-`·``)는 None으로 두고, 레시피 영양 합산 때 0으로 더한다(이후 태스크). 이 이름으로 찾아본 기록(`food_searches`)이 30일 안이면 다시 부르지 않되, 식품 행은 받을 때마다 `fetched_at`을 갱신한다.
+- 한도: 요청(쪽)마다 `ai_calls`에 `kind=food_fetch`(model·token 없음, AI 한도·사용량에 안 셈, 실패해도 기록은 남는다) 한 줄. 사용자 하루(서울 날짜) 300번(체험 계정 50번), 전체 8,000번 — 넘으면 조용히 멈추고(429 아님) `food_searches`에 기록을 남기지 않아 다음에 다시 찾는다. CLI(`user=None`)는 사용자 한도 없이 전체 한도만 본다.
+- 예시 모드: 개발용 식품 17개는 `backend/app/data/sample_foods.json`(`food_code SAMPLE-01~17`). `nutrition_mode`는 키 있으면 `on`(체험 계정도 `on`, 하루 50번 — 실제 DB를 쓴다), 키 없고 `DEV_MODE`면 `sample`(외부 요청·`ai_calls` 없이 예시 파일에서 이름이 같거나 포함된 행만 캐시에 넣는다), 그 외 `off`(영양 API 503 `영양 계산을 지금은 쓸 수 없어요.`, `/api/me`의 `nutrition`도 `off`). 하루 칼로리 목표(21절 `body_profiles`)는 이 모드와 무관하게 늘 보인다.
+- `GET /api/foods/search?q=`(로그인 필요): `nutrition` off → 503 / `q` 공백만이면 400 `찾을 식품 이름을 입력해주세요.`(30자 초과는 앞 30자만 사용) / 캐시에서 이름에 `q`가 든 행(source `ai` 제외, 200개까지) → 원문이 정확히 일치 → 분류(원재료성 > 가공식품 > 음식 > 그 외) → 이름 길이 → 이름 순 정렬해 앞 20개 `{food_code, name, group, kcal}` 반환, `searched`는 이번 요청이 새로 찾아봤는지(캐시로 충분하면 `false`가 아니라 `true` — 최근 30일 안이면 호출 없이도 "찾아본 상태"로 본다, 실패했을 때만 `false`).
+- CLI `flask warm-food-nutrients --limit N`(기본 300, 1~2000): 키 없으면 `click.ClickException("FOOD_NUTRITION_API_KEY가 없어요.")`. `PublicRecipe.ingredient_keys`를 모두 세어(`collections.Counter`, 빈 키 제외) 많이 쓰인 순 N개를 `search_and_cache(name, None)`으로 미리 찾는다. 전체 한도에 걸려 멈추면 `식품 이름 {찾은 수}개를 찾아봤어요. 한도 때문에 {남은 수}개는 다음에 찾아요.`, 다 돌면 `식품 이름 {N}개를 찾아봤어요.`.
+- **Step 0 실측 (2026-09-15, `apis.data.go.kr` 실제 응답)**: 식품 코드 필드는 계획대로 `FOOD_CD`(변경 없음). `두부`·`대파`로 각 100행(1쪽)을 받아 봤을 때 `DB_GRP_NM` 값은 `음식`과 `가공식품`만 관측되고 `원재료성` 행은 이 200행 표본에서 나타나지 않았다(정확히 "두부"·"대파"인 원재료 행도 1쪽에는 없어 2쪽 요청이 실제로 필요함을 확인) — 코드는 `원재료성`이 나타나면 `GROUP_ORDER`로 상위에 두도록 그대로 두되, 실제로는 `가공식품`·`음식` 위주로 검색 결과가 채워질 수 있음을 알아둔다. `SERVING_SIZE` 값 종류는 `100g`·`100mL`(대문자 `ML`) 두 가지만 관측됨 — 대소문자·공백 무시 비교로 이미 대응됨.
+- 결정 23(체험 계정 실제 DB): 개발 예시 식품(17개, `sample_foods.json`)은 DEV_MODE에서만. 체험 계정은 키가 있으면 실제 DB를 쓰고 하루 50번 한도.
+- 결정 25(CLI): `flask warm-food-nutrients --limit 300`(위 CLI 항목 참고).
+- 결정 26(Step 0 확인): 위 Step 0 실측 결과대로 `FIELDS["code"]`는 `FOOD_CD` 그대로, 원재료성 행 유무는 위에 기록.
 
 ## 22. 3단계 추가: 양념 비율 계산기 (추가: 2026-09-13)
 - 레시피 탭 안 `양념 비율` 칸(추천 · 내 레시피 · 영상 · 양념 비율). 불고기·제육볶음·간장조림·초고추장·쌈장·갈비 양념 등 기본 양념을 제공하고 사용자가 추가·수정("내 비율").

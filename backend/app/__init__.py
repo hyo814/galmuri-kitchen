@@ -50,6 +50,7 @@ def create_app(test_config=None):
         AI_SCAN_BURST_LIMIT=int(os.environ.get("AI_SCAN_BURST_LIMIT") or 3),
         AI_DAILY_RECIPE_LIMIT=int(os.environ.get("AI_DAILY_RECIPE_LIMIT") or 10),
         FOODSAFETY_API_KEY=os.environ.get("FOODSAFETY_API_KEY") or None,
+        FOOD_NUTRITION_API_KEY=os.environ.get("FOOD_NUTRITION_API_KEY") or None,
         YOUTUBE_API_KEY=os.environ.get("YOUTUBE_API_KEY") or None,
         UPLOAD_DIR=DEFAULT_UPLOAD_DIR,  # R2가 없을 때 개발용 사진 폴더(스펙 3절, gitignore)
         R2_ACCOUNT_ID=os.environ.get("R2_ACCOUNT_ID") or None,
@@ -85,6 +86,7 @@ def create_app(test_config=None):
     from .coupang import bp as coupang_bp
     from .demo import bp as demo_bp
     from .export import bp as export_bp
+    from .foods import bp as foods_bp
     from .ingredients import bp as ingredients_bp
     from .item_rules import bp as item_rules_bp
     from .locations import bp as locations_bp
@@ -106,6 +108,7 @@ def create_app(test_config=None):
     app.register_blueprint(coupang_bp)
     app.register_blueprint(demo_bp)
     app.register_blueprint(export_bp)
+    app.register_blueprint(foods_bp)
     app.register_blueprint(ingredients_bp)
     app.register_blueprint(item_rules_bp)
     app.register_blueprint(locations_bp)
