@@ -1,0 +1,303 @@
+<title>5 요리 일기 · 집밥 리포트 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+  :root {
+    --board: #e6e8eb; --bg: #f3f4f6; --surface: #ffffff; --field: #f3f4f6; --text: #17191c; --text-2: #5b616b; --text-3: #63697a; --line: #eef0f2; --chip-line: #d3d7dd; --scrim: rgb(15 17 20 / 0.48);
+    --accent: #0b7a4c; --accent-strong: #086a41; --accent-tint: #e7f6ef; --on-accent: #ffffff; --warn: #8f5500; --warn-tint: #fff3dc; --danger: #c4262e; --danger-tint: #fdeded; --danger-line: #f5c2c4; --note: #3a3f46; --track: #e9ecef; --star: #e0a100;
+    --ph1: #d9c3a1; --ph2: #b9cfa8; --ph3: #c7b3c9; --ph4: #e3b8a4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --scrim: rgb(0 0 0 / 0.6); --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --danger: #ff6b6f; --danger-tint: #3b1c1f; --danger-line: #6b2b30; --note: #d3d7dc; --track: #2a2d32; --star: #f5c542; --ph1: #5a4a33; --ph2: #3f5436; --ph3: #4d3f50; --ph4: #5e4133; }
+  }
+  :root[data-theme="dark"] { --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --scrim: rgb(0 0 0 / 0.6); --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --danger: #ff6b6f; --danger-tint: #3b1c1f; --danger-line: #6b2b30; --note: #d3d7dc; --track: #2a2d32; --star: #f5c542; --ph1: #5a4a33; --ph2: #3f5436; --ph3: #4d3f50; --ph4: #5e4133; }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 16px 56px; background: var(--board); color: var(--text); font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .intro, .asks, .board { max-width: 1700px; margin-inline: auto; }
+  .intro { margin-bottom: 20px; }
+  .intro h1 { margin: 0 0 8px; font-size: 26px; line-height: 34px; text-wrap: balance; }
+  .intro p { margin: 0 0 6px; max-width: 70ch; font-size: 15px; line-height: 24px; color: var(--text-2); word-break: keep-all; }
+  .intro b { color: var(--note); }
+  .asks { margin-bottom: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; }
+  .ask { padding: 14px 16px; border-radius: 16px; background: var(--surface); }
+  .ask h3 { margin: 0 0 4px; font-size: 15px; }
+  .ask p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+  .ask .rec { color: var(--accent-strong); font-weight: 600; }
+  .board { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(384px, 100%), 1fr)); gap: 32px 24px; align-items: start; }
+  .option { display: grid; gap: 12px; justify-items: center; }
+  .cap { width: min(384px, 100%); display: grid; gap: 4px; }
+  .tag { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: 0.06em; color: var(--text-3); }
+  .cap h2 { margin: 0; font-size: 18px; line-height: 26px; }
+  .cap p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+
+  .phone { position: relative; width: min(384px, 100%); height: 820px; overflow: hidden; border-radius: 28px; background: var(--bg); padding: 16px 16px; display: grid; align-content: start; gap: 12px; }
+  .back { margin: 0 4px; font-size: 15px; color: var(--text-2); }
+  .h1 { margin: 0 4px; font-size: 26px; font-weight: 700; }
+  .card { border-radius: 20px; background: var(--surface); padding: 14px 16px; display: grid; gap: 10px; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .grow { flex: 1; min-width: 0; }
+  .muted { color: var(--text-3); font-size: 13px; line-height: 19px; }
+  .num { font-variant-numeric: tabular-nums; }
+  .link { color: var(--accent-strong); font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .pill { display: inline-flex; align-items: center; height: 22px; padding: 0 7px; border-radius: 7px; font-size: 12px; font-weight: 600; background: var(--accent-tint); color: var(--accent-strong); white-space: nowrap; }
+  .pill.gray { background: var(--field); color: var(--text-2); }
+  .pill.warn { background: var(--warn-tint); color: var(--warn); }
+  .meter { height: 8px; border-radius: 4px; background: var(--track); overflow: hidden; }
+  .meter i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 52px; border-radius: 16px; font-size: 16px; font-weight: 600; white-space: nowrap; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); }
+  .btn.secondary { background: var(--field); color: var(--text); }
+  .btn.danger { background: var(--danger-tint); color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger-line); }
+  .src { font-size: 12px; line-height: 18px; color: var(--text-3); word-break: keep-all; }
+
+  /* 요약 */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .stat { display: grid; gap: 2px; }
+  .stat b { font-size: 18px; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 12px; color: var(--text-3); }
+  .split { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; }
+  .split i:first-child { background: var(--accent); } .split i:last-child { background: var(--chip-line); }
+
+  /* 달력 */
+  .mnav { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; font-size: 17px; font-weight: 700; }
+  .mnav span { color: var(--text-3); font-weight: 400; font-size: 20px; }
+  .cal { border-radius: 20px; background: var(--surface); padding: 10px 8px 12px; }
+  .dow, .wk { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .dow span { text-align: center; font-size: 12px; color: var(--text-3); padding: 4px 0 6px; }
+  .wk + .wk { margin-top: 4px; }
+  .cell { position: relative; display: grid; justify-items: center; align-content: start; gap: 2px; height: 76px; padding-top: 4px; border-radius: 12px; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .cell.dim { color: var(--chip-line); }
+  .cell.today .d { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 12px; background: var(--accent); color: var(--on-accent); font-weight: 700; }
+  .cell.sel { background: var(--accent-tint); }
+  .th { width: 34px; height: 34px; border-radius: 9px; }
+  .dots { display: flex; gap: 3px; height: 34px; align-items: center; }
+  .dots i { width: 6px; height: 6px; border-radius: 3px; background: var(--accent); }
+  .kc { font-size: 10px; color: var(--text-3); letter-spacing: -0.02em; }
+  .cook { position: absolute; top: 2px; right: 3px; width: 14px; height: 14px; border-radius: 7px; background: var(--warn-tint); color: var(--warn); font-size: 9px; font-weight: 700; display: grid; place-items: center; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--text-3); padding: 0 6px; }
+
+  /* 시트 */
+  .scrim { position: absolute; inset: 0; background: var(--scrim); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 7%; overflow: hidden; padding: 12px 20px 20px; border-radius: 24px 24px 0 0; background: var(--surface); display: grid; align-content: start; gap: 12px; }
+  .handle { justify-self: center; width: 40px; height: 4px; border-radius: 2px; background: var(--chip-line); }
+  .st { margin: 0; font-size: 21px; font-weight: 700; } .sd { margin: 2px 0 0; font-size: 14px; color: var(--text-2); word-break: keep-all; }
+  .meal { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+  .mealh { display: flex; align-items: center; font-size: 14px; font-weight: 600; color: var(--text-2); }
+  .mealh .k { margin-left: auto; font-weight: 500; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .log { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; align-items: center; }
+  .log .ph { width: 52px; height: 52px; border-radius: 12px; }
+  .log .noph { width: 52px; height: 52px; border-radius: 12px; background: var(--field); display: grid; place-items: center; color: var(--text-3); }
+  .log b { font-size: 15px; }
+  .log small { display: block; font-size: 12px; color: var(--text-3); margin-top: 1px; }
+  .stars { color: var(--star); font-size: 12px; letter-spacing: 1px; }
+  .addrow { display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--chip-line); color: var(--text-2); font-size: 14px; font-weight: 600; width: fit-content; }
+  .addrow b { color: var(--accent-strong); }
+  .plan { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: var(--field); font-size: 14px; }
+  .plan .link { margin-left: auto; }
+
+  .seg { display: grid; grid-template-columns: repeat(4, 1fr); padding: 4px; border-radius: 14px; background: var(--field); }
+  .seg span { display: grid; place-items: center; height: 38px; border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--text-2); }
+  .seg span.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+  .fld { display: grid; gap: 6px; }
+  .fld > span { font-size: 13px; font-weight: 600; color: var(--text-2); }
+  .inp { min-height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-radius: 12px; background: var(--field); font-size: 16px; }
+  .inp em { font-style: normal; color: var(--text-3); font-size: 14px; }
+  .chrow { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ch { display: inline-flex; align-items: center; height: 40px; padding: 0 14px; border-radius: 20px; background: var(--field); color: var(--text-2); font-size: 14px; font-weight: 600; }
+  .ch.on { background: var(--accent-tint); color: var(--accent-strong); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .photos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .photos .ph, .photos .add { aspect-ratio: 1; max-width: 100%; border-radius: 12px; }
+  .photos .add { display: grid; place-items: center; align-content: center; gap: 2px; box-shadow: inset 0 0 0 1.5px var(--chip-line); color: var(--text-2); font-size: 12px; font-weight: 600; }
+  .bigstars { display: flex; gap: 6px; font-size: 26px; color: var(--star); }
+  .bigstars .off { color: var(--chip-line); }
+  .stepper { display: grid; grid-template-columns: 48px 1fr 48px; gap: 8px; }
+  .stepper span { display: grid; place-items: center; height: 48px; border-radius: 12px; background: var(--field); font-size: 16px; font-weight: 600; }
+  svg { flex: none; }
+
+  .toggle { width: 44px; height: 26px; border-radius: 13px; background: var(--accent); position: relative; flex: none; }
+  .toggle::after { content: ""; position: absolute; right: 3px; top: 3px; width: 20px; height: 20px; border-radius: 10px; background: var(--on-accent); }
+  .toggle.off { background: var(--chip-line); } .toggle.off::after { right: auto; left: 3px; background: var(--surface); }
+  .use { display: grid; grid-template-columns: 22px minmax(0,1fr) auto; gap: 10px; align-items: center; min-height: 48px; border-top: 1px solid var(--line); }
+  .use:first-of-type { border-top: 0; }
+  .box { width: 22px; height: 22px; border-radius: 6px; background: var(--accent); display: grid; place-items: center; color: var(--on-accent); }
+  .box.off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--chip-line); }
+  .use small { display: block; font-size: 12px; color: var(--text-3); }
+  .qty { display: inline-flex; align-items: center; gap: 4px; height: 36px; padding: 0 10px; border-radius: 10px; background: var(--field); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .hero { display: grid; gap: 4px; }
+  .hero .big { font-size: 34px; line-height: 42px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .calc { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .calc span:nth-child(even) { text-align: right; }
+  .calc .tot { font-weight: 700; padding-top: 6px; border-top: 1px solid var(--line); }
+  .diary { display: grid; grid-template-columns: 64px minmax(0,1fr); gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+  .diary:first-of-type { border-top: 0; }
+  .diary .ph { width: 64px; height: 64px; border-radius: 14px; }
+  .diary b { font-size: 16px; }
+  .diary small { display: block; font-size: 13px; color: var(--text-3); margin-top: 2px; word-break: keep-all; }
+  .save { color: var(--accent-strong); font-weight: 600; }
+  .bars { display: grid; gap: 8px; }
+  .bar { display: grid; grid-template-columns: 76px minmax(0,1fr) 64px; gap: 8px; align-items: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .bar span:last-child { text-align: right; color: var(--text-2); }
+  .toast { position: absolute; left: 16px; right: 16px; bottom: 20px; display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: 16px; background: var(--text); color: var(--bg); font-size: 14px; }
+  .toast .link { color: var(--accent); margin-left: auto; }
+  .reason { display: grid; gap: 8px; }
+  .reason .opt { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 14px; border-radius: 14px; background: var(--field); font-size: 16px; font-weight: 600; }
+  .reason .opt.on { background: var(--accent-tint); color: var(--accent-strong); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .reason .opt small { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--text-3); }
+</style>
+<header class="intro">
+  <h1>5단계 요리 일기 · 집밥 리포트</h1>
+  <p>레시피나 식단 칸에서 <b>요리했어요</b> → 쓴 재료를 재고에서 빼고, 사진·별점·메모와 <b>아낀 돈</b>(사 먹으면 얼마 − 재료비)을 남겨요. 더보기 &gt; 기록에 <b>요리 일기</b>, 한 달 모아 <b>집밥 리포트</b>. 먹은 기록 달력에는 요리한 날 `요` 표시가 붙어요(24절).</p>
+  <p>화면: ① 요리했어요 폼 → ② 저장 후 → ③ 요리 일기 목록 → ④ 일기 상세(아낀 돈 계산) → ⑤ 집밥 리포트 → ⑥ 재료 지울 때 이유.</p>
+</header>
+
+<section class="asks" aria-label="정할 것">
+  <div class="ask"><h3>A. 사 먹으면 얼마</h3><p>시안: ① 내가 쓴 값 → ② <span class="rec">AI 추정(레시피에 저장, 한 번만)</span>. 참가격 외식비는 8품목뿐이라 API 조건이 확인되면 붙여요. 폼에서 값을 바로 고칠 수 있어요.</p></div>
+  <div class="ask"><h3>B. 일기 지우면 재고는?</h3><p>시안: 저장 직후 10초 <span class="rec">되돌리기</span>(재고 복구). 그 뒤 일기를 지우면 기록만 지우고 재고는 그대로라고 안내해요.</p></div>
+  <div class="ask"><h3>C. 식단 칸과 연결</h3><p>시안: 식단 칸 <b>먹었어요</b> 옆에 <span class="rec">요리했어요</span> — 그 칸 요리·인분으로 폼을 열고, 저장하면 먹은 기록도 함께 남아요.</p></div>
+  <div class="ask"><h3>D. 버린 재료 세기</h3><p>시안: 재고에서 지울 때 <span class="rec">다 먹었어요 · 버렸어요 · 그냥 지우기</span>(기본). 리포트는 ‘버렸어요’만 세요.</p></div>
+</section>
+
+<main class="board">
+
+  <section class="option" aria-labelledby="c1">
+    <div class="cap"><span class="tag">1 · COOKED</span><h2 id="c1">요리했어요 폼</h2><p>인분 −/+ 에 맞춰 쓴 양 기본값(레시피 양 × 인분 배율, 단위 다르면 1). 양념 필수품은 기본 빼지 않아요. 사 먹으면 얼마·먹은 기록에도 남기기(기본 켜짐).</p></div>
+    <div class="phone" style="padding:0">
+      <div class="scrim"></div>
+      <div class="sheet" style="top:3%">
+        <div class="handle"></div>
+        <div><p class="st">김치찌개 요리했어요</p><p class="sd">쓴 재료는 재고에서 빼요</p></div>
+        <div class="row"><span class="grow fld"><span>인분</span></span><div class="stepper" style="width:200px"><span>−</span><span>2인분</span><span>+</span></div></div>
+        <div class="fld"><span>쓴 재료</span>
+          <div>
+            <div class="use"><span class="box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span><span>김치<small>재고 600g</small></span><span class="qty">300g</span></div>
+            <div class="use"><span class="box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span><span>두부 <span class="pill warn">마저 써요</span><small>재고 1모</small></span><span class="qty">1모</span></div>
+            <div class="use"><span class="box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg></span><span>대파<small>재고 3대</small></span><span class="qty">1대</span></div>
+            <div class="use"><span class="box off"></span><span>고춧가루<small>양념 · 기본으로 안 빼요</small></span><span class="qty" style="color:var(--text-3)">1큰술</span></div>
+          </div>
+        </div>
+        <div class="fld"><span>언제</span><div class="chrow"><span class="ch on">오늘</span><span class="ch">어제</span><span class="ch">날짜 고르기</span></div></div>
+        <div class="fld"><span>사 먹으면 얼마 (1인분)</span><div class="inp">9,000원<em>추정 · 고칠 수 있어요</em></div></div>
+        <div class="row"><span class="grow"><b style="font-size:15px">별점</b></span><span class="bigstars" style="font-size:24px">★★★★<span class="off">★</span></span></div>
+        <div class="row" style="gap:8px"><span class="btn secondary" style="flex:1;height:44px;font-size:14px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h2l1.5-2h6l1.5 2h2A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.5"/></svg> 사진</span><span class="btn secondary" style="flex:1.4;height:44px;font-size:14px;color:var(--text-3)">메모 (선택)</span></div>
+        <div class="row"><span class="grow"><b style="font-size:15px">먹은 기록에도 남기기</b><br><span class="muted">9월 15일 저녁 · 집밥</span></span><span class="toggle"></span></div>
+        <span class="btn primary">저장하고 재고에서 빼기</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="option" aria-labelledby="c2">
+    <div class="cap"><span class="tag">2 · SAVED</span><h2 id="c2">저장 후</h2><p>레시피 상세로 돌아와 아래 알림: 뺀 재료와 되돌리기(10초). 재고가 0이 된 두부는 목록에서 빠져요.</p></div>
+    <div class="phone">
+      <p class="back">‹ 레시피</p>
+      <div style="height:210px;border-radius:20px;background:linear-gradient(150deg,var(--ph4),var(--ph1))"></div>
+      <p class="h1">김치찌개</p>
+      <div class="row"><span class="pill">요리 3번</span><span class="muted">마지막 9월 15일 · ★★★★</span></div>
+      <div class="card">
+        <b style="font-size:15px">재료 · 2인분</b>
+        <div class="row muted" style="font-size:14px">김치 300g<span class="grow"></span>있어요 300g</div>
+        <div class="row muted" style="font-size:14px">두부 1모<span class="grow"></span><span style="color:var(--warn)">다 썼어요</span></div>
+        <div class="row muted" style="font-size:14px">대파 1대<span class="grow"></span>있어요 2대</div>
+      </div>
+      <span class="btn primary">요리했어요</span>
+      <div class="toast"><span>재고에서 김치·두부·대파를 뺐어요<br><b style="color:var(--accent)">약 10,800원 아꼈어요</b></span><span class="link">되돌리기</span></div>
+    </div>
+  </section>
+
+  <section class="option" aria-labelledby="c3">
+    <div class="cap"><span class="tag">3 · DIARY</span><h2 id="c3">요리 일기 목록</h2><p>더보기 &gt; 기록 &gt; 요리 일기. 날짜 역순 무한 스크롤(26절), 위에 이번 달 요리 횟수와 아낀 돈 한 줄 → 누르면 집밥 리포트.</p></div>
+    <div class="phone">
+      <p class="back">‹ 더보기</p>
+      <p class="h1">요리 일기</p>
+      <div class="card" style="background:var(--accent-tint)">
+        <div class="row"><span class="grow"><b style="font-size:16px">9월 요리 12번 · 약 86,000원 아꼈어요</b><br><span class="muted">집밥 리포트 보기</span></span><span class="link">›</span></div>
+      </div>
+      <div class="card" style="gap:0">
+        <div class="diary"><div class="ph" style="background:linear-gradient(150deg,var(--ph4),var(--ph1))"></div><span><b>김치찌개</b> <span class="stars">★★★★☆</span><small>9월 15일 · 2인분 · <span class="save">약 10,800원 아낌</span></small><small>두부 마저 썼어요</small></span></div>
+        <div class="diary"><div class="ph" style="background:linear-gradient(150deg,var(--ph2),var(--ph3))"></div><span><b>부대찌개</b> <span class="stars">★★★★★</span><small>9월 13일 · 3인분 · <span class="save">약 23,100원 아낌</span></small><small>햄을 더 넣으니 좋았어요</small></span></div>
+        <div class="diary"><div class="ph" style="background:var(--field)"></div><span><b>계란말이</b> <span class="stars">★★★☆☆</span><small>9월 12일 · 1인분 · 재료 2개 가격 모름</small></span></div>
+        <div class="diary"><div class="ph" style="background:linear-gradient(150deg,var(--ph1),var(--ph2))"></div><span><b>된장찌개</b> <span class="stars">★★★★☆</span><small>9월 10일 · 2인분 · <span class="save">약 9,800원 아낌</span></small></span></div>
+        <div class="diary"><div class="ph" style="background:linear-gradient(150deg,var(--ph3),var(--ph4))"></div><span><b>제육볶음</b> <span class="stars">★★★★☆</span><small>9월 7일 · 2인분 · <span class="save">약 12,400원 아낌</span></small></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="option" aria-labelledby="c4">
+    <div class="cap"><span class="tag">4 · DETAIL</span><h2 id="c4">일기 상세 — 아낀 돈 계산</h2><p>사진·별점·메모, 그리고 계산을 그대로 보여줘요: 사 먹으면 × 인분 − 재료비(구입 가격 × 쓴 비율). 가격 모르는 재료는 빼고 표시.</p></div>
+    <div class="phone" style="padding:0">
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <div style="height:150px;border-radius:16px;background:linear-gradient(150deg,var(--ph4),var(--ph1))"></div>
+        <div><p class="st">김치찌개</p><p class="sd">9월 15일 화요일 · 2인분 · <span class="stars">★★★★☆</span></p></div>
+        <p style="margin:0;font-size:15px;line-height:23px">두부 마저 썼어요. 김치가 시어서 설탕 조금.</p>
+        <div class="card" style="background:var(--field)">
+          <div class="hero"><span class="muted">아낀 돈</span><span class="big" style="font-size:28px;line-height:34px;color:var(--accent-strong)">약 10,800원</span></div>
+          <div class="calc">
+            <span>사 먹으면 9,000원 × 2인분 <span class="pill gray">추정</span></span><span>18,000원</span>
+            <span>김치 300g / 1kg 12,900원</span><span>− 3,870원</span>
+            <span>두부 1모 / 1모 2,480원</span><span>− 2,480원</span>
+            <span>대파 1대 / 3대 2,500원</span><span>− 830원</span>
+            <span class="tot">재료비 약 7,180원</span><span class="tot">아낀 돈 약 10,800원</span>
+          </div>
+          <p class="src" style="margin:0">돼지고기 200g은 가격 모름이라 뺐어요 · 양념은 계산에 넣지 않아요 · 참고용이에요</p>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><span class="btn secondary">고치기</span><span class="btn danger">일기 지우기</span></div>
+        <p class="src">일기를 지워도 재고는 되돌리지 않아요.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="option" aria-labelledby="c5">
+    <div class="cap"><span class="tag">5 · REPORT</span><h2 id="c5">집밥 리포트 (월간)</h2><p>맨 위 아낀 돈 합계, 요리 횟수·기록한 날·집밥 비율·버린 재료, 많이 아낀 요리 3개. 좌우로 달 이동.</p></div>
+    <div class="phone">
+      <p class="back">‹ 더보기</p>
+      <div class="mnav" style="padding:0 4px"><span>‹</span>2026년 9월 집밥 리포트<span>›</span></div>
+      <div class="card">
+        <div class="hero"><span class="muted">이번 달 집밥으로</span><span class="big" style="color:var(--accent-strong)">약 86,000원</span><span style="font-size:15px;font-weight:600">아꼈어요</span></div>
+        <p class="src" style="margin:0">요리 12번 중 10번 계산 · 재료 5개 가격 제외</p>
+      </div>
+      <div class="card">
+        <div class="stats" style="grid-template-columns:repeat(4,1fr)">
+          <div class="stat"><b>12번</b><span>요리</span></div>
+          <div class="stat"><b>18일</b><span>기록한 날</span></div>
+          <div class="stat"><b>72%</b><span>집밥</span></div>
+          <div class="stat"><b style="color:var(--warn)">3개</b><span>버린 재료</span></div>
+        </div>
+        <div class="split"><i style="flex:72"></i><i style="flex:28"></i></div>
+        <p class="muted" style="margin:0">지난달보다 요리 4번 더 · 버린 재료 2개 줄었어요</p>
+      </div>
+      <div class="card">
+        <b style="font-size:15px">많이 아낀 요리</b>
+        <div class="bars">
+          <div class="bar"><span>부대찌개</span><div class="meter"><i style="width:100%"></i></div><span>23,100원</span></div>
+          <div class="bar"><span>제육볶음</span><div class="meter"><i style="width:54%"></i></div><span>12,400원</span></div>
+          <div class="bar"><span>된장찌개</span><div class="meter"><i style="width:42%"></i></div><span>9,800원</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <b style="font-size:15px">버린 재료</b>
+        <div class="row" style="flex-wrap:wrap;gap:6px"><span class="pill warn">애호박</span><span class="pill warn">콩나물</span><span class="pill warn">우유</span></div>
+        <p class="muted" style="margin:0">식단에 넣으면 먼저 쓰도록 알려드려요</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="option" aria-labelledby="c6">
+    <div class="cap"><span class="tag">6 · REMOVE REASON</span><h2 id="c6">재료 지울 때 이유</h2><p>재고에서 재료를 지우면 이유를 고를 수 있어요(선택). 기본 <b>그냥 지우기</b>라 한 번 누르던 흐름은 그대로.</p></div>
+    <div class="phone" style="padding:0">
+      <div class="scrim"></div>
+      <div class="sheet" style="top:46%">
+        <div class="handle"></div>
+        <div><p class="st">애호박 지우기</p><p class="sd">구입 9일째 · 냉장</p></div>
+        <div class="reason">
+          <span class="opt">다 먹었어요</span>
+          <span class="opt on">버렸어요<small>집밥 리포트에 세요</small></span>
+          <span class="opt">그냥 지우기</span>
+        </div>
+        <span class="btn danger">지우기</span>
+      </div>
+    </div>
+  </section>
+
+</main>
