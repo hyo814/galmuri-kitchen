@@ -5998,8 +5998,19 @@ button.sh-offline svg:last-child {
   place-items: center;
 }
 
+/* 범례의 요: 칸 표시와 같은 모양으로 글자 줄 안에 */
+.fl-legend .fl-cook {
+  position: static;
+  display: inline-grid;
+  vertical-align: 1px;
+}
+
 /* 날짜 상세 맨 위 요리 일기 줄(day.cook_logs)은 .fl-plan을 그대로 쓴다.
    ponytail: .fl-cookrow에 아래 여백은 두지 않는다 — 시트 본문 gap(.sheet.fl-day .sheet-body)이 이미 줄 사이를 벌린다(개정 1 Q38, 브리프의 8px을 대신한다) */
+/* 두 글자 `보기`도 터치 영역 44px */
+.fl-cookrow .nt-link {
+  min-width: 44px;
+}
 
 /* 5 · Task 12 */
 .ck-reason {
@@ -6501,7 +6512,7 @@ body:has(.ck-toast:not(:empty)) .page::after {
   font-weight: 700;
 }
 
-/* 별점 고르기(StarPicker, 요리했어요·고치기 시트 공용): 점수가 있으면 별 아래 오른쪽에 `별점 빼기` */
+/* 별점 고르기(StarPicker, 요리했어요·고치기 시트 공용): 점수가 있으면 별 아래 오른쪽에 `별점 빼기`(먹은 기록은 `만족도 빼기`) */
 .ck-starpick {
   display: flex;
   flex-direction: column;

@@ -20,6 +20,7 @@ import {
   defaultAmount,
   defaultChecked,
   foodLogLine,
+  overSpent,
   parseAmountInput,
   parseWon,
   savedText,
@@ -36,7 +37,7 @@ import { forgetRecipeCaches, forgetResources } from "../useResource";
 import Icon from "./Icon";
 import Sheet from "./Sheet";
 import StarPicker from "./StarPicker";
-import { showUndoToast } from "./UndoToast";
+import { showUndoToast, undoToastSession } from "./UndoToast";
 
 export interface CookStart { servings: number; date: string; meal: MealKind; slotId: number; slotEaten: boolean }
 
@@ -55,7 +56,14 @@ export function forgetCookCaches() {
   forgetResources("/api/food-logs");
   forgetResources("/api/meal-plans");
   forgetResources("/api/cook-");
+  forgetResources("/api/ingredients"); // 식단 AI 초안의 재고
+  forgetResources("/api/export"); // 내보내기 시트의 요리 일기 수
 }
+
+/** 앱 세션 동안 사 먹으면 얼마를 자동 추정한 레시피 id. 로그아웃(App resetScreens)이 비운다.
+ *  ponytail: 시트 안 ref는 열 때마다 초기화돼 서버 거절(502)·요청 중 닫고 다시 열기마다 AI 하루 횟수를 조용히 썼다 — 레시피마다 한 번만 자동, 그 뒤는 `추정해줘요`.
+ *  새로고침하면 다시 한 번 부른다(성공하면 레시피에 저장돼 초안에 값이 있어 부르지 않는다) */
+export const autoEstimateTried = new Set<number>();
 
 /** 요리 일기 저장·되돌리기 요청과 알림(RecipeDetail·MealSlotSheet 공통) */
 export async function undoCook(logId: number): Promise<string> {
@@ -69,6 +77,7 @@ export function toastSaved(result: CookSaveResult, onUndone?: () => void): void 
   showUndoToast({
     message: deductedText(result.deducted_names),
     strong: result.log.saved === null ? undefined : savedText(result.log.saved),
+    over: result.log.saved !== null && overSpent(result.log.saved),
     // 서버가 되돌리기를 받는 길이(undo_until − created_at, 120초)를 응답을 받은 순간부터 잰다 — 기기 시계가 서버와 달라도 같은 길이
     undoUntil: Date.now() + (Date.parse(result.log.undo_until) - Date.parse(result.log.created_at)),
     onUndo: async () => {
@@ -149,7 +158,7 @@ export function WonField({
   source: EatOutSource | null;
   estimating: boolean;
   onChange: (text: string) => void;
-  /** 있으면 빈 칸일 때 작은 `추정해줘요` 버튼(체험 계정, 개정 1 P16) */
+  /** 있으면 빈 칸일 때 작은 `추정해줘요` 버튼(체험 계정, 개정 1 P16 · 자동 추정을 한 번 해 본 레시피) */
   onEstimate?: () => void;
 }) {
   const id = useId();
@@ -352,7 +361,6 @@ function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeI
       alive.current = false;
     };
   }, []);
-  const autoEstimated = useRef(false);
 
   async function estimate() {
     setEstimating(true);
@@ -368,18 +376,17 @@ function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeI
     }
   }
 
-  // 자동 추정(개정 1 P16): 값이 없고 AI를 쓸 수 있고 체험 계정이 아니면 시트를 열 때마다 한 번, 실패·한도는 조용히 빈 칸.
-  // 닫혀서 결과를 못 쓴 채 다시 열면 또 부른다(추정이 끝나 레시피에 저장됐으면 초안에 값이 있어 부르지 않는다)
+  // 자동 추정(개정 1 P16): 값이 없고 AI를 쓸 수 있고 체험 계정이 아니면 앱 세션 동안 레시피마다 한 번(autoEstimateTried), 실패·한도는 조용히 빈 칸
   useEffect(() => {
-    if (autoEstimated.current || draft.eat_out_price !== null || user.scan === "off" || user.provider === "demo") return;
-    autoEstimated.current = true;
+    if (autoEstimateTried.has(draft.recipe_id) || draft.eat_out_price !== null || user.scan === "off" || user.provider === "demo") return;
+    autoEstimateTried.add(draft.recipe_id);
     estimate().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 체험 계정은 시트만 열어 체험 AI를 쓰지 않게 누를 때만 부른다
-  const demoEstimate =
-    user.provider === "demo" && user.scan !== "off" && draft.eat_out_price === null
+  // 누를 때만 부르는 `추정해줘요`: 체험 계정은 시트만 열어 체험 AI를 쓰지 않게 늘, 로그인 사용자는 자동 추정을 한 번 해 본 뒤에
+  const manualEstimate =
+    user.scan !== "off" && draft.eat_out_price === null && (user.provider === "demo" || autoEstimateTried.has(draft.recipe_id))
       ? () => {
           priceTouched.current = false; // 칸을 만졌다 비운 뒤 눌러도 받은 값으로 채운다
           estimate().catch((e: unknown) => {
@@ -405,6 +412,7 @@ function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeI
       e.currentTarget.closest("dialog")?.querySelector<HTMLElement>('[data-bad], [aria-invalid="true"]')?.focus();
       return;
     }
+    const session = undoToastSession();
     void save.run(async () => {
       const form = new FormData();
       form.append(
@@ -431,6 +439,7 @@ function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeI
         form.append("image", image, "photo.jpg");
       }
       const result = await api<CookSaveResult>("/api/cook-logs", { method: "POST", body: form });
+      if (undoToastSession() !== session) return; // 그사이 로그아웃 — 다음 계정 화면에 앞 사용자 알림·캐시 지우기를 하지 않는다
       forgetCookCaches();
       onSaved(result);
       onClose();
@@ -532,7 +541,7 @@ function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeI
           value={priceText}
           source={source}
           estimating={estimating}
-          onEstimate={demoEstimate}
+          onEstimate={manualEstimate}
           onChange={(text) => {
             priceTouched.current = true;
             setSource(null);

@@ -1,6 +1,6 @@
 import { Fragment, useId, useState } from "react";
 import { api, type CookLogDetail, type User } from "../api";
-import { aboutWon, costLine, eatOutLine, excludedNote, savedText } from "../cooklog/cook.ts";
+import { aboutWon, costLine, eatOutLine, excludedNote, overSpent, savedText } from "../cooklog/cook.ts";
 import { starsText } from "../foodlog/log.ts";
 import { formatWon } from "../format.ts";
 import { slotDateText } from "../meals/plan.ts";
@@ -61,7 +61,7 @@ export default function CookLogSheet({ id, today, user, onChanged, onClose }: Pr
   // 계산표 합계 줄(R10-10): 음수는 위 큰 글자와 같은 `더 들었어요`, 계산 못 했으면 무엇이 모자란지
   const total =
     log.saved !== null
-      ? log.saved < 0
+      ? overSpent(log.saved)
         ? savedText(log.saved)
         : `아낀 돈 ${aboutWon(log.saved)}`
       : priced
@@ -89,9 +89,9 @@ export default function CookLogSheet({ id, today, user, onChanged, onClose }: Pr
             {log.saved === null ? (
               <span className="ck-big ck-none">계산하지 못했어요</span>
             ) : (
-              <span className={log.saved < 0 ? "ck-big ck-over" : "ck-big"}>{aboutWon(log.saved)}</span>
+              <span className={overSpent(log.saved) ? "ck-big ck-over" : "ck-big"}>{aboutWon(log.saved)}</span>
             )}
-            {log.saved !== null && log.saved < 0 && <span>더 들었어요</span>}
+            {log.saved !== null && overSpent(log.saved) && <span>더 들었어요</span>}
           </div>
           <dl className="ck-table">
             {log.eat_out_price !== null && (

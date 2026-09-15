@@ -8,7 +8,7 @@ import ScanSheet from "../components/ScanSheet";
 import SettingsSheet, { type SettingsTarget } from "../components/SettingsSheet";
 import StaplesSheet from "../components/StaplesSheet";
 import { formatDate, formatQuantity, withJosa } from "../format";
-import { forgetRecipeCaches } from "../useResource";
+import { forgetRecipeCaches, forgetResources } from "../useResource";
 
 // 떨어진 필수품이 많아도 배너가 화면을 차지하지 않도록 앞의 몇 개만 이름을 보여 준다 (전체는 필수품 시트)
 const BANNER_NAMES = 3;
@@ -60,6 +60,7 @@ export default function Fridge({ user }: { user: User }) {
   // 처음 화면을 열 때(load) 지우면 안 되므로 mount용 load()와 분리해 둔다.
   const changed = () => {
     forgetRecipeCaches();
+    forgetResources("/api/cook-report"); // 버린 재료 수
     return load();
   };
 

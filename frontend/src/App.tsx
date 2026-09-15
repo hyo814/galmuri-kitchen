@@ -1,8 +1,9 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ApiError, api, onUnauthorized, type User } from "./api";
+import { autoEstimateTried } from "./components/CookSheet";
 import Splash from "./components/Splash";
 import TabBar from "./components/TabBar";
-import UndoToast, { hideUndoToast, useUndoneCount } from "./components/UndoToast";
+import UndoToast, { resetUndoToast, useUndoneCount } from "./components/UndoToast";
 import CookDiary, { resetCookDiaryView } from "./pages/CookDiary";
 import CookReport, { resetCookReportView } from "./pages/CookReport";
 import FoodLogPage, { resetFoodLogView } from "./pages/FoodLog";
@@ -111,7 +112,8 @@ export default function App() {
     window.addEventListener("keydown", stop, { passive: true, once: true });
 
     return stop;
-  }, [route.path]);
+    // undone: 되돌리기로 화면을 새로 만들어 내용이 잠깐 짧아져도 보던 자리로
+  }, [route.path, undone]);
 
   // U-S1/S2: 경로가 바뀌면(첫 렌더 제외) 새 화면의 제목(h1)으로 포커스를 옮긴다 — 스크린리더 사용자가
   // 화면이 바뀐 걸 알 수 있게. 이미 자동 포커스된 입력(예: 레시피 추가 폼의 이름 칸)이 있으면 건너뛴다.
@@ -159,7 +161,8 @@ export default function App() {
     resetFoodLogView();
     resetCookDiaryView();
     resetCookReportView();
-    hideUndoToast();
+    resetUndoToast();
+    autoEstimateTried.clear();
     scrollTops.clear();
     setUser(null);
   }, []);

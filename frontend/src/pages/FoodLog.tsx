@@ -158,7 +158,11 @@ function MonthBody({
         ))}
       </div>
       <p className="fl-legend">
-        <span aria-hidden="true">●</span> 끼니 기록 · 사진 = 첫 사진 · 요 = 요리 일기 있음
+        <span aria-hidden="true">●</span> 끼니 기록 · 사진 = 첫 사진 ·{" "}
+        {/* 요는 달력 칸 표시와 같은 모양(한 덩어리로 줄바꿈) */}
+        <span>
+          <span className="fl-cook">요</span> = 요리 일기 있음
+        </span>
       </p>
     </>
   );

@@ -1,7 +1,7 @@
 import { useRef, type KeyboardEvent } from "react";
 
 /** 별점 라디오 1~5(4b-3 FoodLogSheet 만족도 마크업·키보드 그대로, 개정 1 P10). 같은 점수를 다시 누르면 null.
- *  점수가 있으면 아래 `별점 빼기` — 키보드·스크린리더는 같은 별 다시 누르기로 지울 수 없어서(R10-F2) */
+ *  점수가 있으면 아래 `{label} 빼기`(`별점 빼기`·`만족도 빼기`) — 키보드·스크린리더는 같은 별 다시 누르기로 지울 수 없어서(R10-F2) */
 export default function StarPicker({ value, label, onChange }: { value: number | null; label: string; onChange: (n: number | null) => void }) {
   const group = useRef<HTMLDivElement>(null);
   // 화살표로 점수를 옮기고 켠다(roving tabindex)
@@ -43,7 +43,7 @@ export default function StarPicker({ value, label, onChange }: { value: number |
             group.current?.querySelector<HTMLElement>('[role="radio"]')?.focus(); // 누른 버튼이 사라지므로 별 묶음으로
           }}
         >
-          별점 빼기
+          {label} 빼기
         </button>
       )}
     </div>

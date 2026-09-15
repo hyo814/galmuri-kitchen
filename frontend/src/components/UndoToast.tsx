@@ -4,6 +4,8 @@ export interface UndoToastInput {
   message: string;
   /** 둘째 줄 굵은 초록 글자(시안 `약 10,800원 아꼈어요`) */
   strong?: string;
+  /** 둘째 줄이 `더 들었어요`면 초록을 빼고 알림 글자색으로 */
+  over?: boolean;
   /** 되돌리기. 끝나면 보여줄 글자를 돌려준다(실패는 throw → 오류 글자) */
   onUndo: () => Promise<string>;
   /** 이 시각(Date.now() 기준 ms)이 지나면 어느 단계에서도 되돌리기 버튼을 두지 않는다(서버가 되돌리기를 받는 시간) */
@@ -19,6 +21,7 @@ type Toast = UndoToastInput & { id: number; phase: "ready" | "undoing" | "done" 
 // 앱 전체에 알림 하나(되돌리기는 마지막 저장만) — 새 알림이 오면 앞 알림을 바꾼다
 let toast: Toast | null = null;
 let seq = 0;
+let session = 0;
 let undone = 0;
 let expiryTimer: number | undefined;
 const listeners = new Set<() => void>();
@@ -52,6 +55,15 @@ export function hideUndoToast(): void {
   toast = null;
   emit();
 }
+
+/** 로그아웃: 알림을 치우고 세션 번호를 올린다 — 로그아웃 전에 시작한 느린 저장이 끝나도 다음 계정 화면에 알림을 띄우지 않게 */
+export function resetUndoToast(): void {
+  session += 1;
+  hideUndoToast();
+}
+
+/** 저장을 시작할 때 기억했다가 끝났을 때 다르면(그사이 로그아웃) 결과를 버린다 */
+export const undoToastSession = () => session;
 
 /** 되돌리기에 성공한 횟수. App이 화면 key에 넣어 지금 화면(재고·먹은 기록·레시피 상세…)을 되돌린 값으로 새로 받는다 */
 export function useUndoneCount(): number {
@@ -205,7 +217,7 @@ export default function UndoToast() {
               {current.strong && (
                 <>
                   <br />
-                  <b className="ck-toast-strong">{current.strong}</b>
+                  <b className={current.over ? undefined : "ck-toast-strong"}>{current.strong}</b>
                 </>
               )}
             </span>

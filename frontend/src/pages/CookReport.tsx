@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { localToday, type CookReport as CookReportData } from "../api";
 import Icon from "../components/Icon";
 import LoadError from "../components/LoadError";
-import { aboutWon, barWidths, compareLine, reportLead, reportNote, reportTitle } from "../cooklog/cook.ts";
+import { aboutWon, barWidths, compareLine, overSpent, reportLead, reportNote, reportTitle } from "../cooklog/cook.ts";
 import { monthOf, shiftMonth } from "../foodlog/log";
 import { formatWon } from "../format";
 import { goBack } from "../useHashRoute";
@@ -39,17 +39,17 @@ function ReportBody({ month, onToday }: { month: string; onToday: (today: string
         {data.cooked === 0 ? (
           <>
             <b className="ck-hero-empty">요리 일기가 없어요</b>
-            <p className="nt-src">요리했어요로 남기면 아낀 돈을 계산해요</p>
+            <p className="nt-src">레시피나 식단 칸에서 요리했어요를 누르면 아낀 돈을 계산해요</p>
           </>
         ) : data.counted === 0 ? (
           <>
             <b className="ck-hero-empty">계산한 요리가 없어요</b>
-            <p className="nt-src">사 먹으면 얼마와 재료 가격을 넣으면 계산해요</p>
+            <p className="nt-src">요리 일기에 사 먹으면 얼마와 재료 가격이 있어야 계산해요</p>
           </>
         ) : (
           <>
-            <span className={data.saved_total < 0 ? "ck-hero-big ck-warn" : "ck-hero-big"}>{aboutWon(data.saved_total)}</span>
-            <span className="ck-hero-sub">{data.saved_total >= 0 ? "아꼈어요" : "더 들었어요"}</span>
+            <span className={overSpent(data.saved_total) ? "ck-hero-big ck-warn" : "ck-hero-big"}>{aboutWon(data.saved_total)}</span>
+            <span className="ck-hero-sub">{overSpent(data.saved_total) ? "더 들었어요" : "아꼈어요"}</span>
             <p className="nt-src">{reportNote(data)}</p>
           </>
         )}
@@ -74,6 +74,7 @@ function ReportBody({ month, onToday }: { month: string; onToday: (today: string
             <span>버린 재료</span>
           </div>
         </div>
+        {data.cooked > 0 && home === null && <p className="muted">먹은 기록이 있어야 집밥 비율을 보여줘요</p>}
         {home !== null && (
           <div className="fl-split" role="img" aria-label={`집밥 ${home}%, 외식 ${100 - home}%`}>
             {/* 0%인 쪽은 그리지 않는다(FoodLog.tsx와 같게) */}
@@ -95,7 +96,7 @@ function ReportBody({ month, onToday }: { month: string; onToday: (today: string
                 <div className="nt-meter" aria-hidden="true">
                   <i style={{ width: `${widths[i]}%` }} />
                 </div>
-                <span>{formatWon(row.saved)}</span>
+                <span>{formatWon(Math.round(row.saved / 100) * 100)}</span>
               </li>
             ))}
           </ul>

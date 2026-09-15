@@ -34,6 +34,8 @@ export default function CookDiary({ user }: { user: User }) {
   );
   const [openId, setOpenId] = useState(() => pendingOpen);
   const heading = useRef<HTMLHeadingElement>(null);
+  // 먹은 기록 날짜 상세 `보기`로 들어왔으면 뒤로가 먹은 기록으로 간다(history.back) — 들어올 때 한 번 읽어 이름을 맞춘다(CookReport와 같게)
+  const [fromFoodLog] = useState(() => (history.state as { from?: string } | null)?.from === "/food-log");
 
   useEffect(() => {
     pendingOpen = null;
@@ -80,7 +82,7 @@ export default function CookDiary({ user }: { user: User }) {
   return (
     <main className="page">
       <header className="topbar fl-top">
-        <button type="button" className="icon-btn" aria-label="더보기로 돌아가기" onClick={() => goBack("/more")}>
+        <button type="button" className="icon-btn" aria-label={fromFoodLog ? "먹은 기록으로 돌아가기" : "더보기로 돌아가기"} onClick={() => goBack("/more")}>
           <Icon name="back" />
         </button>
         <h1 ref={heading} tabIndex={-1}>
