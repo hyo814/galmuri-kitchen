@@ -6,6 +6,7 @@ import {
   type AiUsage,
   type BodyProfileResponse,
   type ExportSummary,
+  type FoodLogDay,
   type ItemRule,
   type Staple,
   type StorageLocation,
@@ -18,6 +19,7 @@ import ProviderLogo from "../components/ProviderLogo";
 import RulesSheet from "../components/RulesSheet";
 import Sheet from "../components/Sheet";
 import StaplesSheet from "../components/StaplesSheet";
+import { todayRowSub } from "../foodlog/log";
 import { useInstallPrompt } from "../install";
 import { dailyTarget, goalLabel, kcalNumber } from "../nutrition/body";
 import { useAsyncAction } from "../useAsyncAction";
@@ -273,6 +275,10 @@ function ExportSheet({ onClose }: { onClose: () => void }) {
           <span>식단</span>
           <b>{data?.meals === undefined ? "…" : `${data.meals}칸`}</b>
         </li>
+        <li>
+          <span>먹은 기록</span>
+          <b>{count(data?.food_logs)}</b>
+        </li>
       </ul>
       <p className="mo-note">
         <Icon name="info" size={16} />
@@ -355,6 +361,7 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
   const provider = PROVIDERS[user.provider];
   // 줄과 시트가 하나만 받아 나눠 쓴다(따로 받으면 시트에서 저장·삭제해도 줄이 갱신되지 않는다)
   const body = useResource<BodyProfileResponse>("/api/body-profile");
+  const today = useResource<FoodLogDay>(`/api/food-logs?date=${localToday()}`);
 
   const onInstallClick = async () => {
     if (canPrompt) await prompt();
@@ -388,6 +395,16 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
       <header className="topbar">
         <h1>더보기</h1>
       </header>
+
+      <h2 className="mo-group">기록</h2>
+      <ul className="list">
+        <Row
+          icon={<Icon name="calendar" />}
+          title="먹은 기록"
+          sub={todayRowSub(today.data?.logs)}
+          onClick={() => navigate("/food-log")}
+        />
+      </ul>
 
       <h2 className="mo-group">우리 부엌</h2>
       <ul className="list">
