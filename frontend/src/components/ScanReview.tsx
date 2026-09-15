@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type Ref } from "react";
 import {
   ApiError,
   api,
@@ -8,7 +8,8 @@ import {
   type ScanResult,
   type StorageLocation,
 } from "../api";
-import { formatQuantity, formatWon, namesLabel } from "../format";
+import { formatDate, formatQuantity, formatWon, namesLabel } from "../format";
+import { PRESET_CHIPS, detectedPick, ownDateText, pickDate, pickedText, type DatePick } from "../purchaseDate";
 import { useAsyncAction } from "../useAsyncAction";
 import { refresh } from "../shopping/useShopping";
 import Icon from "./Icon";
@@ -36,6 +37,8 @@ interface Row {
   price: string;
   locationId: number;
   locationKind: LocationKind;
+  /** 이 재료만 다른 구입일. null = 위와 같게 */
+  pick: DatePick | null;
 }
 
 interface Props {
@@ -52,6 +55,73 @@ const DATE_SOURCE: Partial<Record<ScanKind, string>> = {
   order: "주문 날짜로 채웠어요",
 };
 
+/** 구입일 칩 한 줄(시안 scan-multi ④⑤). same: 맨 앞 `위와 같게`(value null). 날짜 고르기는 네이티브 날짜 칸(오늘까지) */
+function DateChips({
+  value,
+  onChange,
+  today,
+  labelledBy,
+  same,
+  groupRef,
+}: {
+  value: DatePick | null;
+  onChange: (pick: DatePick | null) => void;
+  today: string;
+  labelledBy: string;
+  same?: boolean;
+  groupRef?: Ref<HTMLDivElement>;
+}) {
+  const dateRef = useRef<HTMLInputElement>(null);
+  const [dateVisible, setDateVisible] = useState(false);
+  // 재료별 칩에는 `1주 전`이 없다(시안 ⑤)
+  const presets = same ? PRESET_CHIPS.filter(([chip]) => chip !== "week") : PRESET_CHIPS;
+  const openDatePicker = () => {
+    const input = dateRef.current;
+    if (!input) return;
+    try {
+      input.showPicker();
+    } catch {
+      setDateVisible(true); // showPicker가 없는 브라우저: 보이는 날짜 칸으로 바꾸고 포커스
+      requestAnimationFrame(() => dateRef.current?.focus());
+    }
+  };
+  return (
+    <div className="sh-when" role="group" aria-labelledby={labelledBy} tabIndex={-1} ref={groupRef}>
+      {same && (
+        <button type="button" aria-pressed={value === null} onClick={() => onChange(null)}>
+          위와 같게
+        </button>
+      )}
+      {presets.map(([chip, label]) => (
+        <button key={chip} type="button" aria-pressed={value?.chip === chip} onClick={() => onChange({ chip, date: "" })}>
+          {label}
+        </button>
+      ))}
+      <button type="button" aria-pressed={value?.chip === "date"} onClick={openDatePicker}>
+        <Icon name="calendar" size={16} />
+        {value?.chip === "date" ? formatDate(value.date) : "날짜 고르기"}
+      </button>
+      <button type="button" aria-pressed={value?.chip === "unknown"} onClick={() => onChange({ chip: "unknown", date: "" })}>
+        기억 안 나요
+      </button>
+      <input
+        ref={dateRef}
+        className={dateVisible ? "input" : "sr-only"}
+        type="date"
+        tabIndex={dateVisible ? undefined : -1}
+        aria-hidden={dateVisible ? undefined : true}
+        aria-label="날짜 고르기"
+        max={today}
+        value={value?.chip === "date" ? value.date : ""}
+        onChange={(e) => {
+          if (!e.target.value || e.target.value > today) return;
+          onChange({ chip: "date", date: e.target.value });
+        }}
+      />
+    </div>
+  );
+}
+
 export default function ScanReview({ kind, result, locations, onRetake, onAdded, onLocationsStale }: Props) {
   const today = localToday();
   const [rows, setRows] = useState<Row[]>(() =>
@@ -65,6 +135,7 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
       // AI가 추정한 보관 종류의 첫 위치, 그런 위치가 없으면 첫 위치 (스펙 15절)
       locationId: (locations.find((l) => l.kind === item.location_kind) ?? locations[0]).id,
       locationKind: item.location_kind,
+      pick: null,
     })),
   );
   const [openKey, setOpenKey] = useState<number | null>(null);
@@ -80,7 +151,14 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
       ),
     );
   }, [locations]);
-  const [purchasedOn, setPurchasedOn] = useState(result.purchased_on ?? today);
+  // 냉장고 사진은 아무 칩도 안 고른 채 시작한다(시안 결정 C). 영수증·주문은 찍힌 날짜, 못 읽었으면 오늘
+  const [pick, setPick] = useState<DatePick | null>(() => (kind === "fridge" ? null : detectedPick(result.purchased_on, today)));
+  const [dateMissing, setDateMissing] = useState(false);
+  const chipsRef = useRef<HTMLDivElement>(null);
+  const dateLabel = useId();
+  const topDate = pick && pickDate(pick, today);
+  /** 넣을 구입일: 재료만 다른 날이면 그 날, 아니면 위 칩. undefined = 아직 안 고름 */
+  const rowDate = (r: Row) => (r.pick ? pickDate(r.pick, today) : pick ? topDate : undefined);
   const { busy, error, setError, run } = useAsyncAction();
   const [matched, setMatched] = useState<Matched | null>(null);
   const follow = useAsyncAction();
@@ -106,7 +184,12 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
       setError("이름을 채우고 수량은 0보다 큰 숫자로 입력해주세요.");
       return;
     }
-    if (!purchasedOn || purchasedOn > today) {
+    if (chosen.some((r) => rowDate(r) === undefined)) {
+      setDateMissing(true);
+      chipsRef.current?.focus();
+      return;
+    }
+    if (chosen.some((r) => (rowDate(r) ?? "") > today)) {
       setError("구입일은 오늘이나 그 전 날짜로 골라주세요.");
       return;
     }
@@ -121,7 +204,7 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
         name: r.name.trim(),
         quantity: Number(r.quantity),
         unit: r.unit.trim() || "개",
-        purchased_on: purchasedOn,
+        purchased_on: rowDate(r) ?? null,
         price: r.price === "" ? null : Number(r.price),
         location_id: r.locationId,
       }));
@@ -176,23 +259,39 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
           </span>
         )}
 
-        <label className="field scan-date">
-          <span className="field-label">구입일</span>
-          <input
-            className="input"
-            type="date"
-            value={purchasedOn}
-            max={today}
-            required
-            onChange={(e) => setPurchasedOn(e.target.value)}
+        <div className="field scan-date">
+          <span className="field-label" id={dateLabel}>
+            언제 샀어요?
+          </span>
+          <DateChips
+            value={pick}
+            onChange={(next) => {
+              setPick(next);
+              setDateMissing(false);
+            }}
+            today={today}
+            labelledBy={dateLabel}
+            groupRef={chipsRef}
           />
-          {result.purchased_on && purchasedOn === result.purchased_on && DATE_SOURCE[kind] && (
-            <span className="hint">
+          {dateMissing && (
+            <p className="error" role="alert">
+              언제 샀는지 골라주세요
+            </p>
+          )}
+          {pick && <span className="scan-picked">{pickedText(topDate)}</span>}
+          {result.purchased_on && topDate === result.purchased_on && DATE_SOURCE[kind] && (
+            <span className="hint scan-source">
               <Icon name="check" size={14} />
               {DATE_SOURCE[kind]}
             </span>
           )}
-        </label>
+          {kind === "fridge" && (
+            <p className="hint scan-date-hint">
+              <Icon name="info" size={14} />
+              냉장고에 있던 재료는 대략 골라도 괜찮아요. 다른 날 산 재료는 눌러서 따로 고쳐요.
+            </p>
+          )}
+        </div>
 
         <ul className="scan-items">
           {rows.map((row) => {
@@ -232,6 +331,12 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
                       {formatQuantity(Number(row.quantity) || 0)}
                       {row.unit} · {locationName(row.locationId)}
                       {row.price !== "" && ` · ${formatWon(Number(row.price))}`}
+                      {row.pick && (!pick || rowDate(row) !== topDate) && (
+                        <>
+                          {" · "}
+                          <span className="scan-own">{ownDateText(rowDate(row) ?? null, today)}</span>
+                        </>
+                      )}
                     </span>
                   </button>
                 )}
@@ -299,6 +404,18 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
                         <span className="suffix">원</span>
                       </div>
                     </label>
+                    <div className="field scan-edit-date">
+                      <span className="field-label" id={`${editId}-date`}>
+                        이 재료 구입일
+                      </span>
+                      <DateChips
+                        value={row.pick}
+                        onChange={(next) => update(row.key, { pick: next })}
+                        today={today}
+                        labelledBy={`${editId}-date`}
+                        same
+                      />
+                    </div>
                   </div>
                 )}
               </li>

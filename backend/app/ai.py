@@ -141,7 +141,7 @@ def _parse(content, output_format, max_tokens, label, timeout=45):
     예외 내용에는 요청이 들어 있을 수 있어 로그에는 예외 이름만 남긴다."""
     # gthread 워커는 요청 처리 중에도 계속 heartbeat를 보내므로 gunicorn --timeout(120s, Dockerfile)이
     # 이 호출을 끊지 않는다. SDK는 두 번의 시도(45s + 45s) 사이에 retry-after(최대 60s)를 기다릴 수 있어
-    # 최악의 경우 약 150초까지 걸릴 수 있다(식단 초안은 timeout 90이라 약 240초). 그동안 사용자는 화면에서 취소할 수 있다.
+    # 최악의 경우 약 150초까지 걸릴 수 있다(식단 초안·사진 2장 이상 스캔은 timeout 90이라 약 240초). 그동안 사용자는 화면에서 취소할 수 있다.
     client = anthropic.Anthropic(api_key=current_app.config["ANTHROPIC_API_KEY"], timeout=timeout, max_retries=1)
     try:
         response = client.messages.parse(

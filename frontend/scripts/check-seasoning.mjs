@@ -101,6 +101,7 @@ assert.equal(withJosa(namesLabel(["두부", "대파", "애호박"]), "을", "를
 assert.equal(remainingText(undefined), "");
 assert.equal(remainingText({ scan: { used: 0, limit: 10 }, recipe: { used: 2, limit: 10 } }), " · 오늘 8번 남음");
 assert.equal(remainingText({ scan: { used: 0, limit: 10 }, recipe: { used: 10, limit: 10 } }), " · 오늘은 다 썼어요");
+assert.equal(remainingText({ scan: { used: 2, limit: 10 }, recipe: { used: 10, limit: 10 } }, "scan"), " · 오늘 8번 남음");
 console.log("ai copy ok");
 
 // 영상 경로·길이·올린 때 (3b 계획 태스크 5)

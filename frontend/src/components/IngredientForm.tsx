@@ -50,6 +50,8 @@ export default function IngredientForm({
   const [customUnit, setCustomUnit] = useState(!!initial && !UNITS.includes(initial.unit));
   const [price, setPrice] = useState(initial?.price != null ? String(initial.price) : "");
   const [purchasedOn, setPurchasedOn] = useState(initial?.purchased_on ?? localToday());
+  // 기억 안 나요: 구입일 없이 저장(null). 구입일 모름인 재료를 고치면 켜진 채 시작 (시안 docs/design/scan-multi)
+  const [unknownDate, setUnknownDate] = useState(initial?.purchased_on === null);
   const [expiresOn, setExpiresOn] = useState(initial?.expires_on ?? "");
   const [locationId, setLocationId] = useState(initial?.location_id ?? defaultLocationId);
   const [lastAdded, setLastAdded] = useState("");
@@ -65,7 +67,7 @@ export default function IngredientForm({
     name: name.trim(),
     quantity: qty,
     unit: unit.trim() || "개",
-    purchased_on: purchasedOn,
+    purchased_on: unknownDate ? null : purchasedOn,
     expires_on: expiresOn || null,
     price: price === "" ? null : Number(price),
     location_id: locationId,
@@ -74,7 +76,7 @@ export default function IngredientForm({
   const priceTooHigh = price !== "" && Number(price) > MAX_PRICE;
 
   // 고치던 내용이 있으면 `장보기 보기`로 떠나기 전에 묻는다(RecipeForm과 같은 문구)
-  const snapshot = JSON.stringify([name, quantity, unit, price, purchasedOn, expiresOn, locationId]);
+  const snapshot = JSON.stringify([name, quantity, unit, price, purchasedOn, unknownDate, expiresOn, locationId]);
   const [start] = useState(snapshot);
   const canLeave = () => snapshot === start || confirm("작성 중인 내용이 사라져요. 나갈까요?");
 
@@ -249,18 +251,25 @@ export default function IngredientForm({
           </div>
 
           <div className="grid-2">
-            <label className="field">
-              <span className="field-label">구입일</span>
+            <div className="field">
+              <label className="field-label" htmlFor="ingredient-purchased">
+                구입일
+              </label>
               <input
                 className="input"
                 id="ingredient-purchased"
                 type="date"
-                value={purchasedOn}
+                value={unknownDate ? "" : purchasedOn}
                 max={localToday()}
+                disabled={unknownDate}
                 onChange={(e) => setPurchasedOn(e.target.value)}
-                required
+                required={!unknownDate}
               />
-            </label>
+              <button type="button" className="choice" aria-pressed={unknownDate} onClick={() => setUnknownDate(!unknownDate)}>
+                {unknownDate && <Icon name="check" size={16} />}
+                기억 안 나요
+              </button>
+            </div>
             <label className="field">
               <span className="field-label">
                 유통기한 <span className="optional">(선택)</span>
@@ -280,8 +289,8 @@ export default function IngredientForm({
                 key={days}
                 type="button"
                 className="choice"
-                aria-pressed={expiresOn === addDays(purchasedOn, days)}
-                disabled={!purchasedOn}
+                aria-pressed={!unknownDate && expiresOn === addDays(purchasedOn, days)}
+                disabled={!purchasedOn || unknownDate}
                 onClick={() => setExpiresOn(addDays(purchasedOn, days))}
               >
                 구입일 +{days}일

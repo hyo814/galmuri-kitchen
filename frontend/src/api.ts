@@ -93,7 +93,8 @@ export interface IngredientInput {
   name: string;
   quantity: number;
   unit: string;
-  purchased_on: string;
+  /** 구입일 모름(기억 안 나요)이면 null */
+  purchased_on: string | null;
   expires_on: string | null;
   price?: number | null;
   location_id: number;
@@ -103,7 +104,7 @@ export interface Ingredient extends IngredientInput {
   id: number;
   status: Status;
   days_left: number | null;
-  days_since_purchase: number;
+  days_since_purchase: number | null;
   location_name: string;
   location_kind: LocationKind;
 }
