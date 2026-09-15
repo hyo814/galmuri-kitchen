@@ -8,6 +8,7 @@ import {
   createBody,
   dishGrams,
   dishSub,
+  keptAmount,
   logKind,
   parseGrams,
   patchBody,
@@ -69,6 +70,7 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log, user, 
   const save = useAsyncAction();
   const remove = useAsyncAction();
   const whatInput = useRef<HTMLInputElement>(null);
+  const whatTabs = useRef<HTMLDivElement>(null);
   const gramsInput = useRef<HTMLInputElement>(null);
   const ids = { meal: useId(), amount: useId(), place: useId(), memo: useId(), grams: useId(), gramsErr: useId(), radio: useId() };
 
@@ -85,6 +87,7 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log, user, 
       try {
         const data = await api<{ items: RecipeChoice[] }>(`/api/recipes/choices?q=${encodeURIComponent(q)}`, { signal: controller.signal });
         setRecipes(data);
+        setRecipeId((id) => (data.items.some((r) => r.id === id) ? id : null)); // 새 목록에 없으면 숨은 선택으로 저장하지 않게
         setRecipeError("");
       } catch (e) {
         if (!controller.signal.aborted) setRecipeError((e as Error).message);
@@ -188,8 +191,7 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log, user, 
   const grams = effectiveUnit === "grams" ? parseGrams(gramsText) : null;
   const gramsInvalid = effectiveUnit === "grams" && grams === null && showAmount;
   // 양 칸이 숨었으면 원래 양 그대로(patchBody가 바뀌지 않았다고 본다)
-  const amount = !showAmount && log
-    ? log.grams !== null ? { grams: log.grams } : { servings: log.servings ?? 1 }
+  const amount = !showAmount && log ? keptAmount(log)
     : effectiveUnit === "grams" ? { grams: grams ?? 0 } : { servings };
   // 인분·g을 고를 수 있나: 고른 음식에 1인분 무게가 있거나, 인분으로 남긴 음식 기록(서버가 무게 있는 음식만 인분을 받는다)
   const canToggleUnit = pickedDish ? pickedDish.serving_g !== null : !changing && log?.food_code != null && log.servings !== null;
@@ -210,7 +212,8 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log, user, 
   function submit() {
     if (needWhat) {
       setWhatError(true);
-      whatInput.current?.focus();
+      // 입력 칸이 없으면(식단 칸이 없는 식단에서) 지금 고른 갈래 버튼으로
+      (whatInput.current ?? whatTabs.current?.querySelector<HTMLElement>('[aria-pressed="true"]'))?.focus();
       return;
     }
     if (gramsInvalid) {
@@ -258,7 +261,7 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log, user, 
   const q = dishQ.trim();
 
   return (
-    <Sheet title={`${mealLabel(initialMeal)} · 먹은 것 ${log ? "고치기" : "추가"}`} description={slotDateText(date, "")} className="fl-add" focusTitle onClose={onClose}>
+    <Sheet title={`${mealLabel(meal)} · 먹은 것 ${log ? "고치기" : "추가"}`} description={slotDateText(date, "")} className="fl-add" focusTitle onClose={onClose}>
       {log && (
         <div className="field" role="group" aria-labelledby={ids.meal}>
           <span className="field-label" id={ids.meal}>
@@ -294,7 +297,7 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log, user, 
         </div>
       ) : (
         <>
-          <div className="segmented fl-what" role="group" aria-label="무엇을 먹었나요">
+          <div ref={whatTabs} className="segmented fl-what" role="group" aria-label="무엇을 먹었나요">
             {tabs.map((k) => (
               <button key={k} type="button" aria-pressed={tab === k} onClick={() => setTab(k)}>
                 {k === "food" ? "음식 찾기" : KIND_LABEL[k]}
@@ -343,17 +346,14 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log, user, 
                 maxLength={50}
                 enterKeyHint="search"
                 value={recipeQ}
-                onChange={(e) => {
-                  setRecipeQ(e.target.value);
-                  setRecipeId(null);
-                }}
+                onChange={(e) => setRecipeQ(e.target.value)}
               />
               {recipeError ? (
                 <p className="error" role="alert">
                   {recipeError}
                 </p>
               ) : !recipes ? (
-                <p className="muted">찾는 중…</p>
+                <p className="muted" role="status">찾는 중…</p>
               ) : recipes.items.length ? (
                 <div className="fl-cands" role="radiogroup" aria-label="내 레시피">
                   {recipes.items.map((r) => (
@@ -377,7 +377,7 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log, user, 
                   ))}
                 </div>
               ) : (
-                <p className="muted">찾는 레시피가 없어요</p>
+                <p className="muted" role="status">찾는 레시피가 없어요</p>
               )}
             </>
           )}
@@ -407,13 +407,13 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log, user, 
               </div>
               {q !== "" &&
                 (dishLoading ? (
-                  <p className="muted">찾는 중…</p>
+                  <p className="muted" role="status">찾는 중…</p>
                 ) : dishError ? (
                   <p className="error" role="alert">
                     {dishError}
                   </p>
                 ) : !dishes ? (
-                  q.length < 2 && <p className="muted">두 글자 이상 입력하거나 Enter를 눌러주세요</p>
+                  q.length < 2 && <p className="muted" role="status">두 글자 이상 입력하거나 Enter를 눌러주세요</p>
                 ) : dishes.items.length ? (
                   <div className="fl-cands" role="radiogroup" aria-label="음식">
                     {dishes.items.map((item) => (
@@ -439,7 +439,7 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log, user, 
                   </div>
                 ) : dishes.searched ? (
                   <>
-                    <p className="muted">찾는 음식이 없어요. 이름만 남길 수 있어요</p>
+                    <p className="muted" role="status">찾는 음식이 없어요. 이름만 남길 수 있어요</p>
                     <button
                       type="button"
                       className="btn secondary"
@@ -452,7 +452,7 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log, user, 
                     </button>
                   </>
                 ) : (
-                  <p className="muted">지금은 음식을 찾지 못했어요. 잠시 후 다시 찾아주세요</p>
+                  <p className="muted" role="status">지금은 음식을 찾지 못했어요. 잠시 후 다시 찾아주세요</p>
                 ))}
             </>
           )}

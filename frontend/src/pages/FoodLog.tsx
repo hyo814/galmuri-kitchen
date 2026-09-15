@@ -168,7 +168,7 @@ export default function FoodLogPage({ user }: { user: User }) {
   // 서버 today(개정 1 P14) — 받기 전엔 기기 시계로 `다음 달` 막기를 어림하고, 어느 달이든 한 번 받으면 그 값으로 굳힌다
   const [today, setToday] = useState(() => localToday());
   const monthReload = useRef<() => Promise<void>>(async () => {});
-  // 고치기·추가 시트가 저장·삭제하면 날짜 상세를 key로 새로 마운트해 다시 받는다
+  // 고치기·추가 시트가 저장·삭제하면 날짜 상세가 이 값을 보고 다시 받는다(다시 마운트하지 않아 스크롤·포커스 유지)
   const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
@@ -243,8 +243,8 @@ export default function FoodLogPage({ user }: { user: User }) {
 
       {open && selected && (
         <FoodLogDaySheet
-          key={reloadTick}
           date={selected}
+          reloadTick={reloadTick}
           today={today}
           user={user}
           onOpenLog={onOpenLog}

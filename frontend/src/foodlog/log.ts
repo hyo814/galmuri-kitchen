@@ -138,6 +138,10 @@ export function parseGrams(text: string): number | null {
   return Number.isInteger(n) && n >= 1 && n <= 3000 ? n : null;
 }
 
+/** 양 칸이 숨었을 때(`바꾸기`만 누르고 아직 안 고름) 보낼 원래 양 — patchBody가 바뀌지 않았다고 본다 */
+export const keptAmount = (log: Pick<FoodLog, "servings" | "grams">): Amount =>
+  log.grams !== null ? { grams: log.grams } : { servings: log.servings ?? 1 };
+
 /** 무엇 네 갈래(결정 3) */
 export type LogKind = "plan" | "recipe" | "food" | "direct";
 export const KIND_LABEL: Record<LogKind, string> = { plan: "식단에서", recipe: "내 레시피", food: "음식", direct: "직접" };

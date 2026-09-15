@@ -28,6 +28,7 @@ export default function FoodLogDaySheet({
   onAdd,
   onChanged,
   onClose,
+  reloadTick = 0,
 }: {
   date: string;
   today: string;
@@ -36,10 +37,16 @@ export default function FoodLogDaySheet({
   onAdd: (meal: MealKind, day: FoodLogDay) => void;
   onChanged: () => void;
   onClose: () => void;
+  /** 고치기·추가 시트가 저장·삭제하면 올라간다 — 다시 마운트하지 않고 다시 받아 스크롤·포커스를 지킨다 */
+  reloadTick?: number;
 }) {
   const day = useResource<FoodLogDay>(`/api/food-logs?date=${date}`);
   const body = useResource<BodyProfileResponse>("/api/body-profile");
   const goal = body.data?.profile ? dailyTarget(body.data.profile, today).target : null;
+
+  useEffect(() => {
+    if (reloadTick) void day.reload();
+  }, [reloadTick, day.reload]);
 
   const eaten = useAsyncAction();
   const [eatenBusyId, setEatenBusyId] = useState<number | null>(null);

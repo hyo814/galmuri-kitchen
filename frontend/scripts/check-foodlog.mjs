@@ -6,6 +6,7 @@ import {
   createBody,
   dishGrams,
   dishSub,
+  keptAmount,
   logKind,
   parseGrams,
   patchBody,
@@ -213,5 +214,21 @@ assert.equal(logKind({ meal_slot_id: 1, recipe_id: 2, food_code: null }), "plan"
 assert.equal(logKind({ meal_slot_id: null, recipe_id: 2, food_code: null }), "recipe");
 assert.equal(logKind({ meal_slot_id: null, recipe_id: null, food_code: "D1" }), "food");
 assert.equal(logKind({ meal_slot_id: null, recipe_id: null, food_code: null }), "direct");
+
+// 리뷰 fix: 양 칸이 숨었을 때 원래 양 그대로
+assert.deepEqual(keptAmount({ servings: null, grams: 300 }), { grams: 300 });
+assert.deepEqual(keptAmount({ servings: 1.5, grams: null }), { servings: 1.5 });
+assert.deepEqual(keptAmount({ servings: null, grams: null }), { servings: 1 });
+assert.deepEqual(patchBody(saved, { ...same, amount: keptAmount(saved) }), {});
+// 레시피·식단 칸 기록은 인분만 바꾸면 servings만
+const recipeLog = { meal: "dinner", title: "김치찌개", servings: 1, grams: null, place: "home", rating: null, memo: null, meal_slot_id: null, recipe_id: 1, food_code: null };
+assert.deepEqual(patchBody(recipeLog, { meal: "dinner", what: null, amount: { servings: 1.5 }, place: "home", rating: null, memo: "" }), { servings: 1.5 });
+assert.deepEqual(patchBody({ ...recipeLog, meal_slot_id: 2 }, { meal: "dinner", what: null, amount: { servings: 0.5 }, place: "home", rating: null, memo: "" }), { servings: 0.5 });
+// 메모 null에 공백만 입력 → 바뀌지 않음
+assert.deepEqual(patchBody(recipeLog, { meal: "dinner", what: null, amount: { servings: 1 }, place: "home", rating: null, memo: "   " }), {});
+// 음식 + 인분
+assert.deepEqual(createBody("2026-09-14", { meal: "lunch", what: { kind: "food", foodCode: "D1" }, amount: { servings: 0.5 }, place: "out", rating: null, memo: "" }), {
+  eaten_on: "2026-09-14", meal: "lunch", food_code: "D1", servings: 0.5, place: "out", rating: null, memo: null,
+});
 
 console.log("check-foodlog: ok");
