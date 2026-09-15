@@ -16,7 +16,7 @@ from . import scan
 from .auth import login_required
 from .ingredients import SEOUL, seoul_today
 from .meals import MEALS
-from .models import AiCall, FoodLog, Ingredient, MealPlan, MealSlot, Recipe, Seasoning, ShoppingItem, ShoppingNote, db
+from .models import AiCall, CookLog, FoodLog, Ingredient, MealPlan, MealSlot, Recipe, Seasoning, ShoppingItem, ShoppingNote, db
 from .shopping import STOCKED_KEEP_DAYS
 
 bp = Blueprint("export", __name__, url_prefix="/api/export")
@@ -48,6 +48,9 @@ PLACE_LABELS = {"home": "집밥", "out": "외식"}
 FOOD_LOG_SOURCE_LABELS = {"manual": "직접", "meal_plan": "식단", "cook_log": "요리 일기"}
 FOOD_LOG_HEADER = ["날짜", "끼니", "무엇을 먹었나요", "어디서", "인분", "먹은 양(g)", "kcal", "탄수화물(g)", "단백질(g)", "지방(g)",
                    "당류(g)", "나트륨(mg)", "추정", "만족도", "메모", "남긴 방법", "사진 수", "사진 파일 이름", "남긴 시각"]
+EAT_OUT_SOURCE_LABELS = {"user": "직접", "ai": "추정", "sample": "추정"}
+COOK_LOG_HEADER = ["날짜", "요리", "인분", "별점", "메모", "사 먹으면(1인분·원)", "사 먹으면 출처", "재료비(원)", "아낀 돈(원)",
+                   "가격 제외 재료 수", "쓴 재료", "사진 파일 이름", "남긴 시각"]
 SPOOL_BYTES = 5_000_000  # 이보다 크면 메모리 대신 임시 파일에 zip을 만든다
 BATCH = 200
 
@@ -103,6 +106,13 @@ def number(value):
     return int(value) if float(value).is_integer() else float(value)
 
 
+def used_text(item):
+    """'김치 0.3kg' · 재고에 없던 재료는 '돼지고기 200g' · 양이 없으면 이름만."""
+    if item.used is not None:
+        return f"{item.name} {number(item.used)}{item.unit or ''}"
+    return f"{item.name} {item.amount_text}".strip()
+
+
 def write_csv(archive, name, header, rows):
     with io.TextIOWrapper(archive.open(name, "w"), encoding="utf-8-sig", newline="") as out:  # BOM: 엑셀이 UTF-8 한글을 알아본다
         writer = csv.writer(out)
@@ -130,6 +140,7 @@ def summary():
         memos=owned(ShoppingNote).count(),
         meals=meal_rows().count(),
         food_logs=owned(FoodLog).count(),
+        cook_logs=owned(CookLog).count(),
         limit=DAILY_LIMIT,
         remaining=remaining(),
     )
@@ -172,6 +183,7 @@ def export():
     )
     meals = meal_rows().yield_per(BATCH)
     food_logs = food_log_rows().yield_per(BATCH)
+    cook_logs = owned(CookLog).options(selectinload(CookLog.items)).order_by(CookLog.cooked_on, CookLog.id).yield_per(BATCH)
     spool = tempfile.SpooledTemporaryFile(max_size=SPOOL_BYTES)
     with zipfile.ZipFile(spool, "w", zipfile.ZIP_DEFLATED) as archive:
         write_csv(
@@ -296,6 +308,29 @@ def export():
                     seoul_time(log.created_at),
                 ]
                 for log in food_logs
+            ),
+        )
+        write_csv(
+            archive,
+            "cook_logs.csv",
+            COOK_LOG_HEADER,
+            (
+                [
+                    log.cooked_on,
+                    log.title,
+                    log.servings,
+                    "" if log.rating is None else log.rating,
+                    log.memo or "",
+                    "" if log.eat_out_price is None else log.eat_out_price,
+                    EAT_OUT_SOURCE_LABELS.get(log.eat_out_source, ""),
+                    log.ingredient_cost,
+                    "" if log.saved is None else log.saved,
+                    log.excluded_count,
+                    "; ".join(used_text(i) for i in log.items),
+                    os.path.basename(log.photo_key) if log.photo_key else "",
+                    seoul_time(log.created_at),
+                ]
+                for log in cook_logs
             ),
         )
     spool.seek(0)
