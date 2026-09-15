@@ -1,0 +1,269 @@
+"""레시피 1인분 영양 계산과 식품 고르기 저장(스펙 21절 구현 세부, 4b-2 Task 3). 윗부분은 DB 없이 테스트하는 순수 함수."""
+
+import math
+from collections import defaultdict
+
+from flask import Blueprint, abort, g, jsonify, request
+from sqlalchemy import or_
+
+from .ai import scan_mode
+from .amounts import parse_amount
+from .auth import get_owned_or_404, login_required
+from .foods import NUTRIENTS, OFF, name_parts, nutrition_mode
+from .matching import normalize
+from .models import FoodMatch, FoodNutrient, FoodSearch, Recipe, UnitWeightEstimate, db
+from .recipe_parse import ingredient_key
+from .recipes import ALWAYS_HAVE
+from .validation import commit_or_duplicate, text
+
+bp = Blueprint("nutrition", __name__, url_prefix="/api")
+
+SPOON_GRAMS = {"큰술": 15, "숟가락": 15, "스푼": 15, "tbs": 15, "tbsp": 15,
+               "작은술": 5, "티스푼": 5, "tsp": 5, "컵": 200, "꼬집": 0.5}  # 22절 계량 기준(결정 5). 영문 키는 소문자, t·ts는 fixed_grams가 가른다
+TRACE_WORDS = {"약간", "적당량", "적당히", "조금", "소량", "취향껏"}
+COUNTED = ("ok", "estimated")
+MISSING = ("unmatched", "needs_weight", "no_estimate", "unknown_amount", "pending")
+MAX_MATCHES = 2000
+MAX_UNITS = 20  # 재료 하나에 고친 단위 무게 수(unit_grams JSON이 끝없이 커지지 않게)
+IN_CHUNK, LIKE_CHUNK = 500, 50
+WEIGHT_ERROR = "무게는 0.1~5000g 사이로 입력해주세요."
+SAVE_RACE = "방금 저장했어요. 다시 불러와주세요."
+
+
+def match_key(name):
+    """재료 이름 → 기억·자동 맞추기 키. '돼지고기 앞다리살(국산)' → '돼지고기앞다리살'."""
+    return normalize(ingredient_key(name))[:60]
+
+
+def fixed_grams(unit):
+    """g·ml(1ml=1g, ponytail: 기름·꿀은 10~40% 차이)·숟가락 단위 한 단위 g. 셀 수 있는 단위면 None.
+    Ruling 10: t·ts는 원래 글자로 가른다(T·Ts·TS 큰술 15, t·ts 작은술 5). tbs·tbsp는 대소문자 무관 15, tsp는 대소문자 무관 5."""
+    lower = unit.lower()
+    if lower in ("g", "ml"):
+        return 1.0
+    if lower in ("t", "ts"):
+        return 15 if unit[0] == "T" else 5
+    return SPOON_GRAMS.get(lower)
+
+
+def auto_match(key, rows):
+    """결정 10(개정 1). rows는 key in name_parts(이름)인 FoodNutrient(source != 'ai') 후보. 고른 행 또는 None.
+    ① 원재료성 후보가 있으면 (조각에 '생것' 없음, 조각 수, 이름 길이, 이름) 순 첫 행 ② 없으면 normalize(이름) == key인 행이 딱 하나일 때 그것."""
+    raw = [r for r in rows if r.group_name == "원재료성"]
+    if raw:
+        def order(r):
+            parts = name_parts(r.name)
+            return "생것" not in parts, len(parts), len(r.name), r.name
+        return min(raw, key=order)
+    exact = [r for r in rows if normalize(r.name) == key]
+    return exact[0] if len(exact) == 1 else None
+
+
+def _round1(value):
+    """0 이상 값 소수 첫째 자리 반올림(.5는 올림, 화면 Math.round와 같게)."""
+    return math.floor(value * 10 + 0.5) / 10
+
+
+def _round0(value):
+    return math.floor(value + 0.5)
+
+
+NO_KEY = {"key": "", "state": "unsearched", "food": None, "unit_grams": {}}  # 재료 키가 빈 이름('+'·'(고명)'): 찾지 않는다
+
+
+def ingredient_row(item, resolved, can_estimate, servings):
+    """재료 한 줄 계산. resolved = {"key", "state": matched|auto|estimate|estimate_missing|unmatched|unsearched,
+    "food": {food_code, name, group, kcal, carbs_g, protein_g, fat_g, sugars_g, sodium_mg} | None,
+    "unit_grams": {단위: (g, "user"|"ai"|"sample")}}. 상태 순서는 스펙 21절 구현 세부 표."""
+    state, food = resolved["state"], resolved["food"]
+    amount = item.get("amount") or ""
+    parsed = parse_amount(amount)
+    quantity, unit = parsed if parsed else (None, None)
+    per_unit = fixed_grams(unit) if unit else None
+    countable = parsed is not None and per_unit is None
+    weight, weight_source = resolved["unit_grams"].get(unit, (None, None)) if countable else (None, None)
+    grams = values = None
+    reason = None
+
+    if normalize(item["name"]) in ALWAYS_HAVE or normalize(amount) in TRACE_WORDS:
+        status, grams, values = "trace", 0.0, dict.fromkeys(NUTRIENTS, 0.0)
+    elif parsed is None or not resolved["key"]:
+        status = "unknown_amount"  # 양을 못 읽었거나 이름으로 식품을 찾을 수 없다(빼고 약)
+    elif state == "unsearched":
+        status, reason = "pending", "search"
+    elif state == "unmatched":
+        status = "unmatched"
+    elif state == "estimate_missing":
+        status, reason = ("pending", "food") if can_estimate else ("no_estimate", None)
+    elif per_unit is None and weight is None:
+        status, reason = ("pending", "weight") if can_estimate else ("needs_weight", None)
+    else:
+        grams = quantity * (per_unit if per_unit is not None else weight)
+        values = {n: (food[n] or 0) * grams / 100 for n in NUTRIENTS}
+        status = "estimated" if state == "estimate" or weight_source in ("ai", "sample") else "ok"
+
+    shows_food = state in ("matched", "auto") and food is not None
+    return {
+        "name": item["name"], "amount": amount, "key": resolved["key"], "status": status, "pending_reason": reason,
+        "countable": countable, "quantity": quantity, "unit": unit,
+        "grams": _round1(grams) if grams is not None else None,
+        "unit_grams": _round1(weight) if weight is not None else None, "unit_grams_source": weight_source,
+        "food": {"food_code": food["food_code"], "name": food["name"], "group": food["group"], "kcal": _round0(food["kcal"])} if shows_food else None,
+        "estimate_food": state in ("estimate", "estimate_missing"),
+        "values": values,
+        "kcal_per_serving": _round0(values["kcal"] / servings) if values is not None else None,
+    }
+
+
+def recipe_nutrition(ingredients, servings, resolved_by_key, can_estimate):
+    """레시피 1인분(결정 14). 값 없는 영양소는 0으로 더한다. per_serving은 COUNTED 줄이 있거나 모든 줄이 trace일 때만(아니면 None).
+    빈 키는 NO_KEY로 계산한다(resolved_by_key에 넣지 않는다)."""
+    servings = max(servings or 0, 1)
+    keys = [match_key(item["name"]) for item in ingredients]
+    rows = [ingredient_row(item, resolved_by_key[key] if key else NO_KEY, can_estimate, servings) for item, key in zip(ingredients, keys)]
+    statuses = [row["status"] for row in rows]
+    counted_count, trace_count = sum(s in COUNTED for s in statuses), statuses.count("trace")
+    per_serving = None
+    if counted_count or (rows and trace_count == len(rows)):
+        counted = [row for row in rows if row["values"] is not None]
+        totals = {n: sum(row["values"][n] for row in counted) / servings for n in NUTRIENTS}
+        per_serving = {n: _round0(v) if n in ("kcal", "sodium_mg") else _round1(v) for n, v in totals.items()}
+    return {
+        "servings": servings,
+        "per_serving": per_serving,
+        "approx": any(s not in ("ok", "trace") for s in statuses),
+        "estimated_count": statuses.count("estimated"),
+        "missing_count": sum(s in MISSING for s in statuses),
+        "pending": "pending" in statuses,
+        "usable": counted_count * 2 >= len(statuses) - trace_count,
+        "ingredients": [{k: v for k, v in row.items() if k != "values"} for row in rows],
+    }
+
+
+def _chunks(values, size):
+    values = sorted(values)
+    return [values[i:i + size] for i in range(0, len(values), size)]
+
+
+def _food_json(row):
+    return {"food_code": row.food_code, "name": row.name, "group": row.group_name, **{n: getattr(row, n) for n in NUTRIENTS}}
+
+
+class NutritionContext:
+    """요청마다 한 번. 재료 키가 K개면 쿼리는 FoodMatch·FoodSearch·UnitWeightEstimate 각 ceil(K/500), 코드 ceil(2K/500), 후보 ceil(K/50)번."""
+
+    def __init__(self, user, recipes):
+        keys = {match_key(i["name"]) for recipe in recipes for i in recipe.ingredients} - {""}
+        self.can_estimate = scan_mode(user) != "off"
+        self.matches, self.searched, self.foods = {}, set(), {}
+        self.weights, self.candidates = defaultdict(dict), defaultdict(list)
+        for chunk in _chunks(keys, IN_CHUNK):
+            for m in FoodMatch.query.filter(FoodMatch.user_id == user.id, FoodMatch.ingredient_key.in_(chunk)):
+                self.matches[m.ingredient_key] = m
+            self.searched.update(k for (k,) in db.session.query(FoodSearch.query_key).filter(FoodSearch.query_key.in_(chunk)))
+            for w in UnitWeightEstimate.query.filter(UnitWeightEstimate.name_key.in_(chunk)):
+                self.weights[w.name_key][w.unit] = (w.grams, w.source)
+        codes = {m.food_code for m in self.matches.values() if m.food_code} | {f"ai:{k}" for k in keys}
+        for chunk in _chunks(codes, IN_CHUNK):
+            self.foods.update((f.food_code, f) for f in FoodNutrient.query.filter(FoodNutrient.food_code.in_(chunk)))
+        # ponytail: '파'처럼 짧은 키는 LIKE가 캐시의 많은 행을 읽는다. 느려지면 name_parts를 따로 저장하는 표로 바꾼다
+        like_keys = keys - ALWAYS_HAVE
+        found = {}  # 한 행이 여러 묶음의 LIKE에 걸릴 수 있다('대파'는 '%대파%'·'%파%') — 코드로 한 번만
+        for chunk in _chunks(like_keys, LIKE_CHUNK):
+            patterns = [FoodNutrient.name.ilike("%" + k.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%", escape="\\")
+                        for k in chunk]
+            found.update((row.food_code, row) for row in FoodNutrient.query.filter(FoodNutrient.source != "ai", or_(*patterns)))
+        for row in found.values():
+            for part in set(name_parts(row.name)) & like_keys:
+                self.candidates[part].append(row)
+
+    def resolve(self, key):
+        """결정 10·9(개정 1). 사용자 기억 → 자동 맞추기 → 찾아봤으면 AI 추정 → 아직 안 찾아봄."""
+        match = self.matches.get(key)
+        unit_grams = dict(self.weights.get(key, {}))
+        food = None
+        if match is not None:
+            unit_grams.update((unit, (grams, "user")) for unit, grams in (match.unit_grams or {}).items())
+            if match.food_code is None:
+                food = self.foods.get(f"ai:{key}")
+                state = "estimate" if food else "estimate_missing"
+            else:
+                food = self.foods.get(match.food_code)
+                state = "matched" if food else "unmatched"
+        elif (food := auto_match(key, self.candidates.get(key, []))) is not None:
+            state = "auto"
+        elif key in self.searched:
+            food = self.foods.get(f"ai:{key}")
+            state = "estimate" if food else "estimate_missing"
+        else:
+            state = "unsearched"
+        return {"key": key, "state": state, "food": _food_json(food) if food else None, "unit_grams": unit_grams}
+
+    def recipe(self, recipe):
+        resolved = {key: self.resolve(key) for key in {match_key(i["name"]) for i in recipe.ingredients} - {""}}
+        return recipe_nutrition(recipe.ingredients, recipe.servings, resolved, self.can_estimate)
+
+
+def _require_nutrition():
+    if nutrition_mode(g.user) == "off":
+        abort(503, OFF)
+
+
+@bp.get("/recipes/<int:recipe_id>/nutrition")
+@login_required
+def recipe_nutrition_view(recipe_id):
+    _require_nutrition()
+    recipe = get_owned_or_404(Recipe, recipe_id)
+    res = jsonify(NutritionContext(g.user, [recipe]).recipe(recipe))
+    res.headers["Cache-Control"] = "no-store"  # 건강 정보
+    return res
+
+
+@bp.put("/food-matches")
+@login_required
+def put_food_match():
+    _require_nutrition()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        abort(400, "잘못된 요청이에요.")
+    key = match_key(text(data.get("name"), "재료 이름은", 50))
+    if not key:
+        abort(400, "잘못된 요청이에요.")
+    if "food_code" not in data:  # null은 추정으로 두기, 빠진 것은 잘못된 요청
+        abort(400, "잘못된 요청이에요.")
+    food_code = data["food_code"]
+    if food_code is not None and (
+        not isinstance(food_code, str)
+        or FoodNutrient.query.filter(FoodNutrient.food_code == food_code, FoodNutrient.source != "ai").first() is None
+    ):
+        abort(400, "식품을 다시 골라주세요.")
+    unit = data.get("unit")
+    grams = None
+    if unit is not None:
+        if not isinstance(unit, str) or not 1 <= len(unit.strip()) <= 10 or fixed_grams(unit.strip()) is not None:
+            abort(400, "잘못된 요청이에요.")
+        unit = unit.strip()
+        grams = data.get("unit_grams")
+        if grams is not None:
+            if isinstance(grams, bool) or not isinstance(grams, (int, float)) or not math.isfinite(grams) or not 0.1 <= grams <= 5000:
+                abort(400, WEIGHT_ERROR)
+            grams = _round1(float(grams))
+
+    match = FoodMatch.query.filter_by(user_id=g.user.id, ingredient_key=key).first()
+    if match is None:
+        if FoodMatch.query.filter_by(user_id=g.user.id).count() >= MAX_MATCHES:
+            abort(400, f"식품은 {MAX_MATCHES}개까지 기억할 수 있어요.")
+        match = FoodMatch(user_id=g.user.id, ingredient_key=key, unit_grams={})
+        db.session.add(match)
+    match.food_code = food_code
+    if unit is not None:
+        unit_grams = dict(match.unit_grams or {})  # 새 dict를 넣어야 JSON 칸 변경이 저장된다
+        if grams is None:
+            unit_grams.pop(unit, None)
+        else:
+            if unit not in unit_grams and len(unit_grams) >= MAX_UNITS:
+                abort(400, "잘못된 요청이에요.")
+            unit_grams[unit] = grams
+        match.unit_grams = unit_grams
+    commit_or_duplicate(SAVE_RACE)
+    return "", 204
