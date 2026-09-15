@@ -19,6 +19,7 @@ from .auth import login_user, user_json
 from .defaults import seed_user_defaults
 from .ingredients import seoul_today
 from .models import (
+    FoodLog,
     Ingredient,
     MealPlan,
     MealSlot,
@@ -93,6 +94,12 @@ MEAL_PLAN_SLOTS = [
     (1, "lunch", 1, None),  # 내일 점심: 김치찌개(SAMPLE-02)
     (1, "breakfast", None, "토스트"),  # 내일 아침: 직접 쓰기(레시피 없음)
     (2, "dinner", 0, None),  # 모레 저녁: 된장찌개 재사용
+]
+# (며칠 전, 끼니, 예시 레시피 제목 또는 None, 직접 쓴 이름, 어디서, 만족도, 메모) — 결정 16
+FOOD_LOGS = [
+    (1, "dinner", "김치찌개", None, "home", 5, None),  # recipe_rows에서 제목이 같은 예시 레시피
+    (1, "lunch", None, "제육덮밥", "out", 3, "회사 앞 · 조금 짰어요"),
+    (0, "breakfast", None, "토스트", "home", 4, None),
 ]
 
 
@@ -210,6 +217,25 @@ def seed_demo_data(user_id):
             )
         )
     db.session.add(plan)
+
+    for days_ago, meal, recipe_title, name, place, rating, memo in FOOD_LOGS:
+        # 영양은 계산하지 않는다(요청 사용자 g.user가 없어서) — 상세를 열 때 결정 2 흐름으로 채운다.
+        recipe = next((r for r in recipe_rows if r.title == recipe_title), None) if recipe_title else None
+        db.session.add(
+            FoodLog(
+                user_id=user_id,
+                eaten_on=today - timedelta(days=days_ago),
+                meal=meal,
+                source="manual",
+                title=recipe.title if recipe else name,
+                recipe=recipe,
+                servings=1.0,
+                place=place,
+                rating=rating,
+                memo=memo,
+                nutrition_pending=recipe is not None,
+            )
+        )
 
 
 def delete_demo_users(query, limit=None):

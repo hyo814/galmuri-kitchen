@@ -109,8 +109,8 @@ recipe-ai/
 | POST/DELETE | `/api/food-logs/<id>/photos` · `/api/food-logs/<id>/photos/<photo_id>` | 기록 사진 올리기 multipart `image` → 201 `{id, url}`(기록당 4장) / 삭제 204(24절 구현 세부) |
 | POST | `/api/food-logs/photo` | 사진만 먼저: multipart `image` → 201 기록(제목 없음, 날짜·끼니는 서버 시각의 서울 시각, 24절 구현 세부) |
 | GET | `/api/food-logs/month` | 한 달 달력·요약(24절 구현 세부, Task 4). `?month=YYYY-MM` → 200 `{month, today, days, summary}`(`Cache-Control: no-store`, 미래 달도 빈 결과). `month` 모양이 틀리면 400 `잘못된 요청이에요.`, 2000~2100년 밖이면 `날짜를 다시 확인해주세요.` |
-| GET | `/api/export/summary` | (`X-Requested-With: fetch` 필요) 내보낼 개수와 오늘(서울) 남은 횟수 `{ingredients, recipes, seasonings, shopping, memos, meals, limit: 5, remaining}`(27절) |
-| GET | `/api/export` | (`X-Requested-With: fetch` 필요) zip 내려받기(`Content-Disposition: attachment; filename="galmuri-kitchen-YYYYMMDD.zip"`, 서울 날짜). `ingredients.csv`·`recipes.csv`·`seasonings.csv`·`shopping.csv`·`shopping_memos.csv`·`meals.csv`(UTF-8 BOM, 한국어 머리글). 하루 5회(`ai_calls.kind = export`), 넘으면 429 `오늘 내보내기는 5번까지 할 수 있어요. 내일 다시 해주세요.`(27절) |
+| GET | `/api/export/summary` | (`X-Requested-With: fetch` 필요) 내보낼 개수와 오늘(서울) 남은 횟수 `{ingredients, recipes, seasonings, shopping, memos, meals, food_logs, limit: 5, remaining}`(27절) |
+| GET | `/api/export` | (`X-Requested-With: fetch` 필요) zip 내려받기(`Content-Disposition: attachment; filename="galmuri-kitchen-YYYYMMDD.zip"`, 서울 날짜). `ingredients.csv`·`recipes.csv`·`seasonings.csv`·`shopping.csv`·`shopping_memos.csv`·`meals.csv`·`food_logs.csv`(UTF-8 BOM, 한국어 머리글). 하루 5회(`ai_calls.kind = export`), 넘으면 429 `오늘 내보내기는 5번까지 할 수 있어요. 내일 다시 해주세요.`(27절) |
 | GET | `/api/ai-usage` | 오늘(서울) `{scan:{used, limit}, recipe:{used, limit}}` — `오늘 N번 남음`·더보기 AI 사용량 |
 | GET/POST | `/api/seasonings` · GET/PUT/DELETE `/api/seasonings/<id>` | 내 양념 비율 목록·추가 / 상세·수정·삭제(22절) |
 | GET | `/api/shopping` | 장보기 한 번에 받기 `{items, stocked, notes, today}` — 페이지 없음(오프라인 보관, 26절 예외). 7일 지난 산 것은 이때 지운다(28절) |
@@ -174,7 +174,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - OAuth state 검증(Authlib).
 - CSRF: 상태 변경 요청에 커스텀 헤더 요구.
 - 사진: 비공개 버킷, 소유자 확인 후 만료 5분 presigned URL.
-- 체험하기 계정(추가: 2026-09-14, 사용자 결정 "체험 계정 + 카카오 로그인"): `DEMO_LOGIN=1`일 때만 `POST /api/demo-login`이 열린다. 누를 때마다 새 계정(`provider=demo`)과 예시 데이터를 만들고 24시간 뒤 `flask purge-demo-users`로 지운다. IP(IPv6는 /64)별 1시간 3개·하루 10개, 전체 5,000개(차면 오래된 체험 계정부터 재활용), IP는 `SECRET_KEY`에서 뽑은 키의 HMAC 해시만 남긴다. 체험 계정 AI 하루 한도 5번(2026-09-15 3→5, 사용자 결정), 체험 전체 AI 24시간 예산(`DEMO_AI_GLOBAL_DAILY`)을 넘으면 예시 결과, 영상은 늘 예시 목록. 세션은 `user_id`와 `provider_id`가 함께 맞아야 한다. `ai_calls`는 사용자를 지워도 남는다(`SET NULL`, `demo` 표시).
+- 체험하기 계정(추가: 2026-09-14, 사용자 결정 "체험 계정 + 카카오 로그인"): `DEMO_LOGIN=1`일 때만 `POST /api/demo-login`이 열린다. 누를 때마다 새 계정(`provider=demo`)과 예시 데이터를 만들고 24시간 뒤 `flask purge-demo-users`로 지운다. IP(IPv6는 /64)별 1시간 3개·하루 10개, 전체 5,000개(차면 오래된 체험 계정부터 재활용), IP는 `SECRET_KEY`에서 뽑은 키의 HMAC 해시만 남긴다. 체험 계정 AI 하루 한도 5번(2026-09-15 3→5, 사용자 결정), 체험 전체 AI 24시간 예산(`DEMO_AI_GLOBAL_DAILY`)을 넘으면 예시 결과, 영상은 늘 예시 목록. 세션은 `user_id`와 `provider_id`가 함께 맞아야 한다. `ai_calls`는 사용자를 지워도 남는다(`SET NULL`, `demo` 표시). 예시 데이터에 먹은 기록 3개(24절 결정 16)도 함께 만든다.
 - 비밀값(ANTHROPIC_API_KEY, FOODSAFETY_API_KEY, FOOD_NUTRITION_API_KEY, KAKAO_CLIENT_ID/SECRET, NAVER_CLIENT_ID/SECRET, GOOGLE_CLIENT_ID/SECRET, R2_*, DATABASE_URL, SECRET_KEY)은 환경변수. `.env`는 gitignore.
 
 ## 10. 테스트
@@ -636,6 +636,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
   10. 상한: 하루 20개·사용자당 10,000개. 날짜·달 단위로만 받아 커서 페이지 없음(26절 표).
   12. 만족도 1~5 선택, 메모 200자(공백 정리·NUL 400), 어디서 `home`·`out`·null.
   14. 날짜 상세 식단 제안: 그날 내 모든 식단의 연결 안 된 칸을 끼니 순 8개까지 `plan_slots`로.
+  16. 내보내기 `food_logs.csv`(27절): 날짜·끼니·무엇을 먹었나요(없으면 `사진 기록`)·어디서·인분·먹은 양(g)·kcal·탄수화물(g)·단백질(g)·지방(g)·당류(g)·나트륨(mg)·추정·만족도·메모·남긴 방법(직접/식단/요리 일기)·사진 수·사진 파일 이름(`;`로 이어 붙임, 사진 바이트는 안 넣음)·남긴 시각(서울). 정렬은 날짜 → 끼니 → 남긴 순. `GET /api/export/summary`에 `food_logs`(내 기록 수). 체험 계정은 예시 기록 3개를 함께 만든다 — 어제 저녁 `김치찌개`(예시 레시피, 집밥, ★5, `nutrition_pending=true`), 어제 점심 `제육덮밥`(직접, 외식, ★3, 메모 `회사 앞 · 조금 짰어요`), 오늘 아침 `토스트`(직접, 집밥, ★4). 영양은 계산하지 않는다(요청 사용자가 없어서 — 상세를 열 때 결정 2 흐름으로 채운다).
 
 ## 25. 수익화 방향 (추가: 2026-09-13, 기획만 — 구현하지 않음)
 
@@ -687,14 +688,14 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 | **우리 부엌** | 보관 위치 · 필수품 · 품목별 경고 · 주방 도구 | 지금 있는 기능 — 3a 다음 정리 작업에서 옮김 |
 | **나** | 하루 칼로리 목표(21절) · AI 사용량(오늘 사진 인식 N/10회, AI 레시피 N/10회) | 4b · AI 사용량은 3b |
 | **함께** | 가족과 함께 쓰기(기획만) · 친구 초대 · 의견 보내기 | 친구 초대·의견은 배포 무렵, 가족은 기획만 |
-| **앱** | 홈 화면에 앱 설치(있음) · 화면 테마(시스템/밝게/어둡게) · 알림 설정(임박 재료) · 데이터 내보내기(재고·내 레시피·내 양념 비율·장보기·식단) | 테마·내보내기는 3a 다음 정리 작업, 알림은 배포 후 |
+| **앱** | 홈 화면에 앱 설치(있음) · 화면 테마(시스템/밝게/어둡게) · 알림 설정(임박 재료) · 데이터 내보내기(재고·내 레시피·내 양념 비율·장보기·식단·먹은 기록) | 테마·내보내기는 3a 다음 정리 작업, 알림은 배포 후 |
 | **도움말·정보** | 사용 방법 · 공지 · 문의하기 · 이용약관 · 개인정보처리방침 · 데이터 출처 · 앱 정보(버전) | 배포 전 |
 | **계정** | 로그인 계정(카카오/네이버/구글 표시) · 로그아웃 · 회원 탈퇴 | 로그아웃 이동은 정리 작업, 탈퇴는 배포 전 |
 
 - **재고 화면 톱니바퀴:** 우리 부엌 묶음으로 옮긴 뒤에는 재고 화면에서 `보관 위치`·`필수품` 바로가기만 남기고(자주 씀), 나머지는 더보기로 보낸다.
 - **AI 사용량:** `ai_calls`에서 오늘(서울 날짜) 묶음별 횟수와 한도를 보여준다. 원가(토큰)는 사용자에게 보여주지 않는다.
 - **화면 테마:** 기본은 시스템 설정을 따른다. 사용자가 고르면 기기에 저장(localStorage)하고 `<html data-theme>`로 적용한다. 서버 저장은 하지 않는다.
-- **데이터 내보내기:** 재고·내 레시피·내 양념 비율·장보기(목록·최근 산 것·메모)·식단(채운 칸)을 CSV로 묶어 내려받는다(zip 하나). 먹은 기록·요리 기록은 기능이 생기면 추가한다. 사진은 넣지 않는다(레시피 사진 주소, 메모 사진 파일 이름만 적는다). 하루 5회 제한.
+- **데이터 내보내기:** 재고·내 레시피·내 양념 비율·장보기(목록·최근 산 것·메모)·식단(채운 칸)·먹은 기록을 CSV로 묶어 내려받는다(zip 하나). 요리 기록은 5단계에서 추가한다. 사진은 넣지 않는다(레시피 사진 주소, 메모·먹은 기록 사진 파일 이름만 적는다). 하루 5회 제한.
 
 - **집밥 리포트(월간, 이름 2026-09-14 사용자 결정):** 이번 달 기록한 날, 요리한 횟수, 집밥/외식 비율(24절), **버린 재료 수**, **아낀 돈**. 버린 재료를 세려면 재료를 지울 때 이유(`다 먹었어요`/`버렸어요`)를 고를 수 있게 한다(선택, 기본은 이유 없음).
 - **아낀 돈(추가 2026-09-14, 사용자 제안·선택):** 요리 기록(5단계) 한 건마다 `사 먹으면 얼마 − 집밥 재료비 = 아낀 돈`을 계산해 집밥 리포트에서 합산한다. 예: "이번 달 집밥 12번으로 약 86,000원 아꼈어요 · 부대찌개 12,000원 − 재료비 4,300원 = 7,700원".
@@ -712,13 +713,14 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **아직 없는 기능은 만들 때 넣는다.** 표의 항목 중 기능이 없는 행(먹은 기록·요리 기록·집밥 리포트·알림 등)은 지금 더보기에 자리만 만들지 않는다.
 - **재고 화면 톱니바퀴:** `보관 위치`·`필수품`만 남긴다.
 - **재료 삭제 이유:** 삭제 확인에서 `다 먹었어요`/`버렸어요`를 고른 뒤 지운다(선택, 안 고르면 이유 없이 삭제). 서버는 `DELETE /api/ingredients/<id>?reason=eaten|discarded`로 받아 `ingredient_removals`(4절)에 이름·이유를 남긴다.
-- **내보내기 내용:** 지금은 재고·내 레시피·내 양념 비율·장보기·식단. 먹은 기록·요리 기록은 기능이 생기면 CSV를 추가한다. `GET /api/export/summary`·`GET /api/export`(5절).
+- **내보내기 내용:** 지금은 재고·내 레시피·내 양념 비율·장보기·식단·먹은 기록. 요리 기록은 5단계에서 CSV를 추가한다. `GET /api/export/summary`·`GET /api/export`(5절).
   - `ingredients.csv`: 이름, 수량, 단위, 보관 위치, 구입일(모르면 빈 칸, 맨 뒤) (2026-09-15, 사용자 승인 시안 docs/design/scan-multi/), 유통기한, 가격(원)
   - `recipes.csv`(레시피 한 줄): 제목, 인분, 재료(`두부 1모; 대파 1/2대`), 만드는 법(칸 안 줄바꿈 `1. …`), 출처, 출처 링크, 사진 주소(주소만, 사진 파일은 넣지 않음)
   - `seasonings.csv`: 이름, 기준, 기준 양, 기준 단위, 주재료, 양념(`고추장 2큰술; 설탕 0.5큰술`)
   - `shopping.csv`: 이름, 수량, 단위, 생활용품(`예`/빈칸, 2026-09-14 사용자 결정), 살 날, 넣을 위치, 체크, 산 날(재고에 넣은 날), 출처, 출처 이름, 담은 날. 목록(산 것 아님)과 최근 7일 안에 산 것(28절 `STOCKED_KEEP_DAYS`)만 담는다.
   - `shopping_memos.csv`: 장소, 메모, 사진 수, 사진 파일 이름(파일 이름만 `;`로 이어 붙임, 사진 바이트는 넣지 않음), 고친 시각
   - `meals.csv`(칸 한 줄, 추가: 2026-09-15): 식단 이름, 날짜, 끼니(아침/점심/저녁/간식), 요리, 인분, 레시피에서(예/아니요), 1인분 추정 kcal(없으면 빈 칸). 채운 칸만 담고, 식단 시작일 → 날짜 → 끼니 순으로 정렬한다.
+  - `food_logs.csv`(먹은 기록 한 줄, 추가: 2026-09-15, 24절 결정 16): 날짜, 끼니, 무엇을 먹었나요(없으면 `사진 기록`), 어디서(집밥/외식/빈 칸), 인분, 먹은 양(g), kcal, 탄수화물(g), 단백질(g), 지방(g), 당류(g), 나트륨(mg), 추정(예/빈 칸), 만족도, 메모, 남긴 방법(직접/식단/요리 일기), 사진 수, 사진 파일 이름(`;`로 이어 붙임, 사진 바이트는 안 넣음), 남긴 시각. 내 기록만, 날짜 → 끼니 → 남긴 순으로 정렬한다.
   - 엑셀 수식 주입 방지: `=` `+` `-` `@` 탭·CR(전각 `＝＋－＠` 포함, 앞 공백은 건너뛰고 봄)로 시작하는 칸은 앞에 `'`를 붙인다. 숫자는 정수면 정수로, 아니면 반올림 없이 적는다.
   - 하루 5회는 `ai_calls.kind = export`로 세고(AI 사용량·원가에 안 셈), 한도에 걸린 요청은 기록하지 않는다. 기록은 zip을 만들기 전에 하므로 만들다 실패해도 한 번으로 센다.
   - 두 API 모두 GET이지만 한도를 쓰므로 `X-Requested-With: fetch`가 없으면 400(다른 사이트 링크로 한도를 쓰지 못하게). 응답은 `Cache-Control: no-store`·`X-Content-Type-Options: nosniff`.

@@ -1,4 +1,4 @@
-"""데이터 내보내기(스펙 27절): 재고·내 레시피·내 양념 비율·장보기·식단을 CSV로 묶은 zip. 하루(서울) 5번까지."""
+"""데이터 내보내기(스펙 27절): 재고·내 레시피·내 양념 비율·장보기·식단·먹은 기록을 CSV로 묶은 zip. 하루(서울) 5번까지."""
 
 import csv
 import io
@@ -16,7 +16,7 @@ from . import scan
 from .auth import login_required
 from .ingredients import SEOUL, seoul_today
 from .meals import MEALS
-from .models import AiCall, Ingredient, MealPlan, MealSlot, Recipe, Seasoning, ShoppingItem, ShoppingNote, db
+from .models import AiCall, FoodLog, Ingredient, MealPlan, MealSlot, Recipe, Seasoning, ShoppingItem, ShoppingNote, db
 from .shopping import STOCKED_KEEP_DAYS
 
 bp = Blueprint("export", __name__, url_prefix="/api/export")
@@ -44,6 +44,10 @@ SHOPPING_SOURCE_LABELS = {  # 화면 sync.ts의 sourceTag와 같게(직접 담�
     "memo": "메모 사진",
 }
 MEAL_LABELS = {"breakfast": "아침", "lunch": "점심", "dinner": "저녁", "snack": "간식"}
+PLACE_LABELS = {"home": "집밥", "out": "외식"}
+FOOD_LOG_SOURCE_LABELS = {"manual": "직접", "meal_plan": "식단", "cook_log": "요리 일기"}
+FOOD_LOG_HEADER = ["날짜", "끼니", "무엇을 먹었나요", "어디서", "인분", "먹은 양(g)", "kcal", "탄수화물(g)", "단백질(g)", "지방(g)",
+                   "당류(g)", "나트륨(mg)", "추정", "만족도", "메모", "남긴 방법", "사진 수", "사진 파일 이름", "남긴 시각"]
 SPOOL_BYTES = 5_000_000  # 이보다 크면 메모리 대신 임시 파일에 zip을 만든다
 BATCH = 200
 
@@ -72,6 +76,12 @@ def meal_rows():
         .filter(MealPlan.user_id == g.user.id)
         .order_by(MealPlan.start_on, MealPlan.id, MealSlot.date, meal_order)
     )
+
+
+def food_log_rows():
+    """food_logs.csv에 담는 내 먹은 기록: 날짜 → 끼니(MEALS 순) → 남긴 순(created_at, id)."""
+    meal_order = case(*[(FoodLog.meal == meal, index) for index, meal in enumerate(MEALS)], else_=len(MEALS))
+    return owned(FoodLog).options(selectinload(FoodLog.photos)).order_by(FoodLog.eaten_on, meal_order, FoodLog.created_at, FoodLog.id)
 
 
 @bp.before_request
@@ -119,6 +129,7 @@ def summary():
         shopping=shopping_rows().count(),
         memos=owned(ShoppingNote).count(),
         meals=meal_rows().count(),
+        food_logs=owned(FoodLog).count(),
         limit=DAILY_LIMIT,
         remaining=remaining(),
     )
@@ -160,6 +171,7 @@ def export():
         .yield_per(BATCH)
     )
     meals = meal_rows().yield_per(BATCH)
+    food_logs = food_log_rows().yield_per(BATCH)
     spool = tempfile.SpooledTemporaryFile(max_size=SPOOL_BYTES)
     with zipfile.ZipFile(spool, "w", zipfile.ZIP_DEFLATED) as archive:
         write_csv(
@@ -255,6 +267,35 @@ def export():
                     "" if slot.est_kcal is None else slot.est_kcal,
                 ]
                 for slot, plan_name in meals
+            ),
+        )
+        write_csv(
+            archive,
+            "food_logs.csv",
+            FOOD_LOG_HEADER,
+            (
+                [
+                    log.eaten_on,
+                    MEAL_LABELS[log.meal],
+                    log.title or "사진 기록",
+                    PLACE_LABELS.get(log.place, ""),
+                    "" if log.servings is None else number(log.servings),
+                    "" if log.grams is None else log.grams,
+                    "" if log.kcal is None else number(log.kcal),
+                    "" if log.carbs_g is None else number(log.carbs_g),
+                    "" if log.protein_g is None else number(log.protein_g),
+                    "" if log.fat_g is None else number(log.fat_g),
+                    "" if log.sugars_g is None else number(log.sugars_g),
+                    "" if log.sodium_mg is None else number(log.sodium_mg),
+                    "예" if log.approx else "",
+                    "" if log.rating is None else log.rating,
+                    log.memo or "",
+                    FOOD_LOG_SOURCE_LABELS.get(log.source, log.source),
+                    len(log.photos),
+                    "; ".join(os.path.basename(p.photo_key) for p in log.photos),
+                    seoul_time(log.created_at),
+                ]
+                for log in food_logs
             ),
         )
     spool.seek(0)
