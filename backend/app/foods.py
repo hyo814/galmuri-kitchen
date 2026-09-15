@@ -9,6 +9,7 @@ from pathlib import Path
 
 import click
 from flask import Blueprint, abort, current_app, g, jsonify, request
+from sqlalchemy import case
 from sqlalchemy.exc import IntegrityError
 
 from . import outbound
@@ -21,7 +22,7 @@ bp = Blueprint("foods", __name__, url_prefix="/api", cli_group=None)  # 명령�
 
 ENDPOINT = "https://apis.data.go.kr/1471000/FoodNtrCpntDbInfo02/getFoodNtrCpntDbInq02"
 ROWS_PER_PAGE = 100
-MAX_PAGES = 2
+MAX_PAGES = 3  # 1쪽 + 마지막 쪽 + (마지막 쪽이 짧으면) 그 앞쪽. Step 0b 실측: 원재료성 행이 결과 뒤쪽에 몰려 있다(스펙 21절 구현 세부)
 FETCH_SECONDS = 5
 REFRESH_AFTER = timedelta(days=30)
 USER_DAILY_FETCHES, DEMO_DAILY_FETCHES, GLOBAL_DAILY_FETCHES = 300, 50, 8000
@@ -32,8 +33,8 @@ GROUP_ORDER = {"원재료성": 0, "가공식품": 1, "음식": 2}
 OFF = "영양 계산을 지금은 쓸 수 없어요."
 SAMPLE_FILE = Path(__file__).parent / "data" / "sample_foods.json"
 # 실측(nutrition-api-research.md, Task 2 Step 0 재확인): AMT_NUM1 에너지·3 단백질·4 지방·6 탄수화물·7 당류·13 나트륨, 100g당.
-# 코드 필드는 FOOD_CD로 실측 확인됨(Step 0). DB_GRP_NM은 "두부"·"대파" 각 100행 표본에서 "음식"·"가공식품"만 관측되고
-# "원재료성" 행은 관측되지 않았다(스펙 21절 구현 세부에 기록).
+# 코드 필드는 FOOD_CD로 실측 확인됨(Step 0). "두부"·"대파" 1쪽(100행) 표본에는 "음식"·"가공식품"만 있고 "원재료성"이 없었지만,
+# Step 0b에서 결과 뒤쪽(마지막 쪽)에 원재료성 행(DB_GRP_CM "R1")이 몰려 있음을 확인했다(스펙 21절 구현 세부, _search_api 참고).
 FIELDS = {"code": "FOOD_CD", "name": "FOOD_NM_KR", "group": "DB_GRP_NM", "basis": "SERVING_SIZE",
           "kcal": "AMT_NUM1", "protein_g": "AMT_NUM3", "fat_g": "AMT_NUM4", "carbs_g": "AMT_NUM6", "sugars_g": "AMT_NUM7", "sodium_mg": "AMT_NUM13"}
 NUTRIENTS = ("kcal", "carbs_g", "protein_g", "fat_g", "sugars_g", "sodium_mg")
@@ -53,6 +54,14 @@ def food_name_key(name):
 
 def query_key(text):
     return normalize(text)[:60]
+
+
+def name_parts(name):
+    """DB 원문 이름을 '_'·','로 모두 나눠 각 조각을 normalize한 목록(빈 조각은 뺀다). Task 3 이름 부분 매칭용
+    (`food_name_key`·`name_key` 칸은 그대로 첫 조각만 쓴다). matching.normalize는 괄호와 그 안 내용을 통째로 지우므로
+    한 조각 안의 부연 설명은 사라진다: '파_대파_생것' → ['파', '대파', '생것'], '돼지고기_삼겹살(삼겹살)_생것' → ['돼지고기', '삼겹살', '생것']
+    ('삼겹살(삼겹살)' → normalize가 '(삼겹살)'을 지워 '삼겹살'만 남는다)."""
+    return [part for part in (normalize(piece) for piece in re.split(r"[,_]", name)) if part]
 
 
 def _number(value):
@@ -157,10 +166,6 @@ def _upsert_search(key, total, now):
         row.total, row.searched_at = total, now
 
 
-def _has_exact(items, key):
-    return any(isinstance(item, dict) and normalize(item.get(FIELDS["name"]) or "") == key for item in items)
-
-
 def _search_sample(key, name):
     """SAMPLE_FILE에서 name_key가 같거나 이름에 검색어가 든 행만 넣고 기록한다(외부 요청·ai_calls 없음)."""
     try:
@@ -188,23 +193,41 @@ def _search_sample(key, name):
 
 def _search_api(key, name, user):
     """on 모드는 쪽마다 fetch_allowed 확인 → AiCall(kind=food_fetch, model=None, demo) 커밋 → fetch_page.
-    1쪽 total이 ROWS_PER_PAGE보다 크고 normalize(행 이름) == query_key(name)인 행이 없으면 2쪽(MAX_PAGES까지)."""
+    Step 0b 실측: 원재료성 행은 필터가 없어 결과 뒤쪽에 몰려 있다(예: 돼지고기는 마지막 쪽 전체, 대파는 마지막 쪽 끝 1행).
+    그래서 1쪽은 항상 받고, total이 ROWS_PER_PAGE보다 크면 마지막 쪽(ceil(total/ROWS_PER_PAGE))도 받는다.
+    마지막 쪽이 짧으면(50개 미만) 원재료성 구간이 그 앞쪽까지 걸쳐 있을 수 있어 그 앞쪽도 받는다(최대 MAX_PAGES=3쪽)."""
     api_key = current_app.config["FOOD_NUTRITION_API_KEY"]
     demo = user is not None and user.provider == "demo"
-    collected, total = [], 0
-    for page in range(1, MAX_PAGES + 1):
-        if page > 1 and not (total > ROWS_PER_PAGE and not _has_exact(collected, key)):
-            break
+
+    def fetch(page):
         if not fetch_allowed(user):
-            return False
+            return None
         db.session.add(AiCall(user_id=user.id if user else None, kind=FETCH_KIND, model=None, demo=demo, created_at=utcnow()))
         db.session.commit()
         try:
-            items, total = fetch_page(api_key, name, page)
+            return fetch_page(api_key, name, page)
         except (outbound.FetchError, ValueError) as e:
             current_app.logger.warning("food fetch failed: %s", type(e).__name__)  # 이유 이름만(주소·키 없음)
+            return None
+
+    result = fetch(1)
+    if result is None:
+        return False
+    items, total = result
+    collected = [item for item in items if isinstance(item, dict)]
+
+    if total > ROWS_PER_PAGE:
+        last_page = math.ceil(total / ROWS_PER_PAGE)
+        result = fetch(last_page)
+        if result is None:
             return False
-        collected.extend(item for item in items if isinstance(item, dict))
+        last_items = [item for item in result[0] if isinstance(item, dict)]
+        collected.extend(last_items)
+        if last_page >= 3 and len(last_items) < 50:
+            result = fetch(last_page - 1)
+            if result is None:
+                return False
+            collected.extend(item for item in result[0] if isinstance(item, dict))
 
     now = utcnow()
     for item in collected:
@@ -234,14 +257,19 @@ def search_and_cache(name, user):
 
 
 def search_items(q):
-    """캐시에서 이름에 q가 든 행(source != 'ai') 200개까지 → 정렬 (normalize(이름) != query_key(q), GROUP_ORDER(없으면 3), 이름 길이, 이름)
+    """캐시에서 이름에 q가 든 행(source != 'ai') 200개까지(원재료성이 먼저 오도록 SQL에서 정렬해 200개 안에서 밀려나지 않게 함)
+    → 파이썬에서 다시 정렬 (query_key(q)가 name_parts(이름)에 없음, GROUP_ORDER(없으면 3), 이름 길이, 이름)
     → 앞 20개 [{food_code, name, group, kcal}] (kcal은 정수 반올림)."""
     key = query_key(q)
     escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    raw_first = case((FoodNutrient.group_name == "원재료성", 0), else_=1)
     rows = (
-        FoodNutrient.query.filter(FoodNutrient.source != "ai", FoodNutrient.name.ilike(f"%{escaped}%", escape="\\")).limit(200).all()
+        FoodNutrient.query.filter(FoodNutrient.source != "ai", FoodNutrient.name.ilike(f"%{escaped}%", escape="\\"))
+        .order_by(raw_first)
+        .limit(200)
+        .all()
     )
-    rows.sort(key=lambda row: (normalize(row.name) != key, GROUP_ORDER.get(row.group_name, 3), len(row.name), row.name))
+    rows.sort(key=lambda row: (key not in name_parts(row.name), GROUP_ORDER.get(row.group_name, 3), len(row.name), row.name))
     return [{"food_code": r.food_code, "name": r.name, "group": r.group_name, "kcal": round(r.kcal)} for r in rows[:SEARCH_LIMIT]]
 
 

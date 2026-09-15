@@ -81,6 +81,26 @@ def test_row_fields_name_key_splits_on_underscore_and_comma():
     assert foods.row_fields(item("F1", "돼지고기, 앞다리, 생것"))["name_key"] == "돼지고기"
 
 
+# --- name_parts ---
+
+
+def test_name_parts_splits_underscore_all_parts():
+    assert foods.name_parts("파_대파_생것") == ["파", "대파", "생것"]
+
+
+def test_name_parts_drops_parenthesized_detail_within_a_part():
+    # matching.normalize는 괄호와 그 안 내용을 통째로 지운다 → "삼겹살(삼겹살)" 조각이 "삼겹살"만 남는다
+    assert foods.name_parts("돼지고기_삼겹살(삼겹살)_생것") == ["돼지고기", "삼겹살", "생것"]
+
+
+def test_name_parts_splits_on_comma_too():
+    assert foods.name_parts("돼지고기, 앞다리, 생것") == ["돼지고기", "앞다리", "생것"]
+
+
+def test_name_parts_single_part_name_has_no_delimiter():
+    assert foods.name_parts("두부") == ["두부"]
+
+
 # --- fetch_page ---
 
 
@@ -149,24 +169,51 @@ def test_search_and_cache_on_mode(make_app, monkeypatch):
         assert FoodNutrient.query.filter_by(food_code="F1").one().kcal == 90.0
 
 
-def test_second_page_only_when_needed(make_app, monkeypatch):
+def test_tail_paging_fetches_second_page_when_total_fits_in_two_pages(make_app, monkeypatch):
     app = make_app(FOOD_NUTRITION_API_KEY="k")
     with app.app_context():
         user = make_user()
-        page1 = [item(f"F{i}", f"두부요리{i}") for i in range(100)]  # 정확히 "두부"인 행 없음
-        fetch, calls = make_fetch([page(page1, 150), page([item("F999", "두부")], 150)])
+        page1 = [item(f"F{i}", f"두부요리{i}") for i in range(100)]
+        page2 = [item(f"G{i}", f"두부요리{100 + i}") for i in range(50)]
+        fetch, calls = make_fetch([page(page1, 150), page(page2, 150)])
         monkeypatch.setattr(outbound, "fetch_fixed", fetch)
         assert foods.search_and_cache("두부", user) is True
         assert [c["params"]["pageNo"] for c in calls] == [1, 2]
 
-    app2 = make_app(FOOD_NUTRITION_API_KEY="k")
-    with app2.app_context():
-        user2 = make_user()
-        page1b = [item("F1", "두부")] + [item(f"G{i}", f"두부요리{i}") for i in range(99)]
-        fetch2, calls2 = make_fetch([page(page1b, 150)])
-        monkeypatch.setattr(outbound, "fetch_fixed", fetch2)
-        assert foods.search_and_cache("두부", user2) is True
-        assert [c["params"]["pageNo"] for c in calls2] == [1]
+
+def test_tail_paging_stops_at_last_page_when_it_is_full(make_app, monkeypatch):
+    app = make_app(FOOD_NUTRITION_API_KEY="k")
+    with app.app_context():
+        user = make_user()
+        page1 = [item(f"F{i}", f"두부요리{i}") for i in range(100)]
+        last_page = [item(f"R{i}", f"두부_원물{i}", group="원재료성") for i in range(67)]  # 50개 이상(가득 찬 마지막 쪽)
+        fetch, calls = make_fetch([page(page1, 3167), page(last_page, 3167)])
+        monkeypatch.setattr(outbound, "fetch_fixed", fetch)
+        assert foods.search_and_cache("두부", user) is True
+        assert [c["params"]["pageNo"] for c in calls] == [1, 32]
+
+
+def test_tail_paging_also_fetches_page_before_a_short_last_page(make_app, monkeypatch):
+    app = make_app(FOOD_NUTRITION_API_KEY="k")
+    with app.app_context():
+        user = make_user()
+        page1 = [item(f"F{i}", f"두부요리{i}") for i in range(100)]
+        short_last_page = [item(f"R{i}", f"두부_원물{i}", group="원재료성") for i in range(20)]  # 50개 미만
+        page_before_last = [item(f"S{i}", f"두부_원물전{i}") for i in range(100)]
+        fetch, calls = make_fetch([page(page1, 3167), page(short_last_page, 3167), page(page_before_last, 3167)])
+        monkeypatch.setattr(outbound, "fetch_fixed", fetch)
+        assert foods.search_and_cache("두부", user) is True
+        assert [c["params"]["pageNo"] for c in calls] == [1, 32, 31]
+
+
+def test_tail_paging_only_page_one_when_total_fits_one_page(make_app, monkeypatch):
+    app = make_app(FOOD_NUTRITION_API_KEY="k")
+    with app.app_context():
+        user = make_user()
+        fetch, calls = make_fetch([page([item("F1", "두부")], 80)])
+        monkeypatch.setattr(outbound, "fetch_fixed", fetch)
+        assert foods.search_and_cache("두부", user) is True
+        assert [c["params"]["pageNo"] for c in calls] == [1]
 
 
 def test_fetch_failures_leave_no_search_record(make_app, monkeypatch):
@@ -235,6 +282,23 @@ def test_sample_mode_uses_file_without_network(app, monkeypatch):
         names = {row.name for row in FoodNutrient.query.filter_by(source="sample")}
         assert {"두부", "순두부", "연두부"} <= names
         assert AiCall.query.count() == 0
+
+
+# --- search_items ordering ---
+
+
+def test_search_items_ranks_raw_row_above_substring_matches(app):
+    with app.app_context():
+        now = utcnow()
+        db.session.add_all([
+            FoodNutrient(food_code="R1", name="파_대파_생것", name_key="파", group_name="원재료성", kcal=27, source="api", fetched_at=now),
+            FoodNutrient(food_code="P1", name="대파김치", name_key="대파김치", group_name="가공식품", kcal=18, source="api", fetched_at=now),
+            FoodNutrient(food_code="D1", name="꼬치구이_닭고기_대파", name_key="꼬치구이", group_name="음식", kcal=150, source="api", fetched_at=now),
+        ])
+        db.session.commit()
+        names = [row["name"] for row in foods.search_items("대파")]
+    assert names.index("파_대파_생것") < names.index("대파김치")
+    assert names.index("파_대파_생것") < names.index("꼬치구이_닭고기_대파")
 
 
 # --- HTTP endpoint ---
