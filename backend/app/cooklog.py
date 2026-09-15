@@ -5,10 +5,10 @@ import logging
 import math
 import uuid
 import zlib
-from datetime import timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 
 from flask import Blueprint, abort, g, jsonify, request
-from sqlalchemy import text as sql
+from sqlalchemy import and_, or_, text as sql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -22,12 +22,13 @@ from .models import CookLog, CookLogItem, Ingredient, IngredientRemoval, Recipe,
 from .nutrition import TRACE_WORDS
 from .recipe_parse import ingredient_key
 from .recipes import ALWAYS_HAVE, inventory_rows
-from .validation import integer, iso_datetime, memo
+from .validation import decode_cursor, encode_cursor, integer, iso_datetime, memo
 
 bp = Blueprint("cooklog", __name__, url_prefix="/api")
 
 log = logging.getLogger(__name__)
 
+LIST_PAGE = 20
 MAX_COOK_LOGS = 5000
 MAX_USAGES = 50
 MAX_MEMO = 500
@@ -43,6 +44,7 @@ UNDO_EXPIRED = "되돌릴 수 있는 시간이 지났어요. 재고는 직접 �
 PHOTO_FULL = "사진 저장 공간이 가득 찼어요. 오래된 일기 사진을 지워주세요."
 EAT_OUT_ERROR = "사 먹으면 얼마는 0~1,000,000원 사이 숫자로 입력해주세요."
 AMOUNT_ERROR = "쓴 양은 0보다 커야 해요."
+PATCH_FIELDS = {"cooked_on", "rating", "memo", "eat_out_price"}  # 결정 18: 고치기는 이 칸만 받는다
 
 SEASONING_SPOONS = SPOON_UNITS - {"컵"}  # 결정 5: 컵은 밀가루·쌀처럼 많이 쓰는 양이라 양념으로 보지 않는다
 
@@ -385,3 +387,124 @@ def undo_cook_log(log_id):
     db.session.commit()
     storage.delete(keys)  # 커밋 뒤에 — 실패는 로그만
     return jsonify(restored=restored, skipped=skipped)
+
+
+def day_cursor(day, row_id):
+    """결정 20: 날짜를 UTC 자정 시각으로 기존 커서에 넣는다."""
+    return encode_cursor(datetime.combine(day, time.min, tzinfo=timezone.utc), row_id)
+
+
+@bp.get("/cook-logs")
+@login_required
+def list_cook_logs():
+    """결정 20. cooked_on·id 내림차순 커서 페이지, limit 1~50(기본 20)."""
+    limit = min(max(request.args.get("limit", LIST_PAGE, type=int), 1), 50)
+    query = CookLog.query.filter_by(user_id=g.user.id)
+    cursor = request.args.get("cursor")
+    if cursor:
+        when, row_id = decode_cursor(cursor)
+        day = when.date()
+        query = query.filter(or_(CookLog.cooked_on < day, and_(CookLog.cooked_on == day, CookLog.id < row_id)))
+    logs = query.order_by(CookLog.cooked_on.desc(), CookLog.id.desc()).limit(limit + 1).all()
+    has_more = len(logs) > limit
+    logs = logs[:limit]
+    next_cursor = day_cursor(logs[-1].cooked_on, logs[-1].id) if has_more else None
+    res = jsonify(items=[list_json(c) for c in logs], next_cursor=next_cursor)
+    res.headers["Cache-Control"] = "no-store"  # 식습관·지출 정보
+    return res
+
+
+@bp.get("/cook-logs/<int:log_id>")
+@login_required
+def get_cook_log(log_id):
+    res = jsonify(detail_json(get_owned_or_404(CookLog, log_id)))
+    res.headers["Cache-Control"] = "no-store"
+    return res
+
+
+@bp.patch("/cook-logs/<int:log_id>")
+@login_required
+def update_cook_log(log_id):
+    """결정 18. 인분·쓴 재료는 고치지 않는다(화면에 따로 안내가 있다). eat_out_price를 보내면 세 칸을 다시 계산한다."""
+    cook_log = get_owned_or_404(CookLog, log_id)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not set(data) <= PATCH_FIELDS:
+        abort(400, food_logs.BAD_REQUEST)
+    parse_common(data, cook_log, creating=False)
+    if "eat_out_price" in data:
+        for key, value in summarize(cook_log.eat_out_price, cook_log.servings, cook_log.items).items():
+            setattr(cook_log, key, value)
+    db.session.commit()
+    return jsonify(detail_json(cook_log))
+
+
+@bp.delete("/cook-logs/<int:log_id>")
+@login_required
+def delete_cook_log(log_id):
+    """결정 17. 일기·사진만 지운다 — 재고·먹은 기록은 그대로 둔다.
+    사용자 잠금을 먼저 잡고 그 뒤에 읽는다 — PUT 사진 바꾸기와 같은 순서라 동시에 와도 사진 키를 놓치지 않는다(리뷰 I1)."""
+    lock_user(g.user.id)
+    cook_log = get_owned_or_404(CookLog, log_id)
+    keys = [cook_log.photo_key] if cook_log.photo_key else []
+    db.session.delete(cook_log)
+    db.session.commit()
+    storage.delete(keys)
+    return "", 204
+
+
+def _relocked_cook_log(log_id):
+    """사용자 잠금을 잡은 뒤 다시 읽는다(populate_existing — 이미 세션에 있는 옛 값을 돌려주지 않게).
+    그사이 지워졌으면 예외 없이 None(리뷰 I1: db.session.refresh는 지워진 행에서 InvalidRequestError를 던진다)."""
+    cook_log = db.session.get(CookLog, log_id, populate_existing=True)
+    if cook_log is None or cook_log.user_id != g.user.id:
+        return None
+    return cook_log
+
+
+@bp.put("/cook-logs/<int:log_id>/photo")
+@login_required
+def replace_cook_log_photo(log_id):
+    if storage.mode() == "off":
+        abort(503, storage.UPLOAD_UNAVAILABLE)
+    cook_log = get_owned_or_404(CookLog, log_id)  # 사진을 읽기 전 빨리 실패(남의·없는 id)
+    data_bytes, media_type, ext = photos.read_image(MAX_PHOTO_BYTES)
+    lock_user(g.user.id)
+    cook_log = _relocked_cook_log(log_id)  # 잠근 뒤 다시 읽어야 동시 PUT의 결과 위에서 old를 계산한다(리뷰 I1)
+    if cook_log is None:
+        abort(404, "찾을 수 없어요.")
+    check_photo_room(g.user, len(data_bytes), excluding=cook_log)
+    key = new_photo_key(g.user.id, ext)
+    storage.put(key, data_bytes, media_type)
+    old = cook_log.photo_key  # 잠근 뒤 다시 읽은 값 — 동시에 바뀐 사진도 정확히 지운다
+    cook_log.photo_key, cook_log.photo_size = key, len(data_bytes)
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        storage.delete([key])  # 실패하면 새로 올린 파일을 지운다
+        raise
+    storage.delete([old] if old else [])
+    return jsonify(detail_json(cook_log))
+
+
+@bp.delete("/cook-logs/<int:log_id>/photo")
+@login_required
+def delete_cook_log_photo(log_id):
+    """사용자 잠금을 먼저 잡는다(리뷰 I1) — PUT 사진 바꾸기와 같은 순서."""
+    lock_user(g.user.id)
+    cook_log = get_owned_or_404(CookLog, log_id)
+    old = cook_log.photo_key
+    cook_log.photo_key, cook_log.photo_size = None, None
+    db.session.commit()
+    storage.delete([old] if old else [])
+    return "", 204
+
+
+def recipe_cooked(recipe_id, user_id):
+    """레시피 상세 요리 표시(결정 26). 없으면 None, 있으면 {count, last_on, last_rating} — 마지막은 cooked_on·id가 가장 큰 일기."""
+    logs = CookLog.query.filter_by(recipe_id=recipe_id, user_id=user_id)
+    count = logs.count()
+    if not count:
+        return None
+    last = logs.order_by(CookLog.cooked_on.desc(), CookLog.id.desc()).first()
+    return {"count": count, "last_on": last.cooked_on.isoformat(), "last_rating": last.rating}
