@@ -19,7 +19,7 @@ const searchName = (name: string) => name.replace(/\([^)]*\)/g, "").trim();
 /** 소수 첫째 자리까지만(kcalNumber처럼 반올림·자릿수 콤마를 넣지 않는다) */
 const oneDecimal = (n: number) => String(Math.round(n * 10) / 10);
 
-/** 시안 MATCH FOOD: 재료 ↔ 식품 고르기. 열면 바로 한 번 찾고, 고칠 때는 300ms 뒤(AbortController로 앞 요청 취소) */
+/** 시안 MATCH FOOD: 재료 ↔ 식품 고르기. 열면 바로 한 번 찾고, 고칠 때는 600ms 뒤(AbortController로 앞 요청 취소, 한글 조합 중 요청을 줄인다) */
 export default function FoodPickSheet({ row, onSaved, onClose }: Props) {
   const [q, setQ] = useState(() => searchName(row.name));
   const [result, setResult] = useState<{ q: string; items: FoodSearchItem[]; searched: boolean } | null>(null);
@@ -45,7 +45,7 @@ export default function FoodPickSheet({ row, onSaved, onClose }: Props) {
     }
     setLoading(true);
     const controller = new AbortController();
-    const delay = isFirst.current ? 0 : 300;
+    const delay = isFirst.current ? 0 : 600;
     const timer = setTimeout(async () => {
       isFirst.current = false;
       try {
