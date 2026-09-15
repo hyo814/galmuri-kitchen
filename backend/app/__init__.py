@@ -56,7 +56,9 @@ def create_app(test_config=None):
         R2_ACCESS_KEY_ID=os.environ.get("R2_ACCESS_KEY_ID") or None,
         R2_SECRET_ACCESS_KEY=os.environ.get("R2_SECRET_ACCESS_KEY") or None,
         R2_BUCKET=os.environ.get("R2_BUCKET") or None,
-        COUPANG_PARTNERS_ID=os.environ.get("COUPANG_PARTNERS_ID") or None,  # 제휴 링크(스펙 16·25절), 없으면 일반 검색 링크
+        COUPANG_PARTNERS_ID=os.environ.get("COUPANG_PARTNERS_ID") or None,  # 파트너스 트래킹 코드(AF…). 참고용 — 링크는 아래 두 키로 만든다
+        COUPANG_ACCESS_KEY=os.environ.get("COUPANG_ACCESS_KEY") or None,  # 파트너스 API 키. 둘 다 있어야 쿠팡 제휴 링크·광고 표시(coupang.py)
+        COUPANG_SECRET_KEY=os.environ.get("COUPANG_SECRET_KEY") or None,
         DEMO_LOGIN=os.environ.get("DEMO_LOGIN") == "1",  # 로그인 화면 '로그인 없이 체험하기'(demo.py)
         DEMO_IP_HOURLY_LIMIT=int(os.environ.get("DEMO_IP_HOURLY_LIMIT") or 30),  # 같은 IP(IPv6는 /64)에서 1시간에 만들 수 있는 체험 계정 수. 사무실·행사장처럼 한 주소를 여럿이 쓰면 넉넉히
         DEMO_IP_DAILY_LIMIT=int(os.environ.get("DEMO_IP_DAILY_LIMIT") or 100),  # 같은 IP에서 24시간에 만들 수 있는 체험 계정 수
@@ -79,6 +81,7 @@ def create_app(test_config=None):
 
     from .auth import bp as auth_bp
     from .auth import init_oauth
+    from .coupang import bp as coupang_bp
     from .demo import bp as demo_bp
     from .export import bp as export_bp
     from .ingredients import bp as ingredients_bp
@@ -98,6 +101,7 @@ def create_app(test_config=None):
 
     init_oauth(app)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(coupang_bp)
     app.register_blueprint(demo_bp)
     app.register_blueprint(export_bp)
     app.register_blueprint(ingredients_bp)

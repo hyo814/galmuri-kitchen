@@ -181,7 +181,7 @@ class AiCall(db.Model):
     # 사용자를 지워도(체험 계정 정리 등) 원가·전체 예산 계산을 위해 기록은 남긴다(user_id만 비운다)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), index=True)
     demo = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())  # 체험 계정 호출(전체 체험 AI 예산, ai.demo_ai_budget_spent)
-    kind = db.Column(db.String(20), nullable=False)  # fridge | receipt | order | memo | recipe | link | recipe_photo | meal | link_fetch·channel_add·video_refresh(외부 요청 기록)·export(데이터 내보내기), 모두 모델·토큰 없음
+    kind = db.Column(db.String(20), nullable=False)  # fridge | receipt | order | memo | recipe | link | recipe_photo | meal | link_fetch·channel_add·video_refresh·shop_link(외부 요청 기록)·export(데이터 내보내기), 모두 모델·토큰 없음
     # 원가 계산용. 단가는 모델마다 달라 모델 이름을 같이 남긴다. 응답을 못 받은 호출(오류·타임아웃)은 비어 있다.
     model = db.Column(db.String(60))
     input_tokens = db.Column(db.Integer)

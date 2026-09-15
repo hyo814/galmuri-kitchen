@@ -95,9 +95,12 @@ export const STORES: readonly Store[] = [
   },
 ];
 
-/** 제휴 링크 모양. 파트너스 가입 후 형식을 확인하고 채운다(그 전엔 빈 객체 → 광고 표시 없음, 스펙 25절)
- *  ponytail: 쿠팡 파트너스 딥링크는 비밀키 서명이 필요할 수 있다 → 그렇다면 서버 엔드포인트로 옮기고 비밀키는 /api/me에 절대 넣지 않는다 */
-export const AFFILIATE_FORMATS: Partial<Record<StoreId, (url: string, id: string) => string>> = {};
+/** 제휴 링크 모양(스펙 16·25절). /api/me의 shop_affiliates가 true인 쇼핑몰만 쓴다.
+ *  쿠팡: 딥링크 API는 비밀키 서명이 필요해 서버(backend/app/coupang.py)가 만든다. 새 창 링크가 같은 주소의 이동 엔드포인트를 열고
+ *  서버가 제휴 링크로 302 — 누른 순간 바로 여는 <a>라 팝업 차단에 걸리지 않는다. 서버는 www.coupang.com/np/search 주소만 받는다 */
+export const AFFILIATE_FORMATS: Partial<Record<StoreId, (url: string) => string>> = {
+  coupang: (url) => `/api/shop-links/coupang/go?url=${encodeURIComponent(url)}`,
+};
 
 export const LAST_STORE_KEY = "shopping-last-store"; // localStorage, 링크를 누를 때 저장(Task 9)
 
@@ -110,10 +113,10 @@ export function searchQuery(name: string): string {
 export interface StoreLink { sort: SortId | null; label: string; url: string }
 
 /** 쇼핑몰마다 링크(있는 정렬만, 하나도 없으면 [검색 결과]). 순서: lastUsed가 있으면 그 쇼핑몰 맨 위, 나머지는 STORES 순서.
- *  ad는 쇼핑몰 단위(시안: 이름 옆 `광고`) — 제휴 ID와 링크 형식이 둘 다 있을 때만. 검색어가 비면 []. onlyVerified면 verified 없는 쇼핑몰은 [검색 결과]만 */
+ *  ad는 쇼핑몰 단위(시안: 이름 옆 `광고`) — 제휴가 켜져 있고 링크 형식이 있을 때만. 검색어가 비면 []. onlyVerified면 verified 없는 쇼핑몰은 [검색 결과]만 */
 export function storeLinks(
   name: string,
-  affiliates: Partial<Record<StoreId, string>>,
+  affiliates: Partial<Record<StoreId, boolean>>,
   options: { lastUsed?: StoreId | null; onlyVerified?: boolean; formats?: typeof AFFILIATE_FORMATS } = {},
 ): { store: StoreId; name: string; ad: boolean; links: StoreLink[] }[] {
   const q = searchQuery(name); // 호출하는 쪽이 잊어도 같은 검색어가 되게 여기서 정리한다
@@ -122,12 +125,11 @@ export function storeLinks(
   const last = STORES.filter((s) => s.id === lastUsed);
   return [...last, ...STORES.filter((s) => s.id !== lastUsed)]
     .map((s) => {
-      const affId = affiliates[s.id];
-      const format = formats[s.id];
-      const ad = Boolean(affId && format);
+      const format = affiliates[s.id] === true ? formats[s.id] : undefined; // 기기에 남은 옛 /api/me 값(제휴 ID 문자열)은 제휴로 보지 않는다
+      const ad = Boolean(format);
       const make = (template: string) => {
         const url = template.replace("{q}", encodeURIComponent(q));
-        return ad ? format!(url, affId!) : url;
+        return format ? format(url) : url;
       };
       const sorted = SORTS.filter((o) => s.sorts[o.id] && (!onlyVerified || s.verified)).map((o) => ({ sort: o.id, label: o.label, url: make(s.sorts[o.id]!) }));
       const links = sorted.length ? sorted : [{ sort: null, label: "검색 결과", url: make(s.search) }];

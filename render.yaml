@@ -37,6 +37,10 @@ services:
         sync: false
       - key: COUPANG_PARTNERS_ID
         sync: false
+      - key: COUPANG_ACCESS_KEY  # 쿠팡 파트너스 API. 둘 다 있어야 제휴 링크(backend/app/coupang.py)
+        sync: false
+      - key: COUPANG_SECRET_KEY
+        sync: false
       - key: R2_ACCOUNT_ID
         sync: false
       - key: R2_ACCESS_KEY_ID

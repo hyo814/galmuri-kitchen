@@ -93,7 +93,16 @@ export default function StoreLinksSheet({ name, affiliates, onClose }: Props) {
       {stores.some((s) => s.ad) && (
         <p className="mo-note">
           <Icon name="info" size={16} />
-          <span>‘광고’가 붙은 링크로 사면 갈무리부엌이 수수료를 받을 수 있어요. 순서와는 상관없어요.</span>
+          <span>
+            ‘광고’가 붙은 링크로 사면 갈무리부엌이 수수료를 받을 수 있어요. 순서와는 상관없어요.
+            {/* 쿠팡 파트너스 이용 가이드의 경제적 이해관계 표시 문구를 화면 말투로 옮김(스펙 16절) */}
+            {stores.some((s) => s.store === "coupang" && s.ad) && (
+              <>
+                <br />
+                쿠팡 파트너스 활동의 일환으로, 쿠팡 링크로 사면 갈무리부엌이 일정액의 수수료를 받아요.
+              </>
+            )}
+          </span>
         </p>
       )}
     </Sheet>

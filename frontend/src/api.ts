@@ -57,8 +57,8 @@ export interface User {
   recipe_limit: number;
   /** on: 요리 채널 영상 / sample: 키 없는 개발 모드의 예시 영상 / off: 영상 칸 숨김 */
   videos: ScanMode;
-  /** 쇼핑몰별 제휴 ID(값 있는 것만). 링크는 storeLinks.ts에서 만든다 */
-  shop_affiliates: Partial<Record<StoreId, string>>;
+  /** 제휴 링크를 쓸 수 있는 쇼핑몰만 true(쿠팡은 서버에 파트너스 키가 있을 때). 링크는 storeLinks.ts에서 만든다 */
+  shop_affiliates: Partial<Record<StoreId, boolean>>;
 }
 
 /** 재료를 지우는 이유(선택): 다 먹었어요 / 버렸어요 */

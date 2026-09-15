@@ -101,8 +101,8 @@ def user_json(user):
         scan_limit=ai_daily_limit(user, "AI_DAILY_SCAN_LIMIT"),
         recipe_limit=ai_daily_limit(user, "AI_DAILY_RECIPE_LIMIT"),
         videos=video_mode(user),
-        # 쇼핑몰 링크는 화면(storeLinks.ts)에서 만들므로 제휴 ID를 넘긴다. 값 있는 것만(스펙 16절)
-        shop_affiliates={k: v for k, v in {"coupang": current_app.config["COUPANG_PARTNERS_ID"]}.items() if v},
+        # 제휴 링크를 쓸 수 있는 쇼핑몰만 true(스펙 16절). 쿠팡은 서버가 키로 딥링크를 만든다(coupang.py) — 키·트래킹 코드는 넘기지 않는다
+        shop_affiliates={"coupang": True} if current_app.config["COUPANG_ACCESS_KEY"] and current_app.config["COUPANG_SECRET_KEY"] else {},
     )
 
 
