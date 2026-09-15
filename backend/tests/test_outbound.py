@@ -356,7 +356,9 @@ def test_fetch_public_page_revalidates_redirects(monkeypatch):
     assert outbound.fetch_public_page(PAGE)[2] == "https://recipe.example.com/r2"
 
     # Location 없음, http로 내려가는 리다이렉트, 200이 아닌 응답
-    for res in (response(302, headers={}), response(302, headers={"Location": "http://recipe.example.com/"}), response(404)):
+    # Location 모양이 틀린 리다이렉트(urljoin ValueError)도 FetchError
+    malformed = response(302, headers={"Location": "https://[x"})
+    for res in (response(302, headers={}), response(302, headers={"Location": "http://recipe.example.com/"}), response(404), malformed):
         fake_send(monkeypatch, [res])
         with pytest.raises(FetchError):
             outbound.fetch_public_page(PAGE)
@@ -516,7 +518,8 @@ def test_web_page_extracts_title_site_and_text(monkeypatch):
         "title": "제육볶음 만들기",
         "site_name": "요리 블로그",
         "text": "제육볶음\n재료: 돼지고기 600g\n양파 1개\n대파",
-        "url": "https://recipe.example.com/final",    "images": [],
+        "url": "https://recipe.example.com/final",
+        "images": [],
     }
     second = outbound.web_page("https://cook.example.com/x")
     assert (second["title"], second["site_name"], len(second["text"])) == ("두부조림", "cook.example.com", 10_000)
@@ -559,6 +562,7 @@ def test_web_page_image_candidates(monkeypatch):
             "<img src='/icons/x.png'><img src='/btn_ok.jpg'><img src='/button/go.png'><img src='/banner/a.jpg'><img src='/sprite.png'>"
             "<img src='/user/profile.jpg'><img src='/emoji/a.png'><img src='/avatar/1.jpg'><img><img src=''>"
             "<img src='https://other.example.com/p/4.png'><img src='5.jpg'><img src='../6.jpeg'>"
+            "<img src='/" + "a" * 490 + ".jpg'>"  # 500자 넘는 주소
             "<img src='/7.jpg'><img src='/8.jpg'><img src='/9.jpg'>",
             "https://recipe.example.com/post/final",
             "utf-8",
@@ -620,6 +624,10 @@ def webp_extended(width, height):
         (webp(b"ALPH", b"\0" * 10), None),
         (webp_lossy(800, 600)[:25], None),
         (b"GIF89a" + b"\0" * 20, None),
+        pytest.param(b"\xff\xd8" + b"\xff" * 100_000, None, id="jpeg-fill-only"),
+        pytest.param(b"\xff\xd8" + b"\xff\xe0\0\0" * 30_000, None, id="jpeg-zero-length-segments"),
+        pytest.param(b"\xff\xd8" + b"\xff\xd0" * 40_000 + jpeg(10, 10)[2:], None, id="jpeg-sof-after-64kb"),
+        pytest.param(b"\xff\xd8" + b"\xff\xd0" * 1_000 + jpeg(10, 20)[2:], (10, 20), id="jpeg-rst-markers-skipped"),
     ],
 )
 def test_image_size_reads_file_header(data, size):
@@ -631,7 +639,7 @@ IMAGE = jpeg(1000, 1333)  # 테스트에서는 MIN_IMAGE_BYTES를 20으로 줄�
 
 def test_page_images_filters_and_skips_failures(monkeypatch):
     monkeypatch.setattr(outbound, "MIN_IMAGE_BYTES", 20)
-    monkeypatch.setattr(outbound, "MAX_BYTES", 100)
+    monkeypatch.setattr(outbound, "MAX_IMAGE_BYTES", 100)  # 본문 사진은 페이지(MAX_BYTES)보다 작게 받는다
     fake_dns(monkeypatch, {"recipe.example.com": ["93.184.216.34"], "internal.example": ["10.0.0.9"]})
     png = globals()["png"](1200, 900)
     webp = webp_extended(800, 600) + b"w" * 10
@@ -641,8 +649,8 @@ def test_page_images_filters_and_skips_failures(monkeypatch):
             response(200, b"<html>" + b"x" * 40, {"Content-Type": "image/jpeg"}),  # 선언만 사진 → 건너뜀
             response(200, b"\xff\xd8\xff" + b"j" * 5, {"Content-Type": "image/jpeg"}),  # 너무 작음(아이콘·여백)
             response(200, b"\xff\xd8\xff" + b"j" * 200, {"Content-Type": "image/jpeg"}),  # 너무 큼
+            response(302, headers={"Location": "https://[x"}),  # 잘못된 리다이렉트 주소(urljoin ValueError)
             response(302, headers={"Location": "https://internal.example/x.jpg"}),  # 사설 주소로 리다이렉트
-            response(404),
             requests.ConnectionError("boom"),
             response(200, IMAGE, {"Content-Type": "text/html"}),  # 선언된 형식은 보지 않는다
             response(200, png, {}),
@@ -673,6 +681,19 @@ def test_page_images_skip_oversize_and_unreadable(monkeypatch):
 
     fake_send(monkeypatch, [response(200, data, {}) for data in bad])
     assert outbound.page_images(urls[:4]) == []  # 모두 걸러지면 빈 목록 → 가져오기는 글만 보낸다
+
+
+def test_page_images_total_byte_budget(monkeypatch):
+    """요청 하나가 붙잡는 사진 바이트를 6MB로 막는다(512MB 인스턴스). 다음 사진이 넘기면 거기서 멈춘다."""
+    monkeypatch.setattr(outbound, "MIN_IMAGE_BYTES", 20)
+    monkeypatch.setattr(outbound, "MAX_IMAGE_BYTES", 100)
+    monkeypatch.setattr(outbound, "MAX_IMAGE_TOTAL_BYTES", 250)
+    fake_dns(monkeypatch, {"recipe.example.com": ["93.184.216.34"]})
+    image = IMAGE + b"j" * (90 - len(IMAGE))
+    small = IMAGE
+    sent = fake_send(monkeypatch, [response(200, image, {}), response(200, image, {}), response(200, image, {}), response(200, small, {})])
+    assert outbound.page_images([f"https://recipe.example.com/{i}.jpg" for i in range(4)]) == [(image, "image/jpeg")] * 2
+    assert len(sent) == 3  # 세 번째에서 180 + 90 > 250 → 멈추고 네 번째는 요청하지 않는다
 
 
 def test_page_images_stop_at_five(monkeypatch):
