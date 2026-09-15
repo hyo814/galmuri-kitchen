@@ -216,7 +216,7 @@ macOS 기준이며, 명령은 저장소 루트에서 시작합니다.
 
 ```
 backend/.venv/bin/pytest -q -W error::DeprecationWarning   # 백엔드 1,475개
-cd frontend && npm run check && npm run build              # 순수 로직 검사 스크립트 9개 + 타입 검사·빌드
+cd frontend && npm run check && npm run build              # 순수 로직 검사 스크립트 9개 + 타입 검사·빌드(빌드 전에 styles.css 괄호 짝 검사)
 ```
 
 PostgreSQL 검증, 마이그레이션 점검, Docker 스모크 테스트, Render 배포 절차는 [`docs/deploy.md`](docs/deploy.md)에 있습니다.
