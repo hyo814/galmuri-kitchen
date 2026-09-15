@@ -1,13 +1,13 @@
 import { useEffect, useId, useState } from "react";
 import { api, type NutritionIngredient, type RecipeNutrition, type User } from "../api";
 import { kcalNumber } from "../nutrition/body";
-import { dailyValue, ingredientKcalText, ingredientNote, macroSplit, SODIUM_DAILY_MG, SUGARS_DAILY_G } from "../nutrition/day";
+import { dailyValue, ingredientKcalText, ingredientNote, macroSplit, MAX_FILL_ATTEMPTS, SODIUM_DAILY_MG, SUGARS_DAILY_G } from "../nutrition/day";
 import { useResource } from "../useResource";
 import FoodPickSheet from "./FoodPickSheet";
 import LoadError from "./LoadError";
 
-/** 레시피별로 채우기를 한 번만 부른다(레시피 상세를 오가도 계속 부르지 않게, Meals.tsx의 attempted 패턴과 같은 생각) */
-const filled = new Set<number>();
+/** 레시피별 채우기 부른 횟수. MAX_FILL_ATTEMPTS번까지만 부른다(레시피 상세를 오가도 계속 부르지 않게, Meals.tsx의 attempted와 같은 생각) */
+const filled = new Map<number, number>();
 
 /** 로그아웃 등 화면을 전부 리셋할 때(App.tsx `resetScreens`) 함께 비운다 — 다른 사용자로 들어와도 이전 계정이 이미 시도한 레시피로 남지 않게 */
 export function resetRecipeNutrition() {
@@ -26,13 +26,14 @@ export default function RecipeNutrition({ recipeId, user }: { recipeId: number; 
   const headId = useId();
 
   useEffect(() => {
-    if (!data?.pending || filled.has(recipeId)) return;
-    filled.add(recipeId);
+    const tries = filled.get(recipeId) ?? 0;
+    if (!data?.pending || tries >= MAX_FILL_ATTEMPTS) return;
+    filled.set(recipeId, tries + 1);
     (async () => {
       try {
         await api("/api/nutrition/fill", { method: "POST", body: { recipe_ids: [recipeId] } });
       } catch {
-        // 조용히 실패: 다음에 다시 열면 그때 채운다
+        // 조용히 실패: 남은 횟수가 있으면 다시 받은 결과가 아직 계산 중일 때 한 번 더 부른다
       }
       await reload();
     })();

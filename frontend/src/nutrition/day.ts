@@ -89,6 +89,10 @@ export function sodiumDay(mg: number) {
 /** 막대 목표(결정 4): 몸 정보 목표 → 식단 goal_kcal → null */
 export const goalFor = (profileTarget: number | null, planGoal: number | null) => profileTarget ?? planGoal ?? null;
 
+/** 레시피 하나에 자동 채우기를 부르는 최대 횟수(한 세션). 처음 보는 재료가 많으면 첫 채우기는 식품 찾기에 시간 예산을 다 써서
+ * AI 추정을 건너뛰므로, 아직 계산 중이면 한 번 더 부른다(Ruling 18) */
+export const MAX_FILL_ATTEMPTS = 2;
+
 /** 채우기를 부를 레시피: 보이는 날짜 칸의 레시피 중 pending 목록에 있는 것(중복 없이, 이미 시도한 건 빼고, 31개까지) */
 export function fillTargets(
   slots: Pick<MealSlot, "date" | "recipe_id">[],

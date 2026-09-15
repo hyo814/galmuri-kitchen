@@ -18,17 +18,17 @@ import {
   dayHead, defaultPlanName, initialWeek, MEALS, monthGrid, pickPlan, rangeText, slotDateText, weekDates, weekOf, weekStarts,
 } from "../meals/plan";
 import { dailyTarget, kcalNumber } from "../nutrition/body";
-import { daySum, dayHeadText, fillTargets, goalFor, meterPercent, slotKcalText } from "../nutrition/day";
+import { daySum, dayHeadText, fillTargets, goalFor, MAX_FILL_ATTEMPTS, meterPercent, slotKcalText } from "../nutrition/day";
 import { useAsyncAction } from "../useAsyncAction";
 import { navigate } from "../useHashRoute";
 import { cache, forgetResources, useResource } from "../useResource";
 import { forgetMealDraft } from "../meals/draftStore";
 import { urgentLabel } from "./Recipes";
 
-/** 채우기를 이미 부른 레시피 `${planId}|${recipe_id}`(결정 13). pending 목록이 나중에 줄어도(다른 레시피가 먼저 풀려도)
- * 이미 부른 레시피는 다시 넣지 않는다 — 레시피별로 한 번만 시도한다(합쳐 부른 목록으로 판단하면 pending이 줄 때마다
- * 새 조합으로 보여 계속 다시 불렀다). resetMealsView가 비운다 */
-const attempted = new Set<string>();
+/** 채우기를 부른 횟수 `${planId}|${recipe_id}` → 횟수(결정 13). 레시피마다 MAX_FILL_ATTEMPTS번까지만 부른다 —
+ * 합쳐 부른 목록으로 판단하면 pending이 줄 때마다 새 조합으로 보여 계속 다시 불렀다(Task 7 리뷰). 첫 채우기가 찾기에
+ * 시간을 다 써 AI를 건너뛴 레시피는 한 번 더 부른다(Ruling 18). resetMealsView가 비운다 */
+const attempted = new Map<string, number>();
 
 // 탭을 오가도 보던 식단·보기·주를 기억한다(로그아웃 때 resetMealsView)
 let lastPlanId: number | null = null;
@@ -48,7 +48,7 @@ export function resetMealsView() {
 
 /** 레시피를 고쳐 저장했을 때(RecipeForm): 모든 식단에서 그 레시피를 시도 목록에서 빼 새 재료를 다시 채우게 한다 */
 export function forgetMealNutritionFill(recipeId: number) {
-  for (const key of attempted) if (key.endsWith(`|${recipeId}`)) attempted.delete(key);
+  for (const key of [...attempted.keys()]) if (key.endsWith(`|${recipeId}`)) attempted.delete(key);
 }
 
 /** AI 초안 넣기 뒤: 그 식단을 열고 머리에 결과 한 줄을 한 번 보여준다 */
@@ -232,13 +232,15 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
     lastWeek[summary.id] = week;
   }, [summary.id, week]);
 
-  // 채우기(결정 13): 주 보기에서 보이는 주의 pending 레시피 중 아직 안 시도한 것만, 레시피마다 한 번
+  // 채우기(결정 13): 주 보기에서 보이는 주의 pending 레시피 중 횟수가 남은 것만, 레시피마다 MAX_FILL_ATTEMPTS번까지
   useEffect(() => {
     if (!plan || view !== "week" || user.nutrition === "off") return;
-    const attemptedIds = new Set(plan.nutrition_pending_recipe_ids.filter((id) => attempted.has(`${plan.id}|${id}`)));
+    const attemptedIds = new Set(
+      plan.nutrition_pending_recipe_ids.filter((id) => (attempted.get(`${plan.id}|${id}`) ?? 0) >= MAX_FILL_ATTEMPTS),
+    );
     const ids = fillTargets(plan.slots, weekDates(week, plan), plan.nutrition_pending_recipe_ids, attemptedIds);
     if (!ids.length) return;
-    for (const id of ids) attempted.add(`${plan.id}|${id}`); // 요청 전에 표시(pending이 줄어도 같은 레시피를 다시 부르지 않게)
+    for (const id of ids) attempted.set(`${plan.id}|${id}`, (attempted.get(`${plan.id}|${id}`) ?? 0) + 1); // 요청 전에 센다
     (async () => {
       try {
         await api("/api/nutrition/fill", { method: "POST", body: { recipe_ids: ids } });
