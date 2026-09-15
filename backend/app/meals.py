@@ -7,9 +7,11 @@ from sqlalchemy.orm import selectinload
 from . import ai, scan
 from .amounts import is_spoon, parse_amount
 from .auth import abort_if_id_too_big, ai_daily_limit, get_owned_or_404, login_required
+from .foods import nutrition_mode
 from .ingredients import seoul_today
 from .matching import match_prepared, normalize, prepare, title_key
 from .models import Ingredient, MealPlan, MealSlot, Recipe, ShoppingItem, db
+from .nutrition import NutritionContext
 from .recipe_ai import _int_in, clean_draft, public_image_candidates, similar_public_image
 from .recipes import ALWAYS_HAVE, _prepared_stock, check_recipe_cap, inventory, match_summary, parse_recipe, stock_context
 from .validation import commit_or_duplicate, integer, iso_date, text
@@ -52,7 +54,29 @@ def plan_summary(plan, filled):
     }
 
 
-def slot_json(slot, prepared_stock, urgent):
+def nutrition_results(recipes):
+    """{recipe_id: recipe_nutrition 결과}. 영양 모드가 off면 {}(칸은 AI 추정 kcal만). 레시피가 없으면 컨텍스트를 만들지 않는다."""
+    recipes = [r for r in recipes if r is not None]
+    if not recipes or nutrition_mode(g.user) == "off":
+        return {}
+    context = NutritionContext(g.user, list({r.id: r for r in recipes}.values()))
+    return {r.id: context.recipe(r) for r in recipes}
+
+
+def slot_nutrition(slot, result):
+    """칸 1인분 영양(결정 16). result는 그 칸 레시피의 recipe_nutrition 결과 또는 None."""
+    per = result["per_serving"] if result else None
+    if per and result["usable"]:
+        return {**per, "approx": result["approx"], "source": "calc"}
+    if slot.est_kcal:
+        return {"kcal": slot.est_kcal, "carbs_g": None, "protein_g": None, "fat_g": None, "sugars_g": None, "sodium_mg": None,
+                "approx": True, "source": "ai"}
+    if per:
+        return {**per, "approx": True, "source": "calc"}
+    return None
+
+
+def slot_json(slot, prepared_stock, urgent, results):
     if slot.recipe_id is None:
         have_count, total_count, urgent_names = None, None, []
     else:
@@ -69,15 +93,18 @@ def slot_json(slot, prepared_stock, urgent):
         "have_count": have_count,
         "total_count": total_count,
         "urgent_names": urgent_names,
+        "nutrition": slot_nutrition(slot, results.get(slot.recipe_id)),
     }
 
 
 def plan_json(plan, prepared_stock, urgent):
+    results = nutrition_results([s.recipe for s in plan.slots])
     return {
         **plan_summary(plan, len(plan.slots)),
         "goal_kcal": plan.goal_kcal,
         "goal_note": plan.goal_note,
-        "slots": [slot_json(s, prepared_stock, urgent) for s in plan.slots],
+        "slots": [slot_json(s, prepared_stock, urgent, results) for s in plan.slots],
+        "nutrition_pending_recipe_ids": sorted(rid for rid, r in results.items() if r["pending"]),
     }
 
 
@@ -244,7 +271,7 @@ def put_meal_slot(plan_id):
     slot.est_kcal = None  # 덮어쓸 때는 비운다(8: AI 초안으로 채운 칸만 값이 있다)
     commit_or_duplicate(SLOT_TAKEN)
     prepared_stock, urgent = stock_context(g.user.id)
-    return jsonify(slot_json(slot, prepared_stock, urgent))
+    return jsonify(slot_json(slot, prepared_stock, urgent, nutrition_results([slot.recipe])))
 
 
 @bp.post("/meal-plans/<int:plan_id>/copy-week")
@@ -308,7 +335,7 @@ def update_meal_slot(slot_id):
     slot.servings = integer(data.get("servings"), "인분은", 1, 20)
     db.session.commit()
     prepared_stock, urgent = stock_context(g.user.id)
-    return jsonify(slot_json(slot, prepared_stock, urgent))
+    return jsonify(slot_json(slot, prepared_stock, urgent, nutrition_results([slot.recipe])))
 
 
 @bp.delete("/meal-slots/<int:slot_id>")
