@@ -462,3 +462,60 @@ class FoodLogPhoto(db.Model):
     photo_key = db.Column(db.String(200), nullable=False, unique=True)
     size = db.Column(db.Integer, nullable=False)  # 바이트, 사용자별 저장 공간 상한용
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class CookLog(db.Model):
+    """요리 일기 한 건(스펙 4·29절). 돈 칸은 저장할 때 계산한 값 — 레시피·재고를 고쳐도 지난 일기는 그대로(결정 13·14)."""
+
+    __tablename__ = "cook_logs"
+    __table_args__ = (db.Index("ix_cook_logs_user_id_cooked_on", "user_id", "cooked_on"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    recipe_id = db.Column(db.Integer, db.ForeignKey("recipes.id", ondelete="SET NULL"), index=True)
+    food_log_id = db.Column(db.Integer, db.ForeignKey("food_logs.id", ondelete="SET NULL"), index=True)  # 먹은 기록을 지울 때 SET NULL이 cook_logs 전체를 훑지 않게(개정 1 T4⑤)
+    title = db.Column(db.String(60), nullable=False)
+    cooked_on = db.Column(db.Date, nullable=False)
+    servings = db.Column(db.Integer, nullable=False)
+    rating = db.Column(db.Integer)
+    memo = db.Column(db.String(500))
+    photo_key = db.Column(db.String(200), unique=True)
+    photo_size = db.Column(db.Integer)
+    eat_out_price = db.Column(db.Integer)  # 1인분(원)
+    eat_out_source = db.Column(db.String(10))  # user | ai | sample
+    ingredient_cost = db.Column(db.Integer, nullable=False, default=0)
+    saved = db.Column(db.Integer)  # None = 계산 못 함(결정 14)
+    excluded_count = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+    recipe = db.relationship("Recipe")
+    food_log = db.relationship("FoodLog")
+    items = db.relationship("CookLogItem", order_by="CookLogItem.id", cascade="all, delete-orphan", passive_deletes=True)
+
+
+class CookLogItem(db.Model):
+    """요리에 쓴 재료 한 줄. 재고에서 뺀 줄은 되돌리기용 스냅숏(결정 7·8), 재고에 없던 레시피 재료는 이름·양만(가격 모름)."""
+
+    __tablename__ = "cook_log_items"
+
+    id = db.Column(db.Integer, primary_key=True)
+    cook_log_id = db.Column(db.Integer, db.ForeignKey("cook_logs.id", ondelete="CASCADE"), nullable=False, index=True)
+    ingredient_id = db.Column(db.Integer, db.ForeignKey("ingredients.id", ondelete="SET NULL"), index=True)  # 남은 재료만(지운 재료는 처음부터 NULL)
+    removal_id = db.Column(db.Integer, db.ForeignKey("ingredient_removals.id", ondelete="SET NULL"), index=True)  # 다 먹었어요 기록을 지울 때 SET NULL이 전체를 훑지 않게
+    name = db.Column(db.String(50), nullable=False)
+    amount_text = db.Column(db.String(30))  # 재고에 없던 재료의 레시피 양
+    used = db.Column(db.Float)  # 뺀 양(재고 단위)
+    unit = db.Column(db.String(10))
+    quantity_before = db.Column(db.Float)
+    removed = db.Column(db.Boolean, nullable=False, default=False)
+    location_id = db.Column(db.Integer)  # 스냅숏(FK 아님 — 위치가 지워져도 되돌리기가 기본 위치로)
+    purchased_on = db.Column(db.Date)
+    expires_on = db.Column(db.Date)
+    price = db.Column(db.Integer)
+    price_quantity = db.Column(db.Float)
+    cost = db.Column(db.Integer)
+    excluded = db.Column(db.String(10))  # seasoning | no_price | None
+
+    ingredient = db.relationship("Ingredient")
+    removal = db.relationship("IngredientRemoval")

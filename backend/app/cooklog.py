@@ -1,19 +1,48 @@
 """요리 일기(스펙 29절). 요리했어요 초안·저장·되돌리기·목록·상세. 쓴 재료는 저장할 때 스냅숏(결정 1·7·8)."""
 
+import json
+import logging
 import math
+import uuid
+import zlib
+from datetime import timedelta, timezone
 
-from flask import Blueprint, g, jsonify
+from flask import Blueprint, abort, g, jsonify, request
+from sqlalchemy import text as sql
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.attributes import flag_modified
 
+from . import food_logs, meals, photos, storage
 from .amounts import SPOON_UNITS, in_unit, parse_amount
 from .auth import get_owned_or_404, login_required
 from .ingredients import seasoning_names
+from .locations import default_location
 from .matching import match_prepared, names_match, normalize, prepare
-from .models import Recipe
+from .models import CookLog, CookLogItem, Ingredient, IngredientRemoval, Recipe, StorageLocation, db, utcnow
 from .nutrition import TRACE_WORDS
 from .recipe_parse import ingredient_key
 from .recipes import ALWAYS_HAVE, inventory_rows
+from .validation import integer, iso_datetime, memo
 
 bp = Blueprint("cooklog", __name__, url_prefix="/api")
+
+log = logging.getLogger(__name__)
+
+MAX_COOK_LOGS = 5000
+MAX_USAGES = 50
+MAX_MEMO = 500
+MAX_EAT_OUT = 1_000_000
+MAX_AMOUNT = 100_000
+UNDO_SECONDS = 120
+MAX_PHOTO_BYTES = 3 * 1024 * 1024
+MAX_USER_PHOTO_BYTES = 200 * 1024 * 1024  # 메모·먹은 기록 사진과 따로 센다(결정 19)
+MAX_DEMO_PHOTO_BYTES = 20 * 1024 * 1024
+LOCK_KEY = zlib.crc32(b"cook_logs") & 0x7FFFFFFF
+STOCK_CHANGED = "재고가 방금 바뀌었어요. 다시 불러와주세요."
+UNDO_EXPIRED = "되돌릴 수 있는 시간이 지났어요. 재고는 직접 고쳐주세요."
+PHOTO_FULL = "사진 저장 공간이 가득 찼어요. 오래된 일기 사진을 지워주세요."
+EAT_OUT_ERROR = "사 먹으면 얼마는 0~1,000,000원 사이 숫자로 입력해주세요."
+AMOUNT_ERROR = "쓴 양은 0보다 커야 해요."
 
 SEASONING_SPOONS = SPOON_UNITS - {"컵"}  # 결정 5: 컵은 밀가루·쌀처럼 많이 쓰는 양이라 양념으로 보지 않는다
 
@@ -99,3 +128,260 @@ def cook_draft(recipe_id):
     })
     res.headers["Cache-Control"] = "no-store"  # 식습관·지출 정보
     return res
+
+
+def lock_user(user_id):
+    """PostgreSQL 사용자 잠금(결정 9). 트랜잭션이 끝나면 풀린다. SQLite(개발)는 잠그지 않는다."""
+    if db.session.get_bind().dialect.name == "postgresql":
+        db.session.execute(sql("SELECT pg_advisory_xact_lock(:key, :user_id)"), {"key": LOCK_KEY, "user_id": user_id})
+
+
+def aware(value):
+    """SQLite는 시간대 없이 돌려준다(UTC로 저장됨) — detail_json·undo 시간 비교·Task 5가 같이 쓴다(개정 1 P4·S14)."""
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def photo_url(cook_log):
+    return f"/api/photos/{cook_log.photo_key}" if cook_log.photo_key else None
+
+
+def list_json(cook_log):
+    return {"id": cook_log.id, "recipe_id": cook_log.recipe_id, "title": cook_log.title, "cooked_on": cook_log.cooked_on.isoformat(),
+            "servings": cook_log.servings, "rating": cook_log.rating, "memo": cook_log.memo, "photo_url": photo_url(cook_log),
+            "eat_out_price": cook_log.eat_out_price, "eat_out_source": cook_log.eat_out_source,
+            "ingredient_cost": cook_log.ingredient_cost, "saved": cook_log.saved, "excluded_count": cook_log.excluded_count,
+            "created_at": iso_datetime(cook_log.created_at)}
+
+
+def item_json(item):
+    return {"name": item.name, "amount_text": item.amount_text, "used": item.used, "unit": item.unit, "removed": item.removed,
+            "price": item.price, "price_quantity": item.price_quantity, "cost": item.cost, "excluded": item.excluded}
+
+
+def detail_json(cook_log):
+    return {**list_json(cook_log), "items": [item_json(i) for i in cook_log.items], "food_log_id": cook_log.food_log_id,
+            "undo_until": iso_datetime(aware(cook_log.created_at) + timedelta(seconds=UNDO_SECONDS))}
+
+
+def parse_common(data, cook_log, creating):
+    """고치기(Task 5)와 같이 쓰는 칸. 보낸 칸만(creating이면 cooked_on 필수)."""
+    if creating or "cooked_on" in data:
+        cook_log.cooked_on = food_logs.eaten_date(data.get("cooked_on"))
+    if "rating" in data:
+        cook_log.rating = None if data["rating"] is None else integer(data["rating"], "별점은", 1, 5)
+    if "memo" in data:
+        cook_log.memo = memo(data["memo"], MAX_MEMO)
+    if "eat_out_price" in data:
+        value = data["eat_out_price"]
+        if value is not None and (isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= MAX_EAT_OUT):
+            abort(400, EAT_OUT_ERROR)
+        apply_eat_out(cook_log, value)
+
+
+def apply_eat_out(cook_log, value):
+    """결정 11. value가 None이면 일기 칸만 비우고 레시피는 그대로. 레시피 값과 같으면 출처도 레시피 출처,
+    다르면 'user'로 일기·레시피를 함께 바꾼다(레시피는 updated_at을 그대로 넣어 목록 순서를 지킨다)."""
+    recipe = cook_log.recipe
+    cook_log.eat_out_price = value
+    if value is None:
+        cook_log.eat_out_source = None
+    elif recipe is not None and recipe.eat_out_price == value:
+        cook_log.eat_out_source = recipe.eat_out_source
+    else:
+        cook_log.eat_out_source = "user"
+        if recipe is not None:
+            recipe.eat_out_price, recipe.eat_out_source = value, "user"
+            flag_modified(recipe, "updated_at")  # UPDATE에 지금 값을 넣어 onupdate가 돌지 않게
+
+
+def check_photo_room(user, size, excluding=None):
+    """사용자 일기 사진 합계(excluding 일기의 사진은 빼고) + size가 한도(체험 20MB)를 넘으면 400 PHOTO_FULL."""
+    query = db.session.query(db.func.coalesce(db.func.sum(CookLog.photo_size), 0)).filter(CookLog.user_id == user.id)
+    if excluding is not None:
+        query = query.filter(CookLog.id != excluding.id)
+    if query.scalar() + size > (MAX_DEMO_PHOTO_BYTES if user.provider == "demo" else MAX_USER_PHOTO_BYTES):
+        abort(400, PHOTO_FULL)
+
+
+def new_photo_key(user_id, ext):
+    return f"cooklog/{user_id}/{uuid.uuid4().hex}.{ext}"
+
+
+def parse_usages(value):
+    """[{ingredient_id, amount}] 0~MAX_USAGES개, id 겹치지 않음(아니면 BAD_REQUEST), amount는 소수 셋째 자리로 맞춘 뒤 0 < x ≤ MAX_AMOUNT 유한수(아니면 AMOUNT_ERROR).
+    셋째 자리로 맞춰야 뺀 양(used)과 되돌린 양이 재고 반올림(round 3)과 어긋나지 않는다."""
+    if not isinstance(value, list) or len(value) > MAX_USAGES:
+        abort(400, food_logs.BAD_REQUEST)
+    seen = set()
+    for usage in value:
+        item_id = usage.get("ingredient_id") if isinstance(usage, dict) else None
+        if isinstance(item_id, bool) or not isinstance(item_id, int) or not 1 <= item_id <= 2**31 - 1 or item_id in seen:
+            abort(400, food_logs.BAD_REQUEST)
+        seen.add(item_id)
+        amount = usage.get("amount")
+        if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(amount):
+            abort(400, AMOUNT_ERROR)
+        usage["amount"] = amount = round(amount, 3)
+        if not 0 < amount <= MAX_AMOUNT:
+            abort(400, AMOUNT_ERROR)
+    return value
+
+
+def _form_json():
+    try:
+        data = json.loads(request.form.get("data") or "null")
+    except (ValueError, RecursionError):
+        data = None
+    if not isinstance(data, dict):
+        abort(400, food_logs.BAD_REQUEST)
+    return data
+
+
+@bp.post("/cook-logs")
+@login_required
+def create_cook_log():
+    """multipart data(JSON) + 선택 image → 201 {log, deducted_names}. 순서는 스펙 29절 구현 세부(요리 일기 저장).
+    ponytail: R2에 올리는 동안(최대 수 초) 사용자 잠금·재료 행 잠금을 잡고 있다 — 같은 사용자 요청만 기다린다."""
+    data = _form_json()
+    lock_user(g.user.id)  # 레시피(사 먹으면 얼마)·재료 행보다 먼저 — 모든 쓰기가 같은 순서로 잠근다(교착 방지)
+    recipe = get_owned_or_404(Recipe, food_logs._id(data.get("recipe_id")))
+    servings = integer(data.get("servings"), "인분은", 1, 20)
+    cook_log = CookLog(user_id=g.user.id, recipe=recipe, title=recipe.title, servings=servings)
+    parse_common(data, cook_log, creating=True)
+    usages = parse_usages(data.get("usages"))
+
+    make_food = data.get("food_log", True)
+    if not isinstance(make_food, bool):
+        abort(400, food_logs.BAD_REQUEST)
+    slot = None
+    if data.get("meal_slot_id") is not None:
+        slot = meals._owned_slot(food_logs._id(data["meal_slot_id"]))
+        if slot.recipe_id != recipe.id:
+            abort(400, food_logs.BAD_REQUEST)
+    on_slot_day = slot is not None and slot.date == cook_log.cooked_on
+    meal = data.get("meal")
+    if make_food and not on_slot_day and meal not in meals.MEALS:
+        abort(400, "끼니를 골라주세요.")
+
+    image = None
+    if "image" in request.files:
+        if storage.mode() == "off":
+            abort(503, storage.UPLOAD_UNAVAILABLE)
+        image = photos.read_image(MAX_PHOTO_BYTES)
+
+    if CookLog.query.filter_by(user_id=g.user.id).count() >= MAX_COOK_LOGS:  # 상한 확인은 사용자 잠금 안에서(결정 20)
+        abort(400, f"요리 일기는 {MAX_COOK_LOGS}개까지 남길 수 있어요.")
+    if image is not None:
+        check_photo_room(g.user, len(image[0]))
+
+    rows = draft_rows(recipe, g.user.id)  # 차감 전 재고로 판정
+    ids = [usage["ingredient_id"] for usage in usages]
+    # populate_existing: draft_rows가 잠그기 전에 읽어 둔 같은 행의 옛 수량을 쓰지 않게 잠근 뒤 값으로 덮는다
+    locked = (
+        Ingredient.query.filter(Ingredient.id.in_(ids), Ingredient.user_id == g.user.id)
+        .order_by(Ingredient.id).with_for_update().populate_existing().all()
+    )
+    if len(locked) != len(ids):
+        abort(400, STOCK_CHANGED)  # 지운 id·남의 id를 같은 문구로(결정 9)
+    stock = {item.id: item for item in locked}
+    by_id = {row["ingredient_id"]: row for row in rows if row["ingredient_id"] is not None}
+    staples = None
+    deducted_names = []
+    for usage in usages:
+        item = stock[usage["ingredient_id"]]
+        before, amount = item.quantity, usage["amount"]
+        left = round(before - amount, 3)
+        used = min(amount, before) if left < 0.001 else round(before - left, 3)  # 남는 줄은 실제로 줄어든 양 — 되돌리면 정확히 원래 수량
+        row = by_id.get(item.id)
+        if row is not None:
+            seasoning = row["seasoning"]
+        else:
+            staples = seasoning_names(g.user.id) if staples is None else staples
+            seasoning = is_seasoning(ingredient_key(item.name), "", staples)
+        excluded = "seasoning" if seasoning else ("no_price" if item.price is None or not item.price_quantity else None)
+        line = CookLogItem(
+            name=item.name, used=used, unit=item.unit, quantity_before=before, location_id=item.location_id,
+            purchased_on=item.purchased_on, expires_on=item.expires_on, price=item.price, price_quantity=item.price_quantity,
+            cost=item_cost(used, item.price, item.price_quantity) if excluded is None else None,  # 양념은 cost None — summarize가 합에 넣지 않게
+            excluded=excluded,
+        )
+        cook_log.items.append(line)  # 관계에 붙여야 summarize(cook_log.items)가 본다(개정 1 P3)
+        deducted_names.append(item.name)
+        if left < 0.001:
+            line.removed, line.removal = True, IngredientRemoval(user_id=g.user.id, name=item.name, reason="eaten")
+            db.session.delete(item)
+        else:
+            item.quantity, line.ingredient = left, item
+    for row in rows:
+        if row["ingredient_id"] is None and not row["seasoning"]:
+            cook_log.items.append(CookLogItem(name=row["name"][:50], amount_text=row["amount"][:30] or None, excluded="no_price"))
+    for key, value in summarize(cook_log.eat_out_price, servings, cook_log.items).items():
+        setattr(cook_log, key, value)
+
+    if make_food and not (slot is not None and slot.food_log is not None):  # 이미 먹은 칸은 SLOT_TAKEN 대신 만들지 않는다(결정 16)
+        fields = {"meal_slot_id": slot.id} if on_slot_day else {"recipe_id": recipe.id, "eaten_on": cook_log.cooked_on.isoformat(), "meal": meal}
+        food = food_logs.build_log({**fields, "place": "home"})
+        food.source = "cook_log"
+        cook_log.food_log = food
+
+    db.session.add(cook_log)
+    keys = []
+    if image is not None:
+        data_bytes, media_type, ext = image
+        keys.append(new_photo_key(g.user.id, ext))
+        storage.put(keys[0], data_bytes, media_type)  # 저장소 오류는 503 — 커밋 전이라 모두 되돌려진다
+        cook_log.photo_key, cook_log.photo_size = keys[0], len(data_bytes)
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        storage.delete(keys)
+        if isinstance(e, IntegrityError):
+            # 흔한 원인은 같은 칸 food_logs.meal_slot_id UNIQUE 경합(위에서 slot.food_log를 먼저 봐서 드묾, 개정 1 T4④)
+            log.warning("cook log save conflict: %s", type(e).__name__)
+            abort(400, STOCK_CHANGED)
+        raise
+    return jsonify(log=detail_json(cook_log), deducted_names=deducted_names), 201
+
+
+@bp.post("/cook-logs/<int:log_id>/undo")
+@login_required
+def undo_cook_log(log_id):
+    """결정 7·8. 저장 뒤 UNDO_SECONDS 안이면 뺀 양을 더하고 지운 재료를 스냅숏으로 되살린 뒤 일기·먹은 기록·다 먹었어요 기록·사진을 지운다.
+    사용자 잠금을 먼저 잡고 일기를 읽는다 — 동시에 두 번 보내면 뒤 요청은 지워진 일기를 보고 404(두 번 더하지 않게)."""
+    lock_user(g.user.id)
+    cook_log = get_owned_or_404(CookLog, log_id)
+    if utcnow() > aware(cook_log.created_at) + timedelta(seconds=UNDO_SECONDS):
+        abort(400, UNDO_EXPIRED)
+    restored, skipped, fallback = [], [], None
+    for item in cook_log.items:
+        if item.removed:
+            location = db.session.get(StorageLocation, item.location_id) if item.location_id is not None else None
+            if location is None or location.user_id != g.user.id:
+                fallback = fallback or default_location(g.user.id)
+                location = fallback
+            db.session.add(Ingredient(
+                user_id=g.user.id, name=item.name, quantity=item.quantity_before, unit=item.unit, location_id=location.id,
+                purchased_on=item.purchased_on, expires_on=item.expires_on, price=item.price, price_quantity=item.price_quantity,
+            ))
+            restored.append(item.name)
+            if item.removal is not None:
+                db.session.delete(item.removal)
+        elif item.used is not None:
+            ingredient = (
+                Ingredient.query.filter_by(id=item.ingredient_id, user_id=g.user.id).with_for_update().populate_existing().first()
+                if item.ingredient_id is not None else None
+            )
+            if ingredient is None or ingredient.unit != item.unit:
+                skipped.append(item.name)  # 사용자가 지웠거나 단위를 바꿨다
+            else:
+                ingredient.quantity = round(ingredient.quantity + item.used, 3)  # 그사이 고친 수량 위에 더한다
+                restored.append(item.name)
+    keys = [cook_log.photo_key] if cook_log.photo_key else []
+    if cook_log.food_log is not None:
+        keys += [p.photo_key for p in cook_log.food_log.photos]  # 그사이 먹은 기록에 붙인 사진 파일도(개정 1 D15)
+        db.session.delete(cook_log.food_log)
+    db.session.delete(cook_log)
+    db.session.commit()
+    storage.delete(keys)  # 커밋 뒤에 — 실패는 로그만
+    return jsonify(restored=restored, skipped=skipped)

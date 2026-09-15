@@ -18,7 +18,7 @@ from .meals import MEALS, meal_date
 from .models import FoodLog, FoodLogPhoto, MealPlan, MealSlot, Recipe, db, utcnow
 from .nutrition import _round0, _round1
 from .photos import read_image
-from .validation import integer, iso_datetime, text
+from .validation import integer, iso_datetime, memo, text
 
 bp = Blueprint("food_logs", __name__, url_prefix="/api")
 
@@ -43,7 +43,8 @@ PHOTO_FULL = "사진 저장 공간이 가득 찼어요. 오래된 기록 사진�
 
 
 def meal_for_time(moment):
-    """결정 8: 서울 시(時) 5–9 아침 · 10–14 점심 · 15–20 저녁 · 그 밖 간식."""
+    """결정 8: 서울 시(時) 5–9 아침 · 10–14 점심 · 15–20 저녁 · 그 밖 간식.
+    ponytail: 화면 cooklog/cook.ts cookMeal에 같은 시간표가 있다 — 바꾸면 둘 다."""
     hour = moment.astimezone(SEOUL).hour
     return "breakfast" if 5 <= hour < 10 else "lunch" if 10 <= hour < 15 else "dinner" if 15 <= hour < 21 else "snack"
 
@@ -229,13 +230,7 @@ def apply_fields(log, data, creating):
     if "rating" in data:
         log.rating = None if data["rating"] is None else integer(data["rating"], "만족도는", 1, 5)
     if "memo" in data:
-        memo = data["memo"]
-        if memo is not None and (not isinstance(memo, str) or "\x00" in memo):
-            abort(400, BAD_REQUEST)
-        memo = memo.strip() if memo else None
-        if memo and len(memo) > MAX_MEMO:
-            abort(400, f"메모는 {MAX_MEMO}자까지 입력해주세요.")
-        log.memo = memo or None
+        log.memo = memo(data["memo"], MAX_MEMO)
     return "what" if what else "amount" if amount else None
 
 
@@ -260,15 +255,22 @@ def rescale(log, factor):
     log.nutrition_pending = False
 
 
-def create_log(data):
-    """POST /api/food-logs와 칸 먹었어요(Task 5)가 함께 쓰는 만들기(개정 1 P5·D1·D3). 커밋까지 한다.
-    같은 칸 UNIQUE 경합(그 밖 IntegrityError 포함)이면 rollback 뒤 None — 호출 측이 400 SLOT_TAKEN 또는 기존 기록 200."""
+def build_log(data):
+    """create_log의 커밋 전 부분. 요리 저장(cooklog)이 같은 트랜잭션 안에서 쓴다(5단계 개정 1 P6).
+    no_autoflush 안에서 apply_fields(creating=True) → add → check_caps → fill_snapshots. 커밋·IntegrityError 처리는 호출 측."""
     log = FoodLog(user_id=g.user.id, source="manual")
     with db.session.no_autoflush:  # 검사·계산 쿼리가 반쯤 찬 행을 먼저 INSERT하지 않게
         apply_fields(log, data, creating=True)
         db.session.add(log)
         check_caps(g.user.id, log.eaten_on)
         fill_snapshots([log])
+    return log
+
+
+def create_log(data):
+    """POST /api/food-logs와 칸 먹었어요(Task 5)가 함께 쓰는 만들기(개정 1 P5·D1·D3). 커밋까지 한다.
+    같은 칸 UNIQUE 경합(그 밖 IntegrityError 포함)이면 rollback 뒤 None — 호출 측이 400 SLOT_TAKEN 또는 기존 기록 200."""
+    log = build_log(data)
     try:
         db.session.flush()
         db.session.commit()

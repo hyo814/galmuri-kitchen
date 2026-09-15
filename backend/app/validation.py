@@ -27,6 +27,16 @@ def text(value, label, max_len):
     return value.strip()
 
 
+def memo(value, max_len):
+    """None 또는 문자열(아니면·NUL 글자면 400 '잘못된 요청이에요.'). strip 뒤 비면 None, max_len자 넘으면 400(먹은 기록·요리 일기가 함께 쓴다, 개정 1 D14)."""
+    if value is not None and (not isinstance(value, str) or "\x00" in value):
+        abort(400, "잘못된 요청이에요.")
+    value = value.strip() if value else None
+    if value and len(value) > max_len:
+        abort(400, f"메모는 {max_len}자까지 입력해주세요.")
+    return value or None
+
+
 def integer(value, label, lo, hi):
     """bool이 아닌 lo~hi 정수."""
     if isinstance(value, bool) or not isinstance(value, int) or not lo <= value <= hi:
