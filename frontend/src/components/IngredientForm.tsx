@@ -1,6 +1,6 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { localToday, type DeleteReason, type Ingredient, type IngredientInput, type StorageLocation } from "../api";
-import { addDays, withJosa } from "../format";
+import { addDays, KIND_LABEL, withJosa } from "../format";
 import { useAsyncAction } from "../useAsyncAction";
 import Icon from "./Icon";
 import ShoppingAddButton, { cut } from "./ShoppingAddButton";
@@ -8,10 +8,21 @@ import Sheet from "./Sheet";
 
 const MAX_PRICE = 10_000_000;
 
-const DELETE_REASONS: { value: DeleteReason; label: string }[] = [
+// value가 null이면 이유 없이(그냥) 지운다 — 기본값(시안 6)
+const DELETE_REASONS: { value: DeleteReason | null; label: string; note?: string }[] = [
   { value: "eaten", label: "다 먹었어요" },
-  { value: "discarded", label: "버렸어요" },
+  { value: "discarded", label: "버렸어요", note: "집밥 리포트에 세요" },
+  { value: null, label: "그냥 지우기" },
 ];
+
+// 라디오 그룹 키보드: 위·아래 화살표는 포커스만 옮기고, 고르기는 Space·Enter·탭으로 (roving tabindex, More.tsx ThemeSheet와 같은 방식)
+function onReasonKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  e.preventDefault();
+  const radios = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]')];
+  const i = radios.indexOf(document.activeElement as HTMLElement);
+  radios[(i + (e.key === "ArrowDown" ? 1 : -1) + radios.length) % radios.length].focus();
+}
 
 interface Props {
   initial: Ingredient | null;
@@ -346,23 +357,30 @@ export default function IngredientForm({
       {/* 시트 안이 아니라 옆에 둔다: React에서 안쪽 dialog의 close가 바깥 시트 onClose까지 올라가지 않게 */}
       {deleting && initial && (
         <Sheet
-          title={`${withJosa(initial.name, "을", "를")} 삭제할까요?`}
-          description="왜 지우는지 고르면 이번 달 집밥 리포트에 반영해요. 안 골라도 괜찮아요."
+          title={`${initial.name} 지우기`}
+          description={[
+            initial.days_since_purchase !== null && `구입 ${initial.days_since_purchase}일째`,
+            KIND_LABEL[initial.location_kind],
+          ]
+            .filter(Boolean)
+            .join(" · ")}
           onClose={() => setDeleting(null)}
         >
-          <div className="mo-chips" role="group" aria-label="지우는 이유 (선택)">
+          <div className="ck-reason" role="radiogroup" aria-label="지우는 이유" onKeyDown={onReasonKeyDown}>
             {DELETE_REASONS.map((r) => {
               const checked = deleting.reason === r.value;
               return (
                 <button
-                  key={r.value}
+                  key={r.label}
                   type="button"
-                  className="mo-chip"
-                  aria-pressed={checked}
-                  onClick={() => setDeleting({ reason: checked ? null : r.value })}
+                  className="ck-reason-opt"
+                  role="radio"
+                  aria-checked={checked}
+                  tabIndex={checked ? 0 : -1}
+                  onClick={() => setDeleting({ reason: r.value })}
                 >
-                  {checked && <Icon name="check" size={18} />}
-                  {r.label}
+                  <span>{r.label}</span>
+                  {r.note && <small>{r.note}</small>}
                 </button>
               );
             })}
@@ -371,8 +389,8 @@ export default function IngredientForm({
             <button type="button" className="btn outline" disabled={busy} onClick={() => setDeleting(null)}>
               취소
             </button>
-            <button type="button" className="btn danger-fill" disabled={busy} onClick={confirmDelete}>
-              {busy ? "삭제하는 중…" : "삭제"}
+            <button type="button" className="btn danger-text" disabled={busy} onClick={confirmDelete}>
+              {busy ? "지우는 중…" : "지우기"}
             </button>
           </div>
         </Sheet>
