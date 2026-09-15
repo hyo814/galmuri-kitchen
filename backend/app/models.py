@@ -407,3 +407,42 @@ class YoutubeVideo(db.Model):
     description = db.Column(db.String(500))
     published_at = db.Column(db.DateTime(timezone=True), nullable=False)
     fetched_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+
+
+class FoodLog(db.Model):
+    """먹은 기록 한 줄(스펙 21·24절). 영양 칸은 저장할 때 계산한 스냅숏 — 레시피를 고쳐도 지난 기록은 그대로(결정 2).
+    title이 NULL이면 사진만 먼저 남긴 '사진 기록'. meal_slot_id는 식단 칸 '먹었어요'(칸 하나에 기록 하나)."""
+
+    __tablename__ = "food_logs"
+    __table_args__ = (
+        db.UniqueConstraint("meal_slot_id"),
+        db.Index("ix_food_logs_user_id_eaten_on", "user_id", "eaten_on"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    eaten_on = db.Column(db.Date, nullable=False)
+    meal = db.Column(db.String(10), nullable=False)  # breakfast | lunch | dinner | snack
+    source = db.Column(db.String(10), nullable=False, default="manual")  # manual | meal_plan | cook_log(5단계)
+    title = db.Column(db.String(60))
+    recipe_id = db.Column(db.Integer, db.ForeignKey("recipes.id", ondelete="SET NULL"), index=True)
+    meal_slot_id = db.Column(db.Integer, db.ForeignKey("meal_slots.id", ondelete="SET NULL"))
+    food_code = db.Column(db.String(80))  # food_nutrients.food_code — 공유 캐시라 FK 아님
+    servings = db.Column(db.Float)
+    grams = db.Column(db.Integer)
+    place = db.Column(db.String(4))  # home | out
+    rating = db.Column(db.Integer)
+    memo = db.Column(db.String(200))
+    kcal = db.Column(db.Integer)
+    carbs_g = db.Column(db.Float)
+    protein_g = db.Column(db.Float)
+    fat_g = db.Column(db.Float)
+    sugars_g = db.Column(db.Float)
+    sodium_mg = db.Column(db.Integer)
+    approx = db.Column(db.Boolean, nullable=False, default=False)
+    nutrition_pending = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
+
+    recipe = db.relationship("Recipe")
+    meal_slot = db.relationship("MealSlot", backref=db.backref("food_log", uselist=False))

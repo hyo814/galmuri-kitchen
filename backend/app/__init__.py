@@ -87,6 +87,7 @@ def create_app(test_config=None):
     from .coupang import bp as coupang_bp
     from .demo import bp as demo_bp
     from .export import bp as export_bp
+    from .food_logs import bp as food_logs_bp
     from .foods import bp as foods_bp
     from .ingredients import bp as ingredients_bp
     from .item_rules import bp as item_rules_bp
@@ -110,6 +111,7 @@ def create_app(test_config=None):
     app.register_blueprint(coupang_bp)
     app.register_blueprint(demo_bp)
     app.register_blueprint(export_bp)
+    app.register_blueprint(food_logs_bp)
     app.register_blueprint(foods_bp)
     app.register_blueprint(ingredients_bp)
     app.register_blueprint(item_rules_bp)

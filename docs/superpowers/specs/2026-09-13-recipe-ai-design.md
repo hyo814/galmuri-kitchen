@@ -55,7 +55,7 @@ recipe-ai/
 - `cook_logs`: id, user_id, recipe_id(선택, SET NULL), title, cooked_on(date), rating(1~5, 선택), memo(선택), photo_key(선택), created_at
 - `ai_calls`: id, user_id, kind(`fridge`|`receipt`|`order`|`memo`|`recipe`|`link`|`recipe_photo`|`meal`|`nutrition`|`link_fetch`|`channel_add`|`video_refresh`|`export`|`food_fetch`), model, input_tokens, output_tokens, created_at(인덱스). 토큰은 원가 계산용(25절)이다. model은 성공하면 실제로 답한 모델, 실패하면 요청한 모델이다. AI 호출이 AiError로 끝나면(오류·타임아웃·거절·max_tokens·스키마 불일치) 토큰은 비워 둔다. 새 AI 기능도 같은 방식으로 남긴다(`nutrition`은 영양 채우기의 AI 단위 무게·영양 추정, 토큰 있음, 21절). `link_fetch`(링크 가져오기 외부 요청)·`channel_add`(채널 추가)·`video_refresh`(영상 새로 받기)·`export`(데이터 내보내기 27절)·`food_fetch`(식품영양성분 DB 요청, 21절)는 AI를 부르지 않는 한도용 기록이라 model이 NULL이고 토큰이 없다(17절). **원가·사용량 집계는 model IS NOT NULL(또는 scan·recipe·link·recipe_photo·meal·nutrition kind)만 센다.**
 - `ingredient_removals`: id, user_id(CASCADE, 인덱스), name(지운 재료 이름 복사, ≤50자), reason(`eaten`|`discarded`), created_at. INDEX(user_id, created_at). 재료를 이유를 골라 지울 때만 남긴다(27절)
-- `storage_locations`, `staples`, `item_rules`(14절), `shopping_items`(16절), `kitchen_tools`(18절), `body_profiles`(21절), `food_nutrients`·`food_searches`·`food_matches`·`unit_weight_estimates`(21절, 식품영양성분 DB 캐시)
+- `storage_locations`, `staples`, `item_rules`(14절), `shopping_items`(16절), `kitchen_tools`(18절), `body_profiles`(21절), `food_nutrients`·`food_searches`·`food_matches`·`unit_weight_estimates`(21절, 식품영양성분 DB 캐시), `food_logs`(21·24절, 먹은 기록)
 
 ### 규칙
 
@@ -103,6 +103,8 @@ recipe-ai/
 | GET | `/api/recipes/<id>/nutrition` | 레시피 1인분 영양(21절). `nutrition` off 503. `{servings, per_serving\|null, approx, estimated_count, missing_count, pending, usable, ingredients:[{name, amount, key, status, pending_reason, countable, quantity, unit, grams, unit_grams, unit_grams_source, food\|null, estimate_food, kcal_per_serving}]}`(`Cache-Control: no-store`). 계산 결과는 저장하지 않는다 |
 | POST | `/api/nutrition/fill` | 영양 채우기(21절). `{recipe_ids: [int] 1~31}` → 200 `{pending_recipe_ids}`(아직 계산 중인 내 레시피, 요청 순서). 식품 DB 찾기(8초 예산)와 AI 단위 무게·영양 추정(한 번)을 여기서만 한다. 한도·실패는 오류 없이 계산 중으로 남긴다. `nutrition` off 503, 형식이 틀리면 400 `잘못된 요청이에요.`, 남의 id는 조용히 뺀다 |
 | PUT | `/api/food-matches` | 재료 → 식품 고르기 기억(21절). `{name, food_code(null이면 추정으로 두기), unit?, unit_grams?(null이면 지움)}` → 204. 사용자당 2,000개(`식품은 2000개까지 기억할 수 있어요.`), `nutrition` off 503 |
+| GET/POST | `/api/food-logs` | 먹은 기록(24절 구현 세부). GET `?date=YYYY-MM-DD` → `{date, logs, plan_slots, nutrition_pending_recipe_ids}`(`Cache-Control: no-store`, 페이지 없음 — 하루 20개) / POST `{eaten_on, meal, meal_slot_id? \| recipe_id? \| food_code? \| title?, servings?, grams?, place?, rating?, memo?}` → 201 기록(영양은 저장할 때 계산한 스냅숏) |
+| PATCH/DELETE | `/api/food-logs/<id>` | 보낸 칸만 고치기(무엇·양을 바꾸면 영양을 다시 계산) → 200 / 삭제 204(24절 구현 세부) |
 | GET | `/api/export/summary` | (`X-Requested-With: fetch` 필요) 내보낼 개수와 오늘(서울) 남은 횟수 `{ingredients, recipes, seasonings, shopping, memos, meals, limit: 5, remaining}`(27절) |
 | GET | `/api/export` | (`X-Requested-With: fetch` 필요) zip 내려받기(`Content-Disposition: attachment; filename="galmuri-kitchen-YYYYMMDD.zip"`, 서울 날짜). `ingredients.csv`·`recipes.csv`·`seasonings.csv`·`shopping.csv`·`shopping_memos.csv`·`meals.csv`(UTF-8 BOM, 한국어 머리글). 하루 5회(`ai_calls.kind = export`), 넘으면 429 `오늘 내보내기는 5번까지 할 수 있어요. 내일 다시 해주세요.`(27절) |
 | GET | `/api/ai-usage` | 오늘(서울) `{scan:{used, limit}, recipe:{used, limit}}` — `오늘 N번 남음`·더보기 AI 사용량 |
@@ -420,7 +422,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - 당류 기준: 식약처 영양성분 표시 당류 1일 기준치와 WHO 권고(총 섭취 에너지 대비 비율) — **구현 시 공식 수치와 출처를 확인해 화면에 출처와 함께 표시**.
 - `body_profiles`: user_id(UNIQUE), sex, birth_year, height_cm, weight_kg, activity, goal, updated_at(구현 세부 참고). 건강 정보이므로 본인만 조회, 계정 삭제 시 함께 삭제.
 ### 먹은 것 기록
-- `food_logs`: id, user_id, eaten_on, meal, food_code(선택)/recipe_id(선택)/title, amount_g 또는 servings, kcal·당류 등 계산값 스냅숏, estimated(bool).
+- `food_logs`: id, user_id, eaten_on, meal, food_code(선택)/recipe_id(선택)/title, amount_g 또는 servings, kcal·당류 등 계산값 스냅숏, estimated(bool). (구현 이름은 24절 구현 세부)
 - 식품 검색(캐시 → 공공 API) 또는 내 레시피·식단 칸에서 `먹었어요`로 추가.
 - 하루 화면: 목표 대비 kcal 막대, 당류·나트륨 기준 대비 표시.
 - 의료 조언이 아니라 참고용이라는 문구를 계산기 화면에 표시.
@@ -592,6 +594,30 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
   - 날짜 상세 위에 하루 칼로리 목표(21절)가 있으면 목표 대비 kcal 막대와 당류·나트륨 합계.
   - 더보기 입구: 27절 `기록` 묶음 맨 위 `먹은 기록`(한 줄 설명: 오늘 남긴 끼니 수).
 
+**구현 세부 (2026-09-15, 4b-3):**
+- `food_logs`(21절 원안의 `amount_g`는 `grams`, `estimated`는 `approx`): id, user_id(CASCADE), eaten_on(date), meal(`breakfast`·`lunch`·`dinner`·`snack`), source(`manual`·`meal_plan`·`cook_log`(5단계)), title(≤60자, NULL이면 사진 기록), recipe_id(SET NULL, 인덱스), meal_slot_id(SET NULL, UNIQUE — 칸 하나에 기록 하나), food_code(≤80자, 공유 캐시라 FK 아님), servings(float), grams(int), place(`home`·`out`·NULL), rating(1~5), memo(≤200자), kcal(int)·carbs_g·protein_g·fat_g·sugars_g(float)·sodium_mg(int), approx(bool), nutrition_pending(bool), created_at, updated_at. INDEX(user_id, eaten_on). 24절 `photo_key` 칸은 두지 않고 사진 테이블로 대신한다(결정 1, Task 3).
+- API(모두 로그인, `app/food_logs.py`):
+  - `GET /api/food-logs?date=` → `{date, logs, plan_slots, nutrition_pending_recipe_ids}`, `Cache-Control: no-store`. 날짜 모양이 틀리거나 2000~2100년 밖이면 400 `날짜를 다시 확인해주세요.`(미래 날짜는 빈 목록). `logs`는 끼니 순 → 남긴 순(created_at, id). 기록 한 줄: `{id, eaten_on, meal, source, title, recipe_id, meal_slot_id, slot_servings(연결된 칸 인분), food_code, servings, grams, place, rating, memo, nutrition: {kcal, carbs_g, protein_g, fat_g, sugars_g, sodium_mg} | null, approx, nutrition_pending, created_at}`. `plan_slots` = 그날 내 모든 식단 칸 중 먹은 기록과 연결되지 않은 칸 `[{id, meal, title, servings, recipe_id}]`(끼니 순 → 식단 시작일 늦은 순 → 칸 id, 8개, 오늘(서울) 뒤 날짜면 `[]`, 결정 14). `nutrition_pending_recipe_ids` = 아직 계산 중인 기록의 레시피 id(중복 없이 오름차순) — 화면이 `POST /api/nutrition/fill`을 부른 뒤 다시 받는다.
+  - `POST /api/food-logs` → 201 기록. 보낸 `source`는 무시(칸이면 `meal_plan`, 아니면 `manual`). 같은 칸을 이미 기록했거나 동시에 두 번 오면 400 `이미 먹었어요로 남긴 칸이에요.`. 만들기는 `create_log(data)` 하나(칸 `먹었어요` Task 5도 이것을 부른다): 검증·검사·영양 계산을 `no_autoflush` 안에서 하고 flush+commit을 한 try에서 IntegrityError → rollback.
+  - `PATCH /api/food-logs/<id>` → 200 기록(보낸 칸만). 날짜를 옮기면 옮길 날의 하루 상한만 센다. 무엇을 바꾸면 영양을 다시 계산하고, 양만 바꾸면 출처(레시피·음식)가 남은 기록은 다시 계산, 출처가 지워진 기록은 기존 영양 × 새 인분 ÷ 옛 인분(approx 그대로). 같은 칸 경합은 400 `이미 먹었어요로 남긴 칸이에요.`. `DELETE` → 204. 남의 기록·DB int 범위 밖 id는 404.
+- 검증 순서·문구(body가 dict가 아니면 400 `잘못된 요청이에요.`):
+  1. 무엇(만들 때, PATCH는 `meal_slot_id`·`recipe_id`·`food_code`·`title` 중 하나라도 보냈을 때): `meal_slot_id`·`recipe_id`·`food_code` 중 둘 이상이면 `잘못된 요청이에요.` → `meal_slot_id`(bool 아닌 정수, 아니면 `잘못된 요청이에요.`, 남의 칸 404, 이미 기록된 칸 `이미 먹었어요로 남긴 칸이에요.`): 제목·레시피·날짜·끼니를 칸에서 가져오고(보낸 날짜·끼니 무시) 칸 날짜가 오늘 뒤면 `아직 오지 않은 날은 남길 수 없어요.` / `recipe_id`(bool 아닌 정수, 남의 것 404): 제목 = 레시피 제목 / `food_code`: 캐시에 없으면(AI 추정 행 제외) `음식을 다시 골라주세요.`, 제목 = 식품 이름 앞 60자 / 셋 다 없으면 `title` 1~60자 `무엇을 먹었는지는 1~60자로 입력해주세요.`. PATCH로 무엇을 바꾸면 칸 연결은 끊고 `source`는 그대로 둔다(처음 어떻게 남겼는지).
+  2. 날짜·끼니(만들 때 필수, 칸 기록은 칸 값): 없거나 모양이 틀리면 `날짜를 골라주세요.`, 2000~2100년 밖 `날짜를 다시 확인해주세요.`, 오늘(서울) 뒤 `아직 오지 않은 날은 남길 수 없어요.`, 끼니가 네 가지 밖이면 `끼니를 골라주세요.`.
+  3. 양(무엇을 바꿨거나 `servings`·`grams`를 보냈을 때): 음식 기록은 인분·g 중 하나(둘 다 없으면 1인분, 둘 다 보내면 `잘못된 요청이에요.`)만 남기고 다른 쪽은 비운다 — g은 1~3000 정수 `먹은 양은 1~3000g 사이로 입력해주세요.`, 인분인데 음식 1인분 무게(`serving_g`)가 없으면 `이 음식은 g으로 입력해주세요.` / 그 밖은 g을 보내면 `잘못된 요청이에요.`, 인분(기본 1) / 사진 기록(제목 없음)은 둘 다 비운다. 인분은 bool 아닌 0.5~20, 0.5 단위 `인분은 0.5~20 사이로 입력해주세요.`.
+  4. `place`: null·`home`·`out`(아니면 `잘못된 요청이에요.`) / `rating`: null 또는 1~5 정수 `만족도는 1~5 사이 정수로 입력해주세요.` / `memo`: null 또는 문자열(아니면·NUL 글자 `잘못된 요청이에요.`), 앞뒤 공백을 빼고 비면 null, 200자 넘으면 `메모는 200자까지 입력해주세요.`.
+  5. 상한: 그날 20개 `하루에 20개까지 남길 수 있어요.` → 전체 10,000개(만들 때만) `먹은 기록은 10000개까지 남길 수 있어요.`. `ponytail:` 잠그지 않는다 — 동시에 보내면 하나 넘을 수 있다(문제되면 장보기처럼 사용자 잠금).
+- 계획하며 정한 것(전체 계획 결정 1~7·10·12·14 중 이 태스크에 닿는 부분):
+  1. 테이블은 `food_logs`와 사진 테이블(Task 3) 두 개. 사진 키를 JSON 칸으로 두지 않는다.
+  2. 영양은 스냅숏: 만들 때와 무엇·양을 고칠 때만 계산해 행에 넣는다. 레시피를 고치거나 지워도 지난 기록 kcal은 그대로. 계산 출처(레시피·음식)가 사라진 기록은 다시 계산하지 않는다(식단 칸만 남은 기록도 — 칸 레시피가 함께 지워져 다시 계산하면 값이 비므로). 레시피 계산이 계산 중(찾아볼 재료·무게 추정 남음)이면 `nutrition_pending = true`로 두고 하루 GET이 캐시만으로 다시 계산해 채운다(출처가 지워진 기록은 값을 두고 계산 중만 끈다). `ponytail:` GET이 행을 고친다 — 한 날짜 최대 20줄이고, 캐시만 읽어 같은 값을 채우므로 여러 번 와도 결과가 같다(멱등). 한 달 GET은 다시 계산하지 않는다.
+  3. 무엇 네 갈래: 식단에서 = `meal_slot_id`(source `meal_plan`), 내 레시피 = `recipe_id`, 음식 찾기 = `food_code`, 직접 = `title`만(kcal 비움, 직접 kcal 칸 없음).
+  4. 양: 인분 0.5~20(0.5 단위, 기본 1), g은 음식 찾기에서만 1~3000. 1인분 무게가 없는 음식은 g으로만.
+  5. kcal 계산: 레시피 = 1인분(`per_serving`) × 인분(`approx` = 레시피 approx 또는 쓸 만하지 않음), 식단 칸 = `meals.slot_nutrition`(계산값, 모자라면 AI 초안 추정 kcal) × 인분, 음식 = 100g당 × g ÷ 100(1인분이면 g = 1인분 무게 × 인분), 늘 `approx`. 반올림은 kcal·mg 정수, g 소수 첫째, .5 올림(`nutrition._round0`·`_round1`, 화면 `Math.round`와 같음). 영양 모드 `off`면 레시피·음식은 계산하지 않고 식단 칸 AI 추정 kcal만 쓴다. 값 없는 영양소는 null.
+  6. 식단 칸 기록 = 1인분(칸 인분은 응답 `slot_servings`로), 같은 칸은 한 번만(UNIQUE). 칸·식단을 지우면 기록은 남고 연결만 끊긴다(SET NULL).
+  7. 날짜: 오늘(서울) 뒤는 400, 2000~2100년 밖은 식단과 같은 문구.
+  10. 상한: 하루 20개·사용자당 10,000개. 날짜·달 단위로만 받아 커서 페이지 없음(26절 표).
+  12. 만족도 1~5 선택, 메모 200자(공백 정리·NUL 400), 어디서 `home`·`out`·null.
+  14. 날짜 상세 식단 제안: 그날 내 모든 식단의 연결 안 된 칸을 끼니 순 8개까지 `plan_slots`로.
+
 ## 25. 수익화 방향 (추가: 2026-09-13, 기획만 — 구현하지 않음)
 
 순서: 배포 → AI 원가 측정(`ai_calls` 토큰, 구현됨) → 4단계에서 제휴 링크(16절) → 아래 두 가지는 조건이 되면 그때 설계한다.
@@ -620,7 +646,8 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 | 주방 도구·보관 위치·필수품·품목별 규칙 | 수십 개 | 페이지 없음 |
 | 장보기 목록·메모 (2026-09-14, 시안 승인) | 목록 300개(산 것 제외)·메모 20개 | 페이지 없음 — 오프라인에서 전체를 기기에 보관하고 날짜 묶음을 화면에서 만들어야 해서 한 번에 받는다(16·19절) |
 | 식단 목록 (2026-09-14, 4b-1 Task 1) | 50 | 페이지 없음 |
-| 앞으로(먹은 기록·조리 기록) | 커짐 | 서버 커서 페이지 + 무한 스크롤을 기본으로 한다 |
+| 먹은 기록 (2026-09-15, 4b-3) | 사용자당 10,000개 | 날짜·달 단위로 받아 페이지 없음(하루 20개, 24절) |
+| 앞으로(조리 기록) | 커짐 | 서버 커서 페이지 + 무한 스크롤 |
 
 무한 스크롤은 항상 접근성 대안을 둔다: 목록 끝에 보이는 `더 보기` 버튼(IntersectionObserver가 화면에 들어오면 자동으로 불러오고, 버튼은 그것 없이도 동작), 불러오는 중 표시, 끝 상태(`다 봤어요`, 한 페이지에 다 들어가면 숨김), 오류 시 `다시 불러오기`.
 
