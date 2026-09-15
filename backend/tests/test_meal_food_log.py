@@ -104,6 +104,19 @@ def test_overwrite_slot_unlinks_log(client, login, app):
     assert res.get_json()["id"] != log["id"]
 
 
+def test_reput_same_dish_keeps_log(client, login, app):
+    login()
+    plan = make_plan(client, start_on="2026-09-14").get_json()
+    slot = put_slot(client, plan["id"], date="2026-09-14", meal="lunch", title="직접 쓰기").get_json()
+    log = eat(client, slot["id"]).get_json()
+
+    # 같은 요리를 인분만 바꿔 다시 채워도(제목·레시피는 그대로) 기록은 그대로 이어져 있어야 한다
+    same = put_slot(client, plan["id"], date="2026-09-14", meal="lunch", title="직접 쓰기", servings=2).get_json()
+    assert same["eaten_log_id"] == log["id"]
+    with app.app_context():
+        assert db.session.get(FoodLog, log["id"]).meal_slot_id == slot["id"]
+
+
 def test_delete_slot_or_plan_keeps_log(client, login, app):
     login()
     plan = make_plan(client, start_on="2026-09-14").get_json()

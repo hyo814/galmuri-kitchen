@@ -265,16 +265,18 @@ export default function FoodLogPage({ user }: { user: User }) {
           <Icon name="back" />
         </button>
         <h1>먹은 기록</h1>
-        <button
-          type="button"
-          className="icon-btn fl-camera"
-          aria-label="사진만 먼저 남기기"
-          aria-haspopup="dialog"
-          disabled={quickBusy}
-          onClick={() => setQuickOpen(true)}
-        >
-          <Icon name="camera" />
-        </button>
+        {user.photos && (
+          <button
+            type="button"
+            className="icon-btn fl-camera"
+            aria-label="사진만 먼저 남기기"
+            aria-haspopup="dialog"
+            disabled={quickBusy}
+            onClick={() => setQuickOpen(true)}
+          >
+            <Icon name="camera" />
+          </button>
+        )}
       </header>
       {/* 리뷰 fix round 1: role=status 영역은 늘 붙어 있고 글자만 바뀐다(스크린리더가 안정적으로 읽게) */}
       <p className="muted" role="status">

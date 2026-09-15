@@ -145,6 +145,15 @@ def test_me_nutrition_mode(client, login, app):
     assert client.get("/api/me").get_json()["nutrition"] == "off"
 
 
+def test_me_photos_flag_follows_storage_mode(client, login, app):
+    login()
+    assert client.get("/api/me").get_json()["photos"] is True  # 개발 모드: 로컬 디스크
+    app.config["DEV_MODE"] = False  # R2 키 없음 + 개발 모드 아님 → storage.mode() == "off"
+    assert client.get("/api/me").get_json()["photos"] is False
+    app.config.update(R2_ACCOUNT_ID="a", R2_ACCESS_KEY_ID="b", R2_SECRET_ACCESS_KEY="c", R2_BUCKET="d")
+    assert client.get("/api/me").get_json()["photos"] is True
+
+
 def test_coupang_partners_id_from_env(make_app, monkeypatch):
     monkeypatch.setenv("COUPANG_PARTNERS_ID", "")
     assert make_app().config["COUPANG_PARTNERS_ID"] is None

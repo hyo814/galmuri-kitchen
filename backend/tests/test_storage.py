@@ -111,6 +111,15 @@ def test_r2_upload_serve_delete(client, login, r2):
     assert client.get(photo["url"]).status_code == 404  # 행이 없으면 R2를 부르지 않는다(남은 응답 없음으로 확인)
 
 
+def test_r2_delete_batches_1000(app, r2):
+    """delete_objects는 한 번에 1000개까지만 받는다 — 1001개는 두 번(1000 + 1)에 나눠 보낸다."""
+    keys = [f"shopping/1/{i}.jpg" for i in range(1001)]
+    r2.add_response("delete_objects", {}, {"Bucket": "bucket", "Delete": {"Objects": [{"Key": k} for k in keys[:1000]], "Quiet": True}})
+    r2.add_response("delete_objects", {}, {"Bucket": "bucket", "Delete": {"Objects": [{"Key": keys[1000]}], "Quiet": True}})
+    with app.app_context():
+        storage.delete(keys)  # r2 fixture의 assert_no_pending_responses가 정확히 2번 불렀는지 확인한다
+
+
 def test_r2_owner_check_before_any_call(client, login, r2, monkeypatch):
     login()
     _, photo = add_photo(client, r2)

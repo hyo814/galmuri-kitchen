@@ -105,6 +105,7 @@ def user_json(user):
     ponytail: 이름이 scan이라 헷갈리면 ai로 바꾼다. videos는 영상 칸 표시용."""
     from .foods import nutrition_mode  # foods.py가 auth.login_required를 쓰므로 여기서 불러온다
     from .videos import video_mode  # videos.py가 auth.login_required를 쓰므로 여기서 불러온다
+    from . import storage  # storage.py가 auth.login_required를 쓰므로 여기서 불러온다
     return jsonify(
         id=user.id,
         nickname=user.nickname,
@@ -114,6 +115,7 @@ def user_json(user):
         recipe_limit=ai_daily_limit(user, "AI_DAILY_RECIPE_LIMIT"),
         videos=video_mode(user),
         nutrition=nutrition_mode(user),
+        photos=storage.mode() != "off",  # 사진 저장소 꺼짐이면 사진 추가 칸을 숨긴다(기존 사진은 그대로 보인다)
         # 제휴 링크를 쓸 수 있는 쇼핑몰만 true(스펙 16절). 쿠팡은 서버가 키로 딥링크를 만든다(coupang.py) — 키·트래킹 코드는 넘기지 않는다.
         # 체험 계정은 서버가 늘 일반 링크로 보내므로 광고 표시도 없다
         shop_affiliates=(

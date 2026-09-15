@@ -368,7 +368,7 @@ def create_food_log():
         abort(400, BAD_REQUEST)
     log = create_log(data)
     if log is None:
-        abort(400, SLOT_TAKEN)
+        abort(400, SLOT_TAKEN if data.get("meal_slot_id") is not None else BAD_REQUEST)
     return jsonify(log_json(log)), 201
 
 
@@ -392,7 +392,7 @@ def update_food_log(log_id):
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
-        abort(400, SLOT_TAKEN)
+        abort(400, SLOT_TAKEN if data.get("meal_slot_id") is not None else BAD_REQUEST)
     return jsonify(log_json(log))
 
 

@@ -46,8 +46,11 @@ export const MAX_LOG_PHOTOS = 4;
 
 /** 긴 변 1568px JPEG로 줄여 올린다(결정 9). url은 `/api/food-logs/<id>/photos` 또는 `/api/food-logs/photo` */
 export async function uploadFoodPhoto<T>(url: string, file: Blob): Promise<T> {
+  const out = await resizeImage(file);
+  // 못 읽으면 resizeImage가 원본을 돌려주는데, 원본에는 위치 같은 사진 정보가 남아 있을 수 있어 올리지 않는다(ShoppingMemo와 동일 가드)
+  if (out === file) throw new Error("이 사진은 올릴 수 없어요. 다른 사진을 골라주세요.");
   const form = new FormData();
-  form.append("image", await resizeImage(file), "photo.jpg");
+  form.append("image", out, "photo.jpg");
   return api<T>(url, { method: "POST", body: form });
 }
 
@@ -761,7 +764,7 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log: logPro
               </button>
             </div>
           ))}
-          {room >= 2 && (
+          {user.photos && room >= 2 && (
             <>
               <button type="button" className="sh-photo add" disabled={busy} onClick={() => photoCameraRef.current?.click()}>
                 <Icon name="camera" size={22} />
@@ -774,7 +777,7 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log: logPro
             </>
           )}
           {/* 자리가 하나만 남으면 두 칸(찍기·앨범)이 4열 그리드에서 다음 줄로 밀려나므로 칸 하나로 합친다 */}
-          {room === 1 && (
+          {user.photos && room === 1 && (
             <button
               type="button"
               className="sh-photo add"
@@ -787,7 +790,7 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log: logPro
             </button>
           )}
         </div>
-        {room === 1 && addChoiceOpen && (
+        {user.photos && room === 1 && addChoiceOpen && (
           <div className="actions actions-even">
             <button type="button" className="btn secondary" disabled={busy} onClick={() => photoAlbumRef.current?.click()}>
               <Icon name="file" size={18} />
