@@ -5,6 +5,7 @@ import {
   localToday,
   type AiUsage,
   type BodyProfileResponse,
+  type CookReport,
   type ExportSummary,
   type FoodLogDay,
   type ItemRule,
@@ -19,7 +20,7 @@ import ProviderLogo from "../components/ProviderLogo";
 import RulesSheet from "../components/RulesSheet";
 import Sheet from "../components/Sheet";
 import StaplesSheet from "../components/StaplesSheet";
-import { todayRowSub } from "../foodlog/log";
+import { monthOf, todayRowSub } from "../foodlog/log";
 import { useInstallPrompt } from "../install";
 import { dailyTarget, goalLabel, kcalNumber } from "../nutrition/body";
 import { useAsyncAction } from "../useAsyncAction";
@@ -279,6 +280,10 @@ function ExportSheet({ onClose }: { onClose: () => void }) {
           <span>먹은 기록</span>
           <b>{count(data?.food_logs)}</b>
         </li>
+        <li>
+          <span>요리 일기</span>
+          <b>{count(data?.cook_logs)}</b>
+        </li>
       </ul>
       <p className="mo-note">
         <Icon name="info" size={16} />
@@ -362,6 +367,7 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
   // 줄과 시트가 하나만 받아 나눠 쓴다(따로 받으면 시트에서 저장·삭제해도 줄이 갱신되지 않는다)
   const body = useResource<BodyProfileResponse>("/api/body-profile");
   const today = useResource<FoodLogDay>(`/api/food-logs?date=${localToday()}`);
+  const report = useResource<CookReport>(`/api/cook-report?month=${monthOf(localToday())}`);
 
   const onInstallClick = async () => {
     if (canPrompt) await prompt();
@@ -403,6 +409,12 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
           title="먹은 기록"
           sub={todayRowSub(today.data?.logs)}
           onClick={() => navigate("/food-log")}
+        />
+        <Row
+          icon={<Icon name="pan" />}
+          title="요리 일기"
+          sub={report.data ? (report.data.cooked ? `이번 달 요리 ${report.data.cooked}번` : "요리했어요로 남긴 기록을 모아 봐요") : ""}
+          onClick={() => navigate("/cook-logs")}
         />
       </ul>
 

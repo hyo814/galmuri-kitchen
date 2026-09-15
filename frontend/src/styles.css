@@ -6316,3 +6316,152 @@ body:has(.ck-toast:not(:empty)) .page::after {
   font-size: 14px;
   line-height: 20px;
 }
+
+/* 5 · Task 10 */
+/* 요리 일기 목록 위 이번 달 카드(시안 3) */
+.ck-month {
+  background: var(--accent-tint);
+}
+
+.ck-month b {
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.ck-list {
+  gap: 0;
+  padding-block: 4px;
+  list-style: none;
+}
+
+/* 일기 한 줄: 사진 64px + 글, 줄 사이 선 */
+.ck-diary {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 84px;
+  padding: 10px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+}
+
+.ck-list li:first-child .ck-diary {
+  border-top: 0;
+}
+
+.ck-diary b {
+  font-size: 16px;
+}
+
+.ck-diary small {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--text-3);
+  word-break: keep-all;
+}
+
+.ck-ph,
+.ck-noph {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  object-fit: cover;
+}
+
+.ck-noph {
+  display: grid;
+  place-items: center;
+  background: var(--field);
+  color: var(--text-3);
+}
+
+.ck-save {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+/* 일기 상세(시안 4) */
+.ck-hero {
+  width: 100%;
+  height: 150px;
+  border-radius: 16px;
+  object-fit: cover;
+}
+
+/* 시트 설명 줄 바로 아래 별점 — 시트 본문 간격(20px)을 줄여 설명 줄에 붙인다 */
+.ck-sd {
+  margin: -16px 0 0;
+  line-height: 20px;
+}
+
+/* .ck-memo는 요리했어요 시트의 메모 입력 묶음(Task 8)이라 상세 메모 글은 따로 */
+.ck-memo-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 23px;
+  white-space: pre-line;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.ck-sum {
+  display: grid;
+  gap: 4px;
+}
+
+.ck-big {
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-strong);
+}
+
+.ck-big.ck-none {
+  color: var(--text-2);
+}
+
+.ck-big.ck-over {
+  color: var(--warn);
+}
+
+.ck-table {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  word-break: keep-all;
+}
+
+.ck-table dt,
+.ck-table dd {
+  margin: 0;
+}
+
+.ck-table dd {
+  text-align: right;
+}
+
+.ck-table .badge {
+  height: 22px;
+  padding: 0 7px;
+  font-size: 12px;
+  vertical-align: 1px;
+}
+
+.ck-tot {
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  font-weight: 700;
+}
