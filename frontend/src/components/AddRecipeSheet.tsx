@@ -10,7 +10,7 @@ import Sheet from "./Sheet";
 
 export type AddStep = "pick" | "link" | "text" | "photo";
 
-const MAX_PHOTOS = 3;
+const MAX_PHOTOS = 5;
 
 const CHOICES: { step: AddStep | "manual"; icon: IconName; title: string; hint: string }[] = [
   { step: "link", icon: "link", title: "링크로 가져오기", hint: "유튜브·인스타그램·블로그 주소" },
@@ -141,7 +141,7 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
     text: undefined,
     photo: "레시피 사진을 찍거나 고르면 재료와 만드는 법을 정리해줘요",
   }[step];
-  const trimmedText = "사진은 3장까지 읽어요. 앞의 3장만 읽을게요";
+  const trimmedText = "사진은 5장까지 읽어요. 앞의 5장만 읽을게요";
   const value = step === "link" ? url : text;
 
   return (
