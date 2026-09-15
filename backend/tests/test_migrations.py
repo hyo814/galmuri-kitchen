@@ -497,6 +497,36 @@ def test_ingredients_purchased_on_nullable_migration(app):
         assert [(i, str(d)) for i, d in rows] == [(1, "2026-09-01"), (2, "2026-09-11")]
 
 
+def test_price_basis_migration(app):
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="g3f3l3p3h3o3")
+        with db.engine.begin() as conn:
+            conn.execute(sa.text("INSERT INTO users (id, provider, provider_id, nickname, created_at) VALUES (1, 'test', '1', 'u', CURRENT_TIMESTAMP)"))
+            conn.execute(sa.text("INSERT INTO storage_locations (id, user_id, name, kind, sort_order, created_at) VALUES (1, 1, '냉장실', 'fridge', 0, CURRENT_TIMESTAMP)"))
+            conn.execute(sa.text(
+                "INSERT INTO ingredients (id, user_id, location_id, name, quantity, unit, price, created_at) "
+                "VALUES (1, 1, 1, '깐마늘', 300, 'g', 4980, CURRENT_TIMESTAMP)"
+            ))
+            conn.execute(sa.text(
+                "INSERT INTO ingredients (id, user_id, location_id, name, quantity, unit, price, created_at) "
+                "VALUES (2, 1, 1, '대파', 2, '대', NULL, CURRENT_TIMESTAMP)"
+            ))
+
+        upgrade(directory=MIGRATIONS, revision="h1p1r1i1c1e1")
+        with db.engine.connect() as conn:
+            columns = {c["name"] for c in sa.inspect(conn).get_columns("recipes")}
+            rows = conn.execute(sa.text("SELECT id, price_quantity FROM ingredients ORDER BY id")).all()
+        assert {"eat_out_price", "eat_out_source"} <= columns
+        assert [(i, pq) for i, pq in rows] == [(1, 300.0), (2, None)]
+
+        downgrade(directory=MIGRATIONS, revision="g3f3l3p3h3o3")
+        with db.engine.connect() as conn:
+            columns = {c["name"] for c in sa.inspect(conn).get_columns("ingredients")}
+            recipe_columns = {c["name"] for c in sa.inspect(conn).get_columns("recipes")}
+        assert "price_quantity" not in columns
+        assert not {"eat_out_price", "eat_out_source"} & recipe_columns
+
+
 def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)

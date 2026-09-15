@@ -49,8 +49,8 @@ recipe-ai/
 모든 사용자 소유 테이블은 `user_id` FK를 갖고, 모든 조회는 현재 사용자로 한정한다.
 
 - `users`: id, provider(`kakao`|`google`), provider_id, nickname, created_at. UNIQUE(provider, provider_id)
-- `ingredients`: id, user_id, name, quantity(float, 기본 1), unit(str, 기본 `개`), purchased_on(date, 선택 — 비우면 구입일 모름 `기억 안 나요` (2026-09-15, 사용자 승인 시안 docs/design/scan-multi/); 만들 때 키는 꼭 보내고 모르면 `null`), expires_on(date, 선택), price(원, 선택), created_at
-- `recipes`: id, user_id, title(1~60자), servings(1~20, 기본 2), ingredients(JSON `[{name, amount}]` 1~50개), steps(JSON `[str]` 0~30개), source(`mine`|`public`|`ai`|`youtube`|`instagram`|`blog`|`text`|`photo`), source_url(선택), public_recipe_id(선택, SET NULL), image_url(선택, AI 레시피는 비슷한 공공 레시피 사진 17절), created_at, updated_at. UNIQUE(user_id, public_recipe_id)
+- `ingredients`: id, user_id, name, quantity(float, 기본 1), unit(str, 기본 `개`), purchased_on(date, 선택 — 비우면 구입일 모름 `기억 안 나요` (2026-09-15, 사용자 승인 시안 docs/design/scan-multi/); 만들 때 키는 꼭 보내고 모르면 `null`), expires_on(date, 선택), price(원, 선택), price_quantity(float, 선택 — 구입 수량, 29절), created_at
+- `recipes`: id, user_id, title(1~60자), servings(1~20, 기본 2), ingredients(JSON `[{name, amount}]` 1~50개), steps(JSON `[str]` 0~30개), source(`mine`|`public`|`ai`|`youtube`|`instagram`|`blog`|`text`|`photo`), source_url(선택), public_recipe_id(선택, SET NULL), image_url(선택, AI 레시피는 비슷한 공공 레시피 사진 17절), eat_out_price(원, 선택)·eat_out_source(`user`|`ai`|`sample`, 선택, 29절), created_at, updated_at. UNIQUE(user_id, public_recipe_id)
 - `public_recipes`: id, rcp_seq(UNIQUE), title, category(RCP_PAT2), method(RCP_WAY2), kcal(INFO_ENG), servings(원문 `N인분`, 없으면 2), ingredients_text(원문), ingredients(JSON `[{name, amount}]`, 파싱), ingredient_keys(JSON, ingredients와 같은 순서의 매칭용 이름), steps(JSON), image_url, is_sample(키 없을 때 넣는 예시 레시피), updated_at. 사용자 소유 아님.
 - `cook_logs`: id, user_id, recipe_id(선택, SET NULL), title, cooked_on(date), rating(1~5, 선택), memo(선택), photo_key(선택), created_at
 - `ai_calls`: id, user_id, kind(`fridge`|`receipt`|`order`|`memo`|`recipe`|`link`|`recipe_photo`|`meal`|`nutrition`|`link_fetch`|`channel_add`|`video_refresh`|`export`|`food_fetch`), model, input_tokens, output_tokens, created_at(인덱스). 토큰은 원가 계산용(25절)이다. model은 성공하면 실제로 답한 모델, 실패하면 요청한 모델이다. AI 호출이 AiError로 끝나면(오류·타임아웃·거절·max_tokens·스키마 불일치) 토큰은 비워 둔다. 새 AI 기능도 같은 방식으로 남긴다(`nutrition`은 영양 채우기의 AI 단위 무게·영양 추정, 토큰 있음, 21절). `link_fetch`(링크 가져오기 외부 요청)·`channel_add`(채널 추가)·`video_refresh`(영상 새로 받기)·`export`(데이터 내보내기 27절)·`food_fetch`(식품영양성분 DB 요청, 21절)는 AI를 부르지 않는 한도용 기록이라 model이 NULL이고 토큰이 없다(17절). **원가·사용량 집계는 model IS NOT NULL(또는 scan·recipe·link·recipe_photo·meal·nutrition kind)만 센다.**
@@ -704,7 +704,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **집밥 리포트(월간, 이름 2026-09-14 사용자 결정):** 이번 달 기록한 날, 요리한 횟수, 집밥/외식 비율(24절), **버린 재료 수**, **아낀 돈**. 버린 재료를 세려면 재료를 지울 때 이유(`다 먹었어요`/`버렸어요`)를 고를 수 있게 한다(선택, 기본은 이유 없음).
 - **아낀 돈(추가 2026-09-14, 사용자 제안·선택):** 요리 기록(5단계) 한 건마다 `사 먹으면 얼마 − 집밥 재료비 = 아낀 돈`을 계산해 집밥 리포트에서 합산한다. 예: "이번 달 집밥 12번으로 약 86,000원 아꼈어요 · 부대찌개 12,000원 − 재료비 4,300원 = 7,700원".
   - **사 먹으면 얼마(외식 가격) 우선순위:** ① 레시피에 사용자가 직접 입력한 값(`recipes.eat_out_price`, 원, 선택) → ② 한국소비자원 참가격 외식비(대표 외식 8품목 지역별 평균, 레시피 이름이 품목과 맞을 때, 월 1회 캐시) → ③ AI 추정(레시피 이름·인분으로 요즘 외식 가격 추정, 결과를 레시피에 저장해 다시 묻지 않음, AI 일일 한도 recipe 그룹). ②③은 화면에 `참가격 평균`/`추정` 표시. 배달앱 가격은 공개 API가 없어 쓰지 않는다. 참가격 API 이용 조건은 구현 시 확인.
-  - **집밥 재료비:** 재료의 구입 가격(`ingredients.price`, 원, 선택)을 **사용량 비율**로 나눈다(예: 깐마늘 300g 4,980원 중 30g → 498원, 단위가 같을 때 `사용량 ÷ 구입 수량`). 가격이 없으면 KAMIS(농산물유통정보) 소매가격으로 추정(`추정` 표시, 채소·과일·축산물 위주, 이용 조건 구현 시 확인). 둘 다 없거나 단위가 달라 비율을 못 구하면 그 재료는 `가격 모름`으로 빼고, 결과에 "재료 N개 가격 제외"를 함께 보여준다. 양념 등 조금 쓰는 재료(조미료 분류 필수품)는 기본 제외.
+  - **집밥 재료비:** 재료의 구입 가격(`ingredients.price`, 원, 선택)을 **사용량 비율**로 나눈다(예: 깐마늘 300g 4,980원 중 30g → 498원, 단위가 같을 때 `사용량 ÷ 구입 수량`(구입 수량 = `ingredients.price_quantity`, 29절)). 가격이 없으면 KAMIS(농산물유통정보) 소매가격으로 추정(`추정` 표시, 채소·과일·축산물 위주, 이용 조건 구현 시 확인). 둘 다 없거나 단위가 달라 비율을 못 구하면 그 재료는 `가격 모름`으로 빼고, 결과에 "재료 N개 가격 제외"를 함께 보여준다. 양념 등 조금 쓰는 재료(조미료 분류 필수품)는 기본 제외.
   - 아낀 돈이 0 이하이면(사 먹는 게 더 싸면) 그대로 보여주되 합계에서 음수도 반영한다. 의료·재무 조언이 아닌 참고용 표시.
   - **가격 수집(선행, 사용자 결정 "지금 넣기"):** 영수증·주문 캡처 스캔이 품목별 **결제 금액**(할인 반영 후 가능하면)을 함께 읽어 `ingredients.price`로 저장한다. 확인 화면에서 가격을 보고 고칠 수 있고, 직접 추가·수정 폼에도 가격(선택) 칸을 둔다. 냉장고 사진 스캔은 가격이 없다. 3a 레시피 작업 사이에 별도 작은 작업으로 넣는다.
 - **가족과 함께 쓰기(기획만):** 초대 코드로 한 냉장고(재고·필수품·장보기)를 여러 계정이 함께 쓰는 구조. 데이터 소유가 사용자 단위에서 `household` 단위로 바뀌는 큰 변경이라 지금은 설계만 적고 구현하지 않는다. 필요해지면 별도 설계를 먼저 쓴다.
@@ -804,3 +804,9 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **집밥 리포트:** 좌우 달 이동. 아낀 돈 합계(`요리 N번 중 M번 계산 · 재료 K개 가격 제외`), 요리 횟수·기록한 날·집밥 비율·버린 재료 수, 지난달 대비 한 줄, 많이 아낀 요리 3개 막대, 버린 재료 이름 칩.
 - **재료 지울 때 이유(D):** 재고 삭제 시트에 `다 먹었어요 · 버렸어요 · 그냥 지우기`(기본 그냥 지우기). 리포트는 `버렸어요`만 센다. 요리 차감으로 0이 되어 지워진 재료는 `다 먹었어요`로 본다.
 - **먹은 기록 달력(24절):** 요리 일기가 있는 날 칸에 `요` 표시.
+
+**구현 세부 (2026-09-15, 5단계):**
+- **구입 수량 `ingredients.price_quantity`(29절 결정 10):** 가격이 생기거나 바뀌거나 단위가 바뀐 순간의 수량. 만들 때 가격이 있으면 그 수량, PATCH가 보낸 `price` 또는 `unit`이 지금 값과 다르면 고친 뒤 수량, 가격이 없으면 NULL. 요리 차감·수량만 고치기는 바꾸지 않는다 — 재고 고치기 폼은 늘 `price`·`unit`을 포함한 전체 body를 보내므로 "값이 바뀌었나"로 본다(개정 1 P17). 기존 행은 마이그레이션이 `price IS NOT NULL`인 행에 `quantity`로 채운다.
+- **사 먹으면 얼마 칸(29절 결정 11):** `recipes.eat_out_price`(1인분, 원, 0~1,000,000)·`eat_out_source`(`user`|`ai`|`sample`). `recipe_json`에만 넣고, `PUT /api/recipes/<id>`는 이 칸을 받지 않는다(폼에서만 바꾼다, Task 4·5).
+- **마이그레이션 id(29절 결정 31):** Task 1 `h1p1r1i1c1e1`(down `g3f3l3p3h3o3`), Task 4 `h2c2o2o2k2l2`(down `h1p1r1i1c1e1`).
+- **`amounts.in_unit(amount_text, unit)`(23절 D2):** 레시피 양 글자를 재고 단위 수량으로 바꾼다. `parse_amount`로 양과 `1{unit}`을 각각 읽어 단위(대소문자 무시)가 같으면 배수를, 다르거나 못 읽으면 `None`을 돌려준다. 재고 단위에 숫자가 들었으면(`30구`처럼) 매칭하지 않고 `None`.

@@ -45,3 +45,14 @@ def parse_amount(text):
 
 def is_spoon(unit):
     return unit.lower() in SPOON_UNITS
+
+
+def in_unit(amount_text, unit):
+    """레시피 양 글자를 재고 단위 수량으로(23절 D2). '300g'·'kg' → 0.3, '1/2모'·'모' → 0.5, '1L'·'ml' → 1000.0.
+    단위가 다르거나(대소문자 무시) 못 읽거나 재고 단위에 숫자가 들었으면(30구) None."""
+    if not unit or any(ch.isdigit() for ch in unit):
+        return None
+    parsed, target = parse_amount(amount_text), parse_amount(f"1{unit}")
+    if parsed is None or target is None or parsed[1].lower() != target[1].lower():
+        return None
+    return parsed[0] / target[0]

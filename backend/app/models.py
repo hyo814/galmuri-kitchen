@@ -66,6 +66,7 @@ class Ingredient(db.Model):
     purchased_on = db.Column(db.Date)  # None: 구입일 모름("기억 안 나요")
     expires_on = db.Column(db.Date)
     price = db.Column(db.Integer)
+    price_quantity = db.Column(db.Float)  # 가격을 넣거나 바꾸거나 단위를 바꾼 순간의 수량(재료비 비율 분모, 29절 결정 10). 가격 없으면 NULL
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
 
@@ -225,6 +226,8 @@ class Recipe(db.Model):
     source_url = db.Column(db.String(500))
     public_recipe_id = db.Column(db.Integer, db.ForeignKey("public_recipes.id", ondelete="SET NULL"))
     image_url = db.Column(db.String(500))
+    eat_out_price = db.Column(db.Integer)  # 사 먹으면 얼마(1인분, 원, 29절 결정 11)
+    eat_out_source = db.Column(db.String(10))  # user | ai | sample
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow)
 
