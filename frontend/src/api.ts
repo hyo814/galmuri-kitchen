@@ -57,6 +57,8 @@ export interface User {
   recipe_limit: number;
   /** on: 요리 채널 영상 / sample: 키 없는 개발 모드의 예시 영상 / off: 영상 칸 숨김 */
   videos: ScanMode;
+  /** on: 식품영양성분 DB / sample: 키 없는 개발 모드 예시 식품 / off: 영양 칸 숨김 */
+  nutrition: ScanMode;
   /** 제휴 링크를 쓸 수 있는 쇼핑몰만 true(쿠팡은 서버에 파트너스 키가 있을 때). 링크는 storeLinks.ts에서 만든다 */
   shop_affiliates: Partial<Record<StoreId, boolean>>;
 }
@@ -460,4 +462,24 @@ export interface MealDraft {
   slots: { date: string; meal: MealKind; options: number[] }[];
   kept: { date: string; meal: MealKind; title: string }[];
   sample: boolean;
+}
+
+// ---- 하루 칼로리 목표(스펙 21절, 4b-2) ----
+export type Sex = "female" | "male";
+export type Activity = "sedentary" | "light" | "moderate" | "active" | "very_active";
+export type BodyGoal = "maintain" | "lose" | "gain";
+
+/** GET/PUT /api/body-profile. 건강 정보라 본인만 조회(Cache-Control: no-store) */
+export interface BodyProfile {
+  sex: Sex;
+  birth_year: number;
+  height_cm: number;
+  weight_kg: number;
+  activity: Activity;
+  goal: BodyGoal;
+  updated_at: string;
+}
+
+export interface BodyProfileResponse {
+  profile: BodyProfile | null;
 }

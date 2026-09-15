@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, localToday, type AiUsage, type MealKind, type MealPlan, type MealPlanList, type MealPlanSummary, type MealSlot, type User } from "../api";
+import BodyGoalCard from "../components/BodyGoalCard";
 import Icon from "../components/Icon";
 import Mascot from "../components/Mascot";
 import MealCopySheet, { type CopyResult } from "../components/MealCopySheet";
@@ -96,6 +97,7 @@ export default function Meals({ user }: { user: User }) {
         <header className="topbar">
           <h1>식단</h1>
         </header>
+        <BodyGoalCard today={today} />
         {!items ? (
           list.error ? (
             <LoadError error={list.status === 0 ? "인터넷이 연결되면 식단을 볼 수 있어요" : list.error} onRetry={list.reload} />
@@ -351,6 +353,7 @@ function PlanWeek({ summary, today, user, onPick, onChanged, onDeleted }: PlanWe
       <p className="ml-copied" role="status">
         {copied}
       </p>
+      <BodyGoalCard today={today} />
       <div className="ml-row2">
         <button type="button" className="ml-plan" aria-haspopup="dialog" aria-label={`${shown.name}, 다른 식단 고르기`} onClick={onPick}>
           <span>{shown.name}</span>

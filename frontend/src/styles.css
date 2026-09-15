@@ -5165,3 +5165,73 @@ button.sh-offline svg:last-child {
 .choice:disabled {
   opacity: 0.5;
 }
+
+/* 영양 (4b-2) */
+.nt-card {
+  display: grid;
+  gap: 10px;
+  margin: 12px 20px 0;
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.nt-big {
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.nt-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--accent-strong);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.nt-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 8px;
+}
+
+.nt-kv {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  font-size: 14px;
+}
+
+.nt-kv span:nth-child(odd) {
+  color: var(--text-2);
+}
+
+.nt-kv b {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.nt-src {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-3);
+  word-break: keep-all;
+}
+
+/* 시트 안 결과 상자: 카드 기본 여백(페이지용) 대신 폼 흐름에 맞춘다 */
+.field-bg {
+  margin: 0;
+  background: var(--field);
+}
+
+.nt-invalid {
+  color: var(--danger);
+}

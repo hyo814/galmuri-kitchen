@@ -1,5 +1,17 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { ApiError, api, type AiUsage, type ExportSummary, type ItemRule, type Staple, type StorageLocation, type User } from "../api";
+import {
+  ApiError,
+  api,
+  localToday,
+  type AiUsage,
+  type BodyProfileResponse,
+  type ExportSummary,
+  type ItemRule,
+  type Staple,
+  type StorageLocation,
+  type User,
+} from "../api";
+import BodyGoalSheet from "../components/BodyGoalSheet";
 import Icon from "../components/Icon";
 import LocationsSheet from "../components/LocationsSheet";
 import ProviderLogo from "../components/ProviderLogo";
@@ -7,6 +19,7 @@ import RulesSheet from "../components/RulesSheet";
 import Sheet from "../components/Sheet";
 import StaplesSheet from "../components/StaplesSheet";
 import { useInstallPrompt } from "../install";
+import { dailyTarget, goalLabel, kcalNumber } from "../nutrition/body";
 import { useAsyncAction } from "../useAsyncAction";
 import { navigate } from "../useHashRoute";
 import { forgetRecipeCaches, forgetResources, useResource } from "../useResource";
@@ -81,6 +94,54 @@ function Row({ icon, iconClass = "", title, sub, value, className = "", onClick,
         <div className={`mo-row ${className}`}>{inner}</div>
       )}
     </li>
+  );
+}
+
+/** 더보기 `나` 묶음 맨 위 줄(스펙 27절). 키와 관계없이 늘 보인다 */
+function BodyGoalRow({ onOpen }: { onOpen: () => void }) {
+  const { data } = useResource<BodyProfileResponse>("/api/body-profile");
+  const profile = data?.profile;
+  return (
+    <Row
+      icon={<Icon name="bowl" />}
+      title="하루 칼로리 목표"
+      sub={profile ? `${goalLabel(profile.goal)} · 하루 ${kcalNumber(dailyTarget(profile, localToday()).target)}kcal` : "키·몸무게로 하루 필요 칼로리를 알려줘요"}
+      onClick={onOpen}
+    />
+  );
+}
+
+/** 더보기에서 여는 하루 칼로리 목표 시트: 받아온 뒤에야 시트를 그린다(불러오는 중·오류는 안에서) */
+function BodyPanel({ onClose }: { onClose: () => void }) {
+  const { data, error, reload } = useResource<BodyProfileResponse>("/api/body-profile");
+  if (!data)
+    return (
+      <Sheet title="하루 칼로리 목표 정하기" onClose={onClose}>
+        {error ? (
+          <>
+            <p className="error" role="alert">
+              {error}
+            </p>
+            <button type="button" className="btn secondary" onClick={reload}>
+              다시 시도
+            </button>
+          </>
+        ) : (
+          <p className="muted" role="status">
+            불러오는 중…
+          </p>
+        )}
+      </Sheet>
+    );
+  return (
+    <BodyGoalSheet
+      today={localToday()}
+      profile={data.profile}
+      onClose={() => {
+        onClose();
+        void reload();
+      }}
+    />
   );
 }
 
@@ -275,7 +336,7 @@ function LoadedSheet<T>({
   );
 }
 
-type Panel = "locations" | "staples" | "rules" | "theme" | "export" | "install" | "credits";
+type Panel = "locations" | "staples" | "rules" | "body" | "theme" | "export" | "install" | "credits";
 
 export default function More({ user, onLogout }: { user: User; onLogout: () => void }) {
   const { canPrompt, installed, prompt } = useInstallPrompt();
@@ -339,14 +400,11 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
         <Row icon={<Icon name="pan" />} title="주방 도구" sub="프라이팬 코팅 점검" onClick={() => navigate("/tools")} />
       </ul>
 
-      {user.scan !== "off" && (
-        <>
-          <h2 className="mo-group">나</h2>
-          <ul className="list">
-            <AiUsageRow />
-          </ul>
-        </>
-      )}
+      <h2 className="mo-group">나</h2>
+      <ul className="list">
+        <BodyGoalRow onOpen={() => setPanel("body")} />
+        {user.scan !== "off" && <AiUsageRow />}
+      </ul>
 
       <h2 className="mo-group">앱</h2>
       <ul className="list">
@@ -419,6 +477,7 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
           {(data, onChanged) => <RulesSheet rules={data} onChanged={onChanged} onClose={() => setPanel(null)} />}
         </LoadedSheet>
       )}
+      {panel === "body" && <BodyPanel onClose={() => setPanel(null)} />}
       {panel === "theme" && <ThemeSheet value={theme} onChange={chooseTheme} onClose={() => setPanel(null)} />}
       {panel === "export" && <ExportSheet onClose={() => setPanel(null)} />}
       {panel === "credits" && (
