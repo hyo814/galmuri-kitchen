@@ -172,6 +172,7 @@ export interface ExportSummary {
   seasonings: number;
   shopping: number;
   memos: number;
+  meals: number;
   limit: number;
   remaining: number;
 }
