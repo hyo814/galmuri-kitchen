@@ -2,6 +2,7 @@ import json
 from datetime import timedelta
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app import foods, outbound
 from app.models import AiCall, FoodNutrient, FoodSearch, PublicRecipe, User, db, utcnow
@@ -131,6 +132,31 @@ def test_fetch_page_bad_result_code_raises_fetch_error(app, monkeypatch):
         foods.fetch_page("k", "두부", 1)
 
 
+def test_fetch_page_item_dict_with_list_value_uses_inner_list(app, monkeypatch):
+    body = json.dumps({"header": {"resultCode": "00"}, "body": {"totalCount": 2, "items": {"item": [item("F1", "두부"), item("F2", "순두부")]}}})
+    fetch, _ = make_fetch([body])
+    monkeypatch.setattr(outbound, "fetch_fixed", fetch)
+    with app.app_context():
+        items, total = foods.fetch_page("k", "두부", 1)
+    assert len(items) == 2 and total == 2
+
+
+def test_fetch_page_total_count_numeric_string_becomes_int(app, monkeypatch):
+    fetch, _ = make_fetch([page([item("F1", "두부")], "150")])
+    monkeypatch.setattr(outbound, "fetch_fixed", fetch)
+    with app.app_context():
+        _, total = foods.fetch_page("k", "두부", 1)
+    assert total == 150
+
+
+def test_fetch_page_total_count_non_numeric_becomes_zero(app, monkeypatch):
+    fetch, _ = make_fetch([page([item("F1", "두부")], "many")])
+    monkeypatch.setattr(outbound, "fetch_fixed", fetch)
+    with app.app_context():
+        _, total = foods.fetch_page("k", "두부", 1)
+    assert total == 0
+
+
 def test_apis_data_go_kr_is_a_fixed_host():
     assert "apis.data.go.kr" in outbound.FIXED_HOSTS
 
@@ -179,31 +205,40 @@ def test_tail_paging_fetches_second_page_when_total_fits_in_two_pages(make_app, 
         monkeypatch.setattr(outbound, "fetch_fixed", fetch)
         assert foods.search_and_cache("두부", user) is True
         assert [c["params"]["pageNo"] for c in calls] == [1, 2]
+        assert FoodNutrient.query.count() == 150
+        assert FoodNutrient.query.filter_by(food_code="G0").one().name == "두부요리100"
+        assert FoodSearch.query.one().total == 150
 
 
 def test_tail_paging_stops_at_last_page_when_it_is_full(make_app, monkeypatch):
     app = make_app(FOOD_NUTRITION_API_KEY="k")
     with app.app_context():
         user = make_user()
-        page1 = [item(f"F{i}", f"두부요리{i}") for i in range(100)]
+        page1 = [item(f"F{i}", f"두부요리{i}", group="음식") for i in range(100)]
         last_page = [item(f"R{i}", f"두부_원물{i}", group="원재료성") for i in range(67)]  # 50개 이상(가득 찬 마지막 쪽)
         fetch, calls = make_fetch([page(page1, 3167), page(last_page, 3167)])
         monkeypatch.setattr(outbound, "fetch_fixed", fetch)
         assert foods.search_and_cache("두부", user) is True
         assert [c["params"]["pageNo"] for c in calls] == [1, 32]
+        assert FoodNutrient.query.count() == 167
+        assert FoodNutrient.query.filter_by(group_name="원재료성").count() == 67  # 마지막 쪽 행도 캐시에 들어갔다
+        assert FoodSearch.query.one().total == 3167
 
 
 def test_tail_paging_also_fetches_page_before_a_short_last_page(make_app, monkeypatch):
     app = make_app(FOOD_NUTRITION_API_KEY="k")
     with app.app_context():
         user = make_user()
-        page1 = [item(f"F{i}", f"두부요리{i}") for i in range(100)]
+        page1 = [item(f"F{i}", f"두부요리{i}", group="음식") for i in range(100)]
         short_last_page = [item(f"R{i}", f"두부_원물{i}", group="원재료성") for i in range(20)]  # 50개 미만
-        page_before_last = [item(f"S{i}", f"두부_원물전{i}") for i in range(100)]
+        page_before_last = [item(f"S{i}", f"두부_원물전{i}", group="가공식품") for i in range(100)]
         fetch, calls = make_fetch([page(page1, 3167), page(short_last_page, 3167), page(page_before_last, 3167)])
         monkeypatch.setattr(outbound, "fetch_fixed", fetch)
         assert foods.search_and_cache("두부", user) is True
         assert [c["params"]["pageNo"] for c in calls] == [1, 32, 31]
+        assert FoodNutrient.query.count() == 220
+        assert FoodNutrient.query.filter_by(group_name="원재료성").count() == 20
+        assert FoodSearch.query.one().total == 3167
 
 
 def test_tail_paging_only_page_one_when_total_fits_one_page(make_app, monkeypatch):
@@ -214,6 +249,21 @@ def test_tail_paging_only_page_one_when_total_fits_one_page(make_app, monkeypatc
         monkeypatch.setattr(outbound, "fetch_fixed", fetch)
         assert foods.search_and_cache("두부", user) is True
         assert [c["params"]["pageNo"] for c in calls] == [1]
+        assert FoodSearch.query.one().total == 80
+
+
+def test_partial_page_failure_still_caches_earlier_pages_but_not_food_search(make_app, monkeypatch):
+    app = make_app(FOOD_NUTRITION_API_KEY="k")
+    with app.app_context():
+        user = make_user()
+        page1 = [item(f"F{i}", f"두부요리{i}") for i in range(100)]
+        fetch, calls = make_fetch([page(page1, 3167), outbound.FetchError("TooSlow")])
+        monkeypatch.setattr(outbound, "fetch_fixed", fetch)
+        assert foods.search_and_cache("두부", user) is False
+        assert [c["params"]["pageNo"] for c in calls] == [1, 32]
+        assert FoodNutrient.query.count() == 100  # 1쪽은 살아 있다
+        assert FoodSearch.query.count() == 0  # 검색 기록은 안 남아 다음에 다시 찾는다
+        assert AiCall.query.filter_by(kind="food_fetch").count() == 2  # 실패한 요청도 기록은 남는다
 
 
 def test_fetch_failures_leave_no_search_record(make_app, monkeypatch):
@@ -236,7 +286,25 @@ def test_fetch_failures_leave_no_search_record(make_app, monkeypatch):
         assert foods.search_and_cache("양파", user) is False
         assert FoodSearch.query.count() == 0
 
-        assert AiCall.query.filter_by(kind="food_fetch").count() == 3  # 요청마다 남는다(실패해도)
+        # 쓸 수 있는 모양의 오류 응답(body가 null이어도 resultCode부터 본다) → FetchError, 여전히 False
+        body_null = json.dumps({"header": {"resultCode": "03"}, "body": None})
+        monkeypatch.setattr(outbound, "fetch_fixed", lambda *a, **k: (body_null, "utf-8"))
+        assert foods.search_and_cache("배추", user) is False
+        assert FoodSearch.query.count() == 0
+
+        # body가 dict가 아니라 list → AttributeError(.get 없음) → ValueError로 통일
+        body_list = json.dumps({"header": {"resultCode": "00"}, "body": []})
+        monkeypatch.setattr(outbound, "fetch_fixed", lambda *a, **k: (body_list, "utf-8"))
+        assert foods.search_and_cache("감자", user) is False
+        assert FoodSearch.query.count() == 0
+
+        # header가 아예 없음 → KeyError → ValueError로 통일
+        no_header = json.dumps({"body": {"totalCount": 0, "items": []}})
+        monkeypatch.setattr(outbound, "fetch_fixed", lambda *a, **k: (no_header, "utf-8"))
+        assert foods.search_and_cache("당근", user) is False
+        assert FoodSearch.query.count() == 0
+
+        assert AiCall.query.filter_by(kind="food_fetch").count() == 6  # 요청마다 남는다(실패해도), 500이 아니라 항상 False
 
 
 def test_fetch_limits(make_app, monkeypatch):
@@ -268,6 +336,91 @@ def test_fetch_limits(make_app, monkeypatch):
         db.session.commit()
         monkeypatch.setattr(outbound, "fetch_fixed", fail)
         assert foods.search_and_cache("두부", demo_user) is False
+
+
+# --- IntegrityError race (동시에 같은 행을 다른 요청이 먼저 넣었다) ---
+
+
+def test_upsert_integrity_error_race_returns_true_not_500(make_app, monkeypatch):
+    app = make_app(FOOD_NUTRITION_API_KEY="k")
+    with app.app_context():
+        user = make_user()
+        fetch, _ = make_fetch([page([item("F1", "두부")], 1)])
+        monkeypatch.setattr(outbound, "fetch_fixed", fetch)
+
+        def boom(*a, **k):
+            raise IntegrityError("x", {}, Exception("dup"))
+
+        monkeypatch.setattr(foods, "_upsert_search", boom)
+        assert foods.search_and_cache("두부", user) is True
+        assert FoodSearch.query.count() == 0  # 다른 요청이 이미 넣었다고 보고 롤백했다
+
+
+def test_search_endpoint_survives_upsert_integrity_error_race(make_app, monkeypatch):
+    app = make_app(FOOD_NUTRITION_API_KEY="k")
+    client = app.test_client()
+    client.environ_base["HTTP_X_REQUESTED_WITH"] = "fetch"
+    with app.app_context():
+        user = make_user()
+        user_id = user.id
+    with client.session_transaction() as s:
+        s["user_id"], s["pid"] = user_id, "1"
+    fetch, _ = make_fetch([page([item("F1", "두부")], 1)])
+    monkeypatch.setattr(outbound, "fetch_fixed", fetch)
+
+    def boom(*a, **k):
+        raise IntegrityError("x", {}, Exception("dup"))
+
+    monkeypatch.setattr(foods, "_upsert_food", boom)
+    res = client.get("/api/foods/search?q=두부")
+    assert res.status_code == 200
+    assert res.get_json()["searched"] is True
+
+
+def test_sample_search_integrity_error_race_returns_true(app, monkeypatch):
+    with app.app_context():
+        user = make_user()
+
+        def boom(*a, **k):
+            raise IntegrityError("x", {}, Exception("dup"))
+
+        monkeypatch.setattr(foods, "_upsert_search", boom)
+        assert foods.search_and_cache("두부", user) is True
+        assert FoodSearch.query.count() == 0
+
+
+# --- 쿼리 정규화(Ruling 9): API 검색어·LIKE 필터·food_searches 키는 모두 query_key(name) ---
+
+
+def test_search_and_cache_sends_normalized_query_to_api(make_app, monkeypatch):
+    app = make_app(FOOD_NUTRITION_API_KEY="k")
+    with app.app_context():
+        user = make_user()
+        fetch, calls = make_fetch([page([item("F1", "두부")], 1)])
+        monkeypatch.setattr(outbound, "fetch_fixed", fetch)
+        assert foods.search_and_cache("두 부", user) is True
+        assert calls[0]["params"]["FOOD_NM_KR"] == "두부"
+        assert FoodSearch.query.one().query_key == "두부"
+
+
+def test_search_and_cache_sends_synonym_normalized_query_to_api(make_app, monkeypatch):
+    app = make_app(FOOD_NUTRITION_API_KEY="k")
+    with app.app_context():
+        user = make_user()
+        fetch, calls = make_fetch([page([item("F1", "달걀")], 1)])
+        monkeypatch.setattr(outbound, "fetch_fixed", fetch)
+        assert foods.search_and_cache("계란", user) is True
+        assert calls[0]["params"]["FOOD_NM_KR"] == "달걀"
+        assert FoodSearch.query.one().query_key == "달걀"
+
+
+def test_search_items_finds_synonym_normalized_cached_rows(app):
+    with app.app_context():
+        now = utcnow()
+        db.session.add(FoodNutrient(food_code="E1", name="달걀찜", name_key="달걀찜", group_name="음식", kcal=100, source="api", fetched_at=now))
+        db.session.commit()
+        names = [row["name"] for row in foods.search_items("계란")]
+    assert "달걀찜" in names
 
 
 def test_sample_mode_uses_file_without_network(app, monkeypatch):
@@ -390,14 +543,29 @@ def test_warm_cli_picks_most_common_ingredient_keys(make_app, monkeypatch):
         assert "식품 이름 2개를 찾아봤어요." in result.output
 
 
-def test_warm_cli_reports_when_limit_hit(make_app, monkeypatch):
+def test_warm_cli_reports_limit_message_when_global_limit_hit(make_app, monkeypatch):
     app = make_app(FOOD_NUTRITION_API_KEY="k")
     with app.app_context():
         db.session.add(PublicRecipe(rcp_seq="1", title="a", ingredient_keys=["두부", "대파", "양파"]))
+        db.session.add(AiCall(kind="food_fetch", created_at=utcnow()))
         db.session.commit()
+        monkeypatch.setattr(foods, "GLOBAL_DAILY_FETCHES", 1)
 
         results = iter([True, False])
         monkeypatch.setattr(foods, "search_and_cache", lambda name, user: next(results))
         result = app.test_cli_runner().invoke(args=["warm-food-nutrients", "--limit", "3"])
         assert result.exit_code == 0
         assert "식품 이름 1개를 찾아봤어요. 한도 때문에 2개는 다음에 찾아요." in result.output
+
+
+def test_warm_cli_reports_failure_message_when_not_limited(make_app, monkeypatch):
+    app = make_app(FOOD_NUTRITION_API_KEY="k")
+    with app.app_context():
+        db.session.add(PublicRecipe(rcp_seq="1", title="a", ingredient_keys=["두부", "대파", "양파"]))
+        db.session.commit()
+
+        results = iter([True, False])  # 두 번째 이름에서 실패(FetchError 등) — 전체 한도는 아직 남아 있다
+        monkeypatch.setattr(foods, "search_and_cache", lambda name, user: next(results))
+        result = app.test_cli_runner().invoke(args=["warm-food-nutrients", "--limit", "3"])
+        assert result.exit_code == 0
+        assert "식품 이름 1개를 찾아봤어요. 요청이 실패해 2개는 다음에 찾아요." in result.output

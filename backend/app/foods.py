@@ -100,24 +100,39 @@ def row_fields(item):
     return fields
 
 
+def _total_count(value):
+    """totalCount가 숫자 문자열이면 int, 아니면(불리언 포함) 0."""
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return value
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 def fetch_page(key, name, page):
     """(행 dict 목록, totalCount). serviceKey는 Decoding 키를 인코딩하지 않고 주소에 그대로 붙인다(조사 문서: 다시 인코딩하면 403).
-    header.resultCode가 '00'이 아니면 FetchError('ResultCode'). body.items는 목록 또는 {'item': …}."""
+    header.resultCode가 '00'이 아니면 FetchError('ResultCode'). body.items는 목록 또는 {'item': 한 행 또는 목록}.
+    응답 모양이 기대와 다르면(header·body가 dict가 아니거나 없음 등) ValueError."""
     body, _ = outbound.fetch_fixed(f"{ENDPOINT}?serviceKey={key}",
                                     params={"FOOD_NM_KR": name, "type": "json", "numOfRows": ROWS_PER_PAGE, "pageNo": page},
                                     seconds=FETCH_SECONDS)
     try:
         data = json.loads(body)
-        header, result_body = data["header"], data["body"]
+        header = data["header"]
+        if header.get("resultCode") != "00":
+            raise outbound.FetchError("ResultCode")
+        result_body = data["body"]
         items = result_body.get("items")
         total = result_body.get("totalCount")
-    except (ValueError, KeyError, TypeError) as e:
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
         raise ValueError(type(e).__name__) from None
-    if header.get("resultCode") != "00":
-        raise outbound.FetchError("ResultCode")
     if isinstance(items, dict):
-        items = [items["item"]] if "item" in items else []
-    return (items if isinstance(items, list) else []), (total if isinstance(total, int) else 0)
+        value = items.get("item")
+        items = value if isinstance(value, list) else ([value] if value is not None else [])
+    return (items if isinstance(items, list) else []), _total_count(total)
 
 
 def _aware(value):
@@ -139,6 +154,7 @@ def _fetches_between(start, end, user_id=None):
 
 def fetch_allowed(user):
     """오늘(서울) food_fetch 기록이 사용자 한도(체험 50·그 외 300, user None이면 CLI라 사용자 한도 없음)·전체 8,000 미만인지."""
+    # ponytail: 세고 부르기라 동시에 온 요청 몇 개만큼 한도를 넘을 수 있다(coupang.py GLOBAL_HOURLY의 여유와 같은 종류의 문제).
     start, end = _day_bounds(seoul_today())
     if _fetches_between(start, end) >= GLOBAL_DAILY_FETCHES:
         return False
@@ -166,8 +182,8 @@ def _upsert_search(key, total, now):
         row.total, row.searched_at = total, now
 
 
-def _search_sample(key, name):
-    """SAMPLE_FILE에서 name_key가 같거나 이름에 검색어가 든 행만 넣고 기록한다(외부 요청·ai_calls 없음)."""
+def _search_sample(key):
+    """SAMPLE_FILE에서 name_key가 같거나 이름에 검색어(key)가 든 행만 넣고 기록한다(외부 요청·ai_calls 없음)."""
     try:
         rows = json.loads(SAMPLE_FILE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -177,38 +193,59 @@ def _search_sample(key, name):
         if isinstance(row, dict) and isinstance(row.get("name"), str) and (food_name_key(row["name"]) == key or key in normalize(row["name"]))
     ]
     now = utcnow()
-    for row in matched:
-        fields = {
-            "food_code": row["food_code"], "name": row["name"][:100], "name_key": food_name_key(row["name"]),
-            "group_name": (row.get("group") or "")[:20], "kcal": float(row["kcal"]),
-        }
-        for nutrient in NUTRIENTS[1:]:
-            value = row.get(nutrient)
-            fields[nutrient] = float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
-        _upsert_food(fields, "sample", now)
-    _upsert_search(key, len(matched), now)
-    db.session.commit()
+    try:
+        for row in matched:
+            fields = {
+                "food_code": row["food_code"], "name": row["name"][:100], "name_key": food_name_key(row["name"]),
+                "group_name": (row.get("group") or "")[:20], "kcal": float(row["kcal"]),
+            }
+            for nutrient in NUTRIENTS[1:]:
+                value = row.get(nutrient)
+                fields[nutrient] = float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+            _upsert_food(fields, "sample", now)
+        _upsert_search(key, len(matched), now)
+        db.session.commit()
+    except IntegrityError:  # 동시에 같은 행을 다른 요청이 먼저 넣었다(.first()의 autoflush 중일 수도 있다)
+        db.session.rollback()
     return True
 
 
-def _search_api(key, name, user):
-    """on 모드는 쪽마다 fetch_allowed 확인 → AiCall(kind=food_fetch, model=None, demo) 커밋 → fetch_page.
-    Step 0b 실측: 원재료성 행은 필터가 없어 결과 뒤쪽에 몰려 있다(예: 돼지고기는 마지막 쪽 전체, 대파는 마지막 쪽 끝 1행).
-    그래서 1쪽은 항상 받고, total이 ROWS_PER_PAGE보다 크면 마지막 쪽(ceil(total/ROWS_PER_PAGE))도 받는다.
-    마지막 쪽이 짧으면(50개 미만) 원재료성 구간이 그 앞쪽까지 걸쳐 있을 수 있어 그 앞쪽도 받는다(최대 MAX_PAGES=3쪽)."""
+def _search_api(key, user):
+    """on 모드는 쪽마다 fetch_allowed 확인 → AiCall(kind=food_fetch, model=None, demo) 커밋 → fetch_page(key를 검색어로).
+    Step 0b 실측(결정 11): 원재료성 행은 필터가 없어 결과 뒤쪽에 몰려 있다(예: 돼지고기는 마지막 쪽 전체, 대파는 마지막 쪽 끝 1행).
+    그래서 1쪽은 항상 받고, total이 ROWS_PER_PAGE보다 크면 마지막 쪽(ceil(total/ROWS_PER_PAGE))도 받는다. 마지막 쪽 번호가
+    3 이상이고 그 쪽이 짧으면(50개 미만) 원재료성 구간이 그 앞쪽까지 걸쳐 있을 수 있어 그 앞쪽도 받는다(최대 MAX_PAGES쪽).
+    뒤쪽 쪽이 한도·실패로 막히면 이미 받은 행은 그대로 캐시에 넣되 food_searches는 남기지 않아(다음에 다시 찾도록) False."""
     api_key = current_app.config["FOOD_NUTRITION_API_KEY"]
     demo = user is not None and user.provider == "demo"
+    fetched = [0]
 
     def fetch(page):
-        if not fetch_allowed(user):
+        if fetched[0] >= MAX_PAGES or not fetch_allowed(user):
             return None
+        fetched[0] += 1
         db.session.add(AiCall(user_id=user.id if user else None, kind=FETCH_KIND, model=None, demo=demo, created_at=utcnow()))
         db.session.commit()
         try:
-            return fetch_page(api_key, name, page)
+            return fetch_page(api_key, key, page)
         except (outbound.FetchError, ValueError) as e:
             current_app.logger.warning("food fetch failed: %s", type(e).__name__)  # 이유 이름만(주소·키 없음)
             return None
+
+    def store(collected, total=None):
+        """collected를 upsert하고, total을 주면(성공) food_searches도 upsert한다. 동시에 같은 행이 들어가 겹치면
+        (.first()의 autoflush 중일 수도 있다) 롤백한다(다른 요청이 먼저 넣었다는 뜻이라 다시 시도할 필요 없다)."""
+        now = utcnow()
+        try:
+            for item in collected:
+                fields = row_fields(item)
+                if fields is not None:
+                    _upsert_food(fields, "api", now)
+            if total is not None:
+                _upsert_search(key, total, now)
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
 
     result = fetch(1)
     if result is None:
@@ -220,31 +257,26 @@ def _search_api(key, name, user):
         last_page = math.ceil(total / ROWS_PER_PAGE)
         result = fetch(last_page)
         if result is None:
+            store(collected)  # 1쪽은 살리고, 검색 기록은 남기지 않아 다음에 다시 찾는다
             return False
         last_items = [item for item in result[0] if isinstance(item, dict)]
         collected.extend(last_items)
         if last_page >= 3 and len(last_items) < 50:
             result = fetch(last_page - 1)
             if result is None:
+                store(collected)
                 return False
             collected.extend(item for item in result[0] if isinstance(item, dict))
 
-    now = utcnow()
-    for item in collected:
-        fields = row_fields(item)
-        if fields is not None:
-            _upsert_food(fields, "api", now)
-    _upsert_search(key, total, now)
-    try:
-        db.session.commit()
-    except IntegrityError:  # 동시에 같은 행을 다른 요청이 먼저 넣었다
-        db.session.rollback()
+    store(collected, total)
     return True
 
 
 def search_and_cache(name, user):
-    """이름 하나를 찾아 food_nutrients에 넣는다. 이미 찾아봤고 30일 안이면 부르지 않는다. 찾았거나 이미 있으면 True,
-    한도·실패로 못 찾았으면 False(찾아본 기록을 남기지 않아 다음에 다시 찾는다)."""
+    """이름 하나를 찾아 food_nutrients에 넣는다. API 검색어·food_searches 키·search_items의 LIKE 키를 모두
+    query_key(name)으로 통일한다(공백·괄호 정리, 계란→달걀 같은 동의어가 세 곳 다 같은 이름으로 적용된다).
+    이미 찾아봤고 30일 안이면 부르지 않는다. 찾았거나 이미 있으면 True, 한도·실패로 못 찾았으면 False
+    (찾아본 기록을 남기지 않아 다음에 다시 찾는다)."""
     key = query_key(name)
     if not key:
         return False
@@ -252,16 +284,17 @@ def search_and_cache(name, user):
     if existing is not None and _aware(existing.searched_at) >= utcnow() - REFRESH_AFTER:
         return True
     if nutrition_mode(user) == "sample":
-        return _search_sample(key, name)
-    return _search_api(key, name, user)
+        return _search_sample(key)
+    return _search_api(key, user)
 
 
 def search_items(q):
-    """캐시에서 이름에 q가 든 행(source != 'ai') 200개까지(원재료성이 먼저 오도록 SQL에서 정렬해 200개 안에서 밀려나지 않게 함)
-    → 파이썬에서 다시 정렬 (query_key(q)가 name_parts(이름)에 없음, GROUP_ORDER(없으면 3), 이름 길이, 이름)
-    → 앞 20개 [{food_code, name, group, kcal}] (kcal은 정수 반올림)."""
+    """캐시에서 이름에 query_key(q)가 든 행(source != 'ai') 200개까지(원재료성이 먼저 오도록 SQL에서 정렬해 200개 안에서
+    밀려나지 않게 함) → 파이썬에서 다시 정렬 (query_key(q)가 name_parts(이름)에 없음, GROUP_ORDER(없으면 3), 이름 길이, 이름)
+    → 앞 20개 [{food_code, name, group, kcal}] (kcal은 정수 반올림). LIKE도 search_and_cache와 같은 정규화한 키로 찾는다
+    (계란으로 찾아도 "달걀…" 캐시 행을 본다)."""
     key = query_key(q)
-    escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    escaped = key.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     raw_first = case((FoodNutrient.group_name == "원재료성", 0), else_=1)
     rows = (
         FoodNutrient.query.filter(FoodNutrient.source != "ai", FoodNutrient.name.ilike(f"%{escaped}%", escape="\\"))
@@ -279,10 +312,9 @@ def search_foods():
     mode = nutrition_mode(g.user)
     if mode == "off":
         abort(503, OFF)
-    q = (request.args.get("q") or "").strip()
-    if not q:
+    q = (request.args.get("q") or "").strip()[:MAX_QUERY]
+    if not query_key(q):  # 정규화하면 빈 문자열(공백·괄호뿐인 입력 포함)
         abort(400, "찾을 식품 이름을 입력해주세요.")
-    q = q[:MAX_QUERY]
     searched = search_and_cache(q, g.user)
     items = search_items(q)
     return jsonify(items=items, searched=searched)
@@ -303,7 +335,9 @@ def warm_food_nutrients(limit):
         if not search_and_cache(name, None):
             break
         done += 1
-    if done < len(names):
+    if done == len(names):
+        click.echo(f"식품 이름 {done}개를 찾아봤어요.")
+    elif not fetch_allowed(None):
         click.echo(f"식품 이름 {done}개를 찾아봤어요. 한도 때문에 {len(names) - done}개는 다음에 찾아요.")
     else:
-        click.echo(f"식품 이름 {done}개를 찾아봤어요.")
+        click.echo(f"식품 이름 {done}개를 찾아봤어요. 요청이 실패해 {len(names) - done}개는 다음에 찾아요.")
