@@ -9,7 +9,7 @@ from pathlib import Path
 
 import click
 from flask import Blueprint, abort, current_app, g, jsonify, request
-from sqlalchemy import case
+from sqlalchemy import case, func
 from sqlalchemy.exc import IntegrityError
 
 from . import outbound
@@ -306,7 +306,7 @@ def search_items(q):
     escaped = key.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     raw_first = case((FoodNutrient.group_name == "원재료성", 0), else_=1)
     rows = (
-        FoodNutrient.query.filter(FoodNutrient.source != "ai", FoodNutrient.name.like(f"%{escaped}%", escape="\\"))
+        FoodNutrient.query.filter(FoodNutrient.source != "ai", func.lower(FoodNutrient.name).like(f"%{escaped}%", escape="\\"))  # 한 키만 찾는 곳이라 영문 대문자 이름(CGV…)도 찾게 lower
         .order_by(raw_first)
         .limit(200)
         .all()

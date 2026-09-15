@@ -178,7 +178,11 @@ export default function FoodPickSheet({ row, onSaved, onClose }: Props) {
             </div>
           ) : (
             <p className="muted">
-              {result.searched ? "찾는 식품이 없어요. 다른 이름으로 찾아주세요" : "지금은 식품을 찾지 못했어요. 잠시 후 다시 찾아주세요"}
+              {result.searched
+                ? "찾는 식품이 없어요. 다른 이름으로 찾아주세요"
+                : result.q.replace(/\s+/g, "").length < 2 || /^[ㄱ-ㅣ]+$/.test(result.q.replace(/\s+/g, ""))
+                  ? "두 글자 이상 입력하면 더 찾아봐요"
+                  : "지금은 식품을 찾지 못했어요. 잠시 후 다시 찾아주세요"}
             </p>
           )
         ) : null)}
