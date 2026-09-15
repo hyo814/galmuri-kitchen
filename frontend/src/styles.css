@@ -29,6 +29,7 @@
   --protein: #2f7fd1;
   --fat: #b45fa8;
   --track: #e9ecef;
+  --star: #e0a100;
   color-scheme: light dark;
 }
 
@@ -69,6 +70,7 @@
     --protein: #5aa2ea;
     --fat: #cf82c3;
     --track: #2a2d32;
+    --star: #f5c542;
   }
 }
 
@@ -104,6 +106,7 @@
   --protein: #5aa2ea;
   --fat: #cf82c3;
   --track: #2a2d32;
+  --star: #f5c542;
 }
 
 * {
@@ -5619,4 +5622,130 @@ button.sh-offline svg:last-child {
   font-size: 12px;
   color: var(--text-3);
   padding: 0 6px;
+}
+
+/* 날짜 상세 시트(Task 8, 시안 DAY). 시안은 시트 자체 gap 12px에 막대가 옆 여백 없이 꽉 차므로 이 시트에서만 좁힌다(fix round 1) */
+.sheet.fl-day .sheet-body {
+  gap: 12px;
+}
+
+.sheet.fl-day .nt-dmeter {
+  margin: 0;
+}
+
+.fl-meal {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.fl-mealh {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.fl-mealh h3 {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+}
+
+.fl-mk {
+  margin-left: auto;
+  font-weight: 500;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.fl-log {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 56px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+}
+
+.fl-ph,
+.fl-noph {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.fl-noph {
+  display: grid;
+  place-items: center;
+  background: var(--field);
+  color: var(--text-3);
+}
+
+.fl-log b {
+  font-size: 15px;
+}
+
+.fl-log small {
+  display: block;
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 1px;
+}
+
+.fl-stars {
+  color: var(--star);
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.fl-plan {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--field);
+  font-size: 14px;
+}
+
+.fl-plan .nt-link {
+  margin-left: auto;
+}
+
+.fl-addrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px var(--chip-line);
+  background: none;
+  color: var(--text-2);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.fl-addrow b {
+  color: var(--accent-strong);
+}
+
+.fl-warn {
+  margin: -4px 0 0;
+  font-size: 13px;
+  color: var(--warn);
 }

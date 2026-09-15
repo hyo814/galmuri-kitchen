@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
 import { api, type MyRecipe, type RecipeDraft, type RecipeInput } from "../api";
 import Icon from "../components/Icon";
+import { forgetFoodLogNutritionFill } from "../components/FoodLogDaySheet";
 import { forgetRecipeNutritionFill } from "../components/RecipeNutrition";
 import { useAsyncAction } from "../useAsyncAction";
 import { goBack, navigate, setLeaveGuard } from "../useHashRoute";
@@ -212,6 +213,7 @@ function RecipeEditor({ initial, draft = null }: { initial: MyRecipe | null; dra
       forgetRecipeCaches();
       forgetRecipeNutritionFill(saved.id); // 재료가 바뀌었을 수 있다 — 영양 채우기를 다시 부르게
       forgetMealNutritionFill(saved.id);
+      forgetFoodLogNutritionFill(saved.id);
       if (draft) resetRecipeDraft();
       if (initial) goBack(`/recipes/mine/${saved.id}`);
       else navigate(`/recipes/mine/${saved.id}`, { replace: true }); // 뒤로가기하면 목록으로
