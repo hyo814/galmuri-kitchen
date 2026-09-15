@@ -351,7 +351,8 @@ def dish_items(q):
     escaped = key.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     rows = (
         FoodNutrient.query.filter(
-            FoodNutrient.source != "ai", FoodNutrient.group_name == DISH_GROUP, FoodNutrient.name.ilike(f"%{escaped}%", escape="\\")
+            FoodNutrient.source != "ai", FoodNutrient.group_name == DISH_GROUP,
+            func.lower(FoodNutrient.name).like(f"%{escaped}%", escape="\\"),  # search_items와 같게(키 하나만 찾는 곳)
         )
         .limit(200)
         .all()
