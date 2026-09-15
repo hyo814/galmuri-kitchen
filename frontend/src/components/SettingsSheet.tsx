@@ -1,5 +1,6 @@
 import Icon from "./Icon";
 import Sheet from "./Sheet";
+import { navigate } from "../useHashRoute";
 
 export type SettingsTarget = "locations" | "staples";
 
@@ -27,6 +28,17 @@ export default function SettingsSheet({ onOpen, onClose }: Props) {
           </li>
         ))}
       </ul>
+      <button
+        type="button"
+        className="mo-more-link"
+        onClick={() => {
+          onClose();
+          navigate("/more");
+        }}
+      >
+        <span>품목별 경고·로그아웃은 더보기로 옮겼어요</span>
+        <b>더보기로 가기</b>
+      </button>
     </Sheet>
   );
 }

@@ -3226,6 +3226,32 @@ button.row-btn > svg {
   border-top: 1px solid var(--line);
 }
 
+/* 재고 설정 시트 끝 더보기 안내(시안 FridgeGear) */
+.mo-more-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--field);
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-2);
+  text-align: left;
+  word-break: keep-all;
+}
+
+.mo-more-link b {
+  color: var(--accent-strong);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 /* 다른 화면에서 장보기에 담기(시안 RecipeEntry) */
 .sh-missing-cta {
   margin-top: 12px;
