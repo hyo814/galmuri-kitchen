@@ -482,15 +482,22 @@ def test_recipe_list_cursor_id_out_of_range_is_400(client, login):
 
 
 def test_recipe_detail_annotate_is_fast_with_large_inventory(client, login, app):
-    # M7: annotate가 추천과 같은 준비된 재고 + 빠른 매칭을 쓰는지 — 재고 2,000개 × 재료 50개가 0.15초 안(넉넉히)
+    # M7: annotate가 추천과 같은 준비된 재고(_prepared_stock) + 빠른 매칭(_match_key_fast)을 쓰는지.
+    # 맞는 재고를 뒤쪽(1950~1999, 재고 순서 앞쪽)에만 두고 나머지 1,950개는 안 맞는 채움 이름으로 둔다 — 앞쪽에
+    # 바로 맞으면 미준비 구현(비교마다 정규식으로 다시 prepare)도 우연히 빨리 끝나 회귀를 못 잡는다(리뷰 minor).
+    # 이렇게 하면 재료 50개 × 재고 최대 2,000개를 거의 다 훑어야 해서, 미준비 구현은 실측 18초까지 걸렸다.
     words = ["대파", "양파", "두부", "계란", "감자", "당근", "애호박", "돼지고기", "소고기", "닭가슴살",
              "김치", "콩나물", "시금치", "표고버섯", "고추", "마늘", "간장", "고추장", "된장", "설탕"]
     user = login()
     with app.app_context():
         location = StorageLocation.query.filter_by(user_id=user.id).first()
         db.session.add_all(
-            Ingredient(user_id=user.id, location_id=location.id, name=f"{words[i % 20]} {i}", purchased_on=seoul_today())
-            for i in range(2000)
+            Ingredient(user_id=user.id, location_id=location.id, name=f"안맞는재료{i}", purchased_on=seoul_today())
+            for i in range(1950)
+        )
+        db.session.add_all(
+            Ingredient(user_id=user.id, location_id=location.id, name=f"{words[i % 20]} {1950 + i}", purchased_on=seoul_today())
+            for i in range(50)
         )
         db.session.commit()
     ingredients = [{"name": words[i % 20], "amount": "1개"} for i in range(50)]
@@ -501,8 +508,8 @@ def test_recipe_detail_annotate_is_fast_with_large_inventory(client, login, app)
     elapsed = time.perf_counter() - started
     assert res.status_code == 200
     assert all(row["have"] for row in res.get_json()["ingredients"])
-    # 0.3초: 상세가 이제 cooked 계산으로 인덱스된 COUNT 쿼리 하나를 더 한다(29절 결정 26, Task 5).
-    # 이 테스트가 잡으려는 회귀(재고 미준비 O(n²) 매칭, 2,000×50에서 초 단위로 느려짐)에 비하면 여전히 넉넉히 빠르다.
+    # 0.3초: 상세가 이제 cooked 계산으로 인덱스된 COUNT 쿼리 하나를 더 한다(29절 결정 26, Task 5) —
+    # 그래도 이 테스트가 잡으려는 회귀(위 18초)에 비하면 여전히 넉넉히 빠르다.
     assert elapsed < 0.3, f"{elapsed:.3f}s"
 
 

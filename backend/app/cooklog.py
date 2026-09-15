@@ -441,7 +441,9 @@ def update_cook_log(log_id):
 @bp.delete("/cook-logs/<int:log_id>")
 @login_required
 def delete_cook_log(log_id):
-    """결정 17. 일기·사진만 지운다 — 재고·먹은 기록은 그대로 둔다."""
+    """결정 17. 일기·사진만 지운다 — 재고·먹은 기록은 그대로 둔다.
+    사용자 잠금을 먼저 잡고 그 뒤에 읽는다 — PUT 사진 바꾸기와 같은 순서라 동시에 와도 사진 키를 놓치지 않는다(리뷰 I1)."""
+    lock_user(g.user.id)
     cook_log = get_owned_or_404(CookLog, log_id)
     keys = [cook_log.photo_key] if cook_log.photo_key else []
     db.session.delete(cook_log)
@@ -450,18 +452,30 @@ def delete_cook_log(log_id):
     return "", 204
 
 
+def _relocked_cook_log(log_id):
+    """사용자 잠금을 잡은 뒤 다시 읽는다(populate_existing — 이미 세션에 있는 옛 값을 돌려주지 않게).
+    그사이 지워졌으면 예외 없이 None(리뷰 I1: db.session.refresh는 지워진 행에서 StaleDataError를 던진다)."""
+    cook_log = db.session.get(CookLog, log_id, populate_existing=True)
+    if cook_log is None or cook_log.user_id != g.user.id:
+        return None
+    return cook_log
+
+
 @bp.put("/cook-logs/<int:log_id>/photo")
 @login_required
 def replace_cook_log_photo(log_id):
     if storage.mode() == "off":
         abort(503, storage.UPLOAD_UNAVAILABLE)
-    cook_log = get_owned_or_404(CookLog, log_id)
+    cook_log = get_owned_or_404(CookLog, log_id)  # 사진을 읽기 전 빨리 실패(남의·없는 id)
     data_bytes, media_type, ext = photos.read_image(MAX_PHOTO_BYTES)
     lock_user(g.user.id)
+    cook_log = _relocked_cook_log(log_id)  # 잠근 뒤 다시 읽어야 동시 PUT의 결과 위에서 old를 계산한다(리뷰 I1)
+    if cook_log is None:
+        abort(404, "찾을 수 없어요.")
     check_photo_room(g.user, len(data_bytes), excluding=cook_log)
     key = new_photo_key(g.user.id, ext)
     storage.put(key, data_bytes, media_type)
-    old = cook_log.photo_key
+    old = cook_log.photo_key  # 잠근 뒤 다시 읽은 값 — 동시에 바뀐 사진도 정확히 지운다
     cook_log.photo_key, cook_log.photo_size = key, len(data_bytes)
     try:
         db.session.commit()
@@ -476,6 +490,8 @@ def replace_cook_log_photo(log_id):
 @bp.delete("/cook-logs/<int:log_id>/photo")
 @login_required
 def delete_cook_log_photo(log_id):
+    """사용자 잠금을 먼저 잡는다(리뷰 I1) — PUT 사진 바꾸기와 같은 순서."""
+    lock_user(g.user.id)
     cook_log = get_owned_or_404(CookLog, log_id)
     old = cook_log.photo_key
     cook_log.photo_key, cook_log.photo_size = None, None

@@ -3,11 +3,12 @@ import os
 from datetime import date
 
 import pytest
+from sqlalchemy import text as sql
 
-from app import storage
+from app import cooklog, storage
 from app.cooklog import new_photo_key
-from app.models import CookLog, CookLogItem, FoodLog, Ingredient, Recipe, db
-from tests.test_cooklog_save import cook, quantities, stock
+from app.models import CookLog, CookLogItem, FoodLog, IngredientRemoval, Recipe, db
+from tests.test_cooklog_save import cook, kimchi_setup, quantities
 from tests.test_meals import add_recipe
 from tests.test_shopping_notes import JPEG, PNG, as_user, photo_path
 
@@ -82,7 +83,26 @@ def test_list_order_and_cursor(client, login, app):
     assert (res.status_code, res.get_json()["error"]) == (400, BAD)
 
     assert len(client.get("/api/cook-logs?limit=0").get_json()["items"]) == 1
-    assert len(client.get("/api/cook-logs?limit=99").get_json()["items"]) == 4
+
+    # limit=1로 끝까지 넘기며 전체 순서를 맞춘다 — 같은 날짜(9/15) 경계에서 큰 id → 작은 id로 정확히 이어지는지가 핵심(I2a).
+    titles, cursor = [], None
+    for _ in range(10):
+        query = f"?limit=1&cursor={cursor}" if cursor else "?limit=1"
+        page = client.get(f"/api/cook-logs{query}").get_json()
+        assert len(page["items"]) == 1
+        titles.append(page["items"][0]["title"])
+        cursor = page["next_cursor"]
+        if cursor is None:
+            break
+    assert titles == ["9/15b", "9/15a", "9/12", "9/10"]
+    assert cursor is None
+
+
+def test_list_limit_clamps_to_50(client, login, app):
+    user = login()
+    for i in range(60):
+        diary(app, user.id, f"i{i}", date(2026, 9, 1))
+    assert len(client.get("/api/cook-logs?limit=99").get_json()["items"]) == 50
 
 
 def test_detail_shape(client, login, app):
@@ -147,27 +167,30 @@ def test_patch_recomputes_saved_and_updates_recipe(client, login, app):
 
 
 def test_delete_keeps_stock_and_food_log(client, login, app):
-    user = login()
-    stock(client, "대파", 3, "대", 2500)
-    food_id = make_food_log(app, user.id, date(2026, 9, 15))
-    with app.app_context():
-        key = new_photo_key(user.id, "jpg")
-        storage.put(key, JPEG, "image/jpeg")
-    log_id = diary(
-        app, user.id, "김치찌개", date(2026, 9, 15),
-        food_log_id=food_id, photo_key=key, photo_size=len(JPEG),
-        items=[{"name": "두부", "used": 1.0, "unit": "모", "removed": True, "cost": 2480}],
-    )
-    file_path = photo_path(app, f"/api/photos/{key}")
+    """실제 저장 경로(kimchi_setup + cook)로 두부 차감·먹은 기록·사진을 만든 뒤 지운다(I2b) —
+    diary()로 흉내내지 않고 진짜 저장이 남긴 재고·IngredientRemoval·FoodLog 개수가 지우기 전후로 그대로인지 본다."""
+    login()
+    recipe, ids, usages = kimchi_setup(client)
+    res = cook(client, recipe["id"], usages, image=JPEG, eat_out_price=9000, food_log=True, meal="dinner")
+    assert res.status_code == 201, res.get_json()
+    log = res.get_json()["log"]
+    log_id, food_id = log["id"], log["food_log_id"]
+    file_path = photo_path(app, log["photo_url"])
     assert os.path.exists(file_path)
-    before = quantities(client)
+
+    before_stock = quantities(client)
+    with app.app_context():
+        removal_count = IngredientRemoval.query.count()
+        food_log_count = FoodLog.query.count()
+    assert removal_count > 0  # 두부가 이미 차감으로 지워져 다 먹었어요 기록이 있다
 
     res = client.delete(f"/api/cook-logs/{log_id}")
     assert res.status_code == 204
 
-    assert quantities(client) == before
+    assert quantities(client) == before_stock  # 재고는 지우기 전후로 그대로(결정 17)
     with app.app_context():
-        assert Ingredient.query.filter_by(user_id=user.id, name="두부").first() is None
+        assert IngredientRemoval.query.count() == removal_count
+        assert FoodLog.query.count() == food_log_count
         food = db.session.get(FoodLog, food_id)
         assert food is not None and food.source == "cook_log"
     assert not os.path.exists(file_path)
@@ -211,9 +234,18 @@ def test_photo_replace_and_remove(client, login, app, monkeypatch):
 
     res = put_photo(JPEG)  # 사진 없는 상태로 되돌려 놓고 정상 업로드
     assert res.status_code == 200
+    current_url = res.get_json()["photo_url"]
+    current_path = photo_path(app, current_url)
+    assert os.path.exists(current_path)
 
     other_log = cook(client, recipe["id"], []).get_json()["log"]
     other_id = other_log["id"]
+
+    monkeypatch.setattr("app.cooklog.MAX_USER_PHOTO_BYTES", len(JPEG) - 1)  # 자기 사진을 빼도 새 사진(PNG)이 한도를 넘게
+    res = put_photo(PNG, "d.png")
+    assert (res.status_code, res.get_json()["error"]) == (400, PHOTO_FULL)
+    assert client.get(f"/api/cook-logs/{log_id}").get_json()["photo_url"] == current_url  # 실패한 바꾸기는 옛 사진 그대로(minor)
+    assert os.path.exists(current_path)
 
     monkeypatch.setattr("app.cooklog.MAX_USER_PHOTO_BYTES", len(JPEG))
     res = put_photo(JPEG)  # 자기 사진(len(JPEG))은 합계에서 빼므로 0 + len(JPEG) <= 한도
@@ -223,10 +255,74 @@ def test_photo_replace_and_remove(client, login, app, monkeypatch):
     assert (res.status_code, res.get_json()["error"]) == (400, PHOTO_FULL)
 
 
+def test_ownership_across_mutations_404_and_unchanged(client, login, app):
+    """PATCH·DELETE·PUT 사진·DELETE 사진 네 곳 모두 남의 것이면 404이고, 일기·사진 파일은 그대로여야 한다(I2c)."""
+    user = login()
+    with app.app_context():
+        key = new_photo_key(user.id, "jpg")
+        storage.put(key, JPEG, "image/jpeg")
+    log_id = diary(app, user.id, "김치찌개", date(2026, 9, 15), rating=3, memo="원래 메모", photo_key=key, photo_size=len(JPEG))
+    file_path = photo_path(app, f"/api/photos/{key}")
+
+    login("other")
+    assert client.patch(f"/api/cook-logs/{log_id}", json={"rating": 5}).status_code == 404
+    assert client.delete(f"/api/cook-logs/{log_id}").status_code == 404
+    res = client.put(f"/api/cook-logs/{log_id}/photo", data={"image": (io.BytesIO(PNG), "x.png")}, content_type="multipart/form-data")
+    assert res.status_code == 404
+    assert client.delete(f"/api/cook-logs/{log_id}/photo").status_code == 404
+
+    with app.app_context():
+        row = db.session.get(CookLog, log_id)
+        assert (row.rating, row.memo, row.photo_key) == (3, "원래 메모", key)
+    assert os.path.exists(file_path)
+
+
+def test_photo_put_race_no_orphan_file(client, login, app, monkeypatch):
+    """PUT 도중 "다른 PUT"이 먼저 커밋해 버린 상황을 결정적으로 재현한다(I1): lock_user를 부르는 순간
+    사진 키를 직접 바꿔치기한다. 이미 읽어 둔 cook_log 파이썬 객체는 커밋해도 그대로 캐시에 남기려고
+    (SQLAlchemy 기본 expire_on_commit이 새로 고치면 우연히 버그가 가려진다 — 진짜 별도 커넥션은 StaticPool
+    SQLite가 같은 커넥션을 공유해 트랜잭션이 겹쳐 못 쓴다) 이 한 번의 커밋만 expire_on_commit을 끈다.
+    잠근 뒤 다시 읽지 않으면(옛 버그) old를 잠금 전 값(None)으로 착각해 이 커밋이 만든 파일을 고아로 남긴다."""
+    user = login()
+    recipe = add_recipe(client, "김치찌개", [{"name": "김치", "amount": "300g"}])
+    log_id = cook(client, recipe["id"], []).get_json()["log"]["id"]
+
+    other_key = new_photo_key(user.id, "png")
+    real_lock_user = cooklog.lock_user  # 패치 전에 잡아 둔다 — 안에서 app.cooklog.lock_user를 다시 부르면 무한 재귀
+
+    def racing_lock_user(user_id):
+        real_lock_user(user_id)  # 실제 잠금 그대로(SQLite는 no-op)
+        storage.put(other_key, PNG, "image/png")
+        db.session.execute(
+            sql("UPDATE cook_logs SET photo_key = :key, photo_size = :size WHERE id = :id"),
+            {"key": other_key, "size": len(PNG), "id": log_id},
+        )
+        session = db.session()  # db.session.expire_on_commit = ... 는 scoped_session 프록시에 앉아 효과가 없다
+        session.expire_on_commit = False
+        try:
+            session.commit()
+        finally:
+            session.expire_on_commit = True
+
+    monkeypatch.setattr("app.cooklog.lock_user", racing_lock_user)
+
+    res = client.put(f"/api/cook-logs/{log_id}/photo", data={"image": (io.BytesIO(JPEG), "outer.jpg")}, content_type="multipart/form-data")
+    assert res.status_code == 200, res.get_json()
+    outer_url = res.get_json()["photo_url"]
+
+    assert client.get(f"/api/cook-logs/{log_id}").get_json()["photo_url"] == outer_url  # 늦게 커밋한(바깥) 요청이 최종 상태
+
+    root = os.path.join(app.config["UPLOAD_DIR"], "cooklog")
+    files_on_disk = {name for _, _, names in os.walk(root) for name in names}
+    assert files_on_disk == {os.path.basename(outer_url)}  # 동시 PUT이 만든 사진이 고아로 남지 않았다
+
+
 def test_recipe_detail_cooked(client, login, app):
     user = login()
     recipe = add_recipe(client, "김치찌개", [{"name": "김치", "amount": "300g"}])
-    assert client.get(f"/api/recipes/{recipe['id']}").get_json()["cooked"] is None
+    res = client.get(f"/api/recipes/{recipe['id']}")
+    assert res.get_json()["cooked"] is None
+    assert res.headers["Cache-Control"] == "no-store"  # 이제 일기 유래 정보(cooked)를 담는다(minor)
 
     diary(app, user.id, "김치찌개", date(2026, 9, 10), recipe_id=recipe["id"], rating=3)
     diary(app, user.id, "김치찌개", date(2026, 9, 15), recipe_id=recipe["id"], rating=4)
@@ -252,5 +348,7 @@ def test_auth(client, raw_client):
     assert client.get("/api/cook-logs/1").status_code == 401
     assert client.patch("/api/cook-logs/1", json={}).status_code == 401
     assert client.delete("/api/cook-logs/1").status_code == 401
+    assert client.put("/api/cook-logs/1/photo").status_code == 401
+    assert client.delete("/api/cook-logs/1/photo").status_code == 401
     assert raw_client.patch("/api/cook-logs/1").status_code == 400
     assert raw_client.delete("/api/cook-logs/1").status_code == 400
