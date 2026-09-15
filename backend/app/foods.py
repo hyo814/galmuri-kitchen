@@ -39,7 +39,10 @@ SAMPLE_FILE = Path(__file__).parent / "data" / "sample_foods.json"
 # Step 0b에서 결과 뒤쪽(마지막 쪽)에 원재료성 행(DB_GRP_CM "R1")이 몰려 있음을 확인했다(스펙 21절 구현 세부, _search_api 참고).
 FIELDS = {"code": "FOOD_CD", "name": "FOOD_NM_KR", "group": "DB_GRP_NM", "basis": "SERVING_SIZE",
           "kcal": "AMT_NUM1", "protein_g": "AMT_NUM3", "fat_g": "AMT_NUM4", "carbs_g": "AMT_NUM6", "sugars_g": "AMT_NUM7", "sodium_mg": "AMT_NUM13"}
+FIELDS["serving"] = "Z10500"  # 식품중량 '400g'. Task 1 Step 0 실측(결정 24) 확인: 값 모양은 '270.000g'처럼 소수도 온다
 NUTRIENTS = ("kcal", "carbs_g", "protein_g", "fat_g", "sugars_g", "sodium_mg")
+DISH_GROUP = "음식"
+MAX_SERVING_G = 5000
 
 
 def nutrition_mode(user):
@@ -77,6 +80,29 @@ def _number(value):
     return number if math.isfinite(number) and number >= 0 else None
 
 
+def serving_grams(value):
+    """'400g'·'400 g'·'1,000g'·'250ml'(1ml=1g, 4b-2 결정 5)·400 → float. bool·못 읽음·1~5000 밖이면 None."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+    elif isinstance(value, str):
+        match = re.fullmatch(r"([\d,]+(?:\.\d+)?)\s*(g|ml)", value.strip().lower())
+        if not match:
+            return None
+        number = float(match.group(1).replace(",", ""))
+    else:
+        return None
+    return number if math.isfinite(number) and 1 <= number <= MAX_SERVING_G else None
+
+
+def food_by_code(code):
+    """먹은 기록이 쓰는 식품 한 행(source != 'ai'). 문자열이 아니거나 없으면 None."""
+    if not isinstance(code, str) or not 1 <= len(code) <= 80:
+        return None
+    return FoodNutrient.query.filter(FoodNutrient.food_code == code, FoodNutrient.source != "ai").first()
+
+
 def row_fields(item):
     """API 한 행 → FoodNutrient 칸 dict, 못 쓰면 None. 코드 1~80자·이름 1~100자·기준량 '100g'/'100ml'(공백·대소문자 무시)·kcal 숫자 필수.
     나머지 영양소는 숫자가 아니면 None('-'·''). 값은 0 이상 유한수만. group은 20자까지(없으면 '')."""
@@ -99,6 +125,7 @@ def row_fields(item):
     fields = {"food_code": code, "name": name, "name_key": food_name_key(name), "group_name": group, "kcal": kcal}
     for nutrient in NUTRIENTS[1:]:
         fields[nutrient] = _number(item.get(FIELDS[nutrient]))
+    fields["serving_g"] = serving_grams(item.get(FIELDS["serving"]))
     return fields
 
 
@@ -211,6 +238,7 @@ def _search_sample(key):
             for nutrient in NUTRIENTS[1:]:
                 value = row.get(nutrient)
                 fields[nutrient] = float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+            fields["serving_g"] = serving_grams(row.get("serving_g"))
             _upsert_food(fields, "sample", now)
         _upsert_search(key, len(matched), now)
         db.session.commit()
@@ -315,6 +343,30 @@ def search_items(q):
     return [{"food_code": r.food_code, "name": r.name, "group": r.group_name, "kcal": round(r.kcal)} for r in rows[:SEARCH_LIMIT]]
 
 
+def dish_items(q):
+    """search_items와 같은 key = query_key(q)·이스케이프한 ilike(escape='\\')로 캐시에서 음식 행(group_name == DISH_GROUP,
+    source != 'ai') 200개까지 → (key가 name_parts(이름)에 없음, 이름 길이, 이름) → 앞 SEARCH_LIMIT개.
+    [{food_code, name, serving_g, kcal, carbs_g, protein_g, fat_g, sugars_g, sodium_mg}] — 100g당 원값(화면이 양으로 곱한다)."""
+    key = query_key(q)
+    escaped = key.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    rows = (
+        FoodNutrient.query.filter(
+            FoodNutrient.source != "ai", FoodNutrient.group_name == DISH_GROUP,
+            func.lower(FoodNutrient.name).like(f"%{escaped}%", escape="\\"),  # search_items와 같게(키 하나만 찾는 곳)
+        )
+        .limit(200)
+        .all()
+    )
+    rows.sort(key=lambda row: (key not in name_parts(row.name), len(row.name), row.name))
+    return [
+        {
+            "food_code": r.food_code, "name": r.name, "serving_g": r.serving_g, "kcal": r.kcal,
+            "carbs_g": r.carbs_g, "protein_g": r.protein_g, "fat_g": r.fat_g, "sugars_g": r.sugars_g, "sodium_mg": r.sodium_mg,
+        }
+        for r in rows[:SEARCH_LIMIT]
+    ]
+
+
 @bp.get("/foods/search")
 @login_required
 def search_foods():
@@ -327,6 +379,20 @@ def search_foods():
     # 한 글자는 캐시만 찾는다(입력 중 '돼'마다 부르지 않게). 채우기는 search_and_cache로 '파'·'무' 같은 한 글자 재료도 찾는다
     searched = len(query_key(q)) >= 2 and search_and_cache(q, g.user)
     items = search_items(q)
+    return jsonify(items=items, searched=searched)
+
+
+@bp.get("/foods/dishes")
+@login_required
+def search_dishes():
+    mode = nutrition_mode(g.user)
+    if mode == "off":
+        abort(503, OFF)
+    q = (request.args.get("q") or "").strip()[:MAX_QUERY]
+    if not query_key(q):  # 정규화하면 빈 문자열(공백·괄호뿐인 입력 포함)
+        abort(400, "찾을 음식 이름을 입력해주세요.")
+    searched = search_and_cache(q, g.user)
+    items = dish_items(q)
     return jsonify(items=items, searched=searched)
 
 

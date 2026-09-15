@@ -355,10 +355,7 @@ def put_food_match():
     if "food_code" not in data:  # null은 추정으로 두기, 빠진 것은 잘못된 요청
         abort(400, "잘못된 요청이에요.")
     food_code = data["food_code"]
-    if food_code is not None and (
-        not isinstance(food_code, str)
-        or FoodNutrient.query.filter(FoodNutrient.food_code == food_code, FoodNutrient.source != "ai").first() is None
-    ):
+    if food_code is not None and (not isinstance(food_code, str) or foods.food_by_code(food_code) is None):
         abort(400, "식품을 다시 골라주세요.")
     unit = data.get("unit")
     grams = None
