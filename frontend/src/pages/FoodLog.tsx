@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { localToday, type FoodLogMonth, type User } from "../api";
 import Icon from "../components/Icon";
 import LoadError from "../components/LoadError";
@@ -25,20 +25,23 @@ export function resetFoodLogView(): void {
   pendingOpen = null;
 }
 
-/** 한 달의 요약 카드·달력(리뷰 fix round 1, I1). `key={month}`로 달마다 새로 마운트해
+/** 한 달의 요약 카드·달 이동·달력(리뷰 fix round 1, I1 / fix round 2). `key={month}`로 달마다 새로 마운트해
  * - 늦게 도착한 옛 달 응답이 지금 보는 달을 덮지 않고(마운트 해제된 인스턴스의 setData는 아무 화면에도 안 붙는다),
  * - 그 달만 불러오기에 실패해도 자리에서 `LoadError`로 다시 시도할 수 있다.
- * 머리글·달 이동(`FoodLogPage`)은 이 컴포넌트가 실패해도 그대로 남아 다른 달로 옮길 수 있다. */
+ * 시안 순서(요약 → 달 이동 → 달력)를 지키려고 달 이동(`.fl-mnav`)은 `FoodLogPage`가 만들어 `nav`로 내려주고
+ * 이 컴포넌트가 그 자리에 끼워 넣는다 — 그래서 불러오는 중·오류일 때도 달 이동은 그대로 보이고 눌린다. */
 function MonthBody({
   month,
   selected,
   onSelect,
   onToday,
+  nav,
 }: {
   month: string;
   selected: string | null;
   onSelect: (date: string) => void;
   onToday: (today: string) => void;
+  nav: ReactNode;
 }) {
   const { data, error, reload } = useResource<FoodLogMonth>(`/api/food-logs/month?month=${month}`);
 
@@ -46,7 +49,13 @@ function MonthBody({
     if (data) onToday(data.today);
   }, [data, onToday]);
 
-  if (!data) return error ? <LoadError error={error} onRetry={reload} /> : <p className="muted">불러오는 중…</p>;
+  if (!data)
+    return (
+      <>
+        {nav}
+        {error ? <LoadError error={error} onRetry={reload} /> : <p className="muted">불러오는 중…</p>}
+      </>
+    );
 
   const today = data.today;
   const days = new Map(data.days.map((d) => [d.date, d]));
@@ -80,6 +89,8 @@ function MonthBody({
         )}
         <p className="muted">{summary.note}</p>
       </section>
+
+      {nav}
 
       <div className="fl-cal">
         <div className="fl-dow" aria-hidden="true">
@@ -155,6 +166,25 @@ export default function FoodLogPage({ user }: { user: User }) {
 
   const onToday = useCallback((t: string) => setToday(t), []);
 
+  // `MonthBody`가 요약과 달력 사이에 그대로 끼워 넣는다(시안 순서 유지) — 그래서 그 달이 불러오는 중·오류여도 이건 산다
+  const nav = (
+    <div className="fl-mnav">
+      <button type="button" className="icon-btn" aria-label="지난달" onClick={() => setMonth((m) => shiftMonth(m, -1))}>
+        <Icon name="back" />
+      </button>
+      <h2 aria-live="polite">{monthLabel(month)}</h2>
+      <button
+        type="button"
+        className="icon-btn"
+        aria-label="다음 달"
+        disabled={month >= monthOf(today)}
+        onClick={() => setMonth((m) => shiftMonth(m, 1))}
+      >
+        <Icon name="chevron" />
+      </button>
+    </div>
+  );
+
   return (
     <main className="page">
       <header className="topbar fl-top">
@@ -164,23 +194,7 @@ export default function FoodLogPage({ user }: { user: User }) {
         <h1>먹은 기록</h1>
       </header>
 
-      <div className="fl-mnav">
-        <button type="button" className="icon-btn" aria-label="지난달" onClick={() => setMonth((m) => shiftMonth(m, -1))}>
-          <Icon name="back" />
-        </button>
-        <h2 aria-live="polite">{monthLabel(month)}</h2>
-        <button
-          type="button"
-          className="icon-btn"
-          aria-label="다음 달"
-          disabled={month >= monthOf(today)}
-          onClick={() => setMonth((m) => shiftMonth(m, 1))}
-        >
-          <Icon name="chevron" />
-        </button>
-      </div>
-
-      <MonthBody key={month} month={month} selected={selected} onSelect={setSelected} onToday={onToday} />
+      <MonthBody key={month} month={month} selected={selected} onSelect={setSelected} onToday={onToday} nav={nav} />
     </main>
   );
 }
