@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload, selectinload
 from werkzeug.exceptions import BadRequest
 
-from . import storage
+from . import photos, storage
 from .auth import get_owned_or_404, login_required
 from .household import is_household
 from .ingredients import check_ingredient_cap, seoul_today
@@ -18,7 +18,6 @@ from .ingredients import parse_fields as ingredient_fields
 from .locations import choose_location, owned_location, user_locations
 from .matching import match_prepared, normalize, prepare
 from .models import Ingredient, ShoppingItem, ShoppingNote, ShoppingNotePhoto, db, utcnow
-from .scan import sniff_image_type
 from .validation import commit_or_duplicate, iso_date, iso_datetime, text
 
 # 장보기 목록(스펙 16·19·28절). 오프라인 기기가 다시 보내도 괜찮게: 추가는 client_id로 한 번만, 체크는 마지막 변경 우선.
@@ -441,16 +440,8 @@ def upload_photo(note_id):
     if storage.mode() == "off":
         abort(503, storage.UPLOAD_UNAVAILABLE)
     note = _owned_note(note_id)
-    image = request.files.get("image")  # 10MB 초과는 여기서 413
-    client_id = _client_id(request.form.get("client_id"))
-    data = image.read() if image is not None else b""
-    if not data:
-        abort(400, "사진을 올려주세요.")
-    if len(data) > MAX_PHOTO_BYTES:
-        abort(413, "사진이 너무 커요.")
-    media_type = sniff_image_type(data)  # 선언된 Content-Type이 아니라 파일 서명을 믿는다
-    if media_type is None:
-        abort(415, "사진 파일(JPG·PNG·WEBP)만 올릴 수 있어요.")
+    client_id = _client_id(request.form.get("client_id"))  # 10MB 초과는 여기서 413. read_image보다 앞(잘못된 client_id가 먼저 400)
+    data, media_type, ext = photos.read_image(MAX_PHOTO_BYTES)
     _lock_user_items(g.user.id)
     if client_id is not None:
         existing = ShoppingNotePhoto.query.filter_by(note_id=note.id, client_id=client_id).first()
@@ -468,7 +459,6 @@ def upload_photo(note_id):
         abort(400, "사진 저장 공간이 가득 찼어요. 오래된 메모 사진을 지워주세요.")
     # ponytail: 서버는 EXIF(촬영 위치 등)를 지우지 않고 받은 바이트 그대로 둔다. 화면(Task 10)이 캔버스로 다시 인코딩해 올리므로
     # 메타데이터가 빠진다. 다른 경로로 올린 원본이 문제되면 서버에서 Pillow로 다시 저장하는 것을 더한다.
-    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[media_type]
     key = f"shopping/{g.user.id}/{uuid.uuid4().hex}.{ext}"
     storage.put(key, data, media_type)
     photo = ShoppingNotePhoto(note_id=note.id, client_id=client_id, photo_key=key, size=len(data))

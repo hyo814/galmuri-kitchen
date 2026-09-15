@@ -446,3 +446,16 @@ class FoodLog(db.Model):
 
     recipe = db.relationship("Recipe")
     meal_slot = db.relationship("MealSlot", backref=db.backref("food_log", uselist=False))
+    photos = db.relationship("FoodLogPhoto", order_by="FoodLogPhoto.id", cascade="all, delete-orphan", passive_deletes=True)
+
+
+class FoodLogPhoto(db.Model):
+    """먹은 기록 사진(기록당 4장, 결정 9). 파일은 storage(photo_key). 행이 지워져도 DB가 파일을 지우지 않으므로 지우는 곳에서 storage.delete."""
+
+    __tablename__ = "food_log_photos"
+
+    id = db.Column(db.Integer, primary_key=True)
+    log_id = db.Column(db.Integer, db.ForeignKey("food_logs.id", ondelete="CASCADE"), nullable=False, index=True)
+    photo_key = db.Column(db.String(200), nullable=False, unique=True)
+    size = db.Column(db.Integer, nullable=False)  # 바이트, 사용자별 저장 공간 상한용
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
