@@ -145,6 +145,7 @@ def test_export_zip_contents(client, login, app):
         json={"name": "@우유", "quantity": 1.5, "unit": "L", "purchased_on": day(2), "expires_on": "2026-12-01", "price": 2980},
     )
     client.post("/api/ingredients", json={"name": "김치🥬", "quantity": 1 / 3, "purchased_on": day(1), "location_id": kimchi["id"]})
+    client.post("/api/ingredients", json={"name": "고추장", "purchased_on": None})  # 구입일 모름 → 빈 칸, 맨 뒤
     client.post("/api/recipes", json=RECIPE)
     client.post(
         "/api/recipes",
@@ -185,11 +186,12 @@ def test_export_zip_contents(client, login, app):
     files = read_zip(res)
     assert set(files) == {"ingredients.csv", "recipes.csv", "seasonings.csv", "shopping.csv", "shopping_memos.csv"}
 
-    assert files["ingredients.csv"] == [  # 구입일, id 순
+    assert files["ingredients.csv"] == [  # 구입일, id 순(구입일 모름은 맨 뒤)
         INGREDIENT_HEADER,
         ["'@우유", "1.5", "L", "냉장실", day(2), "2026-12-01", "2980"],
         ["두부", "1", "개", "냉장실", day(1), "", ""],
         ["김치🥬", str(1 / 3), "개", "김치냉장고", day(1), "", ""],
+        ["고추장", "1", "개", "냉장실", "", "", ""],
     ]
     assert files["recipes.csv"][0] == RECIPE_HEADER
     steps = "1. 두부를 썰어요.\n2. 양념을 붓고 졸여요."
