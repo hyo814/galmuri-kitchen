@@ -2,8 +2,8 @@
 import assert from "node:assert/strict";
 import { ageOf, dailyTarget, kcalNumber, parseProfileInput, targetNote } from "../src/nutrition/body.ts";
 import {
-  candidateSub, dailyValue, daySum, dayHeadText, fillTargets, goalFor, gramsFieldValue, ingredientKcalText, ingredientNote,
-  macroSplit, meterPercent, pickTitle, sameName, slotKcalText, sodiumDay, sugarDay, unitGramsFrom,
+  candidateSub, closestMatch, dailyValue, daySum, dayHeadText, fillTargets, goalFor, gramsFieldValue, ingredientKcalText,
+  ingredientNote, macroSplit, meterPercent, pickTitle, slotKcalText, sodiumDay, sugarDay, unitGramsFrom,
 } from "../src/nutrition/day.ts";
 
 const TODAY = "2026-09-15";
@@ -203,11 +203,23 @@ assert.deepEqual(
   ingredientNote(row({ status: "estimated", estimate_food: true, name: "고수" })),
   { text: "고수 · AI로 추정했어요", action: "바꾸기" },
 );
+// grams가 null이어도(방어) "0g으로 추정"으로 죽지 않는다
+assert.deepEqual(
+  ingredientNote(
+    row({ status: "estimated", estimate_food: false, name: "뭔가", amount: "1개", grams: null, food: { food_code: "f", name: "뭔가", group: "원재료성", kcal: 1 } }),
+  ),
+  { text: "뭔가 · 1개 ≈ 0g으로 추정", action: "바꾸기" },
+);
 
 assert.equal(candidateSub("원재료성", 84), "원재료 · 100g당 84kcal");
+assert.equal(candidateSub("", 84), "100g당 84kcal");
 
-assert.equal(sameName("두부 (국산)", "두부"), true);
-assert.equal(sameName("순두부", "두부"), false);
+// closestMatch(결정 14): 원재료성이고 검색어 정규화 키가 이름 조각(밑줄·쉼표로 나눔) 중 하나와 같을 때만
+assert.equal(closestMatch({ name: "파_대파_생것", group: "원재료성" }, "대파"), true);
+assert.equal(closestMatch({ name: "굴국_두부", group: "음식" }, "두부"), false);
+assert.equal(closestMatch({ name: "두부 (국산)", group: "원재료성" }, "두부"), true);
+// 여러 낱말 검색어("돼지고기앞다리")는 이름 조각 하나와 같지 않다(조각은 "돼지고기"·"앞다리"·"생것" 각각)
+assert.equal(closestMatch({ name: "돼지고기_앞다리_생것", group: "원재료성" }, "돼지고기 앞다리"), false);
 
 assert.equal(pickTitle("두부"), "‘두부’는 어떤 식품인가요?");
 assert.equal(pickTitle("김치찌개 양념장"), "‘김치찌개 양념장’은 어떤 식품인가요?");
@@ -220,5 +232,7 @@ assert.equal(unitGramsFrom("150", 0.5), 300);
 assert.equal(unitGramsFrom("0", 0.5), null);
 assert.equal(unitGramsFrom("abc", 1), null);
 assert.equal(unitGramsFrom("3000", 0.5), null); // 6000 > 5000
+assert.equal(unitGramsFrom("1,5", 1), 1.5); // 쉼표 소수점
+assert.equal(unitGramsFrom("100", null), null); // quantity 모름
 
 console.log("check-nutrition: ok");

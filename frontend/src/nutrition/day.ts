@@ -112,8 +112,18 @@ export const GROUP_LABEL: Record<string, string> = { 원재료성: "원재료", 
 /** 후보 한 줄 설명 "원재료 · 100g당 84kcal" */
 export const candidateSub = (group: string, kcal: number) => `${GROUP_LABEL[group] ?? group}${group ? " · " : ""}100g당 ${kcalNumber(kcal)}kcal`;
 
-/** 공백·괄호를 뺀 이름이 검색어와 같으면 `가장 비슷` */
-export const sameName = (a: string, b: string) => a.replace(/\([^)]*\)/g, "").replace(/\s+/g, "") === b.replace(/\([^)]*\)/g, "").replace(/\s+/g, "");
+/** 괄호 속 내용·공백을 지우고 소문자로(백엔드 `matching.normalize`와 같은 생각의 화면판) */
+const normalizeKey = (s: string) => s.replace(/\([^)]*\)/g, "").replace(/\s+/g, "").toLowerCase();
+
+/** 이름을 `_`·`,`로 나눠 정규화한 조각 목록(백엔드 `foods.name_parts`와 같은 생각) */
+const nameParts = (name: string) => name.split(/[_,]/).map(normalizeKey).filter(Boolean);
+
+/** `가장 비슷`/처음 선택 판정(결정 14): 원재료성이고 검색어를 정규화한 키가 이름 조각 중 하나와 같을 때만 */
+export function closestMatch(item: { name: string; group: string }, query: string): boolean {
+  if (item.group !== "원재료성") return false;
+  const key = normalizeKey(query);
+  return key !== "" && nameParts(item.name).includes(key);
+}
 
 /** 시트 제목 "‘두부’는 어떤 식품인가요?" */
 export const pickTitle = (name: string) => `‘${name}’${withJosa(name, "은", "는").slice(name.length)} 어떤 식품인가요?`;

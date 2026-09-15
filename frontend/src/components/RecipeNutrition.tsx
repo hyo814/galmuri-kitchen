@@ -2,12 +2,17 @@ import { useEffect, useId, useState } from "react";
 import { api, type NutritionIngredient, type RecipeNutrition, type User } from "../api";
 import { kcalNumber } from "../nutrition/body";
 import { dailyValue, ingredientKcalText, ingredientNote, macroSplit, SODIUM_DAILY_MG, SUGARS_DAILY_G } from "../nutrition/day";
-import { LoadError } from "../pages/Meals";
 import { useResource } from "../useResource";
 import FoodPickSheet from "./FoodPickSheet";
+import LoadError from "./LoadError";
 
 /** 레시피별로 채우기를 한 번만 부른다(레시피 상세를 오가도 계속 부르지 않게, Meals.tsx의 attempted 패턴과 같은 생각) */
 const filled = new Set<number>();
+
+/** 로그아웃 등 화면을 전부 리셋할 때(App.tsx `resetScreens`) 함께 비운다 — 다른 사용자로 들어와도 이전 계정이 이미 시도한 레시피로 남지 않게 */
+export function resetRecipeNutrition() {
+  filled.clear();
+}
 
 /** 시안 RECIPE NUTRITION: 재료 아래 영양 칸(1인분)과 재료별 kcal·식품 고르기 진입점 */
 export default function RecipeNutrition({ recipeId, user }: { recipeId: number; user: User }) {
@@ -98,6 +103,8 @@ export default function RecipeNutrition({ recipeId, user }: { recipeId: number; 
               </div>
             </div>
           </>
+        ) : data.pending ? (
+          <p className="muted">영양을 계산하고 있어요</p>
         ) : (
           <p className="muted">재료를 식품과 맞추면 영양을 계산해줘요</p>
         )}

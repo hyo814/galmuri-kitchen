@@ -5,6 +5,7 @@ import {
 import BodyGoalCard, { type TodayTotal } from "../components/BodyGoalCard";
 import DayNutritionSheet from "../components/DayNutritionSheet";
 import Icon from "../components/Icon";
+import LoadError from "../components/LoadError";
 import Mascot from "../components/Mascot";
 import MealCopySheet, { type CopyResult } from "../components/MealCopySheet";
 import MealFillSheet from "../components/MealFillSheet";
@@ -56,19 +57,7 @@ export function currentWeekOf(planId: number): string | undefined {
   return lastWeek[planId];
 }
 
-export function LoadError({ error, onRetry }: { error: string; onRetry: () => void }) {
-  return (
-    <div className="list-end">
-      <p className="error" role="alert">
-        {error}
-      </p>
-      <button type="button" className="btn secondary inline" onClick={onRetry}>
-        <Icon name="refresh" size={16} />
-        다시 불러오기
-      </button>
-    </div>
-  );
-}
+export { LoadError };
 
 export default function Meals({ user }: { user: User }) {
   const today = localToday();

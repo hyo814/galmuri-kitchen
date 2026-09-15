@@ -11,6 +11,7 @@ import More from "./pages/More";
 import RecipeAi, { RecipeAiDetail, resetAiRecipes } from "./pages/RecipeAi";
 import RecipeDetail from "./pages/RecipeDetail";
 import RecipeForm, { resetRecipeDraft } from "./pages/RecipeForm";
+import { resetRecipeNutrition } from "./components/RecipeNutrition";
 import Shopping from "./pages/Shopping";
 import ShoppingStock from "./pages/ShoppingStock";
 import SeasoningCalc from "./pages/SeasoningCalc";
@@ -146,6 +147,7 @@ export default function App() {
     resetAiRecipes();
     resetRecipeDraft();
     resetMealsView();
+    resetRecipeNutrition();
     scrollTops.clear();
     setUser(null);
   }, []);
