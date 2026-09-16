@@ -201,17 +201,48 @@ def test_manual_patch_cost_recomputes_saved(client, login, app):
     # ponytail: 사 먹으면 얼마를 비우면 0원과 빈 재료비를 구별하지 못해 모름으로 읽는다(칸 하나로 두려고 받아들인 한계)
     assert money({"eat_out_price": None}) == (None, None)
 
-    for bad, message in (({"ingredient_cost": -1}, COST_ERROR), ({"ingredient_cost": "1"}, COST_ERROR), ({"servings": 3}, BAD), ({"title": "라면"}, BAD)):
+    for bad, message in (({"ingredient_cost": -1}, COST_ERROR), ({"ingredient_cost": "1"}, COST_ERROR), ({"servings": 3}, BAD), ({"usages": []}, BAD)):
         assert error(patch(bad)) == (400, message)
     got = client.get(f"/api/cook-logs/{log['id']}").get_json()
     assert (got["rating"], got["memo"], got["eat_out_source"]) == (4, "다음엔 덜 맵게", None)
 
 
-def test_recipe_diary_patch_rejects_cost(client, login):
+def test_recipe_diary_patch_rejects_manual_fields(client, login):
     login()
     recipe = add_recipe(client, "김치찌개", [{"name": "김치", "amount": "300g"}])
     log = cook(client, recipe["id"], [], eat_out_price=9000).get_json()["log"]
-    assert error(client.patch(f"/api/cook-logs/{log['id']}", json={"ingredient_cost": 100})) == (400, BAD)
+    for body in ({"ingredient_cost": 100}, {"title": "딴 이름"}):  # 레시피 일기의 이름은 레시피에서, 재료비는 쓴 재료에서
+        assert error(client.patch(f"/api/cook-logs/{log['id']}", json=body)) == (400, BAD)
+    assert client.get(f"/api/cook-logs/{log['id']}").get_json()["title"] == "김치찌개"
+
+
+def test_manual_patch_title_renames_diary_and_its_food_log(client, login):
+    """사용자 결정(2026-09-17): 직접 쓴 일기는 이름을 고칠 수 있다. 함께 만든 이름만 적은 먹은 기록도 같은 이름이면 같이 바꾼다."""
+    login()
+    log = write(client, food_log=True, meal="dinner").get_json()["log"]
+    quiet = write(client, title="라면", cooked_on="2026-09-14").get_json()["log"]  # 먹은 기록 없이 쓴 일기
+
+    def patch(log_id, body):
+        return client.patch(f"/api/cook-logs/{log_id}", json=body)
+
+    def food_title():
+        return client.get("/api/food-logs?date=2026-09-15").get_json()["logs"][0]["title"]
+
+    res = patch(log["id"], {"title": "  고추장 제육덮밥  "})
+    assert res.status_code == 200, res.get_json()
+    assert res.get_json()["title"] == "고추장 제육덮밥"
+    assert [i["title"] for i in client.get("/api/cook-logs").get_json()["items"]] == ["고추장 제육덮밥", "라면"]
+    assert food_title() == "고추장 제육덮밥"
+    assert patch(quiet["id"], {"title": "짜파게티"}).get_json()["title"] == "짜파게티"
+
+    # 먹은 기록에서 따로 고친 이름은 그대로 둔다
+    assert client.patch(f"/api/food-logs/{log['food_log_id']}", json={"title": "제육덮밥 반 그릇"}).status_code == 200
+    assert patch(log["id"], {"title": "제육덮밥"}).status_code == 200
+    assert food_title() == "제육덮밥 반 그릇"
+
+    for bad, message in (({"title": ""}, TITLE_ERROR), ({"title": "가" * 61}, TITLE_ERROR), ({"title": None}, TITLE_ERROR), ({"title": "제\x00육"}, BAD)):
+        assert error(patch(log["id"], bad)) == (400, message)
+    assert client.get(f"/api/cook-logs/{log['id']}").get_json()["title"] == "제육덮밥"
 
 
 def test_manual_delete_keeps_food_log(client, login, app):
