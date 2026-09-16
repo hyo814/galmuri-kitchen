@@ -79,8 +79,12 @@ test("재료 삭제 이유를 골라 지울 수 있고 새로고침해도 남지
   await expect(page.getByRole("button", { name: /김치/ })).toHaveCount(0);
 });
 
-test("필수품이 떨어지면 배너가 보이고, 채워 넣으면 배너가 사라지며 새로고침해도 그대로다", async ({ page }) => {
+test("필수품 배너는 체험 안내 카드를 닫으면 보이고, 채워 넣으면 사라지며 새로고침해도 그대로다", async ({ page }) => {
   const banner = page.getByRole("button", { name: /필수품 1개가 떨어졌어요/ });
+  // 체험 안내 카드(스펙 30절 C)가 떠 있는 동안은 카드 두 장이 겹치지 않게 배너를 숨긴다
+  await expect(page.getByRole("region", { name: "체험 안내" })).toBeVisible();
+  await expect(banner).toHaveCount(0);
+  await page.getByRole("button", { name: "안내 닫기" }).click();
   await expect(banner).toBeVisible();
   await expect(banner).toContainText("간장");
   await banner.click();

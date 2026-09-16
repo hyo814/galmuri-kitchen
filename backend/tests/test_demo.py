@@ -334,6 +334,64 @@ def test_normal_user_ignores_demo_budget(client, login, app, fake_anthropic):
     assert client.get("/api/me").get_json()["scan"] == "on"
 
 
+USER_BUDGET_FULL = "오늘 준비한 AI 사용량이 모두 찼어요. 조금 뒤에 다시 써주세요."
+
+
+def use_user_budget(app, count, kind="fridge", demo=False, hours_ago=0):
+    with app.app_context():
+        at = utcnow() - timedelta(hours=hours_ago)
+        db.session.add_all(AiCall(user_id=None, demo=demo, kind=kind, created_at=at) for _ in range(count))
+        db.session.commit()
+
+
+def test_user_ai_global_budget_blocks_logged_in_users(client, login, app, monkeypatch):
+    login()
+    app.config.update(ANTHROPIC_API_KEY="test-key", USER_AI_GLOBAL_DAILY=3)
+    for name in ("extract", "extract_recipe"):
+        monkeypatch.setattr(ai, name, fail_if_called)
+    use_user_budget(app, 1, kind="nutrition")  # 영양 추정·사 먹으면 얼마도 Claude 비용이라 센다
+    use_user_budget(app, 1, kind="eat_out")
+    use_user_budget(app, 5, kind="link_fetch")  # 외부 요청 기록(AI 아님)은 안 셈
+    use_user_budget(app, 5, hours_ago=25)  # 24시간 넘은 호출은 안 셈
+    use_user_budget(app, 5, kind="recipe", demo=True)  # 체험 계정 호출은 체험 예산에만 센다
+    with app.app_context():
+        assert ai.user_ai_budget_spent() is False
+    use_user_budget(app, 1, kind="recipe")
+    with app.app_context():
+        assert ai.user_ai_budget_spent() is True
+
+    res = client.post("/api/scan?kind=receipt", data={"image": (io.BytesIO(b"\xff\xd8\xff" + b"jpeg"), "a.jpg", "image/jpeg")})
+    assert (res.status_code, res.get_json()) == (429, {"error": USER_BUDGET_FULL})
+    res = client.post("/api/recipes/import", json={"text": "두부 1모를 썰어 대파와 함께 간장에 조려요. " * 3})
+    assert (res.status_code, res.get_json()) == (429, {"error": USER_BUDGET_FULL})
+    with app.app_context():
+        assert AiCall.query.filter(AiCall.created_at >= utcnow() - timedelta(hours=1)).count() == 13  # 막힌 요청은 기록하지 않는다
+
+
+def test_user_ai_global_budget_blocks_link_import_before_fetch(client, login, app, monkeypatch):
+    login()
+    app.config.update(ANTHROPIC_API_KEY="test-key", USER_AI_GLOBAL_DAILY=1)
+    for name in ("web_page", "page_images", "video_snippet", "instagram_post"):
+        monkeypatch.setattr(outbound, name, fail_if_called)  # 예산을 다 썼으면 링크 주소에 요청하지 않는다
+    monkeypatch.setattr(ai, "extract_recipe", fail_if_called)
+    use_user_budget(app, 1, kind="link")
+    res = client.post("/api/recipes/import", json={"url": "https://blog.example.com/tofu"})
+    assert (res.status_code, res.get_json()) == (429, {"error": USER_BUDGET_FULL})
+    with app.app_context():
+        assert AiCall.query.filter_by(kind="link_fetch").count() == 0
+
+
+def test_demo_user_ignores_user_ai_global_budget(demo_app, monkeypatch):
+    c = new_client(demo_app)
+    c.post("/api/demo-login")
+    demo_app.config.update(ANTHROPIC_API_KEY="test-key", USER_AI_GLOBAL_DAILY=1)
+    use_user_budget(demo_app, 3)
+    usage = {"model": "m", "input_tokens": 1, "output_tokens": 1}
+    monkeypatch.setattr(ai, "extract", lambda *args: ({"items": [], "purchased_on": None}, usage))
+    res = c.post("/api/scan?kind=receipt", data={"image": (io.BytesIO(b"\xff\xd8\xff" + b"jpeg"), "a.jpg", "image/jpeg")})
+    assert (res.status_code, res.get_json()["sample"]) == (200, False)
+
+
 def test_demo_ai_calls_are_marked_demo(demo_app, monkeypatch):
     c = new_client(demo_app)
     c.post("/api/demo-login")

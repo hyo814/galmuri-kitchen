@@ -4,14 +4,29 @@ import Icon from "../components/Icon";
 import InfiniteSentinel from "../components/InfiniteSentinel";
 import IngredientForm from "../components/IngredientForm";
 import LocationsSheet from "../components/LocationsSheet";
+import Mascot from "../components/Mascot";
 import ScanSheet from "../components/ScanSheet";
 import SettingsSheet, { type SettingsTarget } from "../components/SettingsSheet";
 import StaplesSheet from "../components/StaplesSheet";
+import { guideText, urgentItems } from "../demoGuide";
 import { formatDate, formatQuantity, withJosa } from "../format";
+import { forgetScroll } from "../useHashRoute";
 import { forgetRecipeCaches, forgetResources } from "../useResource";
+import { spotlightAiEntry } from "./Recipes";
 
 // 떨어진 필수품이 많아도 배너가 화면을 차지하지 않도록 앞의 몇 개만 이름을 보여 준다 (전체는 필수품 시트)
 const BANNER_NAMES = 3;
+
+// 체험 계정 안내 카드는 계정마다 한 번만(닫거나 버튼을 누르면 이 기기에 기억한다)
+const guideKey = (user: User) => `demoGuideDone:${user.id}`;
+
+function guideDone(user: User): boolean {
+  try {
+    return localStorage.getItem(guideKey(user)) !== null;
+  } catch {
+    return false; // 저장소를 못 쓰면 이번 화면에서만 닫힌다
+  }
+}
 
 function badge(item: Ingredient): string | null {
   if (item.status === "danger") return "섭취 주의";
@@ -34,6 +49,7 @@ export default function Fridge({ user }: { user: User }) {
   const [staplesMissingOnly, setStaplesMissingOnly] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [notice, setNotice] = useState("");
+  const [guide, setGuide] = useState(() => user.provider === "demo" && !guideDone(user));
   const [shown, setShown] = useState(50); // 재고는 서버가 전체를 주고 화면에서 50개씩 점진 렌더 (2,000개까지 대비)
 
   // 필터·검색이 바뀌면 처음 50개부터 다시 보여 준다
@@ -114,6 +130,16 @@ export default function Fridge({ user }: { user: User }) {
   const soon = items?.filter((i) => i.status === "urgent" || i.status === "danger").length ?? 0;
   const missing = staples.filter((s) => !s.in_stock);
 
+  const closeGuide = () => {
+    setGuide(false);
+    try {
+      localStorage.setItem(guideKey(user), "1");
+    } catch {
+      // 저장소를 못 쓰는 브라우저는 이번 화면에서만 닫는다
+    }
+  };
+  const [guideBefore, guideStrong, guideAfter] = items ? guideText(items) : ["", "", ""];
+
   return (
     <main className="page">
       <header className="topbar">
@@ -130,6 +156,47 @@ export default function Fridge({ user }: { user: User }) {
         </button>
       </header>
 
+      {guide && items && (
+        <section className="demo-guide" aria-label="체험 안내">
+          <div className="demo-guide-head">
+            <Mascot size={40} />
+            <p>
+              {guideBefore}
+              {guideStrong && <b>{guideStrong}</b>}
+              {guideAfter}
+            </p>
+            <button className="icon-btn" aria-label="안내 닫기" onClick={closeGuide}>
+              <Icon name="close" size={20} />
+            </button>
+          </div>
+          <div className="demo-guide-acts">
+            <button
+              className="btn primary"
+              onClick={() => {
+                closeGuide();
+                spotlightAiEntry(urgentItems(items).map((i) => i.name));
+                forgetScroll("/recipes"); // 추천 칸 맨 위 AI 카드가 보이게 맨 위에서 연다
+                location.replace("#/recipes"); // 탭 전환과 같게 히스토리를 쌓지 않는다
+              }}
+            >
+              요리 찾아보기
+            </button>
+            {user.scan !== "off" && (
+              <button
+                className="btn secondary"
+                disabled={defaultLocationId === undefined}
+                onClick={() => {
+                  closeGuide();
+                  setScanning(true);
+                }}
+              >
+                사진 찍어보기
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
       {error && (
         <p className="error" role="alert">
           {error}
@@ -142,7 +209,8 @@ export default function Fridge({ user }: { user: User }) {
         </p>
       )}
 
-      {missing.length > 0 && (
+      {/* 체험 안내 카드가 떠 있는 동안은 필수품 배너를 숨긴다(카드 두 장이 겹쳐 보이지 않게). 닫으면 다시 보인다 */}
+      {missing.length > 0 && !(guide && items) && (
         <button className="banner" onClick={() => { setStaplesMissingOnly(true); setPanel("staples"); }}>
           <span className="banner-icon">
             <Icon name="alert" size={22} />
