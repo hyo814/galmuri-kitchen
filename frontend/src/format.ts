@@ -55,6 +55,16 @@ export function addDays(iso: string, days: number): string {
   return d.toLocaleDateString("sv-SE");
 }
 
+/** 유튜브·인스타그램 링크인가(서버 outbound.parse_link와 같은 호스트, 앞의 www.·m. 하나까지). 레시피가 영상에만 있을 수 있어 화면 캡처를 안내한다 */
+export function isVideoLink(link: string): boolean {
+  try {
+    const host = new URL(link.trim()).hostname;
+    return /^(?:www\.|m\.)?(?:(?:music\.)?youtube\.com|youtube-nocookie\.com|youtu\.be|instagram\.com)$/.test(host);
+  } catch {
+    return false; // 주소 모양이 아니다(서버도 받지 않는다)
+  }
+}
+
 /** 식약처 사진은 http 주소로 오지만 https로도 열린다(2026-09-13 확인). https 화면에서 섞인 콘텐츠로 막히지 않게 바꾼다. */
 export function imageSrc(url: string | null): string | null {
   return url ? url.replace(/^http:\/\/(www|openapi)\.foodsafetykorea\.go\.kr\//, "https://$1.foodsafetykorea.go.kr/") : null;

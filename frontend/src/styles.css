@@ -2951,6 +2951,8 @@ button.row-btn > svg {
 .r3-cta-note {
   margin-top: 8px;
   text-align: center;
+  word-break: keep-all;
+  text-wrap: balance; /* 두 줄이면 `· 5장까지`만 따로 내려가지 않게 */
 }
 .r3-crow {
   display: flex;

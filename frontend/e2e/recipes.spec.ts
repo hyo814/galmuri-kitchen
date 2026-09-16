@@ -145,6 +145,66 @@ test("사진으로 레시피를 가져오면 확인 폼에 채워진다", async 
   await expect(page.getByLabel("이름", { exact: true })).toHaveValue("제육볶음");
 });
 
+test("유튜브 링크를 못 읽었을 때만 글 붙여넣기 경고 아래에 화면 캡처로 가져오기가 보이고, 누르면 앨범 먼저인 사진 단계로 갔다가 취소로 돌아온다", async ({ page }) => {
+  // 키 없는 서버는 예시 초안을 주므로, 설명에 레시피가 없는 쇼츠·못 읽는 블로그처럼 422 need_text로 바꾼다
+  await page.route("**/api/recipes/import", (route) => {
+    const blog = (route.request().postDataJSON() as { url: string }).url.includes("blog.naver.com");
+    const error = blog
+      ? "이 링크에서는 레시피를 읽지 못했어요. 글을 복사한 뒤 아래에 붙여 넣어주세요."
+      : "영상 설명에서 레시피를 찾지 못했어요. 설명에 있으면 복사해 붙여 넣고, 영상에만 있으면 보면서 재료와 만드는 법을 아래에 적어주세요.";
+    return route.fulfill({ status: 422, json: { error, need_text: true } });
+  });
+  const sheet = page.getByRole("dialog");
+  const capture = sheet.getByRole("button", { name: "화면 캡처로 가져오기" });
+  const textArea = sheet.getByLabel("레시피 글");
+  const videoWarning = "영상 설명에서 레시피를 찾지 못했어요";
+  const importLink = async (link: string) => {
+    await sheet.getByRole("button", { name: "링크로 가져오기" }).click();
+    await sheet.getByLabel("링크", { exact: true }).fill(link);
+    await sheet.getByRole("button", { name: "가져오기", exact: true }).click();
+    await expect(sheet.getByRole("heading", { name: "글 붙여넣기" })).toBeVisible();
+  };
+  await openRecipes(page, "내 레시피");
+  await page.getByRole("button", { name: "레시피 추가" }).click();
+
+  await importLink("https://blog.naver.com/cook/223456789012");
+  await expect(sheet.getByRole("alert")).toContainText("이 링크에서는 레시피를 읽지 못했어요");
+  await expect(capture).toHaveCount(0);
+
+  await sheet.getByRole("button", { name: "취소" }).click();
+  await importLink("https://m.youtube.com/shorts/abcdefghijk");
+  await expect(sheet.getByRole("alert")).toContainText(videoWarning);
+  await expect(capture).toHaveAccessibleDescription("영상을 멈추고 재료와 만드는 법이 나온 화면을 캡처해 올려주세요 · 5장까지");
+  await textArea.fill("돼지고기 앞다리살 600g"); // 글 붙여넣기는 그대로 쓸 수 있다
+  await capture.click();
+
+  // 화면 캡처로 온 사진 단계: 경고 없이 앨범이 먼저(주 버튼), 맨 아래 취소
+  await expect(sheet.getByRole("heading", { name: "사진으로 가져오기" })).toBeFocused();
+  await expect(sheet.getByRole("alert")).toHaveCount(0);
+  await expect(sheet.getByRole("button")).toHaveText(["앨범에서 고르기", "카메라로 찍기", "취소"]);
+  await expect(sheet.getByRole("button", { name: "앨범에서 고르기" })).toHaveClass(/\bprimary\b/);
+  await sheet.getByRole("button", { name: "취소" }).click();
+
+  // 글 단계로 돌아오면 쓰던 글·경고·캡처 버튼이 그대로
+  await expect(sheet.getByRole("heading", { name: "글 붙여넣기" })).toBeFocused();
+  await expect(textArea).toHaveValue("돼지고기 앞다리살 600g");
+  await expect(sheet.getByRole("alert")).toContainText(videoWarning);
+  await expect(capture).toBeVisible();
+
+  // 방법 고르기로 돌아가 고른 사진 단계는 예전 그대로(카메라 먼저, 취소 없음)
+  await sheet.getByRole("button", { name: "취소" }).click();
+  await sheet.getByRole("button", { name: "사진으로 가져오기" }).click();
+  await expect(sheet.getByRole("button")).toHaveText(["카메라로 찍기", "앨범에서 고르기"]);
+
+  // 영상 보기의 레시피로 가져오기도 유튜브 링크라 같은 버튼이 보인다
+  await page.keyboard.press("Escape");
+  await openRecipes(page, "영상");
+  await page.getByRole("link", { name: /제육볶음 황금레시피/ }).click();
+  await page.getByRole("button", { name: "레시피로 가져오기" }).click();
+  await expect(sheet.getByRole("alert")).toContainText(videoWarning);
+  await expect(capture).toBeVisible();
+});
+
 test("양념 비율 프리셋에서 기준량을 바꾸면 양념 양이 그만큼 바뀐다", async ({ page }) => {
   await openRecipes(page, "양념 비율");
   await page.getByRole("region", { name: "기본 양념" }).getByRole("link", { name: "제육볶음 양념" }).click();
