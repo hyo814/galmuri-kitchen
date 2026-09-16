@@ -53,7 +53,7 @@ INGREDIENTS = [
     ("대파", 1, "단", "fridge", 5, 2),
     ("달걀", 8, "개", "fridge", 4, None),
     ("우유", 1, "L", "fridge", 2, 6),
-    ("애호박", 1, "개", "fridge", 2, None),
+    ("애호박", 0.5, "개", "fridge", 2, None),  # 반 개 남음: 식단 된장찌개(⅓개씩)에 모자라 장보기 미리보기에 체크된 줄이 생긴다(자정을 넘겨도)
     ("김치", 1, "kg", "fridge", 10, None),
     ("돼지고기 앞다리살", 600, "g", "freezer", 12, None),
     ("냉동 만두", 1, "봉지", "freezer", 30, None),
@@ -106,7 +106,8 @@ MEAL_PLAN_SLOTS = [
     (4, "lunch", "잔치국수", 310),  # 700g
     (4, "dinner", 1, None),
     (5, "dinner", "제육덮밥", 950),  # 470g
-    # 일부러 3인분: 애호박(⅓개씩)이 재고 1개보다 모자라 장보기 미리보기가 체크된 줄 `애호박 1개 담기`로 시작한다(양념은 꺼진 채라 0개로 시작하지 않게)
+    # 일부러 3인분(손님): 애호박 필요 양이 늘어 장보기 미리보기가 체크된 줄 `애호박 1개 담기`로 시작한다(양념은 꺼진 채라 0개로 시작하지 않게).
+    # 오늘 저녁 칸이 빠지는 자정 뒤에도 ⅓ × (1 + 1.5) = 0.83개 > 재고 ½개라 그 줄이 남는다
     (6, "dinner", 0, None, 3),
 ]
 # (며칠 전, 끼니, 예시 레시피 제목 또는 None, 직접 쓴 이름, 어디서, 만족도, 메모) — 결정 16
@@ -274,6 +275,7 @@ def seed_demo_data(user_id):
         recipe.eat_out_price, recipe.eat_out_source = price, source
 
     staples = seasoning_names(user_id)
+    undo_closed = utcnow() - timedelta(seconds=cooklog.UNDO_SECONDS + 60)
     for days_ago, title, servings, rating, memo, items, extra in COOK_LOGS:
         recipe = next(r for r in recipe_rows if r.title == title)
         cooked_on = today - timedelta(days=days_ago)
@@ -281,8 +283,9 @@ def seed_demo_data(user_id):
             user_id=user_id, recipe=recipe, title=title, cooked_on=cooked_on,
             servings=servings, rating=rating, memo=memo,
             eat_out_price=recipe.eat_out_price, eat_out_source=recipe.eat_out_source,
-            # 요리한 날 저녁(서울 19시)에 남긴 것으로 — 기본값(만든 시각)이면 체험하기 직후 2분 동안 되돌리기가 예시 일기를 지웠다
-            created_at=datetime.combine(cooked_on, time(19), SEOUL).astimezone(timezone.utc),
+            # 요리한 날 저녁(서울 19시)에 남긴 것으로 — 기본값(만든 시각)이면 체험하기 직후 2분 동안 되돌리기가 예시 일기를 지웠다.
+            # 19시가 아직 안 왔으면(오늘 일기) 되돌리기 창이 이미 닫힌 시각으로
+            created_at=min(datetime.combine(cooked_on, time(19), SEOUL), undo_closed).astimezone(timezone.utc),
         )
         for name, used, unit, price, price_quantity, excluded in items:
             log.items.append(CookLogItem(

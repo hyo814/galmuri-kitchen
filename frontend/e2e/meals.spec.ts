@@ -3,7 +3,7 @@ import type { Page } from "@playwright/test";
 
 // 체험 계정 예시 식단(backend/app/demo.py MEAL_PLAN_SLOTS): 저녁은 매일(오늘 저녁 된장찌개), 점심은 사흘(내일 점심 김치찌개),
 // 아침은 내일 토스트 하나. 직접 쓴 칸(토스트·카레라이스·김밥·비빔밥·잔치국수·제육덮밥)은 1인분 kcal이 있다. 7일 × 4끼 = 28칸 중 11칸.
-// 모두 2인분이고 마지막 날 저녁 된장찌개만 3인분(장보기에 모자란 애호박이 생기게).
+// 모두 2인분이고 마지막 날 저녁 된장찌개만 3인분, 재고 애호박은 ½개(장보기에 모자란 애호박이 생기게).
 
 const todayCard = (page: Page) => page.locator(".ml-day.today");
 
@@ -122,10 +122,10 @@ test("식단으로 장보기 목록을 만들면 장보기 탭에 생기고 새�
   await expect(page.getByRole("heading", { name: "장보기 목록 만들기" })).toBeVisible();
   await expect(page.locator(".topbar .summary")).toBeVisible(); // 재료 계산이 끝나야 담을 줄이 보인다
 
-  // 마지막 날 된장찌개가 3인분이라 애호박이 모자라 체크된 줄 하나로 시작한다(담을 양은 정수로 올리고 필요 양은 소수 한 자리)
+  // 애호박 재고가 ½개라(마지막 날 된장찌개는 3인분) 체크된 줄 하나로 시작한다(담을 양은 정수로 올리고 필요 양은 소수 한 자리)
   const zucchini = page.getByRole("checkbox", { name: "애호박 1개 담기" });
   await expect(zucchini).toBeChecked();
-  await expect(page.locator(".ml-prow", { has: zucchini }).getByText("1.2개 필요 · 1개 있어요")).toBeVisible();
+  await expect(page.locator(".ml-prow", { has: zucchini }).getByText("1.2개 필요 · ½개 있어요")).toBeVisible();
   const addButton = page.getByRole("button", { name: /개 장보기에 담기$/ });
   await expect(addButton).toHaveText("1개 장보기에 담기");
 

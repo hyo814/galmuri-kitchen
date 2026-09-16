@@ -8,7 +8,7 @@ from datetime import datetime, time, timedelta, timezone
 
 import pytest
 
-from app import ai, auth, demo, outbound, scan, videos
+from app import ai, auth, cooklog, demo, meals, outbound, scan, videos
 from app.ingredients import SEOUL, seoul_today
 from app.models import (
     AiCall,
@@ -186,6 +186,21 @@ def test_demo_seeded_cook_logs_cannot_be_undone(demo_app):
     assert len(c.get("/api/cook-logs").get_json()["items"]) == len(demo.COOK_LOGS)
 
 
+def test_demo_cook_log_whose_19h_is_ahead_still_cannot_be_undone(demo_app, monkeypatch):
+    # 오늘 요리한 예시 일기를 19시 전에 만들면 만든 시각(19시)이 미래라 되돌리기 창이 다시 열린다 — 시각에 기대지 않게 하루 뒤 일기로 확인한다
+    ahead_log = (-1, "된장찌개", 2, 4, None, [("두부", 0.5, "모", 2480, 1, None)], [])
+    monkeypatch.setattr(demo, "COOK_LOGS", [ahead_log, *demo.COOK_LOGS])
+    c = new_client(demo_app)
+    c.post("/api/demo-login")
+    logs = c.get("/api/cook-logs").get_json()["items"]
+    assert len(logs) == 4
+    closed = utcnow() - timedelta(seconds=cooklog.UNDO_SECONDS)
+    for log in logs:
+        assert datetime.fromisoformat(log["created_at"]) < closed
+        assert c.post(f"/api/cook-logs/{log['id']}/undo").status_code == 400
+    assert len(c.get("/api/cook-logs").get_json()["items"]) == 4
+
+
 def test_demo_login_seeds_shopping_list(demo_app):
     c = new_client(demo_app)
     c.post("/api/demo-login")
@@ -290,7 +305,7 @@ def test_demo_login_creates_meal_plan(demo_app):
 
 
 def test_demo_meal_plan_shopping_preview_starts_with_one_checked_row(demo_app):
-    # 3인분 된장찌개 덕에 애호박(⅓개 × 1 + 1 + 1.5 = 1.17개, 재고 1개)이 모자라 체크된 줄 하나로 시작한다(0개 담기로 시작하지 않게).
+    # 애호박 재고는 ½개라(된장찌개 ⅓개 × 1 + 1 + 1.5인분 배율 = 1.17개) 체크된 줄 하나로 시작한다(0개 담기로 시작하지 않게).
     # 재고에 없는 숟가락 양 재료는 양념 묶음(담으면 1개, 필요 양은 인분 배율을 곱해 더한 값) — 운영에서 네 줄이 `단위가 달라요`에 섞여 있었다
     c = new_client(demo_app)
     c.post("/api/demo-login")
@@ -299,7 +314,7 @@ def test_demo_meal_plan_shopping_preview_starts_with_one_checked_row(demo_app):
     assert body["recipe_slot_count"] == 5
     assert body["manual"] == []
     assert [(row["name"], row["quantity"], row["unit"], row["need"], row["have"], row["planned_on"]) for row in body["buy"]] == [
-        ("애호박", 1, "개", [{"quantity": 1.17, "unit": "개"}], [{"quantity": 1, "unit": "개"}], seoul_today().isoformat()),
+        ("애호박", 1, "개", [{"quantity": 1.17, "unit": "개"}], [{"quantity": 0.5, "unit": "개"}], seoul_today().isoformat()),
     ]
     spoon = lambda value, unit: ([{"quantity": value, "unit": unit}], [])  # noqa: E731
     assert {row["name"]: (row["quantity"], row["unit"], row["need"], row["have"]) for row in body["seasoning"]} == {
@@ -315,6 +330,20 @@ def test_demo_meal_plan_shopping_preview_starts_with_one_checked_row(demo_app):
         "두부": "listed", "대파": "listed", "청양고추": "listed",
         "감자": "enough", "양파": "enough", "김치": "enough", "돼지고기": "enough",
     }
+
+
+def test_demo_meal_plan_shopping_still_has_checked_row_after_midnight(demo_app, monkeypatch):
+    # 체험 계정은 24시간 산다 — 자정을 넘겨 오늘 저녁 칸이 빠져도(⅓ × 1 + 1.5 = 0.83개 > 재고 ½개) 체크된 줄이 남는다
+    c = new_client(demo_app)
+    c.post("/api/demo-login")
+    plan_id = c.get("/api/meal-plans").get_json()["items"][0]["id"]
+    tomorrow = seoul_today() + timedelta(days=1)
+    monkeypatch.setattr(meals, "seoul_today", lambda: tomorrow)
+    body = c.get(f"/api/meal-plans/{plan_id}/shopping-preview").get_json()
+    assert (body["start_on"], body["recipe_slot_count"]) == (tomorrow.isoformat(), 4)
+    assert [(row["name"], row["quantity"], row["need"], row["planned_on"]) for row in body["buy"]] == [
+        ("애호박", 1, [{"quantity": 0.83, "unit": "개"}], tomorrow.isoformat()),
+    ]
 
 
 def test_demo_users_meal_plan_is_isolated(demo_app):
