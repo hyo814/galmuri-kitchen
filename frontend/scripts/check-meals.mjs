@@ -119,6 +119,12 @@ assert.equal(previewDetail(R([[0.33, "모"]], [[2.5, "모"]], "enough")), "0.3�
 assert.equal(previewDetail(R([[2, "모"], [1.05, "g"]], [])), "2모 + 1.1g 필요 · 없어요");
 assert.equal(previewDetail(R([[0.03, "모"]], [])), "0.1모 필요 · 없어요"); // 아주 적어도 0으로 보이지 않게
 assert.equal(previewDetail(R([], [[1, "병"]], "enough", [], [[2, "큰술"]])), "2큰술 필요 · 1병 있어요"); // 간장
+// 필요와 있음이 같은 글자로 보이는데 값이 다르면 필요를 소수 둘째 자리까지(`1개 담기` 옆에 `1개 필요 · 1개 있어요`가 없게)
+assert.equal(previewDetail(R([[1.04, "개"]], [[1, "개"]])), "1.04개 필요 · 1개 있어요");
+assert.equal(previewDetail(R([[600.04, "g"]], [[600, "g"]])), "600.04g 필요 · 600g 있어요");
+assert.equal(previewDetail(R([[0.96, "개"]], [[1, "개"]], "enough")), "0.96개 필요 · 1개 있어요");
+assert.equal(previewDetail(R([[1, "개"]], [[1, "개"]], "enough")), "1개 필요 · 1개 있어요"); // 값이 같으면 그대로
+assert.equal(previewDetail(R([[1.17, "개"]], [[0.5, "개"]])), "1.2개 필요 · ½개 있어요"); // 체험 애호박
 assert.equal(buyDayText("2026-09-14", "2026-09-14"), "오늘 사요");
 assert.equal(buyDayText("2026-09-13", "2026-09-14"), "오늘 사요");
 assert.equal(buyDayText("2026-09-16", "2026-09-14"), "16일(수)에 사요");
