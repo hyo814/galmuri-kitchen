@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { fillServiceWorker, precacheList, writeServiceWorker } from "./sw-precache.mjs";
 
 assert.deepEqual(
-  precacheList(["sw.js", "index.html", "assets/index-abc.js", "assets/index-abc.js.map", "icon-192.png", "og.png", "manifest.webmanifest"]),
+  precacheList(["sw.js", "index.html", "assets/index-abc.js", "assets/index-abc.js.map", "icon-192.png", "og.png", "manifest.webmanifest", "samples/fridge.jpg"]),
   ["/", "/assets/index-abc.js", "/icon-192.png", "/manifest.webmanifest"],
 );
 
@@ -20,8 +20,10 @@ assert.throws(() => fillServiceWorker("const X = 1;", "v", ["/"]));
 const dir = mkdtempSync(join(tmpdir(), "sw-precache-"));
 try {
   mkdirSync(join(dir, "assets"));
+  mkdirSync(join(dir, "samples"));
   writeFileSync(join(dir, "index.html"), "<html>");
   writeFileSync(join(dir, "assets", "index-1.js"), "a");
+  writeFileSync(join(dir, "samples", "fridge.jpg"), "jpg"); // 체험 예시 사진은 미리 받지 않는다
   const build = () => {
     writeFileSync(join(dir, "sw.js"), template);
     assert.deepEqual(writeServiceWorker(dir, "."), ["/", "/assets/index-1.js"]);
