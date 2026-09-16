@@ -159,7 +159,8 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
     reload,
   } = useResource<Detail>(kind === "mine" ? `/api/recipes/${id}` : `/api/public-recipes/${id}`);
   const { busy, error: actionError, run } = useAsyncAction();
-  const opening = useAsyncAction(); // 추천 레시피 요리했어요(저장한 뒤 시트 열기)
+  // 추천 레시피 요리했어요가 저장 중인지(저장만과 잠금은 run 하나 — 한 번에 둘 다 눌러도 요청 하나, 리뷰 F6)
+  const [opening, setOpening] = useState(false);
   // 요리했어요 시트: 내 레시피 id(추천 레시피는 저장한 복사본)와 맨 위 한 줄
   const [cooking, setCooking] = useState<{ recipeId: number; note?: string } | null>(null);
 
@@ -209,12 +210,13 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
   // 이 화면에 남는다 — 되돌려도 저장한 레시피는 그대로(되돌리기는 요리 일기만)
   const cookPublic = () => {
     if (busy) return;
-    void opening.run(async () => {
+    setOpening(true);
+    void run(async () => {
       const res = await api<Response>(`/api/public-recipes/${recipe.id}/save`, { method: "POST", raw: true });
       const saved = (await res.json()) as MyRecipe;
       forgetRecipeCaches();
       setCooking({ recipeId: saved.id, note: savedRecipeNote(saved.title, res.status === 201) });
-    });
+    }).finally(() => setOpening(false));
   };
 
   const remove = () => {
@@ -278,9 +280,9 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
         </p>
       )}
 
-      {(actionError || opening.error) && (
+      {actionError && (
         <p className="error" role="alert">
-          {actionError || opening.error}
+          {actionError}
         </p>
       )}
 
@@ -307,13 +309,13 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
         <div className="cta-bar">
           {/* 시안 ⑤: 저장만(작게) + 요리했어요(크게). 요리했어요는 저장하는 동안에도 disabled 대신 aria-disabled — 포커스가 남아 시트를 닫으면 돌아온다 */}
           <div className="actions">
-            <button className="btn outline ck-save-only" aria-label={busy ? undefined : "내 레시피로 저장만 하기"} disabled={busy || opening.busy} onClick={save}>
+            <button className="btn outline ck-save-only" aria-label={busy && !opening ? undefined : "내 레시피로 저장만 하기"} disabled={busy} onClick={save}>
               <Icon name="bookmark" size={18} />
-              {busy ? "저장 중…" : "저장만"}
+              {busy && !opening ? "저장 중…" : "저장만"}
             </button>
-            <button className="btn primary" aria-haspopup="dialog" aria-disabled={busy || opening.busy || undefined} data-cook-button onClick={cookPublic}>
+            <button className="btn primary" aria-haspopup="dialog" aria-disabled={busy || undefined} data-cook-button onClick={cookPublic}>
               <Icon name="pan" />
-              {opening.busy ? "저장 중…" : "요리했어요"}
+              {opening ? "저장 중…" : "요리했어요"}
             </button>
           </div>
         </div>

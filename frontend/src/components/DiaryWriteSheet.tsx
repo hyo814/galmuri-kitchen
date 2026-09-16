@@ -36,6 +36,7 @@ function PickSheet({ onNext, onClose }: { onNext: (step: Step) => void; onClose:
   // 검색으로 목록에서 빠진 것은 고른 것으로 치지 않는다(MealFillSheet와 같게)
   const picked = recipes.result?.items.find((r) => r.id === recipeId);
   const title = name.trim();
+  const missing = tried && !picked && !title;
 
   const next = () => {
     setTried(true);
@@ -111,8 +112,8 @@ function PickSheet({ onNext, onClose }: { onNext: (step: Step) => void; onClose:
           />
         </div>
 
-        {tried && !picked && !title && (
-          <p className="hint ck-invalid" role="alert">
+        {missing && (
+          <p id={`${id}-missing`} className="hint ck-invalid" role="alert">
             레시피를 고르거나 요리 이름을 적어주세요
           </p>
         )}
@@ -121,7 +122,13 @@ function PickSheet({ onNext, onClose }: { onNext: (step: Step) => void; onClose:
             취소
           </button>
           {/* 고른 게 없어도 disabled 대신 aria-disabled — 누르면 무엇이 모자란지 알린다 */}
-          <button type="button" className="btn primary" aria-disabled={(!picked && !title) || undefined} onClick={next}>
+          <button
+            type="button"
+            className="btn primary"
+            aria-disabled={(!picked && !title) || undefined}
+            aria-describedby={missing ? `${id}-missing` : undefined}
+            onClick={next}
+          >
             다음
           </button>
         </div>
@@ -174,7 +181,7 @@ function ManualSheet({ title, user, onSaved, onClose }: Props & { title: string 
       <DateChips value={date} today={today} onChange={setDate} />
       <div className="ck-wons">
         <WonField value={priceText} source={null} estimating={false} onChange={setPriceText} />
-        <CostField value={costText} onChange={setCostText} />
+        <CostField value={costText} servings={servings} onChange={setCostText} />
       </div>
       <div className="ck-row">
         <b>별점</b>

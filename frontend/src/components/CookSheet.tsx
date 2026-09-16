@@ -152,6 +152,7 @@ export function DateChips({ value, today, onChange }: { value: string; today: st
 export function WonField({
   label = "사 먹으면 얼마 (1인분)",
   placeholder = "예: 9,000",
+  help,
   value,
   source,
   estimating,
@@ -161,6 +162,8 @@ export function WonField({
   /** 직접 쓴 일기의 `재료비 (선택)`도 같은 칸(0~1,000,000원) */
   label?: ReactNode;
   placeholder?: string;
+  /** 칸 아래 늘 보이는 도움말(재료비가 몇 인분을 합친 값인지) */
+  help?: string;
   value: string;
   source: EatOutSource | null;
   estimating: boolean;
@@ -190,7 +193,7 @@ export function WonField({
             size={Math.max(7, value.length)}
             value={value}
             aria-invalid={invalid || undefined}
-            aria-describedby={[note && `${id}-note`, invalid && `${id}-hint`].filter(Boolean).join(" ") || undefined}
+            aria-describedby={[note && `${id}-note`, help && `${id}-help`, invalid && `${id}-hint`].filter(Boolean).join(" ") || undefined}
             onChange={(e) => onChange(wonFieldText(parseWon(e.target.value), e.target.value))}
           />
           <span className="suffix" aria-hidden="true">
@@ -206,6 +209,11 @@ export function WonField({
           </button>
         )}
       </div>
+      {help && (
+        <p id={`${id}-help`} className="hint">
+          {help}
+        </p>
+      )}
       {invalid && (
         <p id={`${id}-hint`} className="hint ck-invalid">
           0~1,000,000원 사이로 입력해주세요
@@ -297,8 +305,8 @@ export function PhotoPicker({
   );
 }
 
-/** 직접 쓴 일기의 재료비 칸(선택, 0~1,000,000원) */
-export const CostField = ({ value, onChange }: { value: string; onChange: (text: string) => void }) => (
+/** 직접 쓴 일기의 재료비 칸(선택, 0~1,000,000원). 옆 칸이 1인분이라 인분을 합친 값이라고 늘 알린다(리뷰 W3) */
+export const CostField = ({ value, servings, onChange }: { value: string; servings: number; onChange: (text: string) => void }) => (
   <WonField
     label={
       <>
@@ -306,6 +314,7 @@ export const CostField = ({ value, onChange }: { value: string; onChange: (text:
       </>
     }
     placeholder="예: 6,500"
+    help={`${servings}인분을 합친 값이에요`}
     value={value}
     source={null}
     estimating={false}

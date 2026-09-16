@@ -119,7 +119,7 @@ export default function CookEditSheet({ log: logProp, today, photos, onSaved, on
       {logProp.manual ? (
         <div className="ck-wons">
           {priceField}
-          <CostField value={costText} onChange={setCostText} />
+          <CostField value={costText} servings={logProp.servings} onChange={setCostText} />
         </div>
       ) : (
         priceField

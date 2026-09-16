@@ -74,10 +74,11 @@ export const undoneText = (r: { restored: string[]; skipped: string[] }) =>
 /** 쓴 양 칸 옆 "재고 600g" */
 export const stockText = (row: Pick<CookDraftRow, "stock_quantity" | "stock_unit">) =>
   row.stock_quantity === null ? "재고에 없어요" : `재고 ${formatQuantity(row.stock_quantity)}${row.stock_unit ?? ""}`;
+/** "마지막 9월 15일" */
+const lastOnText = (iso: string) => `마지막 ${Number(iso.slice(5, 7))}월 ${Number(iso.slice(8, 10))}일`;
 /** 레시피 상세 "마지막 9월 15일 · ★★★★☆" */
 export function cookedLine(c: { last_on: string; last_rating: number | null }, stars: (n: number) => string): string {
-  const day = `마지막 ${Number(c.last_on.slice(5, 7))}월 ${Number(c.last_on.slice(8, 10))}일`;
-  return c.last_rating === null ? day : `${day} · ${stars(c.last_rating)}`;
+  return c.last_rating === null ? lastOnText(c.last_on) : `${lastOnText(c.last_on)} · ${stars(c.last_rating)}`;
 }
 
 // ---- Task 10: 요리 일기 목록·상세(시안 3·4) ----
@@ -128,7 +129,7 @@ export function excludedNote(items: Pick<CookLogItem, "name" | "used" | "unit" |
 // ---- 요리 일기 쓰기·추천 레시피 요리했어요(29절 추가 2026-09-16, 시안 docs/design/diary-write) ----
 /** 무엇을 요리했나요 시트의 레시피 줄 설명 "요리 2번 · 마지막 9월 14일" */
 export const cookedChoiceText = (c: { count: number; last_on: string } | null) =>
-  c ? `요리 ${c.count}번 · ${cookedLine({ ...c, last_rating: null }, String)}` : "아직 요리 기록이 없어요";
+  c ? `요리 ${c.count}번 · ${lastOnText(c.last_on)}` : "아직 요리 기록이 없어요";
 /** 추천 레시피 요리했어요 시트 맨 위 한 줄(결정 C). created가 아니면 전에 저장해 둔 복사본을 쓴 것 */
 export const savedRecipeNote = (title: string, created: boolean) =>
   `${created ? `${withJosa(title, "을", "를")} 내 레시피에 저장했어요` : `${withJosa(title, "은", "는")} 이미 내 레시피에 있어요`}. 다음부터는 내 레시피에서 열 수 있어요.`;

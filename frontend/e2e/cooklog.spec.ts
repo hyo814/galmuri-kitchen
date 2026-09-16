@@ -217,6 +217,7 @@ test("요리 일기의 일기 쓰기로 레시피 없이 쓰면 재고는 그대
   await expect(sheet.getByRole("button", { name: /추정해줘요/ })).toHaveCount(0); // 레시피가 없어 AI 추정은 없다
   await sheet.getByLabel("사 먹으면 얼마 (1인분)").fill("9000");
   await sheet.getByLabel("재료비 (선택)").fill("6500");
+  await expect(sheet.getByLabel("재료비 (선택)")).toHaveAccessibleDescription("2인분을 합친 값이에요"); // 옆 칸은 1인분이라
   await sheet.getByRole("radiogroup", { name: "별점" }).getByRole("radio", { name: "5점" }).click();
   await sheet.getByRole("button", { name: "메모 (선택)" }).click();
   await sheet.getByLabel("메모").fill("양념을 조금 줄였더니 딱 좋았어요");
@@ -253,6 +254,40 @@ test("요리 일기의 일기 쓰기로 레시피 없이 쓰면 재고는 그대
   await expect(edit).toHaveCount(0);
   await expect(calc.getByText("계산하지 못했어요")).toBeVisible();
   await expect(calc.getByRole("definition")).toHaveText(["18,000원", "재료비를 적으면 아낀 돈을 계산해요"]);
+});
+
+test("일기 쓰기에서 내 레시피를 고르면 요리했어요 시트로 이어지고, 취소·닫기 뒤 포커스는 일기 쓰기로 돌아온다", async ({ page }) => {
+  await openCookDiary(page);
+  const write = app(page).getByRole("button", { name: "일기 쓰기" });
+  const pick = page.getByRole("dialog", { name: "무엇을 요리했나요?" });
+  await write.click();
+  await pick.getByRole("button", { name: "취소" }).click();
+  await expect(pick).toHaveCount(0);
+  await expect(write).toBeFocused();
+
+  await write.click();
+  const radio = pick.getByRole("radio", { name: "김치찌개" });
+  await pick.getByLabel("요리 이름").fill("라면");
+  await pick.getByText("김치찌개", { exact: true }).click(); // 줄을 누르면 고르고, 적던 이름은 비운다
+  await expect(radio).toBeChecked();
+  await expect(pick.getByLabel("요리 이름")).toHaveValue("");
+  await pick.getByRole("button", { name: "다음" }).click();
+  const sheet = page.getByRole("dialog", { name: "김치찌개 요리했어요" });
+  await expect(sheet.getByRole("checkbox", { name: "김치 재고에서 빼기" })).toBeChecked();
+  await page.keyboard.press("Escape");
+  await expect(sheet).toHaveCount(0);
+  await expect(write).toBeFocused(); // 시트가 두 번 바뀌어도 여는 버튼으로
+
+  // 고른 레시피로 저장하면 재고에서 빼고 목록 맨 위에 생긴다
+  const before = await stock(page);
+  await write.click();
+  await pick.getByText("김치찌개", { exact: true }).click();
+  await pick.getByRole("button", { name: "다음" }).click();
+  await sheet.getByRole("button", { name: "저장하고 재고에서 빼기" }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(undoToast(page)).toContainText("재고에서 김치");
+  await expect(diaryRows(page)).toHaveText([/^김치찌개/, /^김치찌개/, /^된장찌개/, /^김치찌개/]);
+  expect((await stock(page)).김치).toBeLessThan(before.김치);
 });
 
 test("추천 레시피의 요리했어요는 내 레시피에 저장한 뒤 같은 시트를 열고, 저장하면 알림이 뜨며 내 레시피에 생긴다", async ({ page }) => {
