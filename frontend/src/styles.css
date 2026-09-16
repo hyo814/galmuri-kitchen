@@ -2311,6 +2311,15 @@ button.row-btn > svg {
   margin-top: 8px;
 }
 
+/* 영상 보기에서 가져오기를 못 했으면 아래에 화면 캡처로 가져오기(버튼 + 안내)가 붙어 CTA 바가 높아진다 — 설명 마지막 줄이 가리지 않게 여백도 늘린다 */
+.r3-detail-save .r3-capture {
+  margin-top: 8px;
+}
+
+.page:has(.r3-detail-save .r3-capture) {
+  padding-bottom: calc(232px + var(--tabbar-h) + env(safe-area-inset-bottom));
+}
+
 .r3-loading {
   display: flex;
   flex-direction: column;

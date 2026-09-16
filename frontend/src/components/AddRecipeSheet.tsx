@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { ApiError, api, type AiUsage, type RecipeDraft } from "../api";
-import { isVideoLink, remainingText } from "../format";
+import { remainingText, videoSource } from "../format";
 import { autoGrowTextarea, openDraft } from "../pages/RecipeForm";
 import { navigate } from "../useHashRoute";
 import { useResource } from "../useResource";
@@ -20,19 +20,41 @@ const CHOICES: { step: AddStep | "manual"; icon: IconName; title: string; hint: 
 ];
 
 interface Props {
-  /** 영상 보기처럼 글 붙여넣기 단계부터 열 때 */
+  /** 영상 보기처럼 글 붙여넣기·사진 단계부터 열 때 */
   initialStep?: AddStep;
   initialWarning?: string;
+  /** 영상 보기에서 못 읽은 유튜브 링크: 처음부터 화면 캡처 흐름으로 연다 */
+  failedLink?: string;
   onClose: () => void;
 }
 
+/** 유튜브·인스타그램 링크를 못 읽었을 때 경고(영상 보기는 가져오기 버튼) 아래에 두는 `화면 캡처로 가져오기` + 안내 한 줄.
+ *  영상 보기처럼 회색 바탕(--bg) 위면 onPage — 회색 보조 버튼이 바탕에 묻혀 테두리 버튼으로 */
+export function CaptureButton({ onClick, onPage = false }: { onClick: () => void; onPage?: boolean }) {
+  const hintId = useId();
+  return (
+    <div className="r3-capture">
+      <button type="button" className={onPage ? "btn outline" : "btn secondary"} aria-describedby={hintId} onClick={onClick}>
+        <Icon name="file" />
+        화면 캡처로 가져오기
+      </button>
+      <p className="hint r3-cta-note" id={hintId}>
+        영상을 멈추고 재료와 만드는 법이 나온 화면을 캡처해 올려주세요 · 5장까지
+      </p>
+    </div>
+  );
+}
+
 /** 레시피 추가: 방법 고르기 → 링크 / 글 붙여넣기(링크를 못 읽으면 경고 상자와 함께 이 단계로) / 사진 → 가져온 레시피 확인 폼 */
-export default function AddRecipeSheet({ initialStep = "pick", initialWarning = "", onClose }: Props) {
+export default function AddRecipeSheet({ initialStep = "pick", initialWarning = "", failedLink = "", onClose }: Props) {
   const [step, setStep] = useState<AddStep>(initialStep);
   const [warning, setWarning] = useState(initialWarning);
-  // 못 읽은 유튜브·인스타그램 링크의 경고(아니면 ""). 있으면 글 단계 경고 아래 `화면 캡처로 가져오기`, 그 사진 단계는 앨범 먼저 + 글 단계로 돌아가는 취소.
-  // 경고와 함께 열었으면 영상 보기의 유튜브 링크다. 링크·글을 다시 보내거나 방법 고르기로 돌아가면 지운다(사진을 못 읽어도 그대로)
-  const [videoWarning, setVideoWarning] = useState(initialWarning);
+  // 화면 캡처 흐름: 못 읽은 유튜브·인스타그램 링크(출처)와 그 경고. 있으면 글 단계 경고 아래 `화면 캡처로 가져오기`,
+  // 사진 단계는 앨범 먼저 + 취소, 사진으로 가져온 레시피의 출처도 이 링크로 남긴다. go()가 흐름 밖으로 옮길 때와 링크·글을 다시 보낼 때 지운다
+  const [capture, setCapture] = useState(() => {
+    const link = videoSource(failedLink);
+    return link && { link, warning: initialWarning };
+  });
   const [url, setUrl] = useState("");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -75,16 +97,19 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
     }
   }, [photoBusy]);
 
-  const go = (next: AddStep) => {
+  // 단계를 바꾸면 요청·경고를 지우고 화면 캡처 흐름도 끝낸다. 흐름 안(글 ↔ 사진)에서만 keepCapture로 이어 가고, 글 단계로 돌아오면 그 경고를 다시 보여준다
+  const go = (next: AddStep, keepCapture = false) => {
     abortRef.current?.abort();
     setBusy(false);
-    setWarning("");
-    if (next === "pick") setVideoWarning("");
+    setWarning(keepCapture && next === "text" ? (capture?.warning ?? "") : "");
+    if (!keepCapture) setCapture(null);
     setStep(next);
   };
 
-  // 영상 보기에서 바로 글 단계로 열었으면 취소는 시트를 닫는다. dialog.close()로 닫아야 여는 버튼으로 포커스가 돌아간다(close 이벤트가 onClose를 부른다)
+  // 취소: 화면 캡처 사진 단계는 글 단계로, 방법 고르기에서 왔으면 방법 고르기로, 영상 보기에서 바로 연 단계는 시트를 닫는다.
+  // dialog.close()로 닫아야 여는 버튼으로 포커스가 돌아간다(close 이벤트가 onClose를 부른다)
   const cancel = () => {
+    if (step === "photo" && initialStep !== "photo") return go("text", true);
     if (initialStep === "pick") return go("pick");
     abortRef.current?.abort();
     rootRef.current?.querySelector("dialog")?.close();
@@ -103,7 +128,8 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
         () => void reloadUsage(), // 성공·실패 모두 AI 횟수를 셌을 수 있다
       );
       if (controller.signal.aborted) return;
-      openDraft(draft);
+      // 화면 캡처로 가져왔으면 출처는 못 읽은 영상 링크(서버가 준 표준 주소와 같은 모양, 카드 없음)
+      openDraft(step === "photo" && capture ? { ...draft, ...capture.link } : draft);
     } catch (err) {
       if (controller.signal.aborted) return;
       setBusy(false);
@@ -113,7 +139,8 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
       // 사진은 422(need_text)여도 사진 단계에 남아 경고로 보여준다(다시 찍을 수 있게)
       if (err instanceof ApiError && err.body?.need_text === true && step === "link") {
         setStep("text");
-        if (isVideoLink(url)) setVideoWarning(err.message);
+        const link = videoSource(url);
+        if (link) setCapture({ link, warning: err.message });
       } else fieldRef.current?.focus();
     }
   };
@@ -121,7 +148,7 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (busy) return;
-    setVideoWarning("");
+    setCapture(null); // 링크·글을 다시 보내면 화면 캡처 흐름은 끝(또 못 읽은 영상 링크면 위에서 다시 연다)
     importDraft(() => (step === "link" ? { url: url.trim() } : { text: text.trim() }));
   };
 
@@ -232,9 +259,9 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
                 }}
               />
               <div className="r3-choices">
-                {videoWarning ? (
+                {capture ? (
                   <>
-                    {/* 화면 캡처로 왔다: 캡처한 화면은 앨범에 있어 앨범이 먼저. 취소는 글 단계로 돌아가 경고·캡처 버튼을 다시 보여준다(쓰던 글은 그대로) */}
+                    {/* 화면 캡처로 왔다: 캡처한 화면은 앨범에 있어 앨범이 먼저. 취소는 글 단계(쓰던 글·경고 그대로)나 영상 보기로 돌아간다 */}
                     <button type="button" className="btn primary" onClick={() => albumRef.current?.click()}>
                       <Icon name="file" />
                       앨범에서 고르기
@@ -243,14 +270,7 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
                       <Icon name="camera" />
                       카메라로 찍기
                     </button>
-                    <button
-                      type="button"
-                      className="btn outline"
-                      onClick={() => {
-                        go("text");
-                        setWarning(videoWarning);
-                      }}
-                    >
+                    <button type="button" className="btn outline" onClick={cancel}>
                       취소
                     </button>
                   </>
@@ -278,17 +298,7 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
                 <span>{warning}</span>
               </div>
             )}
-            {warning && videoWarning && (
-              <div>
-                <button type="button" className="btn secondary" aria-describedby="capture-hint" onClick={() => go("photo")}>
-                  <Icon name="file" />
-                  화면 캡처로 가져오기
-                </button>
-                <p className="hint r3-cta-note" id="capture-hint">
-                  영상을 멈추고 재료와 만드는 법이 나온 화면을 캡처해 올려주세요 · 5장까지
-                </p>
-              </div>
-            )}
+            {warning && capture && <CaptureButton onClick={() => go("photo", true)} />}
             {step === "link" ? (
               <label className="field">
                 <span className="field-label">링크</span>
