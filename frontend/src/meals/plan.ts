@@ -100,10 +100,10 @@ const shownAmount = ({ quantity, unit }: { quantity: number; unit: string }) => 
   return (text.includes(".") ? String(Math.max(Number(quantity.toFixed(1)), 0.1)) : text) + unit;
 };
 const amounts = (list: { quantity: number; unit: string }[], extra: string[] = []) => [...list.map(shownAmount), ...extra].join(" + ");
-/** 줄 설명: buy·enough "2모 필요 · 1모 있어요"/"2개 필요 · 없어요", seasoning "2큰술 필요 · 없어요", manual "있음 8개 · 필요 2판", listed "장보기 목록에 이미 있어서 건너뛰어요" */
+/** 줄 설명: buy·enough "2모 필요 · 1모 있어요"/"2개 필요 · 없어요", seasoning "7큰술 + 약간 필요 · 없어요", manual "있음 8개 · 필요 2판", listed "장보기 목록에 이미 있어서 건너뛰어요" */
 export function previewDetail(row: MealShoppingRow): string {
   if (row.reason === "listed") return "장보기 목록에 이미 있어서 건너뛰어요";
-  const need = amounts(row.need, row.need_extra) || "조금";
+  const need = amounts([...row.need, ...row.need_spoon], row.need_extra) || "조금";
   const have = amounts(row.have);
   if (row.reason === null && row.have.length && !row.need.some((n) => row.have.some((h) => h.unit === n.unit)))
     return `있음 ${have} · 필요 ${need}`;

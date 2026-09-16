@@ -133,6 +133,8 @@ test("식단으로 장보기 목록을 만들면 장보기 탭에 생기고 새�
   const seasoning = page.locator("section", { has: page.getByRole("heading", { name: /^양념 · 집에 없으면 골라주세요/ }) });
   const doenjang = seasoning.getByRole("checkbox", { name: "된장 1개 담기" });
   await expect(doenjang).not.toBeChecked();
+  const doenjangRow = seasoning.locator(".ml-prow", { has: page.getByRole("checkbox", { name: "된장 1개 담기" }) });
+  await expect(doenjangRow.getByText("7큰술 필요 · 없어요")).toBeVisible(); // 2큰술 × 2·2·3인분
   await expect(page.getByText("단위가 달라요 · 직접 골라주세요")).toHaveCount(0);
   await doenjang.click();
   await expect(doenjang).toBeChecked();

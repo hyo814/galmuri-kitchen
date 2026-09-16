@@ -291,7 +291,7 @@ def test_demo_login_creates_meal_plan(demo_app):
 
 def test_demo_meal_plan_shopping_preview_starts_with_one_checked_row(demo_app):
     # 3인분 된장찌개 덕에 애호박(⅓개 × 1 + 1 + 1.5 = 1.17개, 재고 1개)이 모자라 체크된 줄 하나로 시작한다(0개 담기로 시작하지 않게).
-    # 재고에 없는 숟가락 양 재료는 양념 묶음(담으면 1개) — 운영에서 네 줄이 `단위가 달라요`에 섞여 있었다
+    # 재고에 없는 숟가락 양 재료는 양념 묶음(담으면 1개, 필요 양은 인분 배율을 곱해 더한 값) — 운영에서 네 줄이 `단위가 달라요`에 섞여 있었다
     c = new_client(demo_app)
     c.post("/api/demo-login")
     plan_id = c.get("/api/meal-plans").get_json()["items"][0]["id"]
@@ -301,11 +301,15 @@ def test_demo_meal_plan_shopping_preview_starts_with_one_checked_row(demo_app):
     assert [(row["name"], row["quantity"], row["unit"], row["need"], row["have"], row["planned_on"]) for row in body["buy"]] == [
         ("애호박", 1, "개", [{"quantity": 1.17, "unit": "개"}], [{"quantity": 1, "unit": "개"}], seoul_today().isoformat()),
     ]
-    assert {row["name"]: (row["quantity"], row["unit"], row["need_extra"], row["have"]) for row in body["seasoning"]} == {
-        "된장": (1, "개", ["2큰술"], []),
-        "다진 마늘": (1, "개", ["1작은술"], []),
-        "고춧가루": (1, "개", ["1큰술"], []),
-        "식용유": (1, "개", ["1큰술"], []),
+    spoon = lambda value, unit: ([{"quantity": value, "unit": unit}], [])  # noqa: E731
+    assert {row["name"]: (row["quantity"], row["unit"], row["need"], row["have"]) for row in body["seasoning"]} == {
+        name: (1, "개", [], []) for name in ("된장", "다진 마늘", "고춧가루", "식용유")
+    }
+    assert {row["name"]: (row["need_spoon"], row["need_extra"]) for row in body["seasoning"]} == {
+        "된장": spoon(7, "큰술"),  # 2큰술 × 2·2·3인분(레시피 2인분)
+        "다진 마늘": spoon(5.5, "작은술"),  # 된장찌개 셋 + 김치찌개 둘
+        "고춧가루": spoon(2, "큰술"),
+        "식용유": spoon(2, "큰술"),
     }
     assert {row["name"]: row["reason"] for row in body["skip"]} == {
         "두부": "listed", "대파": "listed", "청양고추": "listed",

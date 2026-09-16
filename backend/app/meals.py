@@ -6,7 +6,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import selectinload
 
 from . import ai, scan
-from .amounts import is_spoon, parse_amount
+from .amounts import is_seasoning_amount, is_spoon, parse_amount
 from .auth import abort_if_id_too_big, ai_daily_limit, get_owned_or_404, login_required
 from .foods import nutrition_mode
 from .ingredients import seoul_today
@@ -598,17 +598,19 @@ def shopping_rows(needs, stock, listed, today):
         key = normalize(name) or name
         group = groups.get(key)
         if group is None:
-            group = groups[key] = {"name": name, "dates": [], "need": {}, "need_extra": [], "_seen": set()}
+            group = groups[key] = {"name": name, "dates": [], "need": {}, "need_spoon": {}, "need_extra": [], "seasoning": True}
             order.append(key)
         group["dates"].append(on)
+        group["seasoning"] = group["seasoning"] and is_seasoning_amount(amount)  # 양념 묶음은 모든 양이 숟가락(컵 빼고)·약간일 때만
         parsed = parse_amount(amount)
-        if parsed and not is_spoon(parsed[1]):
+        if parsed:
             value, unit = parsed
-            group["need"][unit] = group["need"].get(unit, 0) + value * ratio
+            # 숟가락·컵 양은 재고와 맞춰 보지 않고 필요 양 글자로만(인분 배율을 곱해 단위별로 더한다)
+            sums = group["need_spoon"] if is_spoon(unit) else group["need"]
+            sums[unit] = sums.get(unit, 0) + value * ratio
         else:
             piece = (amount or "").strip()
-            if piece and piece not in group["_seen"]:
-                group["_seen"].add(piece)
+            if piece and piece not in group["need_extra"]:  # 못 읽는 글자(약간·10~15마리)는 한 번씩
                 group["need_extra"].append(piece)
 
     buckets = {"buy": [], "manual": [], "seasoning": [], "skip": []}
@@ -633,8 +635,10 @@ def shopping_rows(needs, stock, listed, today):
         if normalize(name) in listed_norm:
             bucket, reason = "skip", "listed"
         elif not need:
-            # 숟가락·셀 수 없는 양뿐: 재고가 있으면 충분해요, 전혀 없으면 양념 묶음(화면 체크 꺼짐, 담으면 한 통 1개, 23절 D4)
-            bucket, reason = ("skip", "enough") if has_stock else ("seasoning", None)
+            # 셀 수 있는 양이 없음: 재고가 있으면 충분해요. 없으면 양이 모두 숟가락·약간일 때만 양념 묶음(화면 체크 꺼짐, 담으면 한 통 1개),
+            # 빈 양(공공 레시피는 `돼지고기(50g)`처럼 이름에 양을 넣는다)·컵·범위는 단위가 달라요(23절 D4)
+            bucket = "skip" if has_stock else "seasoning" if group["seasoning"] else "manual"
+            reason = "enough" if has_stock else None
         elif len(need) >= 2 or (have and unit not in have):
             bucket, reason = "manual", None
             quantity = max(math.ceil(quantity), 1)  # 담을 양은 정수로 올린다. 인분 배율로 반올림하면 0이 될 수 있어 최소 1
@@ -648,6 +652,7 @@ def shopping_rows(needs, stock, listed, today):
             "name": name,
             "planned_on": planned_on.isoformat(),
             "need": [{"quantity": round(value, 2), "unit": u} for u, value in need.items()],
+            "need_spoon": [{"quantity": round(value, 2), "unit": u} for u, value in group["need_spoon"].items()],
             "need_extra": group["need_extra"],
             "have": [{"quantity": round(value, 2), "unit": u} for u, value in have.items()],
             "quantity": quantity,
