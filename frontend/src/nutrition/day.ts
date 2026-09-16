@@ -58,12 +58,13 @@ export interface DaySum {
   counted: number;
   approx: boolean;
   hasAi: boolean;
-  /** source calc 칸에서 빼고 더한 영양소 → 재료 이름 */
+  /** 빼고 더한 영양소 → 이름: source calc 칸은 빠진 재료 이름, kcal만 있는 source ai 칸은 다섯 영양소 모두 칸 제목 */
   incomplete: Incomplete;
 }
 
-/** 그날 채운 칸의 1인분 값 합(결정 14·15). kcal 있는 칸이 없으면 null. 탄단지·당류·나트륨(과 빠진 이름)은 source calc 칸만 더한다 */
-export function daySum(slots: Pick<MealSlot, "nutrition">[]): DaySum | null {
+/** 그날 채운 칸의 1인분 값 합(결정 14·15). kcal 있는 칸이 없으면 null. 탄단지·당류·나트륨은 source calc 칸만 더하고,
+ *  kcal만 있는 칸(AI 초안·체험 직접 쓰기)의 제목은 빠진 이름에 넣어 합계가 하한(`이상`)으로 보이게 한다(먹은 기록 날짜 상세와 같은 규칙) */
+export function daySum(slots: Pick<MealSlot, "nutrition" | "title">[]): DaySum | null {
   const withKcal = slots.filter((s) => s.nutrition);
   if (!withKcal.length) return null;
   const sum: DaySum = {
@@ -80,11 +81,13 @@ export function daySum(slots: Pick<MealSlot, "nutrition">[]): DaySum | null {
     hasAi: false,
     incomplete: {},
   };
-  for (const { nutrition: n } of withKcal) {
+  for (const { nutrition: n, title } of withKcal) {
     sum.kcal += n!.kcal;
     sum.approx ||= n!.approx;
-    if (n!.source === "ai") sum.hasAi = true;
-    else {
+    if (n!.source === "ai") {
+      sum.hasAi = true;
+      addIncomplete(sum.incomplete, Object.fromEntries(NUTRIENT_KEYS.map((k) => [k, [title]])));
+    } else {
       sum.calcKcal += n!.kcal;
       for (const k of NUTRIENT_KEYS) sum[k] += n![k] ?? 0;
       addIncomplete(sum.incomplete, n!.incomplete);
