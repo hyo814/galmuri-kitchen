@@ -103,8 +103,8 @@ assert.equal(previewDetail(R([[2, "판"]], [[8, "개"]])), "있음 8개 · 필�
 assert.equal(previewDetail(R([[4, "대"]], [[1, "단"]])), "있음 1단 · 필요 4대"); // 대파
 assert.equal(previewDetail(R([[0.5, "포기"]], [[1, "포기"]], "enough")), "½포기 필요 · 1포기 있어요"); // 김치
 assert.equal(previewDetail(R([[1, "개"]], [], "listed")), "장보기 목록에 이미 있어서 건너뛰어요"); // 양파
-assert.equal(previewDetail(R([], [], null, ["약간"])), "약간 필요 · 없어요"); // 소금(재고 없음 → 1개 담기)
-assert.equal(previewDetail(R([], [], null, ["2큰술", "1큰술"])), "2큰술 + 1큰술 필요 · 없어요"); // 된장(재고 없음 → 1개 담기)
+assert.equal(previewDetail(R([], [], null, ["약간"])), "약간 필요 · 없어요"); // 소금(재고 없음 → 양념 묶음)
+assert.equal(previewDetail(R([], [], null, ["2큰술", "1큰술"])), "2큰술 + 1큰술 필요 · 없어요"); // 된장(재고 없음 → 양념 묶음)
 assert.equal(previewDetail(R([], [[1, "병"]], "enough", ["2큰술"])), "2큰술 필요 · 1병 있어요"); // 간장
 assert.equal(buyDayText("2026-09-14", "2026-09-14"), "오늘 사요");
 assert.equal(buyDayText("2026-09-13", "2026-09-14"), "오늘 사요");

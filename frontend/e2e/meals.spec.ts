@@ -119,19 +119,24 @@ test("식단으로 장보기 목록을 만들면 장보기 탭에 생기고 새�
   await expect(page.getByRole("heading", { name: "장보기 목록 만들기" })).toBeVisible();
   await expect(page.locator(".topbar .summary")).toBeVisible(); // 재료 계산이 끝나야 담을 줄이 보인다
 
-  // 재고에 없는 숟가락 양 재료(된장 2큰술 등)는 한 통(1개)을 담는 줄로 처음부터 체크돼 있다 — 누르지 않아도 담을 수 있다
-  await expect(page.getByRole("checkbox", { name: "된장 1개 담기" })).toBeChecked();
+  // 재고에 없는 숟가락 양 재료(된장 2큰술 등)는 `양념` 묶음에 꺼진 채로 있다(집에 있는 양념을 자동으로 담지 않게).
+  // 체험 식단은 나머지 재료가 목록에 있거나 충분해 담을 줄이 없으니 된장을 직접 켠다
+  const seasoning = page.locator("section", { has: page.getByRole("heading", { name: /^양념 · 집에 없으면 골라주세요/ }) });
+  const doenjang = seasoning.getByRole("checkbox", { name: "된장 1개 담기" });
+  await expect(doenjang).not.toBeChecked();
   await expect(page.getByText("단위가 달라요 · 직접 골라주세요")).toHaveCount(0);
-
   const addButton = page.getByRole("button", { name: /개 장보기에 담기$/ });
-  await expect(addButton).toBeEnabled();
-  const firstName = await page.locator(".ml-prow:not(.skip) .ml-title").first().textContent();
+  await expect(addButton).toHaveText("0개 장보기에 담기");
+  await expect(addButton).toBeDisabled();
+  await doenjang.click();
+  await expect(doenjang).toBeChecked();
+  await expect(addButton).toHaveText("1개 장보기에 담기");
   await addButton.click();
 
-  await expect(page.locator("p.notice")).toContainText("담았어요");
-  await expect(page.getByRole("checkbox", { name: `${firstName} 샀어요` })).toBeVisible();
+  await expect(page.locator("p.notice")).toContainText("식단에서 1개를 담았어요");
+  await expect(page.getByRole("checkbox", { name: "된장 샀어요" })).toBeVisible();
 
   await page.reload();
   await openTab(page, "장보기");
-  await expect(page.getByRole("checkbox", { name: `${firstName} 샀어요` })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "된장 샀어요" })).toBeVisible();
 });

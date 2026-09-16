@@ -272,15 +272,15 @@ def test_demo_login_creates_meal_plan(demo_app):
         assert MealSlot.query.join(MealPlan).filter(MealPlan.user_id == me["id"]).count() == len(demo.MEAL_PLAN_SLOTS)
 
 
-def test_demo_meal_plan_shopping_preview_checks_missing_seasonings(demo_app):
-    # 재고에 없는 숟가락 양 재료는 한 통(1개)을 담는 줄 — 운영에서 네 줄 모두 `단위가 달라요`(체크 꺼짐)로 가 0개 담기로 시작했다
+def test_demo_meal_plan_shopping_preview_puts_missing_seasonings_in_own_group(demo_app):
+    # 재고에 없는 숟가락 양 재료는 양념 묶음(담으면 1개) — 운영에서 네 줄이 `단위가 달라요`에 섞여 있었다
     c = new_client(demo_app)
     c.post("/api/demo-login")
     plan_id = c.get("/api/meal-plans").get_json()["items"][0]["id"]
     body = c.get(f"/api/meal-plans/{plan_id}/shopping-preview").get_json()
     assert body["recipe_slot_count"] == 5
-    assert body["manual"] == []
-    assert {row["name"]: (row["quantity"], row["unit"], row["need_extra"], row["have"]) for row in body["buy"]} == {
+    assert (body["buy"], body["manual"]) == ([], [])
+    assert {row["name"]: (row["quantity"], row["unit"], row["need_extra"], row["have"]) for row in body["seasoning"]} == {
         "된장": (1, "개", ["2큰술"], []),
         "다진 마늘": (1, "개", ["1작은술"], []),
         "고춧가루": (1, "개", ["1큰술"], []),

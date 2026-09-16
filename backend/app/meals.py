@@ -606,7 +606,7 @@ def shopping_rows(needs, stock, listed, today):
                 group["_seen"].add(piece)
                 group["need_extra"].append(piece)
 
-    buckets = {"buy": [], "manual": [], "skip": []}
+    buckets = {"buy": [], "manual": [], "seasoning": [], "skip": []}
     for index, key in enumerate(order):
         group = groups[key]
         name = group["name"]
@@ -628,8 +628,8 @@ def shopping_rows(needs, stock, listed, today):
         if normalize(name) in listed_norm:
             bucket, reason = "skip", "listed"
         elif not need:
-            # 숟가락·셀 수 없는 양뿐: 재고가 있으면 충분해요, 전혀 없으면 한 통(1개)을 체크된 줄로 담는다(23절 D4)
-            bucket, reason = ("skip", "enough") if has_stock else ("buy", None)
+            # 숟가락·셀 수 없는 양뿐: 재고가 있으면 충분해요, 전혀 없으면 양념 묶음(화면 체크 꺼짐, 담으면 한 통 1개, 23절 D4)
+            bucket, reason = ("skip", "enough") if has_stock else ("seasoning", None)
         elif len(need) >= 2 or (have and unit not in have):
             bucket, reason = "manual", None
             quantity = max(quantity, 0.01)  # 인분 배율로 반올림하면 0이 될 수 있어 최소값을 둔다

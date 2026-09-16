@@ -126,12 +126,13 @@ def test_spoon_unit_with_stock_skips_enough():
     assert (row["quantity"], row["unit"]) == (1, "개")  # need가 비었을 때 기본값(재고가 없을 때 담는 한 통과 같은 값)
 
 
-def test_spoon_unit_without_stock_is_buy_one_pack():
-    # 된장 2큰술: 재고에 전혀 없으면 한 통(1개)을 체크된 줄로 담는다 — `단위가 달라요`로 가면 체크가 꺼져 0개 담기로 시작했다
+def test_spoon_unit_without_stock_is_seasoning_one_pack():
+    # 된장 2큰술: 재고에 전혀 없으면 양념 묶음(화면 체크 꺼짐, 담으면 한 통 1개) — 집에 있는데 재고에 안 넣은 양념을 자동으로 담지 않게.
+    # `단위가 달라요`는 진짜 단위 충돌만(AI 초안 레시피 11개를 넣으면 양념 11줄이 그 묶음에 섞였다)
     needs = [("된장", "2큰술", 1, date(2026, 9, 16)), ("된장", "1큰술", 2, date(2026, 9, 17)), ("된장", "2큰술", 1, date(2026, 9, 18))]
     result = shopping_rows(needs, [], [], TODAY)
-    assert result["manual"] == [] and result["skip"] == []
-    row = by_name(result["buy"], "된장")
+    assert result["buy"] == [] and result["manual"] == [] and result["skip"] == []
+    row = by_name(result["seasoning"], "된장")
     assert (row["quantity"], row["unit"], row["reason"]) == (1, "개", None)
     assert (row["need"], row["have"]) == ([], [])
     assert row["need_extra"] == ["2큰술", "1큰술"]  # 글자가 같으면 한 번만
@@ -147,11 +148,11 @@ def test_manual_tiny_scaled_amount_clamped_to_min():
     assert row["quantity"] >= 0.01
 
 
-def test_uncountable_without_stock_is_buy_one_pack():
+def test_uncountable_without_stock_is_seasoning_one_pack():
     needs = [("소금", "약간", 1, date(2026, 9, 16))]
     result = shopping_rows(needs, [], [], TODAY)
-    assert result["manual"] == []
-    row = by_name(result["buy"], "소금")
+    assert result["buy"] == [] and result["manual"] == []
+    row = by_name(result["seasoning"], "소금")
     assert (row["quantity"], row["unit"], row["reason"]) == (1, "개", None)
     assert row["need_extra"] == ["약간"]
 
@@ -160,7 +161,7 @@ def test_spoon_unit_with_stock_in_other_unit_still_skips():
     # 숟가락 양만 있으면 재고 단위와 맞춰 볼 수 없다 — 이름이 같은 재고가 있으면 충분해요(단위가 달라요 아님)
     needs = [("고춧가루", "1큰술", 1, date(2026, 9, 16))]
     result = shopping_rows(needs, [("고춧가루", 500, "g")], [], TODAY)
-    assert result["buy"] == [] and result["manual"] == []
+    assert result["buy"] == [] and result["manual"] == [] and result["seasoning"] == []
     assert by_name(result["skip"], "고춧가루")["reason"] == "enough"
 
 
@@ -295,4 +296,4 @@ def test_preview_past_plan_empty(client, login, monkeypatch):
     assert res.status_code == 200
     body = res.get_json()
     assert body["recipe_slot_count"] == 0
-    assert body["buy"] == [] and body["manual"] == [] and body["skip"] == []
+    assert body["buy"] == [] and body["manual"] == [] and body["seasoning"] == [] and body["skip"] == []
