@@ -158,7 +158,8 @@ def test_miss_count_and_relabel_share_one_locked_transaction(client, login, app,
         engine = db.engine
 
     def on_execute(conn, cursor, statement, *args):
-        events.append("LOCK" if "pg_advisory_xact_lock" in statement else statement.split()[0].upper())
+        lowered = statement.lower()
+        events.append("LOCK" if "pg_advisory_xact_lock" in lowered else "COUNT" if "count(" in lowered else statement.split()[0].upper())
 
     def on_commit(conn):
         events.append("COMMIT")
@@ -173,5 +174,6 @@ def test_miss_count_and_relabel_share_one_locked_transaction(client, login, app,
     update = events.index("UPDATE")  # 오류라 토큰 기록은 없다 — 유일한 UPDATE가 kind 바꾸기
     last_commit = update - 1 - events[:update][::-1].index("COMMIT")
     in_transaction = events[last_commit + 1 : update]
-    assert "SELECT" in in_transaction and events[update + 1] == "COMMIT"
-    assert ("LOCK" in in_transaction) == (engine.dialect.name == "postgresql")
+    assert "COUNT" in in_transaction and events[update + 1] == "COMMIT"  # 헛호출 수를 센 것과 바꾼 것이 한 트랜잭션
+    before_count = in_transaction[: in_transaction.index("COUNT")]
+    assert ("LOCK" in before_count) == (engine.dialect.name == "postgresql")  # 세기 전에 잠근다

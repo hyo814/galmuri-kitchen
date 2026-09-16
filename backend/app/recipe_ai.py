@@ -146,9 +146,10 @@ NEED_TEXT = {
     "blog": "이 링크에서는 레시피를 읽지 못했어요. 글을 복사한 뒤 아래에 붙여 넣어주세요.",
     "text": "레시피를 찾지 못했어요. 재료와 만드는 법이 담긴 글을 붙여 넣어주세요.",
 }
-NO_RECIPE = {  # 영상 설명·캡션에 레시피 표시(RECIPE_SIGNAL)가 없어 AI를 부르지 않았을 때
-    "youtube": "영상 설명에 레시피가 없어요. 쇼츠처럼 레시피가 영상에만 있으면, 보면서 재료와 만드는 법을 적어 붙여 넣어주세요.",
-    "instagram": "게시물 설명에서 레시피를 찾지 못했어요. 설명을 길게 눌러 복사해 붙여 넣거나, 레시피가 영상에만 있으면 보면서 재료와 만드는 법을 적어 붙여 넣어주세요.",
+# 영상 설명·캡션에 레시피 표시(RECIPE_SIGNAL)가 없어 AI를 부르지 않았을 때. 표시 규칙이 놓친 레시피(간장 3T)일 수도 있어 복사도 안내한다
+NO_RECIPE = {
+    "youtube": "영상 설명에서 레시피를 찾지 못했어요. 설명에 있으면 복사하고, 쇼츠처럼 영상에만 있으면 보면서 재료와 만드는 법을 적어 아래에 붙여 넣어주세요.",
+    "instagram": "게시물 설명에서 레시피를 찾지 못했어요. 설명에 있으면 길게 눌러 복사하고, 릴스처럼 영상에만 있으면 보면서 재료와 만드는 법을 적어 아래에 붙여 넣어주세요.",
 }
 
 
@@ -266,7 +267,8 @@ def import_recipe():
                 if video is None:
                     abort(404, "영상을 찾을 수 없어요. 링크를 다시 확인해주세요.")
                 # 쇼츠처럼 레시피가 영상에만 있으면 AI를 불러도 못 찾는다. 제목의 양(계란 2개로…)은 레시피가 아니라 보지 않는다.
-                # ponytail: 표시 없이 적힌 설명 레시피(양배추 1/4통)도 여기서 글 붙여넣기로 간다. 잦으면 RECIPE_SIGNAL을 늘린다.
+                # ponytail: 표시 규칙에 없는 표기로만 적힌 설명 레시피(간장 3T·2숟가락·양배추 1/4통)도 여기서 글 붙여넣기로 간다.
+                # 잦으면 RECIPE_SIGNAL을 늘린다(블로그 본문 사진 보내기 기준도 함께 바뀐다).
                 if not RECIPE_SIGNAL.search(video["description"]):
                     return need_text(source, NO_RECIPE)
                 body = f"{video['title']}\n\n{video['description']}"
@@ -275,7 +277,10 @@ def import_recipe():
                 post = outbound.instagram_post(value)
                 if post is None:
                     return need_text(source)
-                if not RECIPE_SIGNAL.search(post["caption"]):  # 릴스처럼 레시피가 영상에만 있거나 미리보기 캡션이 잘렸다
+                # 릴스처럼 레시피가 영상에만 있거나 미리보기 캡션이 잘렸다.
+                # ponytail: 미리보기가 한국어(좋아요 1,234개)로 오면 그 수가 표시로 잡혀 거르지 못하고 예전처럼 AI를 부른다.
+                # 서버(싱가포르)는 영어 미리보기를 받는다고 보고 두었다 — 잦으면 좋아요·댓글 수를 떼고 본다.
+                if not RECIPE_SIGNAL.search(post["caption"]):
                     return need_text(source, NO_RECIPE)
                 body = post["caption"]
                 source_card = {"title": post["title"], "author": None, "thumbnail_url": post["thumbnail_url"]}

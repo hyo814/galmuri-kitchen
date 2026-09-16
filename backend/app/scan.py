@@ -122,7 +122,7 @@ def miss_ai_call(call):
     kind에 _miss를 붙여 하루 한도에서 빼고, 아니면 그대로 센다(헛호출을 되풀이해 비용을 쓰지 못하게). 토큰 기록은 그대로다."""
     _lock(call.user_id, MISS_KINDS)
     if calls_today(call.user_id, MISS_KINDS) < MISS_FREE_DAILY:
-        call.kind = f"{call.kind}_miss"
+        call.kind = miss_kinds([call.kind])[0]
     db.session.commit()
 
 
