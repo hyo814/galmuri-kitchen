@@ -47,7 +47,8 @@ function PickSheet({ onNext, onClose }: { onNext: (step: Step) => void; onClose:
 
   return (
     <div ref={rootRef}>
-      <Sheet title="무엇을 요리했나요?" description="내 레시피에서 고르면 쓴 재료를 재고에서 빼요" onClose={onClose}>
+      {/* focusTitle: 첫 칸이 검색 칸이라 열자마자 키보드가 목록을 가리지 않게 */}
+      <Sheet title="무엇을 요리했나요?" description="내 레시피에서 고르면 쓴 재료를 재고에서 빼요" focusTitle onClose={onClose}>
         <SearchBox label="내 레시피에서 찾기" value={input} onChange={setInput} />
         {recipes.result?.items.length ? (
           <>
