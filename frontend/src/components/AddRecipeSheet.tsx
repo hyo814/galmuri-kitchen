@@ -1,10 +1,11 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
-import { ApiError, api, type AiUsage, type RecipeDraft } from "../api";
+import { ApiError, api, isMultiImport, type AiUsage, type MultiRecipeDraft, type RecipeDraft } from "../api";
 import { remainingText } from "../format";
-import { autoGrowTextarea, openDraft } from "../pages/RecipeForm";
+import { autoGrowTextarea, openDraft, openMultiPick } from "../pages/RecipeForm";
 import { navigate } from "../useHashRoute";
 import { useResource } from "../useResource";
 import Icon, { type IconName } from "./Icon";
+import { ImportPickSheet } from "./RecipePickSheet";
 import { ScanWait, preparePhoto } from "./ScanSheet";
 import Sheet from "./Sheet";
 
@@ -62,6 +63,8 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [photoNote, setPhotoNote] = useState<{ count: number; trimmed: boolean }>({ count: 0, trimmed: false });
+  // 여러 요리 가져오기(17절): 한 페이지에 요리가 여러 개면 저장 대신 고르기 화면을 보여준다
+  const [multi, setMulti] = useState<MultiRecipeDraft | null>(null);
   const { data: usage, reload: reloadUsage } = useResource<AiUsage>("/api/ai-usage");
   const abortRef = useRef<AbortController | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -127,12 +130,18 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
     try {
       const body = await makeBody();
       controller.signal.throwIfAborted();
-      const draft = await api<RecipeDraft>("/api/recipes/import", { method: "POST", body, signal: controller.signal }).finally(
+      const result = await api<RecipeDraft | MultiRecipeDraft>("/api/recipes/import", { method: "POST", body, signal: controller.signal }).finally(
         () => void reloadUsage(), // 성공·실패 모두 AI 횟수를 셌을 수 있다
       );
       if (controller.signal.aborted) return;
+      if (isMultiImport(result)) {
+        // 여러 요리 가져오기(17절): 저장 폼 대신 고르기 화면. AddRecipeSheet의 나머지 단계는 그대로 두고(취소하면 되돌아온다) 위에 겹쳐 보여준다
+        setBusy(false);
+        setMulti(result);
+        return;
+      }
       // 못 읽은 영상 링크의 흐름에서 글·화면 캡처로 가져왔으면 출처는 그 링크(카드 없음)
-      openDraft(capture ? { ...draft, ...capture.link } : draft);
+      openDraft(capture ? { ...result, ...capture.link } : result);
     } catch (err) {
       if (controller.signal.aborted) return;
       setBusy(false);
@@ -185,6 +194,10 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
   const trimmedText = "사진은 5장까지 읽어요. 앞의 5장만 읽을게요";
   const value = step === "link" ? url : text;
 
+  if (multi) {
+    return <ImportPickSheet result={multi} onPick={(order) => openMultiPick(multi, order, capture?.link)} onClose={onClose} />;
+  }
+
   return (
     <div ref={rootRef}>
       <Sheet title={title} description={description} hideHeader={photoBusy} onClose={onClose}>
@@ -227,7 +240,7 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
                 <>
                   {photoNote.trimmed ? trimmedText : `사진 ${photoNote.count}장`}
                   <br />
-                  10초쯤 걸려요.
+                  10초쯤, 요리가 여러 개면 1분쯤 걸려요.
                 </>
               }
               onCancel={cancelPhotos}
@@ -347,6 +360,10 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
                   autoFocus={!warning}
                 />
               </label>
+            )}
+            {/* 링크는 페이지를 읽고(본문 사진까지) 여러 요리를 찾을 수 있어(17절) 버튼 글자만으로는 조용히 1분 가까이 갈 수 있다 */}
+            {busy && step === "link" && (
+              <p className="hint r3-wait-hint">페이지에서 요리를 모두 찾고 있어요 · 요리가 여러 개거나 본문 사진까지 읽으면 1분쯤 걸려요</p>
             )}
             <div className="actions">
               <button type="button" className="btn outline" onClick={cancel}>

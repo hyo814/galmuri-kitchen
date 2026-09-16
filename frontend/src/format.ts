@@ -36,6 +36,24 @@ export function remainingText(usage: AiUsage | undefined, group: keyof AiUsage =
 /** ["두부"] → "두부", ["두부", "대파"] → "두부·대파", 3개 이상 → "두부 외 2개" */
 export const namesLabel = (names: string[]) => (names.length <= 2 ? names.join("·") : `${names[0]} 외 ${names.length - 1}개`);
 
+/** 양이 빈 재료 개수(여러 요리 가져오기 17절: `양이 안 보이는 재료 N개` 경고) */
+export function missingAmountCount(ingredients: { amount: string }[]): number {
+  return ingredients.filter((i) => !i.amount.trim()).length;
+}
+
+/** 여러 요리 가져오기(17절) 고르기 줄: "떡 · 어묵 · 고추장 · 설탕 외 4개 · 만드는 법 5단계" */
+export function pickRowSummary(ingredients: { name: string }[], steps: string[], max = 4): string {
+  const names = ingredients.map((i) => i.name);
+  const shown = names.length > max ? `${names.slice(0, max).join(" · ")} 외 ${names.length - max}개` : names.join(" · ");
+  return `${shown} · 만드는 법 ${steps.length}단계`;
+}
+
+/** 저장한 뒤 이어서 화면(17절 ⑤)의 남은 요리 줄: "재료 9개 · 만드는 법 5단계", 양이 빠졌으면 "재료 6개 · 양 확인 2개" */
+export function remainingRowSummary(ingredients: { amount: string }[], steps: string[]): string {
+  const missing = missingAmountCount(ingredients);
+  return `재료 ${ingredients.length}개 · ${missing > 0 ? `양 확인 ${missing}개` : `만드는 법 ${steps.length}단계`}`;
+}
+
 export const KIND_LABEL: Record<LocationKind, string> = { fridge: "냉장", freezer: "냉동", room: "실온" };
 
 /** 6 → "6개월", 12 → "1년", 24 → "2년" */

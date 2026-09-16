@@ -9,7 +9,7 @@ from sqlalchemy import event as sqlalchemy_event
 from app import ai, outbound, scan
 from app.ingredients import SEOUL, seoul_today
 from app.models import AiCall, PublicRecipe, User, db
-from app.recipe_ai import RECIPE_SIGNAL, clean_draft, public_image_candidates, similar_public_image
+from app.recipe_ai import MAX_IMPORT_RECIPES, RECIPE_SIGNAL, clean_draft, clean_drafts, public_image_candidates, similar_public_image
 from tests.test_scan import AI_FAILURES, JPEG_BYTES, PNG_BYTES, USAGE, ai_call_costs, ai_calls, fail_if_called
 
 FAIL = "레시피를 만들지 못했어요. 잠시 후 다시 시도해주세요."
@@ -92,6 +92,35 @@ def test_clean_draft_trims_caps_and_rejects_empty():
     assert clean_draft("레시피") is None
     assert clean_draft(draft(ingredients="두부", steps="썰어요")) is None
     assert clean_draft(draft(steps="썰어요"))["steps"] == []
+
+
+# --- clean_drafts (여러 요리 가져오기, 17절) ---
+
+
+def test_clean_drafts_caps_at_five_and_drops_invalid():
+    rows = [draft(f"요리{i}") for i in range(7)]  # 5개가 넘게 와도 찾은 순서로 앞의 5개만 본다
+    assert [d["title"] for d in clean_drafts(rows)] == [f"요리{i}" for i in range(MAX_IMPORT_RECIPES)]
+
+    mixed = [draft("좋은 요리"), draft(names=()), "not-a-dict", {"title": "   "}, draft("또 좋은 요리")]
+    assert [d["title"] for d in clean_drafts(mixed)] == ["좋은 요리", "또 좋은 요리"]  # 못 쓰는 항목은 뺀다
+
+    assert clean_drafts(None) == []
+    assert clean_drafts("레시피") == []
+    assert clean_drafts([]) == []
+
+
+def test_clean_drafts_drops_exact_duplicate_titles():
+    """같은 요리가 소개 글과 상세 설명에 겹쳐 두 번 나와도(글자 그대로거나 공백만 다를 수 있다) 먼저 나온 것만 남긴다."""
+    dup = [
+        draft("제육볶음"),
+        draft("제육볶음", names=("돼지고기", "간장")),  # 글자 그대로 겹친 같은 요리
+        draft(" 제육볶음 "),  # 앞뒤 공백만 다름(clean_draft가 이미 지운다)
+        draft("돼지  불고기"),  # 새 요리(가운데 공백 두 칸)
+        draft("돼지 불고기"),  # 위와 같은 요리 — 공백을 정리하면 같아진다
+    ]
+    cleaned = clean_drafts(dup)
+    assert [d["title"] for d in cleaned] == ["제육볶음", "돼지  불고기"]
+    assert cleaned[0]["ingredients"][0]["name"] == "두부"  # 먼저 나온 원래 재료가 남는다(나중 것으로 바뀌지 않는다)
 
 
 # --- similar_public_image ---
@@ -435,13 +464,13 @@ def test_ai_recipes_requires_fetch_header(raw_client):
 
 
 def test_extract_recipe_sends_text_as_material_and_schema(app, fake_anthropic):
-    parsed = ai.ImportResult(found=True, recipe=ai.RecipeDraft(title="제육볶음", servings=3, ingredients=[ai.DraftIngredient(name="돼지고기", amount="")], steps=["볶아요."]))
+    parsed = ai.ImportResult(found=True, recipes=[ai.RecipeDraft(title="제육볶음", servings=3, ingredients=[ai.DraftIngredient(name="돼지고기", amount="")], steps=["볶아요."])])
     usage = SimpleNamespace(input_tokens=700, output_tokens=200)
     calls = fake_anthropic(response=SimpleNamespace(stop_reason="end_turn", parsed_output=parsed, usage=usage, model="claude-sonnet-5"))
     app.config["ANTHROPIC_API_KEY"] = "test-key"
     with app.app_context():
         result, tokens = ai.extract_recipe("재료: 돼지고기" + "가" * 11_000 + "끝")
-    assert result == {"found": True, "recipe": {"title": "제육볶음", "servings": 3, "ingredients": [{"name": "돼지고기", "amount": ""}], "steps": ["볶아요."]}}
+    assert result == {"found": True, "recipes": [{"title": "제육볶음", "servings": 3, "ingredients": [{"name": "돼지고기", "amount": ""}], "steps": ["볶아요."]}]}
     assert tokens["input_tokens"] == 700
     request = calls["parse"]
     assert request["output_format"] is ai.ImportResult
@@ -450,11 +479,11 @@ def test_extract_recipe_sends_text_as_material_and_schema(app, fake_anthropic):
 
 
 def test_extract_recipe_with_page_images_sends_image_blocks_then_text(app, fake_anthropic):
-    parsed = ai.ImportResult(found=False, recipe=None)
+    parsed = ai.ImportResult(found=False, recipes=[])
     calls = fake_anthropic(response=SimpleNamespace(stop_reason="end_turn", parsed_output=parsed, usage=SimpleNamespace(input_tokens=1, output_tokens=1), model="m"))
     app.config["ANTHROPIC_API_KEY"] = "test-key"
     with app.app_context():
-        assert ai.extract_recipe("레시피 공개", [(JPEG_BYTES, "image/jpeg"), (PNG_BYTES, "image/png")])[0] == {"found": False, "recipe": None}
+        assert ai.extract_recipe("레시피 공개", [(JPEG_BYTES, "image/jpeg"), (PNG_BYTES, "image/png")])[0] == {"found": False, "recipes": []}
         content = calls["parse"]["messages"][0]["content"]
         assert [block["type"] for block in content] == ["image", "image", "text"]
         assert content[1]["source"] == {"type": "base64", "media_type": "image/png", "data": base64.standard_b64encode(PNG_BYTES).decode()}
@@ -465,6 +494,20 @@ def test_extract_recipe_with_page_images_sends_image_blocks_then_text(app, fake_
 
         ai.extract_recipe("레시피 공개", [])  # 사진이 없으면 지금처럼 글 한 덩어리
         assert isinstance(calls["parse"]["messages"][0]["content"], str)
+
+
+def test_extract_recipe_uses_90s_timeout_for_bigger_max_tokens(app, fake_anthropic):
+    """레시피 5개 분량이라 max_tokens를 늘린 만큼(16000) timeout도 90으로 맞춘다(draft_meals와 같음)."""
+    parsed = ai.ImportResult(found=True, recipes=[ai.RecipeDraft(title="제육볶음", servings=2, ingredients=[ai.DraftIngredient(name="돼지고기", amount="")], steps=[])])
+    calls = fake_anthropic(response=SimpleNamespace(stop_reason="end_turn", parsed_output=parsed, usage=SimpleNamespace(input_tokens=1, output_tokens=1), model="m"))
+    app.config["ANTHROPIC_API_KEY"] = "test-key"
+    with app.app_context():
+        ai.extract_recipe("레시피 글")
+        assert calls["client"]["timeout"] == 90
+        ai.extract_recipe("레시피 글", [(JPEG_BYTES, "image/jpeg")])
+        assert calls["client"]["timeout"] == 90
+        ai.extract_recipe_from_images([(JPEG_BYTES, "image/jpeg")])
+        assert calls["client"]["timeout"] == 90
 
 
 # --- POST /api/recipes/import ---
@@ -499,7 +542,17 @@ def import_(client, **body):
 def found(title="제육볶음", names=("돼지고기", "양파")):
     recipe = draft(title, names)
     del recipe["minutes"]
-    return {"found": True, "recipe": recipe}, USAGE
+    return {"found": True, "recipes": [recipe]}, USAGE
+
+
+def found_many(*titles):
+    """여러 요리 가져오기(17절): AI가 한 번에 찾은 레시피 여러 개."""
+    recipes = []
+    for title in titles:
+        recipe = draft(title)
+        del recipe["minutes"]
+        recipes.append(recipe)
+    return {"found": True, "recipes": recipes}, USAGE
 
 
 def live(app, youtube_key="yt-key"):
@@ -589,7 +642,7 @@ def test_import_youtube_with_api_key(client, login, app, monkeypatch):
     def extract(text, images):
         seen["text"], seen["images"] = text, images
         raw, usage = found(" 제육볶음 ")
-        raw["recipe"]["ingredients"].append({"name": "돼지고기", "amount": "중복"})
+        raw["recipes"][0]["ingredients"].append({"name": "돼지고기", "amount": "중복"})
         return raw, usage
 
     monkeypatch.setattr(outbound, "video_snippet", snippet)
@@ -773,7 +826,7 @@ def test_import_blog_recipe_less_text_sends_page_images(client, login, app, monk
     app.config["AI_SCAN_BURST_LIMIT"] = 10  # AI 호출 4번을 이어서 보낸다
     fetched, calls = [], []
     monkeypatch.setattr(outbound, "web_page", lambda url: page(text=RECIPE_LESS, url=url, images=PAGE_IMAGES))
-    monkeypatch.setattr(outbound, "page_images", lambda urls: fetched.append(urls) or [(JPEG_BYTES, "image/jpeg"), (PNG_BYTES, "image/png")])
+    monkeypatch.setattr(outbound, "page_images", lambda urls: (fetched.append(urls) or [(JPEG_BYTES, "image/jpeg"), (PNG_BYTES, "image/png")], False))
     monkeypatch.setattr(ai, "extract_recipe", lambda text, images: calls.append((text, images)) or found())
     res = import_(client, url=WEB)
     body = res.get_json()
@@ -785,13 +838,13 @@ def test_import_blog_recipe_less_text_sends_page_images(client, login, app, monk
 
     # 사진을 하나도 받지 못해도 글만으로 AI를 부른다
     calls.clear()
-    monkeypatch.setattr(outbound, "page_images", lambda urls: [])
+    monkeypatch.setattr(outbound, "page_images", lambda urls: ([], False))
     assert import_(client, url=WEB).status_code == 200
     assert calls == [(f"제육볶음 만들기\n\n{RECIPE_LESS}", [])]
 
     # 사진을 보고도 레시피가 없으면 블로그 need_text
-    monkeypatch.setattr(outbound, "page_images", lambda urls: [(JPEG_BYTES, "image/jpeg")])
-    monkeypatch.setattr(ai, "extract_recipe", lambda text, images: ({"found": False, "recipe": None}, USAGE))
+    monkeypatch.setattr(outbound, "page_images", lambda urls: ([(JPEG_BYTES, "image/jpeg")], False))
+    monkeypatch.setattr(ai, "extract_recipe", lambda text, images: ({"found": False, "recipes": []}, USAGE))
     res = import_(client, url=WEB)
     assert (res.status_code, res.get_json()) == (422, {"error": NEED_WEB, "need_text": True})
 
@@ -802,6 +855,57 @@ def test_import_blog_recipe_less_text_sends_page_images(client, login, app, monk
     assert import_(client, url=WEB).status_code == 200
     assert calls == [("\n\n레시피", [(JPEG_BYTES, "image/jpeg")])]
     assert [kind for _, kind in ai_calls(app)] == ["link_fetch", "link"] * 2 + ["link_fetch", "link_miss"] + ["link_fetch", "link"]
+
+
+# --- 여러 요리 가져오기(17절, 2026-09-17) ---
+
+
+def test_import_web_page_multi_recipe_list(client, login, app, monkeypatch):
+    """한 페이지에 요리가 여러 개(최대 5개)면 목록으로 돌려주고, 고르기 화면이 쓸 사진 배지·많을 때 안내를 함께 준다. AI는 한 번만 부른다."""
+    user = login()
+    live(app)
+    titles = ["오리지날 떡볶이", "부트졸로키아 떡볶이", "옥황상제 떡볶이"]
+    monkeypatch.setattr(outbound, "web_page", lambda url: page(text=RECIPE_LESS, url=url, images=PAGE_IMAGES))
+    monkeypatch.setattr(outbound, "page_images", lambda urls: ([(JPEG_BYTES, "image/jpeg")], False))
+    monkeypatch.setattr(ai, "extract_recipe", lambda text, images: found_many(*titles))
+    res = import_(client, url=WEB)
+    body = res.get_json()
+    assert res.status_code == 200
+    assert [r["title"] for r in body["recipes"]] == titles
+    assert all({"servings", "ingredients", "steps"} <= r.keys() for r in body["recipes"])
+    assert (body["from_image"], body["images_truncated"], body["sample"]) == (True, False, False)  # 사진을 함께 보냈다
+    assert (body["source"], body["source_url"], body["source_card"]) == ("blog", WEB, {"title": "제육볶음 만들기", "author": "요리 블로그", "thumbnail_url": None})
+    assert "title" not in body  # 목록 모양이라 단일 초안 키는 안 준다
+    assert ai_calls(app) == [(user.id, "link_fetch"), (user.id, "link")]  # AI 호출은 한 번만 세고 기록한다
+
+
+def test_import_multi_recipe_drops_invalid_and_collapses_to_single(client, login, app, monkeypatch):
+    """AI가 목록으로 줘도 못 쓰는 항목을 빼고 하나만 남으면 지금 흐름(단일 초안 모양) 그대로다."""
+    login()
+    live(app)
+    no_network(monkeypatch)
+    good = draft("좋은 요리")
+    del good["minutes"]
+    bad = draft(names=())  # 재료가 없어 clean_draft가 버린다
+    del bad["minutes"]
+    monkeypatch.setattr(ai, "extract_recipe", lambda text, images: ({"found": True, "recipes": [bad, good]}, USAGE))
+    body = import_(client, text=RECIPE_TEXT).get_json()
+    assert body["title"] == "좋은 요리"
+    assert "recipes" not in body and "from_image" not in body and "images_truncated" not in body
+
+
+def test_import_web_page_images_truncated_flag(client, login, app, monkeypatch):
+    """images_truncated는 outbound.page_images가 준 두 번째 값을 그대로 전달한다(그 판단 자체는 test_outbound.py에서 본다)."""
+    login()
+    live(app)
+    monkeypatch.setattr(outbound, "web_page", lambda url: page(text=RECIPE_LESS, url=url, images=PAGE_IMAGES))
+    monkeypatch.setattr(ai, "extract_recipe", lambda text, images: found_many("떡볶이", "김치볶음밥"))
+
+    monkeypatch.setattr(outbound, "page_images", lambda urls: ([(JPEG_BYTES, "image/jpeg")] * 5, True))
+    assert import_(client, url=WEB).get_json()["images_truncated"] is True
+
+    monkeypatch.setattr(outbound, "page_images", lambda urls: ([(JPEG_BYTES, "image/jpeg")] * 3, False))
+    assert import_(client, url=WEB).get_json()["images_truncated"] is False
 
 
 @pytest.mark.parametrize(
@@ -870,7 +974,7 @@ def test_import_blog_without_image_candidates_is_text_only(client, login, app, m
 def test_import_text_not_a_recipe_is_422_and_a_miss(client, login, app, monkeypatch):
     user = login()
     live(app)
-    monkeypatch.setattr(ai, "extract_recipe", lambda text, images: ({"found": False, "recipe": None}, USAGE))
+    monkeypatch.setattr(ai, "extract_recipe", lambda text, images: ({"found": False, "recipes": []}, USAGE))
     res = import_(client, text="  오늘은 날씨가 좋아서 산책을 했어요.  ")  # 붙여 넣은 글은 레시피 표시가 없어도 AI가 본다
     assert (res.status_code, res.get_json()) == (422, {"error": NEED_TEXT, "need_text": True})
 
@@ -1016,13 +1120,13 @@ def import_photos(client, *images):
 
 
 def test_extract_recipe_from_images_sends_image_blocks_and_prompt(app, fake_anthropic):
-    parsed = ai.ImportResult(found=True, recipe=ai.RecipeDraft(title="잡채", servings=4, ingredients=[ai.DraftIngredient(name="당면", amount="300g")], steps=["삶아요."]))
+    parsed = ai.ImportResult(found=True, recipes=[ai.RecipeDraft(title="잡채", servings=4, ingredients=[ai.DraftIngredient(name="당면", amount="300g")], steps=["삶아요."])])
     usage = SimpleNamespace(input_tokens=2400, output_tokens=300)
     calls = fake_anthropic(response=SimpleNamespace(stop_reason="end_turn", parsed_output=parsed, usage=usage, model="claude-sonnet-5"))
     app.config["ANTHROPIC_API_KEY"] = "test-key"
     with app.app_context():
         result, tokens = ai.extract_recipe_from_images([(JPEG_BYTES, "image/jpeg"), (PNG_BYTES, "image/png")])
-    assert result["found"] is True and result["recipe"]["title"] == "잡채"
+    assert result["found"] is True and result["recipes"][0]["title"] == "잡채"
     assert tokens == {"model": "claude-sonnet-5", "input_tokens": 2400, "output_tokens": 300}
     request = calls["parse"]
     assert request["output_format"] is ai.ImportResult
@@ -1074,10 +1178,21 @@ def test_import_photos_real_call_logs_tokens(client, login, app, monkeypatch):
     assert client.get(f"/api/recipes/{saved.get_json()['id']}").get_json()["source"] == "photo"
 
 
+def test_import_photos_multi_recipe_list(client, login, app, monkeypatch):
+    """사진 한 장에 요리가 여러 개 적혀 있어도(요리책 페이지 등) 목록으로 돌려주고, 사진으로 가져오기는 늘 `사진에서 읽었어요`다."""
+    user = login()
+    live(app)
+    monkeypatch.setattr(ai, "extract_recipe_from_images", lambda images: found_many("간장 떡볶이", "로제 떡볶이"))
+    body = import_photos(client, JPEG_BYTES).get_json()
+    assert [r["title"] for r in body["recipes"]] == ["간장 떡볶이", "로제 떡볶이"]
+    assert (body["from_image"], body["images_truncated"], body["source"], body["source_url"], body["source_card"]) == (True, False, "photo", None, None)
+    assert ai_calls(app) == [(user.id, "recipe_photo")]  # AI 호출은 한 번만
+
+
 def test_import_photos_not_found_is_422_and_a_miss(client, login, app, monkeypatch):
     user = login()
     live(app)
-    monkeypatch.setattr(ai, "extract_recipe_from_images", lambda images: ({"found": False, "recipe": None}, USAGE))
+    monkeypatch.setattr(ai, "extract_recipe_from_images", lambda images: ({"found": False, "recipes": []}, USAGE))
     res = import_photos(client, JPEG_BYTES)
     assert (res.status_code, res.get_json()) == (422, {"error": PHOTO_NOT_FOUND, "need_text": True})
     monkeypatch.setattr(ai, "extract_recipe_from_images", lambda images: found(names=()))  # 찾았다지만 쓸 재료가 없다

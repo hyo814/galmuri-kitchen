@@ -169,6 +169,26 @@ export interface RecipeDraft extends RecipeInput {
   sample?: boolean;
 }
 
+/** POST /api/recipes/import 결과에 레시피가 여러 개(최대 5개) 있을 때(17절 여러 요리 가져오기). 정확히 1개면 RecipeDraft 그대로 온다 */
+export interface MultiRecipeDraft {
+  recipes: RecipeInput[];
+  /** 이 호출에 사진을 함께 보냈는지(레시피별이 아니라 호출 전체 기준) — 고르기 화면의 `사진에서 읽었어요` 배지 */
+  from_image: boolean;
+  source: RecipeDraft["source"];
+  source_url: string | null;
+  source_card?: SourceCard | null;
+  /** 본문 사진 후보가 5장보다 많아 앞쪽만 읽었을 때 */
+  images_truncated: boolean;
+  sample?: boolean;
+}
+
+/** POST /api/recipes/import 응답이 레시피 목록(2개 이상)인지 좁혀 준다. 정확히 1개면 RecipeDraft 그대로 온다(17절).
+ *  이 응답을 받는 모든 곳(AddRecipeSheet·VideoPlayer·MealFillSheet)이 이 함수로 갈라야 한다 — 안 거르면 RecipeDraft를 기대하는 코드가
+ *  recipes 목록을 만나 필드가 없어 그대로 깨진다(빈 화면). */
+export function isMultiImport(result: RecipeDraft | MultiRecipeDraft): result is MultiRecipeDraft {
+  return "recipes" in result;
+}
+
 export interface AiUsage {
   scan: { used: number; limit: number };
   recipe: { used: number; limit: number };

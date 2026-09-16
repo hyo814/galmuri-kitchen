@@ -2,14 +2,17 @@ import { useEffect, useId, useRef, useState } from "react";
 import {
   ApiError,
   api,
+  isMultiImport,
   localToday,
   type AiUsage,
   type MealKind,
   type MealPlan,
   type MealSlot,
+  type MultiRecipeDraft,
   type MyRecipe,
   type RecipeChoice,
   type RecipeDraft,
+  type RecipeInput,
   type User,
   type Video,
 } from "../api";
@@ -19,6 +22,7 @@ import { urgentLabel } from "../pages/Recipes";
 import { useAsyncAction } from "../useAsyncAction";
 import { forgetRecipeCaches, useResource } from "../useResource";
 import Icon from "./Icon";
+import RecipePickSheet from "./RecipePickSheet";
 import Sheet from "./Sheet";
 import Thumb from "./VideoThumb";
 
@@ -115,6 +119,8 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
   const { busy, error, setError, run } = useAsyncAction();
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
+  // 여러 요리 가져오기(17절): 영상 설명에 요리가 여러 개면 고르고 나서 이어간다(remaining을 남기지 않는다 — 이 칸 하나만 채우면 끝)
+  const [multiPick, setMultiPick] = useState<{ result: MultiRecipeDraft; sourceUrl: string } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const { data: usage, reload: reloadUsage } = useResource<AiUsage>("/api/ai-usage");
@@ -146,29 +152,50 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
   const putSlot = (body: { recipe_id: number } | { title: string }, signal?: AbortSignal) =>
     api<MealSlot>(`/api/meal-plans/${plan.id}/slots`, { method: "PUT", body: { date, meal, servings, ...body }, signal });
 
-  /** 영상: 확인 화면 없이 정리 → 내 레시피에 저장 → 칸에 넣기(스펙 20절) */
+  /** 영상: 확인 화면 없이 정리 → 내 레시피에 저장 → 칸에 넣기(스펙 20절). 설명에 요리가 여러 개면(17절) 고른 뒤 이어간다(AI는 다시 안 부른다) */
   const importVideo = async (video: Video) => {
     const controller = new AbortController();
     abortRef.current = controller;
     const { signal } = controller;
     setImporting(true);
     setImportError("");
-    let stage: "import" | "recipe" | "slot" = "import";
+    const sourceUrl = `https://www.youtube.com/watch?v=${video.video_id}`;
+    try {
+      const result = await api<RecipeDraft | MultiRecipeDraft>("/api/recipes/import", { method: "POST", body: { url: sourceUrl }, signal });
+      if (signal.aborted) return;
+      if (isMultiImport(result)) {
+        setImporting(false);
+        setMultiPick({ result, sourceUrl });
+        return;
+      }
+      await saveVideoRecipe(result, sourceUrl, controller);
+    } catch (e) {
+      if (signal.aborted) return;
+      setImporting(false);
+      setImportError(e instanceof ApiError && e.body?.need_text === true ? NEED_TEXT : (e as Error).message);
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null;
+      void reloadUsage();
+    }
+  };
+
+  /** 여러 요리 중 하나를 골라 저장 → 칸 넣기를 이어간다. 이 칸 하나만 채우면 끝이라 나머지는 남기지 않는다(17절과 달리 세션이 없다) */
+  const pickVideoRecipe = (order: number) => {
+    if (!multiPick) return;
+    const { result, sourceUrl } = multiPick;
+    setMultiPick(null);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setImporting(true);
+    void saveVideoRecipe(result.recipes[order - 1], sourceUrl, controller);
+  };
+
+  /** 정리된 레시피 하나를 내 레시피에 저장하고 칸에 넣는다(importVideo·여러 요리 고르기 이후가 함께 쓴다) */
+  const saveVideoRecipe = async (draft: RecipeInput, sourceUrl: string, controller: AbortController) => {
+    const { signal } = controller;
     let recipe: MyRecipe | undefined;
     try {
-      const draft = await api<RecipeDraft>("/api/recipes/import", {
-        method: "POST",
-        body: { url: `https://www.youtube.com/watch?v=${video.video_id}` },
-        signal,
-      });
-      stage = "recipe";
-      const { title, servings: recipeServings, ingredients, steps, source_url } = draft;
-      recipe = await api<MyRecipe>("/api/recipes", {
-        method: "POST",
-        body: { title, servings: recipeServings, ingredients, steps, source: "youtube", source_url },
-        signal,
-      });
-      stage = "slot";
+      recipe = await api<MyRecipe>("/api/recipes", { method: "POST", body: { ...draft, source: "youtube", source_url: sourceUrl }, signal });
       const slot = await putSlot({ recipe_id: recipe.id }, signal);
       abortRef.current = null; // 다 넣었다: 이제 닫혀도 끊긴 요청이 아니다
       await onSaved(slot);
@@ -186,10 +213,10 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
         setError(SLOT_FAILED);
         return;
       }
-      setImportError(stage === "import" && e instanceof ApiError && e.body?.need_text === true ? NEED_TEXT : (e as Error).message);
+      setImportError((e as Error).message);
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
-      if (stage !== "import") forgetRecipeCaches(); // 도중에 끊겨도 서버에는 저장됐을 수 있다
+      forgetRecipeCaches(); // 도중에 끊겨도 서버에는 저장됐을 수 있다
       void reloadUsage();
     }
   };
@@ -215,13 +242,31 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
 
   const videoQ = videos.result?.q ?? "";
 
+  // 여러 요리 가져오기(17절): 고르는 동안은 탭·검색을 감춘다(취소하면 그대로 돌아온다 — 다른 상태는 그대로 있다)
+  if (multiPick) {
+    return (
+      <div ref={rootRef}>
+        <RecipePickSheet
+          title={`요리가 ${multiPick.result.recipes.length}개 있어요`}
+          subtitle="이 칸에 넣을 요리를 골라주세요"
+          items={multiPick.result.recipes.map((draft, i) => ({ order: i + 1, draft }))}
+          fromImage={multiPick.result.from_image}
+          imagesTruncated={multiPick.result.images_truncated}
+          note="AI는 1번만 썼어요."
+          onPick={pickVideoRecipe}
+          onClose={() => setMultiPick(null)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div ref={rootRef}>
       <Sheet title={`${mealLabel(meal)} 채우기`} description={slotDateText(date, localToday())} onClose={onClose}>
         {/* 알림은 처음부터 붙어 있는 영역에 글자만 바꿔 넣는다 — 글자와 함께 새로 붙인 영역은 TalkBack이 읽지 않을 수 있다.
             sr-only(absolute)라 시트 간격(gap)을 차지하지 않는다. 화면에 보이는 상자·오류는 아래에 따로 그린다 */}
         <p className="sr-only" role="status">
-          {importing ? `영상에서 레시피를 정리하고 있어요. 10초쯤 걸려요. 다 되면 내 레시피에 저장하고 이 칸에 ${servings}인분으로 넣어줘요.` : ""}
+          {importing ? `영상에서 레시피를 정리하고 있어요. 10초쯤, 요리가 여러 개면 1분쯤 걸려요. 다 되면 내 레시피에 저장하고 이 칸에 ${servings}인분으로 넣어줘요.` : ""}
         </p>
         <p className="sr-only" role="alert">
           {tab === "video" ? importError : error}
@@ -353,7 +398,7 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
                   </span>
                   영상에서 레시피를 정리하고 있어요
                 </b>
-                <span>10초쯤 걸려요. 다 되면 내 레시피에 저장하고 이 칸에 {servings}인분으로 넣어줘요.</span>
+                <span>10초쯤, 요리가 여러 개면 1분쯤 걸려요. 다 되면 내 레시피에 저장하고 이 칸에 {servings}인분으로 넣어줘요.</span>
               </div>
             )}
             {importError && <p className="error">{importError}</p>}

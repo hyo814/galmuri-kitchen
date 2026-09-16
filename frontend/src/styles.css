@@ -160,12 +160,17 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
   padding: 28px 20px 0;
 }
 
-.topbar h1 {
+/* 페이지 제목(.rc-head h1은 레시피 상세·AI 레시피용, 같은 모양). 긴 이름이 낱말 가운데서 끊기지 않게(.summary와 같은 규칙) */
+.topbar h1,
+.rc-head h1 {
   margin: 0;
   font-size: 26px;
   line-height: 34px;
   font-weight: 700;
   letter-spacing: -0.5px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
 .summary {
@@ -207,6 +212,11 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
 }
 
 .page > .error {
+  margin: 16px 20px 0;
+}
+
+/* 여러 요리 가져오기(17절 ⑤) 이어서 화면처럼 목록 바로 뒤에 안내가 오는 페이지 */
+.page > .mo-note {
   margin: 16px 20px 0;
 }
 
@@ -1770,15 +1780,6 @@ button.row-btn > svg {
   padding: 20px 20px 0;
 }
 
-.rc-head h1 {
-  margin: 0;
-  font-size: 26px;
-  line-height: 34px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  word-break: keep-all;
-}
-
 .rc-sec {
   margin: 16px 20px 0;
   padding: 20px;
@@ -2971,6 +2972,11 @@ button.row-btn > svg {
   word-break: keep-all;
   text-wrap: balance; /* 두 줄이면 `· 5장까지`만 따로 내려가지 않게 */
 }
+/* 링크 가져오기 기다리는 중 문구(.hint는 공유 클래스라 여기서만 낱말 가운데 줄바꿈을 막는다) */
+.r3-wait-hint {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .r3-crow {
   display: flex;
   align-items: center;
@@ -2995,6 +3001,25 @@ button.row-btn > svg {
   background: var(--danger-tint);
   color: var(--danger);
   font-size: 14px;
+}
+/* 줄 안의 작은 확인 버튼(여러 요리 가져오기 17절 ⑤ 남은 요리 `확인하기`): danger-sm과 같은 모양, 강조색 */
+.btn.accent-sm {
+  flex-shrink: 0;
+  width: auto;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-size: 14px;
+}
+/* 여러 요리 가져오기(17절 ⑤) 저장한 줄의 `저장함` 표시: 확인하기 버튼 자리를 대신하는 평범한 글자(시안 .saved) */
+.r3-saved-tag {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-3);
 }
 .r3-toggle {
   position: relative;
@@ -3175,6 +3200,9 @@ button.row-btn > svg {
 
 .mo-radio .row-sub {
   font-size: 13px;
+  /* 여러 요리 가져오기(17절) 고르기 줄처럼 재료·단계 수를 이어 붙인 긴 문구가 낱말 가운데서 끊기지 않게(.summary와 같은 규칙) */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .mo-dot {
@@ -4599,6 +4627,7 @@ button.sh-offline svg:last-child {
   font-size: 14px;
   line-height: 21px;
   word-break: keep-all;
+  overflow-wrap: anywhere; /* `10초쯤, 요리가 여러 개면 1분쯤` 같은 긴 안내가 낱말 가운데서 끊기지 않게 */
 }
 
 /* 점 세 개는 .r3-dots의 prefers-reduced-motion 규칙으로 멈춘다 */
@@ -5123,6 +5152,16 @@ button.sh-offline svg:last-child {
   width: 32px;
   height: 32px;
   border-radius: 10px;
+}
+
+/* 여러 요리 가져오기(17절) 확인 화면의 `N개 중 K번째` 줄: scan-kindline 자리·scan-change 버튼을 그대로 쓰고 배경만 강조 */
+.r3-which {
+  background: var(--accent-tint);
+}
+
+.r3-which .row-title {
+  font-size: 14px;
+  color: var(--accent-strong);
 }
 
 .scan-change {

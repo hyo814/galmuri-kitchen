@@ -61,6 +61,45 @@ test("빈 칸을 내 레시피로 채우면 칸에 생기고 새로고침해도 
   await expect(todayCard(page).getByRole("button", { name: /아침 김치찌개/ })).toBeVisible();
 });
 
+function multiDraft(title: string) {
+  return { title, servings: 2, ingredients: [{ name: "떡", amount: "300g" }], steps: ["끓여요."] };
+}
+
+test("빈 칸 채우기의 영상에서 여러 요리를 찾으면 고른 것만 저장되고 칸에 들어간다(17절)", async ({ page }) => {
+  await page.route("**/api/recipes/import", (route) => {
+    if (!route.request().headers()["content-type"]?.startsWith("application/json")) return route.continue();
+    return route.fulfill({
+      json: {
+        recipes: [multiDraft("오리지날 떡볶이"), multiDraft("부트졸로키아 떡볶이")],
+        from_image: false,
+        images_truncated: false,
+        source: "youtube",
+        source_url: "https://www.youtube.com/watch?v=sample00001",
+        source_card: { title: "제육볶음 황금레시피, 이렇게만 하세요", author: "예시 채널", thumbnail_url: null },
+        sample: false,
+      },
+    });
+  });
+  await goToMeals(page);
+  const today = todayCard(page);
+  await today.getByRole("button", { name: /아침 채우기$/ }).click();
+  const fillSheet = page.getByRole("dialog", { name: "아침 채우기" });
+  await fillSheet.getByRole("button", { name: "영상" }).click();
+  // 영상 줄은 label(r3-vrow)이 sr-only 라디오를 감싼다 — 라디오를 강제 클릭하는 대신 보이는 줄을 눌러 네이티브 label 위임을 쓴다
+  await fillSheet.locator("label.r3-vrow", { hasText: "제육볶음 황금레시피" }).click();
+  await fillSheet.getByRole("button", { name: "넣기" }).click();
+
+  const pickSheet = page.getByRole("dialog", { name: "요리가 2개 있어요" });
+  await expect(pickSheet).toBeVisible();
+  await pickSheet.getByRole("radio", { name: "부트졸로키아 떡볶이" }).check({ force: true });
+  await pickSheet.getByRole("button", { name: "이 요리 확인하기" }).click();
+
+  await expect(today.getByRole("button", { name: /아침 부트졸로키아 떡볶이/ })).toBeVisible();
+  await openTab(page, "레시피");
+  await page.getByRole("button", { name: "내 레시피" }).click();
+  await expect(page.getByRole("link", { name: "오리지날 떡볶이" })).toHaveCount(0); // 고르지 않은 쪽은 저장되지 않는다
+});
+
 test("칸을 비우면 칸에서 사라지고 새로고침해도 그대로다", async ({ page }) => {
   await goToMeals(page);
   const today = todayCard(page);

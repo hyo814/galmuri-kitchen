@@ -668,7 +668,7 @@ def test_demo_video_import_calls_youtube_only_within_demo_ai_limit(demo_app, mon
 
     recipe = {"title": "제육볶음", "servings": 2, "ingredients": [{"name": "돼지고기", "amount": "600g"}], "steps": ["볶아요."]}
     monkeypatch.setattr(outbound, "video_snippet", snippet)
-    monkeypatch.setattr(ai, "extract_recipe", lambda text, images: ({"found": True, "recipe": recipe}, {"model": "m", "input_tokens": 1, "output_tokens": 1}))
+    monkeypatch.setattr(ai, "extract_recipe", lambda text, images: ({"found": True, "recipes": [recipe]}, {"model": "m", "input_tokens": 1, "output_tokens": 1}))
     url = {"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
     for _ in range(auth.DEMO_AI_DAILY_LIMIT):
         assert c.post("/api/recipes/import", json=url).status_code == 200

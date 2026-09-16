@@ -15,6 +15,7 @@ bp = Blueprint("recipe_ai", __name__, url_prefix="/api")
 
 MAX_TITLE = 60
 MAX_SUGGESTIONS = 3
+MAX_IMPORT_RECIPES = 5  # 가져오기 한 번에 고를 수 있는 레시피 최대 개수(17절 여러 요리 가져오기)
 FAIL = "레시피를 만들지 못했어요. 잠시 후 다시 시도해주세요."
 
 
@@ -51,6 +52,22 @@ def clean_draft(raw):
     if "minutes" in raw:
         draft["minutes"] = _int_in(raw["minutes"], 1, 300)
     return draft
+
+
+def clean_drafts(raw_list):
+    """clean_draft를 목록에 적용해 최대 MAX_IMPORT_RECIPES개까지 정리한다(17절 여러 요리 가져오기). 못 쓰는 항목은 빼고,
+    이름이 같은 항목(공백 정리 뒤)은 AI가 자료에서 같은 요리를 두 번 봤다는 뜻이라 먼저 나온 것만 남긴다."""
+    rows = raw_list[:MAX_IMPORT_RECIPES] if isinstance(raw_list, list) else []
+    drafts, seen_titles = [], set()
+    for draft in map(clean_draft, rows):
+        if not draft:
+            continue
+        key = " ".join(draft["title"].split())  # 공백만 다른 같은 이름까지만 뺀다(다른 요리를 잘못 합치지 않게)
+        if key in seen_titles:
+            continue
+        seen_titles.add(key)
+        drafts.append(draft)
+    return drafts
 
 
 def public_image_candidates():
@@ -208,12 +225,15 @@ def import_photos():
         scan.miss_ai_call(call)
         abort(502, "레시피를 정리하지 못했어요. 잠시 후 다시 시도해주세요.")
     scan.finish_ai_call(call, usage)
-    draft = clean_draft(raw.get("recipe")) if isinstance(raw, dict) and raw.get("found") is True else None
-    if draft is None:
+    drafts = clean_drafts(raw.get("recipes")) if isinstance(raw, dict) and raw.get("found") is True else []
+    if not drafts:
         scan.miss_ai_call(call)
         # 글 붙여넣기로 바꾸지 않고 사진 단계에 경고로 보여준다(need_text는 링크·글과 같은 모양으로 둔다)
         return jsonify(error=PHOTO_NOT_FOUND, need_text=True), 422
-    return jsonify(**draft, source="photo", source_url=None, source_card=None, sample=False)
+    if len(drafts) == 1:
+        return jsonify(**drafts[0], source="photo", source_url=None, source_card=None, sample=False)
+    # 사진으로 가져오기는 늘 사진에서 읽는다 — 여러 요리 가져오기(17절) 고르기 화면의 `사진에서 읽었어요` 배지
+    return jsonify(recipes=drafts, from_image=True, source="photo", source_url=None, source_card=None, images_truncated=False, sample=False)
 
 
 @bp.post("/recipes/import")
@@ -263,6 +283,7 @@ def import_recipe():
     db.session.commit()
 
     images = []
+    images_truncated = False
     if link is None:
         body = text.strip()
     else:
@@ -298,7 +319,8 @@ def import_recipe():
                 source_url = page["url"] if len(page["url"]) <= outbound.MAX_LINK else value  # 저장 폼은 500자까지 받는다
                 source_card = {"title": page["title"], "author": page["site_name"], "thumbnail_url": None}
                 if page["images"] and not RECIPE_SIGNAL.search(page["text"]):  # 사진 요청 실패는 건너뛰고 기록을 더하지 않는다
-                    images = outbound.page_images(page["images"])
+                    # 5장을 채우고도 시도하지 않은 후보가 남았으면 더 있다고 알린다(17절 ⑥, 사진으로 가져오기 안내)
+                    images, images_truncated = outbound.page_images(page["images"])
         except outbound.FetchError as e:
             current_app.logger.warning("import fetch failed: %s", e)  # 예외·이유 이름만(주소·키 없음)
             return need_text(source, source_url)
@@ -313,11 +335,21 @@ def import_recipe():
         scan.miss_ai_call(call)
         abort(502, "레시피를 정리하지 못했어요. 잠시 후 다시 시도해주세요.")
     scan.finish_ai_call(call, usage)
-    draft = clean_draft(raw.get("recipe")) if isinstance(raw, dict) and raw.get("found") is True else None
-    if draft is None:
+    drafts = clean_drafts(raw.get("recipes")) if isinstance(raw, dict) and raw.get("found") is True else []
+    if not drafts:
         scan.miss_ai_call(call)
         return need_text(source, source_url)
-    return jsonify(**draft, source=source, source_url=source_url, source_card=source_card, sample=False)
+    if len(drafts) == 1:
+        return jsonify(**drafts[0], source=source, source_url=source_url, source_card=source_card, sample=False)
+    return jsonify(
+        recipes=drafts,
+        from_image=bool(images),
+        source=source,
+        source_url=source_url,
+        source_card=source_card,
+        images_truncated=images_truncated,
+        sample=False,
+    )
 
 
 EAT_OUT_MIN, EAT_OUT_MAX = 1_000, 100_000

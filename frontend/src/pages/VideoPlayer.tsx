@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, api, type RecipeDraft, type User, type VideoDetail } from "../api";
+import { ApiError, api, isMultiImport, type MultiRecipeDraft, type RecipeDraft, type User, type VideoDetail } from "../api";
 import AddRecipeSheet, { CaptureButton } from "../components/AddRecipeSheet";
 import Avatar from "../components/Avatar";
 import Icon from "../components/Icon";
+import { ImportPickSheet } from "../components/RecipePickSheet";
 import { timeAgo } from "../format";
 import { navigate } from "../useHashRoute";
 import { useResource } from "../useResource";
 import { BackLink } from "./RecipeDetail";
-import { openDraft } from "./RecipeForm";
+import { openDraft, openMultiPick } from "./RecipeForm";
 import { setRecipesSegment } from "./Recipes";
 
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
@@ -22,6 +23,8 @@ export default function VideoPlayer({ id, user }: { id: string; user: User }) {
   // 누르면 링크를 다시 읽지 않고 사진 시트를 연다(시트를 닫고 영상을 멈춰 캡처한 뒤 돌아오게)
   const [needText, setNeedText] = useState("");
   const [sheet, setSheet] = useState<"text" | "photo" | null>(null);
+  // 여러 요리 가져오기(17절): 설명에 요리가 여러 개면 저장 대신 고르기 화면을 보여준다(안 그러면 RecipeForm이 목록을 단일 초안으로 착각해 빈 화면이 된다)
+  const [multi, setMulti] = useState<MultiRecipeDraft | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -66,8 +69,14 @@ export default function VideoPlayer({ id, user }: { id: string; user: User }) {
     setBusy(true);
     setImportError("");
     try {
-      const draft = await api<RecipeDraft>("/api/recipes/import", { method: "POST", body: { url: watchUrl }, signal: controller.signal });
-      if (!controller.signal.aborted) openDraft(draft);
+      const result = await api<RecipeDraft | MultiRecipeDraft>("/api/recipes/import", { method: "POST", body: { url: watchUrl }, signal: controller.signal });
+      if (controller.signal.aborted) return;
+      if (isMultiImport(result)) {
+        setBusy(false);
+        setMulti(result);
+        return;
+      }
+      openDraft(result);
     } catch (err) {
       if (controller.signal.aborted) return;
       setBusy(false);
@@ -180,6 +189,7 @@ export default function VideoPlayer({ id, user }: { id: string; user: User }) {
           onClose={() => setSheet(null)}
         />
       )}
+      {multi && <ImportPickSheet result={multi} onPick={(order) => openMultiPick(multi, order)} onClose={() => setMulti(null)} />}
     </main>
   );
 }
