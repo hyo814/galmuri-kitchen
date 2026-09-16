@@ -147,14 +147,16 @@ test("사진으로 레시피를 가져오면 확인 폼에 채워진다", async 
 
 const VIDEO_MISS = "영상 설명에서 레시피를 찾지 못했어요. 설명에 있으면 복사해 붙여 넣고, 영상에만 있으면 보면서 재료와 만드는 법을 아래에 적어주세요.";
 const CAPTURE_HINT = "영상을 멈추고 재료와 만드는 법이 나온 화면을 캡처해 올려주세요 · 5장까지";
+const PHOTO_MISS = "사진에서 레시피를 찾지 못했어요. 글자가 잘 보이는 사진으로 다시 올리거나 글 붙여넣기를 써주세요.";
 
 /** 키 없는 서버는 링크·글에도 예시 초안을 주므로 422 need_text로 바꾼다(블로그·글 문구, 그 밖의 링크는 설명에 레시피가 없는 영상 문구).
- *  사진은 서버의 예시 초안 그대로 둔다. 링크·글 요청 수를 센다 */
-async function missTextImports(page: Page) {
+ *  사진(multipart)은 photos면 못 읽음 422, 아니면 서버의 예시 초안 그대로. 링크·글 요청 수를 센다 */
+async function missImports(page: Page, { photos = false } = {}) {
   const sent = { count: 0 };
   await page.route("**/api/recipes/import", (route) => {
     const request = route.request();
-    if (!request.headers()["content-type"]?.startsWith("application/json")) return route.continue();
+    if (!request.headers()["content-type"]?.startsWith("application/json"))
+      return photos ? route.fulfill({ status: 422, json: { error: PHOTO_MISS, need_text: true } }) : route.continue();
     sent.count++;
     const { url } = request.postDataJSON() as { url?: string };
     const error = !url
@@ -177,7 +179,7 @@ async function importFailingLink(page: Page, link: string) {
 }
 
 test("유튜브 링크를 못 읽었을 때만 경고 아래에 화면 캡처로 가져오기가 보이고, 앨범 먼저인 사진 단계에서 취소하면 쓰던 글로 돌아온다", async ({ page }) => {
-  await missTextImports(page);
+  await missImports(page, { photos: true });
   const sheet = page.getByRole("dialog");
   const capture = sheet.getByRole("button", { name: "화면 캡처로 가져오기" });
   const textArea = sheet.getByLabel("레시피 글");
@@ -195,11 +197,16 @@ test("유튜브 링크를 못 읽었을 때만 경고 아래에 화면 캡처로
   await textArea.fill("돼지고기 앞다리살 600g"); // 글 붙여넣기는 그대로 쓸 수 있다
   await capture.click();
 
-  // 화면 캡처로 온 사진 단계: 경고 없이 앨범이 먼저(주 버튼), 그 아래 취소
+  // 화면 캡처로 온 사진 단계: 경고 없이 앨범이 먼저(주 버튼), 사용량 줄 아래 취소
   await expect(sheet.getByRole("heading", { name: "사진으로 가져오기" })).toBeFocused();
   await expect(sheet.getByRole("alert")).toHaveCount(0);
   await expect(sheet.getByRole("button")).toHaveText(["앨범에서 고르기", "카메라로 찍기", "취소"]);
   await expect(sheet.getByRole("button", { name: "앨범에서 고르기" })).toHaveClass(/\bprimary\b/);
+
+  // 사진을 못 읽어도(422) 경고와 함께 앨범 먼저·취소는 그대로
+  await sheet.locator("input[type=file][multiple]").setInputFiles({ name: "capture.png", mimeType: "image/png", buffer: TINY_PNG });
+  await expect(sheet.getByRole("alert")).toHaveText(PHOTO_MISS);
+  await expect(sheet.getByRole("button")).toHaveText(["앨범에서 고르기", "카메라로 찍기", "취소"]);
   await sheet.getByRole("button", { name: "취소" }).click();
 
   // 글 단계로 돌아오면 쓰던 글·경고·캡처 버튼이 그대로
@@ -223,7 +230,7 @@ test("유튜브 링크를 못 읽었을 때만 경고 아래에 화면 캡처로
 });
 
 test("화면 캡처로 가져온 레시피는 못 읽은 영상 링크를 출처로 남긴다", async ({ page }) => {
-  await missTextImports(page);
+  await missImports(page);
   const sheet = page.getByRole("dialog");
   const watchUrl = "https://www.youtube.com/watch?v=abcdefghijk"; // 서버처럼 표준 주소로 바꾼다
   await openRecipes(page, "내 레시피");
@@ -243,7 +250,7 @@ test("화면 캡처로 가져온 레시피는 못 읽은 영상 링크를 출처
 });
 
 test("영상 보기에서 가져오기를 못 하면 화면 캡처로 가져오기가 남고, 링크를 다시 읽지 않고 사진 시트를 연다", async ({ page }) => {
-  const sent = await missTextImports(page);
+  const sent = await missImports(page);
   const sheet = page.getByRole("dialog");
   await openRecipes(page, "영상");
   await page.getByRole("link", { name: /제육볶음 황금레시피/ }).click();

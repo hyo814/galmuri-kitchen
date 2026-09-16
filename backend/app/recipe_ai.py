@@ -169,7 +169,7 @@ RECIPE_SIGNAL = re.compile(
 )
 
 MAX_IMPORT_PHOTOS = 5
-PHOTO_NOT_FOUND = "사진에서 레시피를 찾지 못했어요. 글자가 잘 보이게 다시 찍거나 글 붙여넣기를 써주세요."
+PHOTO_NOT_FOUND = "사진에서 레시피를 찾지 못했어요. 글자가 잘 보이는 사진으로 다시 올리거나 글 붙여넣기를 써주세요."
 
 
 def import_photos():

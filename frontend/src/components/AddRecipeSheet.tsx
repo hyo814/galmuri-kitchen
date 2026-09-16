@@ -261,7 +261,7 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
               <div className="r3-choices">
                 {capture ? (
                   <>
-                    {/* 화면 캡처로 왔다: 캡처한 화면은 앨범에 있어 앨범이 먼저. 취소는 글 단계(쓰던 글·경고 그대로)나 영상 보기로 돌아간다 */}
+                    {/* 화면 캡처로 왔다: 캡처한 화면은 앨범에 있어 앨범이 먼저 */}
                     <button type="button" className="btn primary" onClick={() => albumRef.current?.click()}>
                       <Icon name="file" />
                       앨범에서 고르기
@@ -269,9 +269,6 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
                     <button type="button" className="btn secondary" onClick={() => cameraRef.current?.click()}>
                       <Icon name="camera" />
                       카메라로 찍기
-                    </button>
-                    <button type="button" className="btn outline" onClick={cancel}>
-                      취소
                     </button>
                   </>
                 ) : (
@@ -288,6 +285,14 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
                 )}
               </div>
               <p className="r3-quota">사진은 AI가 정리해요{remainingText(usage)}</p>
+              {/* 화면 캡처로 왔으면 글 붙여넣기와 같은 자리에 취소: 글 단계(쓰던 글·경고 그대로)나 영상 보기로 돌아간다 */}
+              {capture && (
+                <div className="actions">
+                  <button type="button" className="btn outline" onClick={cancel}>
+                    취소
+                  </button>
+                </div>
+              )}
             </div>
           )
         ) : (
