@@ -105,14 +105,15 @@ const amounts = (list: Amount[], extra: string[] = [], number = (a: Amount) => s
 /** 줄 설명: buy·enough "2모 필요 · 1모 있어요"/"2개 필요 · 없어요", seasoning "7큰술 + 약간 필요 · 없어요", manual "있음 8개 · 필요 2판", listed "장보기 목록에 이미 있어서 건너뛰어요" */
 export function previewDetail(row: MealShoppingRow): string {
   if (row.reason === "listed") return "장보기 목록에 이미 있어서 건너뛰어요";
-  // 같은 단위 있음과 같은 글자로 보이는데 값이 다르면(1.04개 · 1개) 필요를 소수 둘째 자리까지 — `1개 담기` 옆에 `1개 필요 · 1개 있어요`가 없게
-  const needNumber = (n: Amount) => {
-    const text = shownNumber(n.quantity);
-    const same = row.have.some((h) => h.unit === n.unit && h.quantity !== n.quantity && shownNumber(h.quantity) === text);
-    return same ? String(Number(n.quantity.toFixed(2))) : text;
+  // 필요·있음이 같은 단위에서 같은 글자로 보이는데 값이 다르면(1.04개 · 1개, 1개 · 0.96개) 그 수를 소수 둘째 자리까지 — `1개 담기` 옆에 `1개 필요 · 1개 있어요`가 없게
+  const exact = (others: Amount[]) => (a: Amount) => {
+    const text = shownNumber(a.quantity);
+    const clash = others.some((o) => o.unit === a.unit && o.quantity !== a.quantity && shownNumber(o.quantity) === text);
+    return clash ? String(Number(a.quantity.toFixed(2))) : text;
   };
-  const need = amounts([...row.need, ...row.need_spoon], row.need_extra, needNumber) || "조금";
-  const have = amounts(row.have);
+  const needs = [...row.need, ...row.need_spoon];
+  const need = amounts(needs, row.need_extra, exact(row.have)) || "조금";
+  const have = amounts(row.have, [], exact(needs));
   if (row.reason === null && row.have.length && !row.need.some((n) => row.have.some((h) => h.unit === n.unit)))
     return `있음 ${have} · 필요 ${need}`;
   return `${need} 필요 · ${have ? `${have} 있어요` : "없어요"}`;
