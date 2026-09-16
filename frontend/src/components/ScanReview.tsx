@@ -45,6 +45,10 @@ interface Props {
   kind: ScanKind;
   result: ScanResult;
   locations: StorageLocation[];
+  /** 체험 계정 예시 사진(스펙 31절): 위에 사진 띠를 두고 찾은 재료와 맞춰 보게 한다 */
+  samplePhoto?: { src: string; alt: string } | null;
+  /** 왼쪽 아래 버튼 이름(다시 찍기·다시 고르기·예시 사진은 다른 사진) */
+  retakeLabel: string;
   onRetake: () => void;
   onAdded: (count: number) => Promise<void>;
   onLocationsStale?: () => void;
@@ -122,7 +126,23 @@ function DateChips({
   );
 }
 
-export default function ScanReview({ kind, result, locations, onRetake, onAdded, onLocationsStale }: Props) {
+/** 예시 사진 띠(시안 scan-sample ⑤-A): 150px 높이에 사진 전체를 보여 주고 접을 수 있다 */
+function PhotoStrip({ src, alt }: { src: string; alt: string }) {
+  const [open, setOpen] = useState(true);
+  const photoId = useId();
+  return (
+    <div className="scan-strip">
+      <div className="scan-strip-photo" id={photoId} hidden={!open}>
+        <img src={src} alt={alt} />
+      </div>
+      <button type="button" aria-expanded={open} aria-controls={photoId} onClick={() => setOpen(!open)}>
+        <span>{open ? "사진 접기" : "사진 펼치기"}</span>
+      </button>
+    </div>
+  );
+}
+
+export default function ScanReview({ kind, result, locations, samplePhoto, retakeLabel, onRetake, onAdded, onLocationsStale }: Props) {
   const today = localToday();
   const [rows, setRows] = useState<Row[]>(() =>
     result.items.map((item, key) => ({
@@ -255,9 +275,12 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
         {result.sample && (
           <span className="badge info scan-sample">
             <Icon name="info" size={16} />
-            오늘 체험용 AI를 다 써서 사진을 읽지 않고 예시를 보여줘요. 로그인하면 실제로 읽어줘요.
+            {samplePhoto
+              ? "오늘 체험용 AI를 다 써서, 이 사진을 미리 읽어 둔 결과를 보여줘요. 로그인하면 내 사진을 바로 읽어요."
+              : "오늘 체험용 AI를 다 써서 사진을 읽지 않고 예시를 보여줘요. 로그인하면 실제로 읽어줘요."}
           </span>
         )}
+        {samplePhoto && <PhotoStrip src={samplePhoto.src} alt={samplePhoto.alt} />}
 
         <div className="field scan-date">
           <span className="field-label" id={dateLabel}>
@@ -432,7 +455,7 @@ export default function ScanReview({ kind, result, locations, onRetake, onAdded,
         <div className="scan-foot">
           <div className="actions">
             <button type="button" className="btn secondary" disabled={busy} onClick={onRetake}>
-              {kind === "order" ? "다시 고르기" : "다시 찍기"}
+              {retakeLabel}
             </button>
             <button className="btn primary" disabled={busy || chosen.length === 0 || !!matched}>
               {busy ? "넣는 중…" : `${chosen.length}개 재고에 넣기`}
