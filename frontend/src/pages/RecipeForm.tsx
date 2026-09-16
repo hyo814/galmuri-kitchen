@@ -74,24 +74,27 @@ export function openDraft(draft: RecipeDraft, { replace = false } = {}) {
 }
 
 const SOURCE_NAME: Record<RecipeDraft["source"], string> = { youtube: "유튜브", instagram: "인스타그램", blog: "블로그", text: "", photo: "" };
+const SOURCE_TITLE: Partial<Record<RecipeDraft["source"], string>> = { youtube: "유튜브 영상", instagram: "인스타그램 게시물", blog: "블로그 글" };
 
-/** 가져온 링크의 출처 카드: 썸네일(외부 사진이라 리퍼러 없이, 저장하지 않음) · 제목 · `유튜브 · 채널명` · 원본 */
+/** 가져온 링크의 출처 카드: 썸네일(외부 사진이라 리퍼러 없이, 저장하지 않음) · 제목 · `유튜브 · 채널명` · 원본.
+ *  화면 캡처로 가져와 카드 없이 링크만 있으면 `유튜브 영상` · 원본 */
 function SourceCardView({ draft }: { draft: RecipeDraft }) {
   const card = draft.source_card;
-  if (!card) return null;
-  const sub = [SOURCE_NAME[draft.source], card.author].filter(Boolean).join(" · ");
   const url = /^https?:\/\//i.test(draft.source_url ?? "") ? draft.source_url : null;
+  const plainTitle = !card && url ? SOURCE_TITLE[draft.source] : undefined;
+  if (!card && !plainTitle) return null;
+  const sub = card ? [SOURCE_NAME[draft.source], card.author].filter(Boolean).join(" · ") : "";
   return (
     <div className="r3-source">
       <span className="r3-source-thumb">
-        {card.thumbnail_url ? (
+        {card?.thumbnail_url ? (
           <img src={card.thumbnail_url} alt="" loading="lazy" referrerPolicy="no-referrer" />
         ) : (
           <Icon name={draft.source === "youtube" ? "play" : "link"} size={16} />
         )}
       </span>
       <span className="row-main">
-        <span className="row-title">{card.title}</span>
+        <span className="row-title">{card ? card.title : plainTitle}</span>
         {sub && <span className="row-sub">{sub}</span>}
       </span>
       {url && (
