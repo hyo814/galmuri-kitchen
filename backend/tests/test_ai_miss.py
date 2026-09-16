@@ -157,9 +157,14 @@ def test_miss_count_and_relabel_share_one_locked_transaction(client, login, app,
     with app.app_context():
         engine = db.engine
 
-    def on_execute(conn, cursor, statement, *args):
-        lowered = statement.lower()
-        events.append("LOCK" if "pg_advisory_xact_lock" in lowered else "COUNT" if "count(" in lowered else statement.split()[0].upper())
+    def on_execute(conn, cursor, statement, parameters, *args):
+        values = " ".join(map(str, parameters.values() if isinstance(parameters, dict) else parameters or ()))
+        if "pg_advisory_xact_lock" in statement:
+            events.append("LOCK")
+        elif "count(" in statement.lower() and "_miss" in values:  # 헛호출 수를 세는 쿼리(kind 목록이 _miss)
+            events.append("COUNT")
+        else:
+            events.append(statement.split()[0].upper())
 
     def on_commit(conn):
         events.append("COMMIT")

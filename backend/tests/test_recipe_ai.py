@@ -9,7 +9,7 @@ from sqlalchemy import event as sqlalchemy_event
 from app import ai, outbound, scan
 from app.ingredients import SEOUL, seoul_today
 from app.models import AiCall, PublicRecipe, User, db
-from app.recipe_ai import clean_draft, public_image_candidates, similar_public_image
+from app.recipe_ai import RECIPE_SIGNAL, clean_draft, public_image_candidates, similar_public_image
 from tests.test_scan import AI_FAILURES, JPEG_BYTES, PNG_BYTES, USAGE, ai_call_costs, ai_calls, fail_if_called
 
 FAIL = "레시피를 만들지 못했어요. 잠시 후 다시 시도해주세요."
@@ -479,8 +479,9 @@ NEED_YOUTUBE = "유튜브 링크에서는 레시피를 읽지 못했어요. 영�
 NEED_INSTAGRAM = "인스타그램 링크에서는 레시피를 읽지 못했어요. 게시물 설명을 길게 눌러 복사한 뒤 아래에 붙여 넣어주세요."
 NEED_WEB = "이 링크에서는 레시피를 읽지 못했어요. 글을 복사한 뒤 아래에 붙여 넣어주세요."
 NEED_TEXT = "레시피를 찾지 못했어요. 재료와 만드는 법이 담긴 글을 붙여 넣어주세요."
-NO_RECIPE_YOUTUBE = "영상 설명에서 레시피를 찾지 못했어요. 설명에 있으면 복사하고, 쇼츠처럼 영상에만 있으면 보면서 재료와 만드는 법을 적어 아래에 붙여 넣어주세요."
-NO_RECIPE_INSTAGRAM = "게시물 설명에서 레시피를 찾지 못했어요. 설명에 있으면 길게 눌러 복사하고, 릴스처럼 영상에만 있으면 보면서 재료와 만드는 법을 적어 아래에 붙여 넣어주세요."
+NO_RECIPE_YOUTUBE = "영상 설명에서 레시피를 찾지 못했어요. 설명에 있으면 복사해 붙여 넣고, 영상에만 있으면 보면서 재료와 만드는 법을 아래에 적어주세요."
+NO_RECIPE_INSTAGRAM = "게시물 설명에서 레시피를 찾지 못했어요. 설명에 있으면 길게 눌러 복사해 붙여 넣고, 영상에만 있으면 보면서 재료와 만드는 법을 아래에 적어주세요."
+OWNER_SHORTS = "양배추 냉털 지지고 레시피 #절약 #직장인브이로그 #자취요리"  # 사용자가 알린 쇼츠(설명에 재료가 없다)
 IMPORT_FAIL = "레시피를 정리하지 못했어요. 잠시 후 다시 시도해주세요."
 RECIPE_LIMIT = "오늘 AI 레시피는 10번까지 쓸 수 있어요. 내일 다시 써주세요."
 SNIPPET = {"title": "제육볶음 황금레시피", "description": "재료: 돼지고기 앞다리살 600g", "channel_title": "집밥 연구소", "thumbnail_url": "https://i.ytimg.com/vi/x/hq.jpg"}
@@ -666,6 +667,26 @@ def test_import_video_links_without_recipe_text_skip_ai(client, login, app, monk
     assert client.get("/api/ai-usage").get_json()["recipe"]["used"] == 0
 
 
+@pytest.mark.parametrize(
+    "description, calls_ai",
+    [
+        ("간장 3T 설탕 1T 참기름 1t\n팬에 볶아요", True),
+        ("간장 2숟가락, 밥 1공기 넣고 비벼요", True),
+        (OWNER_SHORTS, False),
+    ],
+)
+def test_import_youtube_calls_ai_only_with_recipe_signal(client, login, app, monkeypatch, description, calls_ai):
+    user = login()
+    live(app)
+    seen = []
+    monkeypatch.setattr(outbound, "video_snippet", lambda video_id, key: {**SNIPPET, "description": description})
+    monkeypatch.setattr(ai, "extract_recipe", lambda text, images: seen.append(text) or found())
+    res = import_(client, url="https://m.youtube.com/shorts/3PAszpPVMD0")
+    assert res.status_code == (200 if calls_ai else 422)
+    assert len(seen) == int(calls_ai)
+    assert ai_calls(app) == [(user.id, "link_fetch")] + ([(user.id, "link")] if calls_ai else [])
+
+
 def test_import_instagram_without_caption_asks_for_text(client, login, app, monkeypatch):
     login()
     live(app)
@@ -794,6 +815,14 @@ def test_import_blog_recipe_less_text_sends_page_images(client, login, app, monk
         "두부 1모",
         "대파 1대",
         "마늘 3쪽",
+        "간장 3T",  # 2026-09-16 넓힌 표시(유튜브·인스타그램 미리 거르기와 같은 규칙)
+        "참기름 1t",
+        "설탕 2숟가락",
+        "소금 한 숟갈",
+        "밥 1공기",
+        "후추 1/2tsp",
+        "식초 1 tbsp",
+        "깨 2ts",
     ],
 )
 def test_import_blog_with_recipe_signal_is_text_only(client, login, app, monkeypatch, text):
@@ -806,6 +835,20 @@ def test_import_blog_with_recipe_signal_is_text_only(client, login, app, monkeyp
     monkeypatch.setattr(ai, "extract_recipe", lambda text, images: calls.append(images) or found())
     assert import_(client, url=WEB).status_code == 200
     assert calls == [[]]
+
+
+@pytest.mark.parametrize(
+    "text, found_signal",
+    [
+        ("간장 3T 설탕 1T 참기름 1t", True),
+        ("간장 2숟가락, 밥 1공기", True),
+        (OWNER_SHORTS, False),
+        ("5ton 트럭 · 용량 5GB · 10 Tips · 2tbspoon", False),  # 단위 뒤에 영문이 붙으면 양이 아니다
+        (RECIPE_LESS, False),
+    ],
+)
+def test_recipe_signal(text, found_signal):
+    assert bool(RECIPE_SIGNAL.search(text)) is found_signal
 
 
 def test_import_blog_without_image_candidates_is_text_only(client, login, app, monkeypatch):

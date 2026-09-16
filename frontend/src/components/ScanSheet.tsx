@@ -455,12 +455,13 @@ export default function ScanSheet({ mode, limit, samples = [], locations, onAdde
             )}
             <p className="hint scan-quota">
               <Icon name="info" size={16} />
-              {/* 3: 서버 scan.MISS_FREE_DAILY(찾지 못함·오류는 하루 3번까지 세지 않는다, 스펙 7절) */}
+              {/* 3: 서버 scan.MISS_FREE_DAILY(찾지 못함·오류는 사진 인식·AI 레시피를 합쳐 하루 3번까지 세지 않는다, 스펙 7절).
+                  `하루 3번까지는`은 줄바꿈 없는 공백(\u00a0)으로 묶어 폰 폭에서 두 줄로 나뉠 때 갈라지지 않게 한다 */}
               {mode === "sample"
                 ? SAMPLE_MODE_HINT
                 : sampleList.length > 0
                   ? `체험 계정은 하루 ${limit}번까지 · 예시 사진도 1번으로 세요`
-                  : `하루 ${limit}번까지 쓸 수 있어요 · 못 찾으면 3번까지는 세지 않아요`}
+                  : `하루 ${limit}번까지 쓸 수 있어요 · 못 찾거나 실패하면 하루\u00a03번까지는 세지 않아요`}
             </p>
           </>
         )}
