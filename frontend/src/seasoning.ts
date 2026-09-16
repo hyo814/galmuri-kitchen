@@ -66,12 +66,13 @@ export function scaleItem(item: SeasoningItem, factor: number): { text: string; 
 }
 
 /** 인분을 바꾼 레시피 재료 양(recipeQuantity로 읽은 값) 아래 회색 줄(스펙 23절 D1). 계산기(scaleItem)와 같은 규칙:
- *  "3큰술" → "밥숟가락 약 4개", "3작은술" → "1큰술", "10큰술" → "¾컵". 1큰술이 안 되거나 큰술·작은술이 아니면 null */
+ *  "3큰술" → "밥숟가락 약 4개", "3작은술" → "약 1큰술", "10큰술" → "약 ¾컵". 1큰술이 안 되거나 큰술·작은술이 아니면 null */
 export function spoonHint({ quantity, unit }: { quantity: number; unit: string }): string | null {
   if (unit !== "큰술" && unit !== "작은술") return null;
   const { text, sub } = scaleItem({ name: "", amount: quantity, unit }, 1);
   if (text.endsWith("작은술") || text === "약간") return null; // 계산기도 1큰술 아래는 밥숟가락을 안 보여준다
-  return unit === "큰술" && text.endsWith("큰술") ? sub : text;
+  // 본문(scaleAmount "6.6작은술")과 달리 분수로 맞춘 값("2¼큰술")이라 "약"을 붙인다
+  return unit === "큰술" && text.endsWith("큰술") ? sub : `약 ${text}`;
 }
 
 /** 시안 SeasoningList·SeasoningCalc 보조 줄: "돼지고기 600g 기준", "2인분 기준", "완성 ½컵 기준", "완성 300ml 기준" */
