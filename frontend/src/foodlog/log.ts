@@ -2,7 +2,7 @@
 import type { DishItem, FoodLog, FoodLogMonthDay, FoodLogMonthSummary, FoodLogNutrition, FoodPlace, Incomplete, MealKind } from "../api";
 import { slotDateText } from "../meals/plan.ts";
 import { kcalNumber } from "../nutrition/body.ts";
-import { addIncomplete, atLeast, incompleteNotes } from "../nutrition/day.ts";
+import { addIncomplete, incompleteNotes, isIncomplete, nutrientText } from "../nutrition/day.ts";
 
 export const PLACE_LABEL: Record<FoodPlace, string> = { home: "집밥", out: "외식" };
 export const monthOf = (iso: string) => iso.slice(0, 7);
@@ -65,8 +65,8 @@ export function dayTotals(logs: Pick<FoodLog, "nutrition" | "approx" | "incomple
   return t;
 }
 
-/** 시트 설명에 보인(합이 0이 아닌) 당류·나트륨 중 빼고 더한 것 안내 */
-export const dayLeftOutNotes = (t: DayTotals) => incompleteNotes(t.incomplete, (["sugars_g", "sodium_mg"] as const).filter((k) => t[k]));
+/** 이 시트가 보여주는 당류·나트륨 중 빼고 더한 것 안내 */
+export const dayLeftOutNotes = (t: DayTotals) => incompleteNotes(t.incomplete, ["sugars_g", "sodium_mg"]);
 
 /** 시트 설명(시안 DAY·PHOTO FIRST) */
 export function dayDescription(logs: Pick<FoodLog, "nutrition" | "approx" | "title" | "incomplete">[], goal: number | null): string {
@@ -76,8 +76,9 @@ export function dayDescription(logs: Pick<FoodLog, "nutrition" | "approx" | "tit
   if (!t) return hint || "kcal을 계산할 수 있는 기록이 없어요";
   return [
     `${t.approx ? "약 " : ""}${kcalNumber(t.kcal)}${goal ? ` / 목표 ${kcalNumber(goal)}` : ""}kcal`,
-    t.sugars_g ? `당류 ${Math.round(t.sugars_g)}g${atLeast(t.incomplete, "sugars_g")}` : "",
-    t.sodium_mg ? `나트륨 ${kcalNumber(t.sodium_mg)}mg${atLeast(t.incomplete, "sodium_mg")}` : "",
+    // 합이 0이면 숨기되(값이 다 있는 0), 빼고 더한 값이 있으면 "알 수 없어요"까지 보여준다(결정 14 개정 2)
+    t.sugars_g || isIncomplete(t.incomplete, "sugars_g") ? `당류 ${nutrientText(t.sugars_g, "g", t.incomplete, "sugars_g")}` : "",
+    t.sodium_mg || isIncomplete(t.incomplete, "sodium_mg") ? `나트륨 ${nutrientText(t.sodium_mg, "mg", t.incomplete, "sodium_mg")}` : "",
     hint,
   ].filter(Boolean).join(" · ");
 }
@@ -127,13 +128,13 @@ export type Amount = { servings: number } | { grams: number };
 export const dishGrams = (item: Pick<DishItem, "serving_g">, amount: Amount) =>
   "grams" in amount ? amount.grams : item.serving_g === null ? null : item.serving_g * amount.servings;
 
-/** 미리보기 "약 370kcal · 당류 11g · 나트륨 820mg"(레시피에서 빼고 더한 값은 "이상") */
+/** 미리보기 "약 370kcal · 당류 11g · 나트륨 820mg"(레시피에서 빼고 더한 값은 dayDescription과 같은 규칙) */
 export function previewText(n: FoodLogNutrition | null, approx: boolean, incomplete: Incomplete = {}): string {
   if (!n) return "";
   return [
     `${approx ? "약 " : ""}${kcalNumber(n.kcal)}kcal`,
-    n.sugars_g ? `당류 ${Math.round(n.sugars_g)}g${atLeast(incomplete, "sugars_g")}` : "",
-    n.sodium_mg ? `나트륨 ${kcalNumber(n.sodium_mg)}mg${atLeast(incomplete, "sodium_mg")}` : "",
+    n.sugars_g || isIncomplete(incomplete, "sugars_g") ? `당류 ${nutrientText(n.sugars_g ?? 0, "g", incomplete, "sugars_g")}` : "",
+    n.sodium_mg || isIncomplete(incomplete, "sodium_mg") ? `나트륨 ${nutrientText(n.sodium_mg ?? 0, "mg", incomplete, "sodium_mg")}` : "",
   ].filter(Boolean).join(" · ");
 }
 

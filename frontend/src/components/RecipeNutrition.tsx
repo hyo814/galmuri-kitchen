@@ -2,7 +2,8 @@ import { useEffect, useId, useState } from "react";
 import { api, type NutritionIngredient, type RecipeNutrition, type User } from "../api";
 import { kcalNumber } from "../nutrition/body";
 import {
-  atLeast, dailyValue, incompleteNotes, ingredientKcalText, ingredientNote, macroSplit, MAX_FILL_ATTEMPTS, NUTRIENT_KEYS, SODIUM_DAILY_MG, SUGARS_DAILY_G,
+  dailyValue, incompleteNotes, ingredientKcalText, ingredientNote, isIncomplete, macroSplit, MAX_FILL_ATTEMPTS, NUTRIENT_KEYS, nutrientText, SODIUM_DAILY_MG,
+  SUGARS_DAILY_G,
 } from "../nutrition/day";
 import { useResource } from "../useResource";
 import FoodPickSheet from "./FoodPickSheet";
@@ -48,10 +49,10 @@ export default function RecipeNutrition({ recipeId, user }: { recipeId: number; 
 
   const { per_serving, incomplete } = data;
   const [carbPct, proteinPct, fatPct] = per_serving ? macroSplit(per_serving.carbs_g, per_serving.protein_g, per_serving.fat_g) : [0, 0, 0];
-  // 값이 빠진 영양소는 "이상"으로 보여주고 비율·막대는 확실할 때만(결정 14 개정 2)
-  const splitKnown = !atLeast(incomplete, "carbs_g") && !atLeast(incomplete, "protein_g") && !atLeast(incomplete, "fat_g");
-  const sugar = per_serving ? dailyValue(per_serving.sugars_g, SUGARS_DAILY_G, !!atLeast(incomplete, "sugars_g")) : null;
-  const sodium = per_serving ? dailyValue(per_serving.sodium_mg, SODIUM_DAILY_MG, !!atLeast(incomplete, "sodium_mg")) : null;
+  // 값이 빠진 영양소는 "이상"(아는 값이 없으면 "알 수 없어요")으로 보여주고 비율·막대는 확실할 때만(결정 14 개정 2)
+  const splitKnown = !(["carbs_g", "protein_g", "fat_g"] as const).some((k) => isIncomplete(incomplete, k));
+  const sugar = per_serving ? dailyValue(per_serving.sugars_g, SUGARS_DAILY_G, isIncomplete(incomplete, "sugars_g")) : null;
+  const sodium = per_serving ? dailyValue(per_serving.sodium_mg, SODIUM_DAILY_MG, isIncomplete(incomplete, "sodium_mg")) : null;
 
   return (
     <>
@@ -81,23 +82,19 @@ export default function RecipeNutrition({ recipeId, user }: { recipeId: number; 
             )}
             <div className="nt-legend">
               <span className="c">
-                탄수화물 <b>{Math.round(per_serving.carbs_g)}g</b>
-                {atLeast(incomplete, "carbs_g")}
+                탄수화물 <b>{nutrientText(per_serving.carbs_g, "g", incomplete, "carbs_g")}</b>
               </span>
               <span className="p">
-                단백질 <b>{Math.round(per_serving.protein_g)}g</b>
-                {atLeast(incomplete, "protein_g")}
+                단백질 <b>{nutrientText(per_serving.protein_g, "g", incomplete, "protein_g")}</b>
               </span>
               <span className="f">
-                지방 <b>{Math.round(per_serving.fat_g)}g</b>
-                {atLeast(incomplete, "fat_g")}
+                지방 <b>{nutrientText(per_serving.fat_g, "g", incomplete, "fat_g")}</b>
               </span>
             </div>
             <div style={{ display: "grid", gap: 8 }}>
               <div className="nt-row">
-                <span className="muted" style={{ flex: 1, minWidth: 0 }}>
-                  당류 <b style={{ color: "var(--text)" }}>{Math.round(per_serving.sugars_g)}g</b>
-                  {atLeast(incomplete, "sugars_g")}
+                <span className="muted" style={{ flex: "1 1 auto", minWidth: 0 }}>
+                  당류 <b style={{ color: "var(--text)" }}>{nutrientText(per_serving.sugars_g, "g", incomplete, "sugars_g")}</b>
                 </span>
                 {sugar && (
                   <span className="muted" style={sugar.warn ? { color: "var(--warn)" } : undefined}>
@@ -111,9 +108,8 @@ export default function RecipeNutrition({ recipeId, user }: { recipeId: number; 
                 </div>
               )}
               <div className="nt-row">
-                <span className="muted" style={{ flex: 1, minWidth: 0 }}>
-                  나트륨 <b style={{ color: "var(--text)" }}>{kcalNumber(per_serving.sodium_mg)}mg</b>
-                  {atLeast(incomplete, "sodium_mg")}
+                <span className="muted" style={{ flex: "1 1 auto", minWidth: 0 }}>
+                  나트륨 <b style={{ color: "var(--text)" }}>{nutrientText(per_serving.sodium_mg, "mg", incomplete, "sodium_mg")}</b>
                 </span>
                 {sodium && (
                   <span className="muted" style={sodium.warn ? { color: "var(--warn)" } : undefined}>

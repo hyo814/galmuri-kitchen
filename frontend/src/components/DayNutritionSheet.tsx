@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import type { MealSlot } from "../api";
 import { kcalNumber } from "../nutrition/body";
-import { atLeast, daySum, incompleteNotes, macroSplit, meterPercent, NUTRIENT_KEYS, slotKcalText, sodiumDay, sugarDay } from "../nutrition/day";
+import { daySum, incompleteNotes, isIncomplete, macroSplit, meterPercent, NUTRIENT_KEYS, nutrientText, slotKcalText, sodiumDay, sugarDay } from "../nutrition/day";
 import { dayHead, MEALS } from "../meals/plan";
 import Sheet from "./Sheet";
 
@@ -24,11 +24,11 @@ export default function DayNutritionSheet({ date, slots, goal, onClose }: Props)
   const over = goal !== null && sum.kcal > goal;
   const hasCalc = slots.some((s) => s.nutrition?.source === "calc");
   const [carbPct, proteinPct, fatPct] = macroSplit(sum.carbs_g, sum.protein_g, sum.fat_g);
-  // 값이 빠진 영양소는 "이상"으로 보여주고 비율·막대는 확실할 때만(결정 14 개정 2, RecipeNutrition과 같게)
+  // 값이 빠진 영양소는 "이상"(아는 값이 없으면 "알 수 없어요")으로 보여주고 비율·막대는 확실할 때만(결정 14 개정 2, RecipeNutrition과 같게)
   const { incomplete } = sum;
-  const splitKnown = !atLeast(incomplete, "carbs_g") && !atLeast(incomplete, "protein_g") && !atLeast(incomplete, "fat_g");
-  const sugar = sugarDay(sum.sugars_g, sum.calcKcal, !!atLeast(incomplete, "sugars_g"));
-  const sodium = sodiumDay(sum.sodium_mg, !!atLeast(incomplete, "sodium_mg"));
+  const splitKnown = !(["carbs_g", "protein_g", "fat_g"] as const).some((k) => isIncomplete(incomplete, k));
+  const sugar = sugarDay(sum.sugars_g, sum.calcKcal, isIncomplete(incomplete, "sugars_g"));
+  const sodium = sodiumDay(sum.sodium_mg, isIncomplete(incomplete, "sodium_mg"));
   const bySlot = new Map(slots.map((s) => [s.meal, s]));
 
   return (
@@ -56,23 +56,19 @@ export default function DayNutritionSheet({ date, slots, goal, onClose }: Props)
           )}
           <div className="nt-legend">
             <span className="c">
-              탄수화물 <b>{Math.round(sum.carbs_g)}g</b>
-              {atLeast(incomplete, "carbs_g")}
+              탄수화물 <b>{nutrientText(sum.carbs_g, "g", incomplete, "carbs_g")}</b>
             </span>
             <span className="p">
-              단백질 <b>{Math.round(sum.protein_g)}g</b>
-              {atLeast(incomplete, "protein_g")}
+              단백질 <b>{nutrientText(sum.protein_g, "g", incomplete, "protein_g")}</b>
             </span>
             <span className="f">
-              지방 <b>{Math.round(sum.fat_g)}g</b>
-              {atLeast(incomplete, "fat_g")}
+              지방 <b>{nutrientText(sum.fat_g, "g", incomplete, "fat_g")}</b>
             </span>
           </div>
           <div className="nt-card field-bg">
             <div className="nt-row">
-              <span className="muted" style={{ flex: 1, minWidth: 0 }}>
-                당류 <b style={{ color: "var(--text)" }}>{Math.round(sum.sugars_g)}g</b>
-                {atLeast(incomplete, "sugars_g")}
+              <span className="muted" style={{ flex: "1 1 auto", minWidth: 0 }}>
+                당류 <b style={{ color: "var(--text)" }}>{nutrientText(sum.sugars_g, "g", incomplete, "sugars_g")}</b>
               </span>
               {sugar && (
                 <span className="muted" style={sugar.warn ? { color: "var(--warn)" } : undefined}>
@@ -86,9 +82,8 @@ export default function DayNutritionSheet({ date, slots, goal, onClose }: Props)
               </div>
             )}
             <div className="nt-row">
-              <span className="muted" style={{ flex: 1, minWidth: 0 }}>
-                나트륨 <b style={{ color: "var(--text)" }}>{kcalNumber(sum.sodium_mg)}mg</b>
-                {atLeast(incomplete, "sodium_mg")}
+              <span className="muted" style={{ flex: "1 1 auto", minWidth: 0 }}>
+                나트륨 <b style={{ color: "var(--text)" }}>{nutrientText(sum.sodium_mg, "mg", incomplete, "sodium_mg")}</b>
               </span>
               {sodium && (
                 <span className="muted" style={sodium.warn ? { color: "var(--warn)" } : undefined}>

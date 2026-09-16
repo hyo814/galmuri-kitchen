@@ -102,7 +102,7 @@ assert.equal(dayDescription(dayLogs, null), "약 1,190kcal · 당류 22g · 나�
 assert.deepEqual(dayT.incomplete, {});
 assert.deepEqual(dayLeftOutNotes(dayT), []);
 
-// 값이 빠진 기록(결정 14 개정 2): 아는 값만 더하고 " 이상", 보이는 당류·나트륨의 빠진 이름만 안내(탄단지는 이 시트에 없다)
+// 값이 빠진 기록(결정 14 개정 2): 아는 값만 더하고 " 이상", 당류·나트륨의 빠진 이름만 안내(탄단지는 이 시트에 없다)
 const leftOutLogs = [
   { title: "된장찌개", nutrition: { kcal: 165, carbs_g: 8, protein_g: 7, fat_g: 4, sugars_g: 2, sodium_mg: 7 }, approx: true, incomplete: { sodium_mg: ["된장"] } },
   { title: "제육덮밥", nutrition: { kcal: 740, carbs_g: 88, protein_g: null, fat_g: null, sugars_g: 22, sodium_mg: 1640 }, approx: true, incomplete: { protein_g: ["제육덮밥"], fat_g: ["제육덮밥"] } },
@@ -112,11 +112,16 @@ const leftOutT = dayTotals(leftOutLogs);
 assert.deepEqual([leftOutT.sugars_g, leftOutT.sodium_mg], [24, 1647]);
 assert.deepEqual(leftOutT.incomplete, { sodium_mg: ["된장", "된장국"], protein_g: ["제육덮밥"], fat_g: ["제육덮밥"], sugars_g: ["된장국"] });
 assert.equal(dayDescription(leftOutLogs, null), "약 1,025kcal · 당류 24g 이상 · 나트륨 1,647mg 이상");
-assert.deepEqual(dayLeftOutNotes(leftOutT), ["된장국은 당류 값이 없어 빼고 계산했어요", "된장 외 1개는 나트륨 값이 없어 빼고 계산했어요"]);
-// 합이 0이라 숨긴 영양소는 안내도 하지 않는다
-const onlyAi = dayTotals([leftOutLogs[2]]);
-assert.equal(dayDescription([leftOutLogs[2]], null), "약 120kcal");
-assert.deepEqual(dayLeftOutNotes(onlyAi), []);
+assert.deepEqual(dayLeftOutNotes(leftOutT), ["된장국은 당류 정보가 없어 빼고 계산했어요", "된장 외 1개는 나트륨 정보가 없어 빼고 계산했어요"]);
+// 아는 값이 없으면(합 0) "0mg 이상" 대신 "알 수 없어요" — 레시피 카드·식단 하루 시트와 같은 규칙. 값이 다 있는 0은 전처럼 숨긴다
+const aiLog = {
+  title: "된장국", nutrition: { kcal: 120, carbs_g: null, protein_g: null, fat_g: null, sugars_g: null, sodium_mg: null }, approx: true,
+  incomplete: { carbs_g: ["된장국"], protein_g: ["된장국"], fat_g: ["된장국"], sugars_g: ["된장국"], sodium_mg: ["된장국"] },
+};
+assert.equal(dayDescription([aiLog], null), "약 120kcal · 당류 알 수 없어요 · 나트륨 알 수 없어요");
+assert.deepEqual(dayLeftOutNotes(dayTotals([aiLog])), ["된장국은 당류·나트륨 정보가 없어 빼고 계산했어요"]);
+const zeroLog = { ...aiLog, nutrition: { ...aiLog.nutrition, sugars_g: 0, sodium_mg: 0 }, incomplete: {} };
+assert.equal(dayDescription([zeroLog], null), "약 120kcal");
 
 // nutrition이 없는 기록은 approx가 true여도 합계·약에서 아예 빠진다(사진 기록의 남은 approx 값을 실수로 쓰지 않는다, fix round 1)
 assert.equal(dayTotals([{ nutrition: null, approx: true }]), null);
@@ -204,6 +209,7 @@ assert.equal(recipe15.sodium_mg, 500);
 assert.equal(previewText(recipe15, false), "201kcal · 나트륨 500mg");
 assert.equal(previewText(recipe15, false, { sodium_mg: ["된장"], carbs_g: ["된장"] }), "201kcal · 나트륨 500mg 이상");
 assert.equal(previewText({ ...recipe15, sugars_g: 3 }, true, { sugars_g: ["된장"] }), "약 201kcal · 당류 3g 이상 · 나트륨 500mg");
+assert.equal(previewText({ ...recipe15, sugars_g: 0 }, true, { sugars_g: ["된장"] }), "약 201kcal · 당류 알 수 없어요 · 나트륨 500mg");
 assert.equal(previewText(null, false), "");
 
 assert.equal(parseGrams("250"), 250);

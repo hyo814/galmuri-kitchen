@@ -5619,8 +5619,11 @@ button.sh-offline svg:last-child {
   color: var(--danger);
 }
 
+/* wrap: 오른쪽 글자가 길면(빠진 값의 "총 에너지의 37% 이상 · WHO 권장 10% 미만") 다음 줄로 — 당류·나트륨 줄의 왼쪽 글자는
+   flex-basis auto라 제 폭을 지킨다(0부터 자라면 한 줄에 들어간다고 보고 왼쪽을 한 글자 폭까지 눌렀다) */
 .nt-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }

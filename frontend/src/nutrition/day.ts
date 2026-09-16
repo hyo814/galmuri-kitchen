@@ -16,22 +16,29 @@ export function addIncomplete(into: Incomplete, from: Incomplete) {
   for (const k of NUTRIENT_KEYS) if (from[k]?.length) into[k] = [...new Set([...(into[k] ?? []), ...from[k]])];
 }
 
-/** 값 뒤 " 이상" — 빼고 더한 값이 있어 실제로는 더 많을 수 있다(결정 14 개정 2) */
-export const atLeast = (incomplete: Incomplete, key: NutrientKey) => (incomplete[key]?.length ? " 이상" : "");
+/** 빼고 더한 값이 있는 영양소인가(결정 14 개정 2) — 실제로는 더 많을 수 있다 */
+export const isIncomplete = (incomplete: Incomplete, key: NutrientKey) => !!incomplete[key]?.length;
 
-/** "된장은 나트륨 값이 없어 빼고 계산했어요" · "된장 외 1개는 당류·나트륨 값이 …". keys는 화면에 보이는 영양소, 빠진 이름이 같은 영양소끼리 한 줄 */
+/** 영양소 값 글자 "113mg". 빼고 더한 값이 있으면 "113mg 이상", 아는 값이 없으면(반올림해 0) "알 수 없어요" — 모든 화면이 같은 규칙 */
+export function nutrientText(value: number, unit: "g" | "mg", incomplete: Incomplete, key: NutrientKey): string {
+  const text = `${kcalNumber(value)}${unit}`;
+  if (!isIncomplete(incomplete, key)) return text;
+  return Math.round(value) > 0 ? `${text} 이상` : "알 수 없어요";
+}
+
+/** "된장은 나트륨 정보가 없어 빼고 계산했어요" · "된장 외 1개는 당류·나트륨 정보가 …". keys는 화면에 보이는 영양소, 빠진 이름이 같은(순서 무관) 영양소끼리 한 줄 */
 export function incompleteNotes(incomplete: Incomplete, keys: readonly NutrientKey[]): string[] {
   const groups = new Map<string, { names: string[]; labels: string[] }>();
   for (const k of keys) {
     const names = incomplete[k];
     if (!names?.length) continue;
-    const id = names.join("\n");
+    const id = [...names].sort().join("\n");
     if (!groups.has(id)) groups.set(id, { names, labels: [] });
     groups.get(id)!.labels.push(NUTRIENT_LABEL[k]);
   }
   return [...groups.values()].map(({ names, labels }) => {
     const who = names.length > 1 ? `${names[0]} 외 ${names.length - 1}개` : names[0];
-    return `${withJosa(who, "은", "는")} ${labels.join("·")} 값이 없어 빼고 계산했어요`;
+    return `${withJosa(who, "은", "는")} ${labels.join("·")} 정보가 없어 빼고 계산했어요`;
   });
 }
 
@@ -115,7 +122,8 @@ export function sugarDay(sugars_g: number, kcal: number, incomplete = false) {
   const ratio = kcal > 0 ? (sugars_g * 4) / kcal : 0;
   const warn = ratio >= WHO_SUGAR_RATIO;
   if (incomplete && !warn) return null;
-  return { text: `총 에너지의 ${Math.round(ratio * 100)}%${incomplete ? " 이상" : ""} · WHO 10% 미만`, percent: meterPercent(ratio, WHO_SUGAR_RATIO), warn };
+  const who = incomplete ? "이상 · WHO 권장" : "· WHO"; // "13% 이상 · WHO 10% 미만"은 이상·미만이 붙어 헷갈린다
+  return { text: `총 에너지의 ${Math.round(ratio * 100)}% ${who} 10% 미만`, percent: meterPercent(ratio, WHO_SUGAR_RATIO), warn };
 }
 
 /** 하루 나트륨: 넘으면 "1일 기준치 넘었어요", 아니면 "1일 기준치의 N%" */
