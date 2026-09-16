@@ -276,7 +276,7 @@ export default function ScanReview({ kind, result, locations, samplePhoto, retak
           <span className="badge info scan-sample">
             <Icon name="info" size={16} />
             {samplePhoto
-              ? "오늘 체험용 AI를 다 써서, 이 사진을 미리 읽어 둔 결과를 보여줘요. 로그인하면 내 사진을 바로 읽어요."
+              ? "오늘 체험용 AI를 다 써서 이 사진을 미리 읽어둔 결과를 보여줘요. 로그인하면 내 사진을 바로 읽어요."
               : "오늘 체험용 AI를 다 써서 사진을 읽지 않고 예시를 보여줘요. 로그인하면 실제로 읽어줘요."}
           </span>
         )}

@@ -150,16 +150,26 @@ export function ScanWait({
   );
 }
 
-/** 인식 실패 문구와 도움말(버튼은 부르는 쪽에서) */
-export function ScanFail({ message, status, reason }: { message: string; status: number; reason?: "empty" }) {
+/** 인식 실패 문구와 도움말(버튼은 부르는 쪽에서). photoTips: 사진 찍기·올리기 도움말 — 내 사진일 때만(예시 사진은 끈다) */
+export function ScanFail({
+  message,
+  status,
+  reason,
+  photoTips = true,
+}: {
+  message: string;
+  status: number;
+  reason?: "empty";
+  photoTips?: boolean;
+}) {
   return (
     <div className="scan-fail">
       <span className="scan-fail-icon">
         <Icon name="alert" size={28} />
       </span>
       <h2>{message}</h2>
-      {(status === 502 || reason === "empty") && <p className="hint">밝은 곳에서 글자가 잘 보이게 찍으면 더 잘 찾아요</p>}
-      {status === 415 && <p className="hint">{HEIF_HINT}</p>}
+      {photoTips && (status === 502 || reason === "empty") && <p className="hint">밝은 곳에서 글자가 잘 보이게 찍으면 더 잘 찾아요</p>}
+      {photoTips && status === 415 && <p className="hint">{HEIF_HINT}</p>}
     </div>
   );
 }
@@ -228,7 +238,12 @@ export default function ScanSheet({ mode, limit, samples = [], locations, onAdde
   useStepFocus(rootRef, step.name);
 
   const count = photos.length;
-  const loadingTitle = sample ? `${sample.label}에서 재료를 찾고 있어요` : `사진 ${count}장에서 재료를 찾고 있어요`;
+  // 체험 AI를 다 쓴(sample 모드) 예시 사진은 읽어둔 결과를 받아 오기만 한다 — 읽는다고 하지 않는다
+  const loadingTitle = !sample
+    ? `사진 ${count}장에서 재료를 찾고 있어요`
+    : mode === "sample"
+      ? "읽어둔 결과를 불러오고 있어요"
+      : `${sample.label}에서 재료를 찾고 있어요`;
   // ScanSheet가 떠 있는 동안 계속 마운트된 알림 영역. 단계별 시각적 문구를 중복해서 role=status/alert로
   // 두 번 읽지 않도록, 여기 하나로 모으고 본문 쪽 role은 뺀다.
   const liveText =
@@ -320,23 +335,21 @@ export default function ScanSheet({ mode, limit, samples = [], locations, onAdde
   const choice = SCAN_CHOICES.find((c) => c.kind === kind) ?? SCAN_CHOICES[0];
   // 한도 초과(429, 하루 한도·짧은 시간 연속 호출 모두)·기능 꺼짐(503)은 다시 찍어도 같으므로 '닫기'를 보여 준다
   const canRetake = step.name === "error" && step.status !== 429 && step.status !== 503;
-  // 확인 화면 설명 앞머리: 예시 사진은 읽은 시간(미리 읽어 둔 결과면 뺀다), 여러 장은 합친 안내
-  const readNote =
+  // 확인 화면 설명: 예시 사진은 읽은 시간(읽어둔 결과면 뺀다, 384px에서 꺾여도 뒷말이 한 줄이게 NBSP), 여러 장은 합친 안내
+  const reviewNote =
     step.name !== "review"
       ? ""
-      : sample
-        ? step.result.sample
-          ? ""
-          : `${sample.label} 1장을 ${step.seconds}초 만에 읽었어요 · `
-        : count > 1
-          ? `사진 ${count}장에서 찾았어요 · 겹친 재료는 합쳤어요 · `
-          : "";
+      : sample && !step.result.sample
+        ? `사진 1장을 ${step.seconds}초 만에 읽었어요 · 넣을\u00a0재료만\u00a0체크해주세요`
+        : !sample && count > 1
+          ? `사진 ${count}장에서 찾았어요 · 겹친 재료는 합쳤어요 · 넣을 재료만 체크해주세요`
+          : "넣을 재료만 체크해주세요";
 
   const sheetProps =
     step.name === "review"
       ? {
           title: `찾은 재료 ${step.result.items.length}개`,
-          description: `${readNote}넣을 재료만 체크해주세요`,
+          description: reviewNote,
           className: "scan-tall",
         }
       : step.name === "pick"
@@ -459,7 +472,7 @@ export default function ScanSheet({ mode, limit, samples = [], locations, onAdde
             {mode === "sample" ? (
               <p className="hint scan-note">
                 <Icon name="info" size={16} />
-                오늘 체험용 AI를 다 써서, 이 사진을 미리 읽어 둔 결과를 보여줘요
+                오늘 체험용 AI를 다 써서 이 사진을 미리 읽어둔 결과를 보여줘요
               </p>
             ) : (
               <p className="scan-note live">
@@ -472,7 +485,7 @@ export default function ScanSheet({ mode, limit, samples = [], locations, onAdde
                 다른 사진
               </button>
               <button type="button" className="btn primary" onClick={read}>
-                이 사진 읽기
+                {mode === "sample" ? "읽어둔 결과 보기" : "이 사진 읽기"}
               </button>
             </div>
           </>
@@ -543,48 +556,52 @@ export default function ScanSheet({ mode, limit, samples = [], locations, onAdde
           </>
         )}
 
-        {step.name === "loading" && (
-          <ScanWait
-            title={loadingTitle}
-            photo={count > 1 && !sample ? "겹치는 재료는 하나로 합쳐요 · 20초쯤 걸려요" : "10초쯤 걸려요"}
-            visual={
-              sample ? (
-                <div className="scan-shot" aria-hidden="true">
-                  <img src={sample.src} alt="" />
-                  <div className="scan-beam" />
-                </div>
-              ) : (
-                <div className="scan-stack" aria-hidden="true">
-                  {photos.slice(0, 3).map((p) => (
-                    <img key={p.id} src={p.url} alt="" />
-                  ))}
-                </div>
-              )
-            }
-            // 예시 사진은 하는 일을 단계로 보여 준다(시안 ④). 가짜 타이머 없이 응답이 오면 확인 화면으로 넘어간다
-            progress={
-              sample && (
-                <ol className="scan-steps">
-                  <li className="done">
-                    <span>
-                      <Icon name="check" size={12} />
-                    </span>
-                    사진 보냈어요
-                  </li>
-                  <li aria-current="step">
-                    <span />
-                    글자와 품목을 읽는 중
-                  </li>
-                  <li>
-                    <span />
-                    식재료만 골라 보관 위치 정하기
-                  </li>
-                </ol>
-              )
-            }
-            onCancel={cancel}
-          />
-        )}
+        {step.name === "loading" &&
+          (sample && mode === "sample" ? (
+            // 읽어둔 결과를 받아 오기만 하니 사진 훑기·단계 없이 기본 화면
+            <ScanWait title={loadingTitle} photo={`${sample.label} 예시 사진`} onCancel={cancel} />
+          ) : (
+            <ScanWait
+              title={loadingTitle}
+              photo={count > 1 && !sample ? "겹치는 재료는 하나로 합쳐요 · 20초쯤 걸려요" : "10초쯤 걸려요"}
+              visual={
+                sample ? (
+                  <div className="scan-shot" aria-hidden="true">
+                    <img src={sample.src} alt="" />
+                    <div className="scan-beam" />
+                  </div>
+                ) : (
+                  <div className="scan-stack" aria-hidden="true">
+                    {photos.slice(0, 3).map((p) => (
+                      <img key={p.id} src={p.url} alt="" />
+                    ))}
+                  </div>
+                )
+              }
+              // 예시 사진은 하는 일을 단계로 보여 준다(시안 ④). 가짜 타이머 없이 응답이 오면 확인 화면으로 넘어간다
+              progress={
+                sample && (
+                  <ol className="scan-steps">
+                    <li className="done">
+                      <span>
+                        <Icon name="check" size={12} />
+                      </span>
+                      사진 보냈어요
+                    </li>
+                    <li aria-current="step">
+                      <span />
+                      글자와 품목을 읽는 중
+                    </li>
+                    <li>
+                      <span />
+                      식재료만 골라 보관 위치 정하기
+                    </li>
+                  </ol>
+                )
+              }
+              onCancel={cancel}
+            />
+          ))}
 
         {step.name === "review" && (
           <ScanReview
@@ -601,7 +618,7 @@ export default function ScanSheet({ mode, limit, samples = [], locations, onAdde
 
         {step.name === "error" && (
           <>
-            <ScanFail message={step.message} status={step.status} reason={step.reason} />
+            <ScanFail message={step.message} status={step.status} reason={step.reason} photoTips={!sample} />
             <div className="actions">
               {canRetake ? (
                 <button type="button" className="btn secondary" onClick={backToPhotos}>
