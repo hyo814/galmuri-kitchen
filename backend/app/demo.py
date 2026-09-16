@@ -92,12 +92,21 @@ SHOPPING_MEMO = {"place": "이마트 성수점", "body": "세일 수요일까지
 MEAL_PLAN_DAYS = 7
 MEAL_PLAN_SERVINGS = 2
 _ORDINALS = ["첫째", "둘째", "셋째", "넷째", "다섯째", "여섯째"]
-# (오늘부터 며칠 뒤, 끼니, RECIPE_SAMPLES 인덱스(None=직접 쓰기), 직접 쓸 때 제목)
+# (오늘부터 며칠 뒤, 끼니, RECIPE_SAMPLES 인덱스(0 된장찌개, 1 김치찌개) 또는 직접 쓴 제목, 직접 쓴 칸의 1인분 kcal)
+# 저녁은 매일, 점심은 사흘, 아침은 하루만 채워 주 보기에 빈 날이 없고 AI 초안이 채울 빈 칸도 남는다. 같은 레시피는 이어진 날에 두지 않는다.
+# 직접 쓴 칸 kcal은 식약처 식품영양성분 자료집(2020) 음식 1인분 값(괄호 안 무게)을 반올림한 것 — AI 초안 칸처럼 est_kcal로 보인다
 MEAL_PLAN_SLOTS = [
-    (0, "dinner", 0, None),  # 오늘 저녁: 된장찌개(SAMPLE-01)
-    (1, "lunch", 1, None),  # 내일 점심: 김치찌개(SAMPLE-02)
-    (1, "breakfast", None, "토스트"),  # 내일 아침: 직접 쓰기(레시피 없음)
-    (2, "dinner", 0, None),  # 모레 저녁: 된장찌개 재사용
+    (0, "dinner", 0, None),  # 오늘 저녁은 레시피 칸: 먹었어요·요리했어요를 바로 해 본다(오늘 아침은 먹은 기록 토스트라 비운다)
+    (1, "breakfast", "토스트", 366),  # 식빵토스트 100g
+    (1, "lunch", 1, None),
+    (1, "dinner", "카레라이스", 518),  # 480g
+    (2, "lunch", "김밥", 323),  # 230g
+    (2, "dinner", 0, None),
+    (3, "dinner", "비빔밥", 638),  # 450g
+    (4, "lunch", "잔치국수", 310),  # 700g
+    (4, "dinner", 1, None),
+    (5, "dinner", "제육덮밥", 950),  # 470g
+    (6, "dinner", 0, None),
 ]
 # (며칠 전, 끼니, 예시 레시피 제목 또는 None, 직접 쓴 이름, 어디서, 만족도, 메모) — 결정 16
 FOOD_LOGS = [
@@ -226,15 +235,16 @@ def seed_demo_data(user_id):
         days=MEAL_PLAN_DAYS,
         default_servings=MEAL_PLAN_SERVINGS,
     )
-    for days_ahead, meal, recipe_index, free_title in MEAL_PLAN_SLOTS:
-        recipe = recipe_rows[recipe_index] if recipe_index is not None else None
+    for days_ahead, meal, dish, kcal in MEAL_PLAN_SLOTS:
+        recipe = recipe_rows[dish] if isinstance(dish, int) else None
         plan.slots.append(
             MealSlot(
                 date=today + timedelta(days=days_ahead),
                 meal=meal,
                 recipe=recipe,
-                title=recipe.title if recipe else free_title,
+                title=recipe.title if recipe else dish,
                 servings=MEAL_PLAN_SERVINGS,
+                est_kcal=kcal,
             )
         )
     db.session.add(plan)

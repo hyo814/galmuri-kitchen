@@ -1,8 +1,8 @@
 import { expect, openTab, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
-// 체험 계정 예시 식단(backend/app/demo.py MEAL_PLAN_SLOTS): 오늘 저녁 된장찌개, 내일 점심 김치찌개,
-// 내일 아침 토스트(직접 쓰기, 레시피 없음), 모레 저녁 된장찌개(재사용). 7일 × 4끼 = 28칸 중 4칸.
+// 체험 계정 예시 식단(backend/app/demo.py MEAL_PLAN_SLOTS): 저녁은 매일(오늘 저녁 된장찌개), 점심은 사흘(내일 점심 김치찌개),
+// 아침은 내일 토스트 하나. 직접 쓴 칸(토스트·카레라이스·김밥·비빔밥·잔치국수·제육덮밥)은 1인분 kcal이 있다. 7일 × 4끼 = 28칸 중 11칸.
 
 const todayCard = (page: Page) => page.locator(".ml-day.today");
 
@@ -13,10 +13,16 @@ async function goToMeals(page: Page) {
 
 test("체험 계정 예시 식단이 처음부터 채워져 보인다", async ({ page }) => {
   await goToMeals(page);
-  await expect(page.locator(".topbar .summary")).toHaveText("28칸 중 4칸 채웠어요");
+  await expect(page.locator(".topbar .summary")).toHaveText("28칸 중 11칸 채웠어요");
   await expect(todayCard(page).getByRole("button", { name: /저녁 된장찌개/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /점심 김치찌개/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /아침 토스트/ })).toBeVisible();
+  // 빈 날이 없다: 7일 모두 저녁이 있고 `0 / 4`인 날이 없다
+  await expect(page.locator(".ml-day")).toHaveCount(7);
+  await expect(page.locator('.ml-day .ml-slot[data-meal="dinner"]')).toHaveCount(7);
+  await expect(page.locator(".ml-day .ml-count", { hasText: "0 / 4" })).toHaveCount(0);
+  // 직접 쓴 칸도 AI 초안 칸처럼 1인분 kcal이 보인다
+  await expect(page.getByRole("button", { name: /아침 토스트, 2인분, 1인분 약 366kcal$/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /저녁 제육덮밥, 2인분, 1인분 약 950kcal$/ })).toBeVisible();
 });
 
 test("새 식단을 만들면 바로 보이고 식단 고르기 목록에도 생기며 새로고침해도 남는다", async ({ page }) => {
@@ -70,7 +76,7 @@ test("칸을 비우면 칸에서 사라지고 새로고침해도 그대로다", 
 
 test("이번 주 복사를 하면 다음 주 칸이 채워지고 새로고침해도 남는다", async ({ page }) => {
   await goToMeals(page);
-  await expect(page.locator(".topbar .summary")).toHaveText("28칸 중 4칸 채웠어요");
+  await expect(page.locator(".topbar .summary")).toHaveText("28칸 중 11칸 채웠어요");
 
   await page.getByRole("button", { name: "식단 메뉴" }).click();
   await page.getByRole("button", { name: "이번 주 복사" }).click();
@@ -79,16 +85,16 @@ test("이번 주 복사를 하면 다음 주 칸이 채워지고 새로고침해
 
   // 복사로 다음 주까지 들어가 식단 기간이 14일(56칸)로 늘어난다(MealCopySheet 안내와 같음)
   await expect(page.locator(".ml-copied")).toContainText("칸을 복사했어요");
-  await expect(page.locator(".topbar .summary")).toHaveText("56칸 중 8칸 채웠어요");
+  await expect(page.locator(".topbar .summary")).toHaveText("56칸 중 22칸 채웠어요");
 
   await page.reload();
   await goToMeals(page);
-  await expect(page.locator(".topbar .summary")).toHaveText("56칸 중 8칸 채웠어요");
+  await expect(page.locator(".topbar .summary")).toHaveText("56칸 중 22칸 채웠어요");
 });
 
 test("AI 식단 초안(예시 결과)을 넣으면 칸이 늘고 새로고침해도 남는다", async ({ page }) => {
   await goToMeals(page);
-  await expect(page.locator(".topbar .summary")).toHaveText("28칸 중 4칸 채웠어요");
+  await expect(page.locator(".topbar .summary")).toHaveText("28칸 중 11칸 채웠어요");
 
   await page.getByRole("button", { name: "AI 초안" }).click();
   await expect(page.getByRole("heading", { name: "AI 식단 초안" })).toBeVisible();
@@ -99,7 +105,7 @@ test("AI 식단 초안(예시 결과)을 넣으면 칸이 늘고 새로고침해
   await page.getByRole("button", { name: /칸 식단에 넣기$/ }).click();
 
   await expect(page.locator(".ml-copied")).toContainText("칸을 넣었어요");
-  await expect(page.locator(".topbar .summary")).not.toHaveText("28칸 중 4칸 채웠어요");
+  await expect(page.locator(".topbar .summary")).not.toHaveText("28칸 중 11칸 채웠어요");
   const filledText = await page.locator(".topbar .summary").textContent();
 
   await page.reload();

@@ -3,6 +3,7 @@ import hmac
 import io
 import json
 import os
+from collections import Counter
 from datetime import datetime, time, timedelta, timezone
 
 import pytest
@@ -225,28 +226,70 @@ def test_demo_login_creates_meal_plan(demo_app):
     c = new_client(demo_app)
     me = c.post("/api/demo-login").get_json()
     today = seoul_today()
-    tomorrow = (today + timedelta(days=1)).isoformat()
-    day_after = (today + timedelta(days=2)).isoformat()
+
+    def day(n):
+        return (today + timedelta(days=n)).isoformat()
 
     plans = c.get("/api/meal-plans").get_json()["items"]
     assert len(plans) == 1
     summary = plans[0]
     assert summary["name"] == demo.default_plan_name(today, demo.MEAL_PLAN_DAYS)
     assert (summary["start_on"], summary["days"], summary["default_servings"]) == (today.isoformat(), demo.MEAL_PLAN_DAYS, demo.MEAL_PLAN_SERVINGS)
-    assert summary["filled"] == len(demo.MEAL_PLAN_SLOTS) == 4
+    assert summary["filled"] == len(demo.MEAL_PLAN_SLOTS) == 11
 
     plan = c.get(f"/api/meal-plans/{summary['id']}").get_json()
     slots = {(s["date"], s["meal"]): s for s in plan["slots"]}
-    assert slots[(today.isoformat(), "dinner")]["title"] == "된장찌개"
-    assert slots[(today.isoformat(), "dinner")]["recipe_id"] is not None
-    assert slots[(tomorrow, "lunch")]["title"] == "김치찌개"
-    assert slots[(tomorrow, "lunch")]["recipe_id"] is not None
-    assert slots[(day_after, "dinner")]["title"] == "된장찌개"
-    breakfast = slots[(tomorrow, "breakfast")]
+    assert len(slots) == 11
+    # 주 보기에 빈 날이 없다: 저녁은 매일, 점심은 사흘, 아침은 하루, 간식은 없다(AI 초안이 채울 빈 칸이 남게)
+    assert Counter(meal for _, meal in slots) == {"dinner": 7, "lunch": 3, "breakfast": 1}
+    assert {date for date, meal in slots if meal == "dinner"} == {day(n) for n in range(demo.MEAL_PLAN_DAYS)}
+    # 오늘 저녁은 레시피 칸 — 먹었어요·요리했어요를 바로 눌러 볼 수 있다. 오늘 아침은 먹은 기록(토스트)과 겹치지 않게 비운다
+    assert (slots[(day(0), "dinner")]["title"], slots[(day(0), "dinner")]["recipe_id"] is not None) == ("된장찌개", True)
+    assert [meal for date, meal in slots if date == day(0)] == ["dinner"]
+    assert (slots[(day(1), "lunch")]["title"], slots[(day(1), "lunch")]["recipe_id"] is not None) == ("김치찌개", True)
+    breakfast = slots[(day(1), "breakfast")]
     assert (breakfast["title"], breakfast["recipe_id"], breakfast["servings"]) == ("토스트", None, demo.MEAL_PLAN_SERVINGS)
+
+    # 예시 레시피 둘을 쓰되 같은 레시피를 같은 날·이어진 날에 두지 않는다
+    recipe_days = {}
+    for (date, _), slot in slots.items():
+        if slot["recipe_id"] is not None:
+            recipe_days.setdefault(slot["title"], []).append(datetime.fromisoformat(date))
+    assert set(recipe_days) == {"된장찌개", "김치찌개"}
+    for days in recipe_days.values():
+        days.sort()
+        assert all((later - earlier).days >= 2 for earlier, later in zip(days, days[1:]))
+
+    # 직접 쓰기 칸은 AI 초안 칸처럼 1인분 kcal(est_kcal)을 갖고 영양으로 보인다(영양 계산이 꺼진 서버에서도). 레시피 칸은 계산에 맡긴다
+    direct = [slot for slot in slots.values() if slot["recipe_id"] is None]
+    assert len(direct) == 6 and len({slot["title"] for slot in direct}) == 6
+    for slot in direct:
+        assert 1 <= slot["est_kcal"] <= 3000
+        assert (slot["nutrition"]["kcal"], slot["nutrition"]["approx"], slot["nutrition"]["source"]) == (slot["est_kcal"], True, "ai")
+    assert all(slot["est_kcal"] is None for slot in slots.values() if slot["recipe_id"] is not None)
 
     with demo_app.app_context():
         assert MealSlot.query.join(MealPlan).filter(MealPlan.user_id == me["id"]).count() == len(demo.MEAL_PLAN_SLOTS)
+
+
+def test_demo_meal_plan_shopping_preview_checks_missing_seasonings(demo_app):
+    # 재고에 없는 숟가락 양 재료는 한 통(1개)을 담는 줄 — 운영에서 네 줄 모두 `단위가 달라요`(체크 꺼짐)로 가 0개 담기로 시작했다
+    c = new_client(demo_app)
+    c.post("/api/demo-login")
+    plan_id = c.get("/api/meal-plans").get_json()["items"][0]["id"]
+    body = c.get(f"/api/meal-plans/{plan_id}/shopping-preview").get_json()
+    assert body["recipe_slot_count"] == 5
+    assert body["manual"] == []
+    assert {row["name"]: (row["quantity"], row["unit"], row["need_extra"], row["have"]) for row in body["buy"]} == {
+        "된장": (1, "개", ["2큰술"], []),
+        "다진 마늘": (1, "개", ["1작은술"], []),
+        "고춧가루": (1, "개", ["1큰술"], []),
+        "식용유": (1, "개", ["1큰술"], []),
+    }
+    assert {row["name"]: row["reason"] for row in body["skip"]} == {
+        "두부": "listed", "대파": "listed", "청양고추": "listed",
+        "애호박": "enough", "감자": "enough", "양파": "enough", "김치": "enough", "돼지고기": "enough",
+    }
 
 
 def test_demo_users_meal_plan_is_isolated(demo_app):
