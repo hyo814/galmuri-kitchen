@@ -1,4 +1,4 @@
-import { expect, openTab, test } from "./fixtures";
+import { app, expect, openTab, test } from "./fixtures";
 
 type Page = import("@playwright/test").Page;
 
@@ -41,7 +41,7 @@ test("살 것을 추가해 체크하고 재고에 넣으면 목록에서 빠지�
 
   await expect(page).toHaveURL(/#\/shopping$/);
   // 재고에 넣기 뒤 목록이 새로 받아질 때까지(대파·우유도 체크돼 있어 함께 재고로 들어간다 — 체크 안 한 두부로 로딩 완료를 확인)
-  await expect(page.getByText("두부")).toBeVisible();
+  await expect(app(page).getByText("두부")).toBeVisible();
   await expect(page.getByText("새우깡")).toHaveCount(0); // 접힌 "산 것"에만 남아 화면엔 안 보인다
 
   await openTab(page, "재고");
@@ -80,7 +80,7 @@ test("살 것을 목록에서 빼면 사라지고 새로고침해도 돌아오�
 
   await expect(page.getByText("건포도")).toHaveCount(0);
   await page.reload();
-  await expect(page.getByText("두부")).toBeVisible(); // 목록이 다시 불러와질 때까지 기다린 뒤
+  await expect(app(page).getByText("두부")).toBeVisible(); // 목록이 다시 불러와질 때까지 기다린 뒤
   await expect(page.getByText("건포도")).toHaveCount(0);
 });
 
@@ -142,7 +142,7 @@ test("사진에서 살 것을 뽑으면(예시 결과) 체크한 것만 장보�
   await expect(page.getByText(/장보기에 \d+개 담았어요/)).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "참기름 샀어요" })).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "양파 샀어요" })).toBeVisible();
-  await expect(page.getByText("대파")).toHaveCount(1); // 이미 있던 대파는 다시 담기지 않아 한 줄 그대로
+  await expect(app(page).getByText("대파")).toHaveCount(1); // 이미 있던 대파는 다시 담기지 않아 한 줄 그대로
 
   await page.reload();
   await expect(page.getByRole("checkbox", { name: "참기름 샀어요" })).toBeVisible();
