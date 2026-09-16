@@ -1,7 +1,7 @@
 """요리 채널 영상(스펙 17절). 고른 채널(기본 채널 + 내 채널)의 최근 영상을 서버에 캐시해 최신순으로 보여준다.
 
 유튜브 Data API 사용량(units): 채널 새로 받기 = channels.list + playlistItems.list + videos.list = 3.
-검색은 캐시된 제목에서만 한다(search.list 100 units는 쓰지 않는다). 외부 요청은 outbound.py에서만 한다.
+검색은 캐시된 제목·설명에서만 한다(search.list 100 units는 쓰지 않는다). 외부 요청은 outbound.py에서만 한다.
 쿼터 보호: 새로 받기는 `ai_calls.kind = video_refresh`, 채널 추가는 `channel_add`로 기록해(토큰 없음, AI 사용량·원가에 안 셈)
 사용자별 하루 새로 받기 20번·채널 추가 30번, 전체 24시간 추정 8,000 units 안에서만 유튜브를 부른다.
 """
@@ -31,6 +31,7 @@ DEFAULT_CHANNELS_FILE = Path(__file__).parent / "data" / "default_channels.json"
 PAGE_SIZE = 30
 FEED_PER_CHANNEL = 12  # 전체 목록에는 채널마다 최신 12개까지만 섞는다(자주 올리는 채널이 도배하지 않게). 채널 칩·검색은 받아둔 50개 모두
 MAX_QUERY = 50
+SEARCH_LIMIT = 100  # 검색은 커서 없이 한 번에
 MINE_LIMIT = 30
 STALE_AFTER = timedelta(hours=6)
 KEEP_FOR = timedelta(days=30)  # 유튜브 약관: 받은 정보를 30일 넘게 두지 않는다
@@ -62,7 +63,7 @@ SAMPLE_CHANNELS = [
     {"id": 4, "title": "한식 기본기", "video_count": None, "is_default": True, "hidden": False},
     {"id": 5, "title": "간단 도시락", "video_count": None, "is_default": True, "hidden": True},
 ]
-SAMPLE_CHANNELS = [{**c, "thumbnail_url": None, "unavailable": False} for c in SAMPLE_CHANNELS]
+SAMPLE_CHANNELS = [{**c, "youtube_id": None, "thumbnail_url": None, "unavailable": False} for c in SAMPLE_CHANNELS]
 SAMPLE_VIDEOS = [  # (제목, 채널 id, 길이 초, 며칠 전, 설명)
     (
         "제육볶음 황금레시피, 이렇게만 하세요",
@@ -286,9 +287,10 @@ def video_json(video, channel, detail=False):
 
 def channel_json(channel, mine=False, hidden=False):
     """is_default는 화면 묶음(기본 채널)이다. 내가 추가한 뒤 기본 채널이 된 채널은 `내 채널`에 둔다.
-    unavailable: 새로 받아 봤더니 채널·재생목록이 없어졌다(삭제·비공개)."""
+    unavailable: 새로 받아 봤더니 채널·재생목록이 없어졌다(삭제·비공개). youtube_id: 채널 안 유튜브 검색 주소에 쓰는 UC… ID."""
     return {
         "id": channel.id,
+        "youtube_id": channel.channel_id,
         "title": channel.title,
         "thumbnail_url": channel.thumbnail_url,
         "video_count": channel.video_count,
@@ -301,7 +303,8 @@ def channel_json(channel, mine=False, hidden=False):
 @bp.get("/videos")
 @login_required
 def list_videos():
-    """보이는 채널 영상 published_at·id 내림차순 커서 페이지(스펙 26절). q는 캐시된 제목에서만 찾는다.
+    """보이는 채널 영상 published_at·id 내림차순 커서 페이지(스펙 26절). q는 캐시된 제목·설명에서 찾아
+    제목 일치 먼저(그 안은 최신순) 100개까지 한 번에 준다(cursor·limit은 무시, next_cursor 없음).
     새로 받기·오래된 영상 지우기는 첫 페이지(cursor 없음)에서만 한다."""
     mode = video_mode(g.user)
     if mode == "off":
@@ -316,15 +319,14 @@ def list_videos():
             abort(400, "잘못된 요청이에요.")
         channel = int(channel)
     cursor = request.args.get("cursor")
-    cursor = decode_cursor(cursor) if cursor else None
+    cursor = decode_cursor(cursor) if cursor and not q else None
 
     if mode == "sample":
-        items = [
-            {k: v[k] for k in LIST_FIELDS}
-            for v in sample_videos()
-            if (channel is None or v["channel_id"] == channel) and q.lower() in v["title"].lower()
-        ]
-        return jsonify(items=items, next_cursor=None, sample=True)
+        needle = q.lower()
+        rows = [v for v in sample_videos() if channel is None or v["channel_id"] == channel]
+        titled = [v for v in rows if needle in v["title"].lower()]
+        described = [v for v in rows if needle not in v["title"].lower() and needle in (v["description"] or "").lower()]
+        return jsonify(items=[{k: v[k] for k in LIST_FIELDS} for v in titled + described], next_cursor=None, sample=True)
 
     if cursor is None and mode != "cached":  # 체험 계정은 읽기만: 새로 받기 없음(유튜브 할당량을 쓰지 않는다)
         refresh_stale(g.user.id, current_app.config["YOUTUBE_API_KEY"], time.monotonic() + REQUEST_SECONDS)
@@ -338,8 +340,16 @@ def list_videos():
         ranked = select(YoutubeVideo.id, rank.label("rank")).where(YoutubeVideo.fetched_at >= utcnow() - KEEP_FOR).subquery()
         query = query.filter(YoutubeVideo.id.in_(select(ranked.c.id).where(ranked.c.rank <= FEED_PER_CHANNEL)))
     if q:
-        escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        query = query.filter(YoutubeVideo.title.ilike(f"%{escaped}%", escape="\\"))
+        pattern = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        in_title = YoutubeVideo.title.ilike(pattern, escape="\\")
+        # ponytail: 캐시(채널마다 최근 50개) 안에서만 찾아 결과가 적다 — 100개를 넘기면 커서에 제목 일치 여부를 넣어 페이지로 나눈다
+        rows = (
+            query.filter(or_(in_title, YoutubeVideo.description.ilike(pattern, escape="\\")))
+            .order_by(in_title.desc(), YoutubeVideo.published_at.desc(), YoutubeVideo.id.desc())  # 제목 일치 먼저
+            .limit(SEARCH_LIMIT)
+            .all()
+        )
+        return jsonify(items=[video_json(video, ch) for video, ch in rows], next_cursor=None, sample=False)
     if cursor:
         published_at, video_pk = cursor
         query = query.filter(

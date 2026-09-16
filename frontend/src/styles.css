@@ -2912,9 +2912,17 @@ button.row-btn > svg {
   border-radius: 12px;
   font-size: 15px;
 }
-/* 목록 끝에서도 가운데 작은 버튼으로(.btn은 기본이 가로 가득) */
+/* 목록 끝에서도 가운데 작은 버튼으로(.btn은 기본이 가로 가득). 채널 이름이 길면 양옆 20px 안에서 두 줄로 */
 .btn.r3-yt-search {
   width: fit-content;
+  max-width: calc(100% - 40px);
+  padding-block: 8px;
+  text-align: center;
+  word-break: keep-all;
+  text-wrap: balance;
+}
+.empty .btn.r3-yt-search {
+  max-width: 100%;
 }
 .r3-toggle[aria-disabled="true"],
 .btn.danger-sm[aria-disabled="true"] {

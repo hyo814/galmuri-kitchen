@@ -284,6 +284,7 @@ export interface VideoPage {
 /** 요리 채널. is_default면 기본 채널(숨기기만), 아니면 내 채널(빼기). unavailable: 삭제·비공개된 채널 */
 export interface Channel {
   id: number;
+  youtube_id: string | null; // 유튜브 채널 ID(UC…), 채널 안 검색 주소에 쓴다. 예시 채널은 null
   title: string;
   thumbnail_url: string | null;
   video_count: number | null;
