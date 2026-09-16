@@ -4339,7 +4339,8 @@ button.sh-offline svg:last-child {
   font-size: 16px;
   line-height: 22px;
   font-weight: 600;
-  overflow-wrap: anywhere;
+  word-break: keep-all; /* `열무김/치`처럼 낱말 가운데서 끊지 않게 띄어쓰기에서 줄바꿈 */
+  overflow-wrap: anywhere; /* 띄어쓰기 없이 아주 긴 한 낱말만 어디서든 끊는다 */
 }
 
 .ml-sub {
