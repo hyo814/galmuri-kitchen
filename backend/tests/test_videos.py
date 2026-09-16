@@ -237,6 +237,30 @@ def test_videos_search_returns_all_matches_at_once_up_to_100(on_client, on_login
     assert on_client.get("/api/videos?q=찌개&cursor=nope").status_code == 200
 
 
+def test_videos_search_caps_after_putting_title_matches_first(on_client, on_login, on_app, no_youtube):
+    on_login()
+    oldest_title = [("t0", 200, "찌개 옛날 영상")]  # 가장 오래됐고 가장 먼저 넣었다(id도 가장 작다)
+    newer = [(f"d{i}", i, f"설명 {i}", "찌개 끓이기") for i in range(100)]
+    make_channel(on_app, "A", default=True, videos_=oldest_title + newer)
+    found = titles(on_client.get("/api/videos?q=찌개"))
+    assert (len(found), found[0], found[-1]) == (100, "찌개 옛날 영상", "설명 98")  # 정렬한 뒤에 100개로 자른다
+
+
+def test_videos_search_orders_newest_first_within_each_group(on_client, on_login, on_app, no_youtube):
+    on_login()
+    make_channel(on_app, "A", default=True, videos_=[  # 넣은 순서(id)와 공개 날짜 순서가 다르다
+        ("d2", 2, "설명 2일 전", "찌개"),
+        ("t5", 5, "찌개 5일 전"),
+        ("d1", 1, "설명 1일 전", "찌개"),
+        ("t1", 1, "찌개 1일 전"),
+        ("d9", 9, "설명 9일 전", "찌개"),
+        ("t3", 3, "찌개 3일 전"),
+    ])
+    assert titles(on_client.get("/api/videos?q=찌개")) == [
+        "찌개 1일 전", "찌개 3일 전", "찌개 5일 전", "설명 1일 전", "설명 2일 전", "설명 9일 전",
+    ]
+
+
 def test_refresh_stale_limits_to_three_and_updates_fetched_at(on_client, on_login, on_app, monkeypatch):
     on_login()
     fresh = make_channel(on_app, "F", default=True)

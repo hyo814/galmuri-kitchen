@@ -169,33 +169,36 @@ test("영상 목록과 채널 화면이 키 없는 상태에서 예시로 보인
 });
 
 test("영상 검색은 설명까지 찾고, 채널을 고르면 그 채널 안 YouTube 검색으로 잇는다", async ({ page }) => {
-  // 예시 채널은 유튜브 채널 ID가 없어서, 첫 채널(집밥 연구소)에 ID가 있는 것처럼 응답을 바꾼다
+  // 예시 채널은 유튜브 채널 ID가 없어서, 집밥 연구소에 ID가 있는 것처럼 응답을 바꾼다
   const youtubeId = "UCabcdefghijklmnopqrstuv";
   await page.route("**/api/channels", async (route) => {
     const response = await route.fetch();
     const body = await response.json();
-    body.items[0].youtube_id = youtubeId;
+    body.items.find((c: { title: string }) => c.title === "집밥 연구소").youtube_id = youtubeId;
     await route.fulfill({ response, json: body });
   });
   await openRecipes(page, "영상");
   const search = page.getByRole("searchbox", { name: "영상 제목·설명에서 찾기" });
-  // YouTube 찾기 링크는 검색 결과를 다 받은 뒤에 생기므로, 링크부터 기다리고 목록을 본다
-  await search.fill("대파"); // 예시 영상 두 개의 설명에만 있다
+  const rows = page.locator(".r3-vlist > li");
+  // 검색어·채널을 바꾼 직후에는 목록이 잠깐 비어 '없음' 검사가 그냥 통과하므로, 새 결과의 줄 수부터 맞춘 뒤 본다
+  await search.fill("대파"); // 예시 영상 두 개의 설명에만 있다(검색 전 목록은 5줄)
+  await expect(rows).toHaveCount(2);
+  await expect(page.getByText("냉장고 털이 두부조림 10분 완성")).toBeVisible();
+  await expect(page.getByText("제육볶음 황금레시피, 이렇게만 하세요")).toBeVisible();
+  await expect(page.getByText("국물이 진한 된장찌개 비법 3가지")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "YouTube에서 더 찾기" })).toHaveAttribute(
     "href",
     `https://www.youtube.com/results?search_query=${encodeURIComponent("대파 레시피")}`,
   );
-  await expect(page.getByText("냉장고 털이 두부조림 10분 완성")).toBeVisible();
-  await expect(page.getByText("제육볶음 황금레시피, 이렇게만 하세요")).toBeVisible();
-  await expect(page.getByText("국물이 진한 된장찌개 비법 3가지")).toHaveCount(0);
 
   await page.getByRole("button", { name: "집밥 연구소", exact: true }).click();
+  await expect(rows).toHaveCount(1); // 바꾸기 전 목록은 2줄
+  await expect(page.getByText("제육볶음 황금레시피, 이렇게만 하세요")).toBeVisible();
+  await expect(page.getByText("냉장고 털이 두부조림 10분 완성")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "YouTube 집밥 연구소 채널에서 더 찾기" })).toHaveAttribute(
     "href",
     `https://www.youtube.com/channel/${youtubeId}/search?query=${encodeURIComponent("대파")}`,
   );
-  await expect(page.getByText("제육볶음 황금레시피, 이렇게만 하세요")).toBeVisible();
-  await expect(page.getByText("냉장고 털이 두부조림 10분 완성")).toHaveCount(0);
 
   await search.fill("계란말이"); // 이 채널에는 없다 → 결과 없음 화면에도 채널 안 찾기
   await expect(page.getByRole("link", { name: "YouTube 집밥 연구소 채널에서 찾기" })).toHaveAttribute(
