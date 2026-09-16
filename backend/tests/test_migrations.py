@@ -560,6 +560,15 @@ def test_cook_logs_migration_adds_and_removes_tables(app):
 
 
 def test_food_log_nutrition_incomplete_migration(app):
+    """칸만 더하고 뺀다 — SQLite에서 food_logs를 다시 만들면(batch) 외래 키 CASCADE로 기록 사진이 지워지고 요리 일기 연결이 끊긴다."""
+
+    def linked():
+        with db.engine.connect() as conn:
+            return (
+                conn.execute(sa.text("SELECT COUNT(*) FROM food_log_photos WHERE log_id = 1")).scalar_one(),
+                conn.execute(sa.text("SELECT food_log_id FROM cook_logs WHERE id = 1")).scalar_one(),
+            )
+
     with app.app_context():
         upgrade(directory=MIGRATIONS, revision="h2c2o2o2k2l2")
         with db.engine.begin() as conn:
@@ -568,6 +577,13 @@ def test_food_log_nutrition_incomplete_migration(app):
                 "INSERT INTO food_logs (id, user_id, eaten_on, meal, source, title, kcal, sodium_mg, approx, nutrition_pending, created_at, updated_at) "
                 "VALUES (1, 1, '2026-09-14', 'dinner', 'manual', '된장찌개', 165, 7, TRUE, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
             ))
+            conn.execute(sa.text(
+                "INSERT INTO food_log_photos (id, log_id, photo_key, size, created_at) VALUES (1, 1, 'foodlog/1/a.jpg', 10, CURRENT_TIMESTAMP)"
+            ))
+            conn.execute(sa.text(
+                "INSERT INTO cook_logs (id, user_id, food_log_id, title, cooked_on, servings, ingredient_cost, excluded_count, created_at, updated_at) "
+                "VALUES (1, 1, 1, '된장찌개', '2026-09-14', 2, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ))
 
         upgrade(directory=MIGRATIONS, revision="h3i3n3c3m3p3")
         with db.engine.connect() as conn:
@@ -575,10 +591,16 @@ def test_food_log_nutrition_incomplete_migration(app):
             kept = conn.execute(sa.text("SELECT nutrition_incomplete FROM food_logs")).scalar_one()
         assert "nutrition_incomplete" in columns
         assert kept is None  # 지난 스냅숏은 어떤 값이 빠졌는지 알 수 없어 비워 둔다
+        assert linked() == (1, 1)
 
         downgrade(directory=MIGRATIONS, revision="h2c2o2o2k2l2")
         with db.engine.connect() as conn:
             assert "nutrition_incomplete" not in {c["name"] for c in sa.inspect(conn).get_columns("food_logs")}
+            assert "ix_food_logs_user_id_eaten_on" in {ix["name"] for ix in sa.inspect(conn).get_indexes("food_logs")}
+        assert linked() == (1, 1)
+
+        upgrade(directory=MIGRATIONS, revision="h3i3n3c3m3p3")
+        assert linked() == (1, 1)
 
 
 def test_upgrade_to_head_and_back_to_base(app):

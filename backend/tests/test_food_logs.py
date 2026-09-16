@@ -117,6 +117,13 @@ def test_log_marks_nutrients_left_out(client, login, app):
     other = post_log(client, recipe_id=recipe["id"], meal="dinner").get_json()
     patched = patch_log(client, other["id"], title="라면").get_json()
     assert (patched["nutrition"], patched["incomplete"]) == (None, {})
+
+    # 출처(레시피)가 지워진 기록은 양만 비율로 고치고 표시는 그대로 둔다(rescale)
+    gone = add_recipe(client, "된장국", [{"name": "된장", "amount": "30g"}])
+    kept = post_log(client, recipe_id=gone["id"], meal="breakfast").get_json()
+    assert client.delete(f"/api/recipes/{gone['id']}").status_code == 204
+    patched = patch_log(client, kept["id"], servings=2).get_json()
+    assert (patched["recipe_id"], patched["nutrition"]["kcal"], patched["incomplete"]) == (None, 86, SODIUM_LEFT_OUT)
     with app.app_context():
         assert db.session.get(FoodLog, log["id"]).nutrition_incomplete == SODIUM_LEFT_OUT
         # JSON의 null이 아니라 SQL NULL(마이그레이션 전 기록과 같게)
@@ -124,7 +131,7 @@ def test_log_marks_nutrients_left_out(client, login, app):
         # 스냅숏이라 나중에 식품 값이 채워져도 지난 기록 표시는 그대로(결정 2)
         FoodNutrient.query.filter_by(food_code="R1").one().sodium_mg = 4000
         db.session.commit()
-    assert get_day(client).get_json()["logs"][0]["incomplete"] == SODIUM_LEFT_OUT
+    assert next(r for r in get_day(client).get_json()["logs"] if r["id"] == log["id"])["incomplete"] == SODIUM_LEFT_OUT
     patched = patch_log(client, log["id"], servings=2).get_json()  # 출처가 있으면 양을 바꿀 때 다시 계산한다
     assert (patched["nutrition"]["sodium_mg"], patched["incomplete"]) == (2400, {})
 
