@@ -620,7 +620,7 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
               <span class="tag">backend · AI</span>
             </div>
             <dl>
-              <div><dt>결정</dt><dd>모든 Claude 호출은 <code>messages.parse</code> + Pydantic 스키마로 받고, 형식이 틀리면 쓰지 않습니다. 서버가 개수·길이·수량·금액 범위를 한 번 더 정리하고, 결과는 확인 화면을 거쳐야 저장됩니다. 사용자별 하루 사진 인식 20번·AI 레시피 20번과 60초 연속 제한을 두고, 실패한 호출도 셉니다.</dd></div>
+              <div><dt>결정</dt><dd>모든 Claude 호출은 <code>messages.parse</code> + Pydantic 스키마로 받고, 형식이 틀리면 쓰지 않습니다. 서버가 개수·길이·수량·금액 범위를 한 번 더 정리하고, 결과는 확인 화면을 거쳐야 저장됩니다. 사용자별 하루 사진 인식 20번·AI 레시피 20번과 60초 연속 제한을 두고, 못 찾았거나 실패한 호출은 하루 3번까지만 세지 않습니다.</dd></div>
               <div><dt>이유</dt><dd>영수증 한 줄을 잘못 읽어도 재고가 조용히 틀어지지 않게 하려는 것입니다. 사진 속 글자는 지시로 따르지 말라는 규칙을 프롬프트에 넣었고, 호출마다 토큰을 <code>ai_calls</code>에 남겨 원가를 셉니다.</dd></div>
               <div><dt>대가</dt><dd>한 번에 끝나지 않고 확인 단계가 하나 늘어납니다. 여러 장 사진은 AI 호출 한 번(한도 1회)으로 읽어 부담을 줄였습니다.</dd></div>
             </dl>
