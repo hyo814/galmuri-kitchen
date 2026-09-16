@@ -3195,6 +3195,9 @@ button.row-btn > svg {
 
 .mo-radio .row-sub {
   font-size: 13px;
+  /* 여러 요리 가져오기(17절) 고르기 줄처럼 재료·단계 수를 이어 붙인 긴 문구가 낱말 가운데서 끊기지 않게(.summary와 같은 규칙) */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .mo-dot {

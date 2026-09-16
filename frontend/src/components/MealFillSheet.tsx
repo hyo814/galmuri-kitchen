@@ -266,7 +266,7 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
         {/* 알림은 처음부터 붙어 있는 영역에 글자만 바꿔 넣는다 — 글자와 함께 새로 붙인 영역은 TalkBack이 읽지 않을 수 있다.
             sr-only(absolute)라 시트 간격(gap)을 차지하지 않는다. 화면에 보이는 상자·오류는 아래에 따로 그린다 */}
         <p className="sr-only" role="status">
-          {importing ? `영상에서 레시피를 정리하고 있어요. 10초쯤 걸려요. 다 되면 내 레시피에 저장하고 이 칸에 ${servings}인분으로 넣어줘요.` : ""}
+          {importing ? `영상에서 레시피를 정리하고 있어요. 10초쯤, 요리가 여러 개면 1분쯤 걸려요. 다 되면 내 레시피에 저장하고 이 칸에 ${servings}인분으로 넣어줘요.` : ""}
         </p>
         <p className="sr-only" role="alert">
           {tab === "video" ? importError : error}
@@ -398,7 +398,7 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
                   </span>
                   영상에서 레시피를 정리하고 있어요
                 </b>
-                <span>10초쯤 걸려요. 다 되면 내 레시피에 저장하고 이 칸에 {servings}인분으로 넣어줘요.</span>
+                <span>10초쯤, 요리가 여러 개면 1분쯤 걸려요. 다 되면 내 레시피에 저장하고 이 칸에 {servings}인분으로 넣어줘요.</span>
               </div>
             )}
             {importError && <p className="error">{importError}</p>}
