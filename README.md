@@ -309,6 +309,6 @@ docs/deploy.md      배포 가이드와 배포 전 로컬 검증
 
 ## 작성자
 
-- 이름: [이름]
-- 이메일: [이메일]
-- GitHub: [GitHub]
+- 이름: 임효진
+- 이메일: [ggamjige8888@naver.com](mailto:ggamjige8888@naver.com)
+- GitHub: [hyo814](https://github.com/hyo814)
