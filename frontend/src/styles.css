@@ -173,7 +173,7 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
   font-size: 15px;
   line-height: 22px;
   color: var(--text-2);
-  word-break: keep-all; /* 부제가 `옮겨/요`처럼 낱말 가운데서 끊기지 않게 */
+  word-break: keep-all; /* 부제가 `옮겨/요`·`로그인하/면`처럼 낱말 가운데서 끊기지 않게 */
   overflow-wrap: anywhere;
 }
 
@@ -592,6 +592,11 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
   padding: 0 8px;
   font-size: 16px;
   white-space: nowrap;
+}
+
+/* 버튼이 하나뿐일 때(화면 캡처 사진 단계의 취소) — 왼쪽 1fr 칸에만 있으면 덜 만든 것처럼 보여 가로 가득 */
+.actions.actions-single {
+  grid-template-columns: 1fr;
 }
 
 .hint {
@@ -2314,6 +2319,15 @@ button.row-btn > svg {
   margin-top: 8px;
 }
 
+/* 영상 보기에서 가져오기를 못 했으면 아래에 화면 캡처로 가져오기(버튼 + 안내)가 붙어 CTA 바가 높아진다 — 설명 마지막 줄이 가리지 않게 여백도 늘린다 */
+.r3-detail-save .r3-capture {
+  margin-top: 8px;
+}
+
+.page:has(.r3-detail-save .r3-capture) {
+  padding-bottom: calc(232px + var(--tabbar-h) + env(safe-area-inset-bottom));
+}
+
 .r3-loading {
   display: flex;
   flex-direction: column;
@@ -2954,6 +2968,8 @@ button.row-btn > svg {
 .r3-cta-note {
   margin-top: 8px;
   text-align: center;
+  word-break: keep-all;
+  text-wrap: balance; /* 두 줄이면 `· 5장까지`만 따로 내려가지 않게 */
 }
 .r3-crow {
   display: flex;

@@ -472,6 +472,10 @@ def test_extract_recipe_with_page_images_sends_image_blocks_then_text(app, fake_
 YOUTUBE = "https://youtu.be/dQw4w9WgXcQ?si=x"
 YOUTUBE_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 INSTAGRAM = "https://www.instagram.com/reel/C1a2B3c4D5e/?igsh=1"
+INSTAGRAM_URL = "https://www.instagram.com/p/C1a2B3c4D5e/"
+# 유튜브·인스타그램 422 need_text는 서버가 읽은 출처·표준 주소도 준다(화면이 그 흐름에서 가져온 레시피의 출처로 남긴다). 블로그·글은 없다
+YOUTUBE_LINK = {"source": "youtube", "source_url": YOUTUBE_URL}
+INSTAGRAM_LINK = {"source": "instagram", "source_url": INSTAGRAM_URL}
 BLOG = "https://blog.naver.com/cook/2231"
 WEB = "https://recipe.example.com/a"
 RECIPE_TEXT = "제육볶음\n재료: 돼지고기 600g, 양파 1개\n1. 볶아요."
@@ -614,7 +618,7 @@ def test_import_youtube_without_api_key_asks_for_text(client, login, app, monkey
     live(app, youtube_key=None)
     no_network(monkeypatch)
     res = import_(client, url=YOUTUBE)
-    assert (res.status_code, res.get_json()) == (422, {"error": NEED_YOUTUBE, "need_text": True})
+    assert (res.status_code, res.get_json()) == (422, {"error": NEED_YOUTUBE, "need_text": True, **YOUTUBE_LINK})
     assert ai_calls(app) == []  # 외부 요청도 하지 않으니 기록도 없다
 
 
@@ -638,13 +642,13 @@ def test_import_youtube_fetch_error_422_not_counted(client, login, app, monkeypa
     monkeypatch.setattr(outbound, "video_snippet", broken)
     monkeypatch.setattr(ai, "extract_recipe", fail_if_called)
     res = import_(client, url=YOUTUBE)
-    assert (res.status_code, res.get_json()) == (422, {"error": NEED_YOUTUBE, "need_text": True})
+    assert (res.status_code, res.get_json()) == (422, {"error": NEED_YOUTUBE, "need_text": True, **YOUTUBE_LINK})
     assert "import fetch failed: ReadTimeout" in caplog.text and "yt-key" not in caplog.text
 
     # 설명이 거의 비어 있어도 AI를 부르지 않는다(설명에 레시피가 없다는 안내)
     monkeypatch.setattr(outbound, "video_snippet", lambda video_id, key: {**SNIPPET, "title": "짧", "description": "  "})
     res = import_(client, url=YOUTUBE)
-    assert (res.status_code, res.get_json()) == (422, {"error": NO_RECIPE_YOUTUBE, "need_text": True})
+    assert (res.status_code, res.get_json()) == (422, {"error": NO_RECIPE_YOUTUBE, "need_text": True, **YOUTUBE_LINK})
     assert ai_calls(app) == [(user.id, "link_fetch")] * 2  # AI 호출(link)은 없다
 
 
@@ -659,10 +663,10 @@ def test_import_video_links_without_recipe_text_skip_ai(client, login, app, monk
     monkeypatch.setattr(outbound, "instagram_post", lambda code: reel)
     monkeypatch.setattr(ai, "extract_recipe", fail_if_called)
     res = import_(client, url="https://m.youtube.com/shorts/3PAszpPVMD0")
-    assert (res.status_code, res.get_json()) == (422, {"error": NO_RECIPE_YOUTUBE, "need_text": True})  # 제목의 양 표시(2개)는 보지 않는다
+    assert (res.status_code, res.get_json()) == (422, {"error": NO_RECIPE_YOUTUBE, "need_text": True, "source": "youtube", "source_url": "https://www.youtube.com/watch?v=3PAszpPVMD0"})  # 제목의 양 표시(2개)는 보지 않는다, 출처는 표준 주소로
     assert seen == ["3PAszpPVMD0"]
     res = import_(client, url=INSTAGRAM)
-    assert (res.status_code, res.get_json()) == (422, {"error": NO_RECIPE_INSTAGRAM, "need_text": True})
+    assert (res.status_code, res.get_json()) == (422, {"error": NO_RECIPE_INSTAGRAM, "need_text": True, **INSTAGRAM_LINK})
     assert ai_calls(app) == [(user.id, "link_fetch")] * 2
     assert client.get("/api/ai-usage").get_json()["recipe"]["used"] == 0
 
@@ -693,15 +697,15 @@ def test_import_instagram_without_caption_asks_for_text(client, login, app, monk
     monkeypatch.setattr(ai, "extract_recipe", fail_if_called)
     monkeypatch.setattr(outbound, "instagram_post", lambda code: None)
     res = import_(client, url=INSTAGRAM)
-    assert (res.status_code, res.get_json()) == (422, {"error": NEED_INSTAGRAM, "need_text": True})
+    assert (res.status_code, res.get_json()) == (422, {"error": NEED_INSTAGRAM, "need_text": True, **INSTAGRAM_LINK})
 
     def broken(code):
         raise outbound.FetchError("HTTPError")
 
     monkeypatch.setattr(outbound, "instagram_post", broken)
-    assert import_(client, url=INSTAGRAM).get_json() == {"error": NEED_INSTAGRAM, "need_text": True}
+    assert import_(client, url=INSTAGRAM).get_json() == {"error": NEED_INSTAGRAM, "need_text": True, **INSTAGRAM_LINK}
     monkeypatch.setattr(outbound, "instagram_post", lambda code: {"caption": " 맛있어요 ", "title": "cook on Instagram", "thumbnail_url": None})
-    assert import_(client, url=INSTAGRAM).get_json() == {"error": NO_RECIPE_INSTAGRAM, "need_text": True}  # 캡션에 레시피 표시가 없다
+    assert import_(client, url=INSTAGRAM).get_json() == {"error": NO_RECIPE_INSTAGRAM, "need_text": True, **INSTAGRAM_LINK}  # 캡션에 레시피 표시가 없다
     assert "link" not in [kind for _, kind in ai_calls(app)]
 
     seen = []
@@ -874,7 +878,7 @@ def test_import_text_not_a_recipe_is_422_and_a_miss(client, login, app, monkeypa
     monkeypatch.setattr(ai, "extract_recipe", lambda text, images: found(names=()))
     monkeypatch.setattr(outbound, "video_snippet", lambda video_id, key: SNIPPET)
     res = import_(client, url=YOUTUBE)
-    assert (res.status_code, res.get_json()) == (422, {"error": NEED_YOUTUBE, "need_text": True})
+    assert (res.status_code, res.get_json()) == (422, {"error": NEED_YOUTUBE, "need_text": True, **YOUTUBE_LINK})
     assert ai_calls(app) == [(user.id, "link_miss"), (user.id, "link_fetch"), (user.id, "link_miss")]  # 헛호출(스펙 7절)
     assert ai_call_costs(app) == [("claude-sonnet-5-answered", 1500, 120), NO_TOKENS, ("claude-sonnet-5-answered", 1500, 120)]
 
@@ -1002,7 +1006,7 @@ def test_link_fetch_not_counted_as_ai_use(client, login, app, monkeypatch):
 
 # --- 사진으로 가져오기 (POST /api/recipes/import multipart) ---
 
-PHOTO_NOT_FOUND = "사진에서 레시피를 찾지 못했어요. 글자가 잘 보이게 다시 찍거나 글 붙여넣기를 써주세요."
+PHOTO_NOT_FOUND = "사진에서 레시피를 찾지 못했어요. 글자가 잘 보이는 사진으로 다시 올리거나 글 붙여넣기를 써주세요."
 
 
 def import_photos(client, *images):

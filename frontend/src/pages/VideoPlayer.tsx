@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, api, type RecipeDraft, type User, type VideoDetail } from "../api";
-import AddRecipeSheet from "../components/AddRecipeSheet";
+import AddRecipeSheet, { CaptureButton } from "../components/AddRecipeSheet";
 import Avatar from "../components/Avatar";
 import Icon from "../components/Icon";
 import { timeAgo } from "../format";
@@ -18,7 +18,10 @@ export default function VideoPlayer({ id, user }: { id: string; user: User }) {
   const { data: video, error, status, reload } = useResource<VideoDetail>(`/api/videos/${id}`);
   const [busy, setBusy] = useState(false);
   const [importError, setImportError] = useState("");
-  const [warning, setWarning] = useState(""); // 링크를 못 읽었다(422 need_text) → 글 붙여넣기 시트
+  // 링크를 못 읽은 이유(422 need_text) → 글 붙여넣기 시트. 한 번 못 읽으면 가져오기 아래에 화면 캡처로 가져오기를 계속 두고,
+  // 누르면 링크를 다시 읽지 않고 사진 시트를 연다(시트를 닫고 영상을 멈춰 캡처한 뒤 돌아오게)
+  const [needText, setNeedText] = useState("");
+  const [sheet, setSheet] = useState<"text" | "photo" | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -68,8 +71,10 @@ export default function VideoPlayer({ id, user }: { id: string; user: User }) {
     } catch (err) {
       if (controller.signal.aborted) return;
       setBusy(false);
-      if (err instanceof ApiError && err.body?.need_text === true) setWarning(err.message);
-      else setImportError((err as Error).message);
+      if (err instanceof ApiError && err.body?.need_text === true) {
+        setNeedText(err.message);
+        setSheet("text");
+      } else setImportError((err as Error).message);
     }
   };
 
@@ -153,10 +158,28 @@ export default function VideoPlayer({ id, user }: { id: string; user: User }) {
                 {importError}
               </p>
             )}
+            {needText && (
+              <CaptureButton
+                onPage
+                onClick={() => {
+                  // 가져오기를 다시 누른 채 열면 그 요청은 멈춘다 — 늦게 온 응답이 열린 사진 시트를 바꾸거나 초안으로 넘기지 않게
+                  abortRef.current?.abort();
+                  setBusy(false);
+                  setSheet("photo");
+                }}
+              />
+            )}
           </div>
         </div>
       )}
-      {warning && <AddRecipeSheet initialStep="text" initialWarning={warning} onClose={() => setWarning("")} />}
+      {sheet && (
+        <AddRecipeSheet
+          initialStep={sheet}
+          initialWarning={sheet === "text" ? needText : ""}
+          failedLink={{ source: "youtube", source_url: watchUrl }}
+          onClose={() => setSheet(null)}
+        />
+      )}
     </main>
   );
 }

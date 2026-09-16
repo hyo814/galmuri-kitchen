@@ -153,9 +153,13 @@ NO_RECIPE = {
 }
 
 
-def need_text(source, messages=NEED_TEXT):
-    """링크를 못 읽었거나 레시피가 없을 때. 화면은 글 붙여넣기로 바꿔 이 문구를 보여준다."""
-    return jsonify(error=messages[source], need_text=True), 422
+def need_text(source, source_url=None, messages=NEED_TEXT):
+    """링크를 못 읽었거나 레시피가 없을 때. 화면은 글 붙여넣기로 바꿔 이 문구를 보여준다.
+    유튜브·인스타그램은 읽은 출처·표준 주소도 준다 — 화면이 그 흐름(글·화면 캡처)에서 가져온 레시피의 출처로 남긴다(주소를 다시 해석하지 않게)."""
+    body = {"error": messages[source], "need_text": True}
+    if source in ("youtube", "instagram"):
+        body.update(source=source, source_url=source_url)
+    return jsonify(body), 422
 
 
 # 블로그 본문 글에 이 표시가 하나도 없으면 레시피가 사진에만 있는 글로 보고 본문 사진을 함께 읽는다.
@@ -169,7 +173,7 @@ RECIPE_SIGNAL = re.compile(
 )
 
 MAX_IMPORT_PHOTOS = 5
-PHOTO_NOT_FOUND = "사진에서 레시피를 찾지 못했어요. 글자가 잘 보이게 다시 찍거나 글 붙여넣기를 써주세요."
+PHOTO_NOT_FOUND = "사진에서 레시피를 찾지 못했어요. 글자가 잘 보이는 사진으로 다시 올리거나 글 붙여넣기를 써주세요."
 
 
 def import_photos():
@@ -266,7 +270,7 @@ def import_recipe():
         try:
             if kind == "youtube":
                 if not youtube_key:  # 자막은 가져오지 않는다(스펙 17절)
-                    return need_text(source)
+                    return need_text(source, source_url)
                 video = outbound.video_snippet(value, youtube_key)
                 if video is None:
                     abort(404, "영상을 찾을 수 없어요. 링크를 다시 확인해주세요.")
@@ -274,18 +278,18 @@ def import_recipe():
                 # ponytail: 표시 규칙에 없는 표기로만 적힌 설명 레시피(양배추 1/4통·계란 두 알)도 여기서 글 붙여넣기로 간다.
                 # 잦으면 RECIPE_SIGNAL을 늘린다(블로그 본문 사진 보내기 기준도 함께 바뀐다).
                 if not RECIPE_SIGNAL.search(video["description"]):
-                    return need_text(source, NO_RECIPE)
+                    return need_text(source, source_url, NO_RECIPE)
                 body = f"{video['title']}\n\n{video['description']}"
                 source_card = {"title": video["title"], "author": video["channel_title"], "thumbnail_url": video["thumbnail_url"]}
             elif kind == "instagram":
                 post = outbound.instagram_post(value)
                 if post is None:
-                    return need_text(source)
+                    return need_text(source, source_url)
                 # 릴스처럼 레시피가 영상에만 있거나 미리보기 캡션이 잘렸다.
                 # ponytail: 미리보기가 한국어(좋아요 1,234개)로 오면 그 수가 표시로 잡혀 거르지 못하고 예전처럼 AI를 부른다.
                 # 서버(싱가포르)는 영어 미리보기를 받는다고 보고 두었다 — 잦으면 좋아요·댓글 수를 떼고 본다.
                 if not RECIPE_SIGNAL.search(post["caption"]):
-                    return need_text(source, NO_RECIPE)
+                    return need_text(source, source_url, NO_RECIPE)
                 body = post["caption"]
                 source_card = {"title": post["title"], "author": None, "thumbnail_url": post["thumbnail_url"]}
             else:
@@ -297,9 +301,9 @@ def import_recipe():
                     images = outbound.page_images(page["images"])
         except outbound.FetchError as e:
             current_app.logger.warning("import fetch failed: %s", e)  # 예외·이유 이름만(주소·키 없음)
-            return need_text(source)
+            return need_text(source, source_url)
         if len(body.strip()) < MIN_IMPORT_TEXT and not images:
-            return need_text(source)
+            return need_text(source, source_url)
 
     scan.check_ai_limits(user_id, scan.RECIPE_KINDS, limit, "AI 레시피는")
     call = scan.start_ai_call(user_id, "link")
@@ -312,7 +316,7 @@ def import_recipe():
     draft = clean_draft(raw.get("recipe")) if isinstance(raw, dict) and raw.get("found") is True else None
     if draft is None:
         scan.miss_ai_call(call)
-        return need_text(source)
+        return need_text(source, source_url)
     return jsonify(**draft, source=source, source_url=source_url, source_card=source_card, sample=False)
 
 
