@@ -474,6 +474,20 @@ def test_non_demo_user_sample_field_is_ignored(client, login, stored_scans, monk
     assert [i["name"] for i in res["items"]] == [row[0] for row in ai.SAMPLES["receipt"]]
 
 
+def test_sample_scans_file_is_read_again_only_when_it_changes(tmp_path, monkeypatch):
+    path = tmp_path / "sample_scans.json"
+    monkeypatch.setattr(ai, "SAMPLE_SCANS_FILE", path)
+    assert ai.sample_scans() == {}  # 파일 없음
+    path.write_text(json.dumps({"fridge": STORED_SCANS["fridge"]}), encoding="utf-8")
+    ai.sample_scans().clear()  # 부른 쪽이 바꿔도 기억한 값은 그대로
+    hits = ai._read_sample_scans.cache_info().hits
+    assert ai.sample_scans() == {"fridge": STORED_SCANS["fridge"]}
+    assert ai._read_sample_scans.cache_info().hits == hits + 1  # 파일을 다시 읽지 않았다
+    path.write_text(json.dumps(STORED_SCANS), encoding="utf-8")
+    os.utime(path, ns=(path.stat().st_atime_ns, path.stat().st_mtime_ns + 1_000_000_000))  # 같은 순간에 고쳐도 시각이 달라지게
+    assert sorted(ai.sample_scans()) == ["ereceipt", "fridge"]  # 서버를 다시 켜지 않아도 새 내용
+
+
 def test_demo_videos_are_sample_even_with_key(demo_app):
     demo_app.config["YOUTUBE_API_KEY"] = "k"
     c = new_client(demo_app)
