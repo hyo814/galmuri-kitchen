@@ -13,6 +13,10 @@ export const test = base.extend({
 
 export { expect };
 
+/** 앱 화면(#root). index.html의 PC 소개(aside.pitch, 폰 폭에서는 숨김)에도 "두부·대파" 같은 글자가 있어서
+ *  페이지 전체 getByText는 숨은 소개 문구에 먼저 걸린다(스펙 30절 A). 흔한 재료 이름은 이 안에서 찾는다 */
+export const app = (page: import("@playwright/test").Page) => page.locator("#root");
+
 /** 아래 탭 막대에서 탭을 누른다. */
 export async function openTab(page: import("@playwright/test").Page, label: "재고" | "레시피" | "장보기" | "식단" | "더보기") {
   await page.getByRole("navigation", { name: "주요 메뉴" }).getByRole("link", { name: label }).click();
