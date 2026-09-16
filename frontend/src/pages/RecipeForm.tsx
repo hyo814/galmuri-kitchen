@@ -64,6 +64,11 @@ function storedDraft(): RecipeDraft | null {
 
 // 여러 요리 가져오기(17절): 지금 폼에 없는 나머지 레시피. draft와 같은 방식(모듈 변수 + sessionStorage)으로 폼에 넘긴다.
 // 서버에는 저장하지 않고 탭에만 두며, 저장을 다 마치거나(요리가 안 남음) 나가면 지운다(앱을 닫아도 사라진다).
+interface SavedSlot {
+  order: number;
+  title: string;
+}
+
 interface MultiSession {
   total: number;
   currentOrder: number;
@@ -72,6 +77,7 @@ interface MultiSession {
   source_card?: SourceCard | null;
   fromImage: boolean;
   items: PickSlot[]; // 지금 폼에 열려 있는 것 말고 나머지 전부(저장하지 않은 것만)
+  saved: SavedSlot[]; // 이 세션에서 이미 저장한 것들(찾은 순서, ⑤ 화면의 `저장함` 줄)
 }
 
 let pendingMulti: MultiSession | null = null;
@@ -135,6 +141,7 @@ export function openMultiPick(result: MultiRecipeDraft, order: number, captureLi
     source_card: result.source_card ?? null,
     fromImage: result.from_image,
     items: slots.filter((s) => s.order !== order),
+    saved: [],
   };
   const target = slots.find((s) => s.order === order)!;
   pendingMulti = session;
@@ -222,9 +229,9 @@ function RecipeEditor({ initial, draft = null, multi = null, onSwitch }: RecipeE
   // 영상 보기에서 가져왔으면 뒤로 링크가 `영상`
   const [fromVideo] = useState(() => !!(history.state as { from?: string } | null)?.from?.startsWith("/recipes/videos/"));
   const { busy, error, setError, run } = useAsyncAction();
-  // 여러 요리 가져오기(17절): 요리 바꾸기 시트, 저장한 뒤 이어서 화면
+  // 여러 요리 가져오기(17절): 요리 바꾸기 시트, 저장한 뒤 이어서 화면(afterSave.multi는 방금 저장한 것까지 반영한 최신 세션)
   const [switching, setSwitching] = useState(false);
-  const [afterSave, setAfterSave] = useState<{ title: string; id: number } | null>(null);
+  const [afterSave, setAfterSave] = useState<{ id: number; multi: MultiSession } | null>(null);
 
   const openSlot = (nextMulti: MultiSession, target: PickSlot) => {
     storeMulti(nextMulti);
@@ -239,11 +246,12 @@ function RecipeEditor({ initial, draft = null, multi = null, onSwitch }: RecipeE
     if (target) openSlot({ ...multi, currentOrder: order, items: pool.filter((s) => s.order !== order) }, target);
   };
 
-  // 저장한 뒤 이어서 확인하기: 방금 저장한 것은 이미 세션에서 빠져 있어 되살릴 필요가 없다
+  // 저장한 뒤 이어서 확인하기: afterSave 화면(⑤)에서만 부르므로 그 최신 세션을 base로 쓴다(방금 저장한 것도 saved에 있다)
   const continueTo = (order: number) => {
-    if (!multi) return;
-    const target = multi.items.find((s) => s.order === order);
-    if (target) openSlot({ ...multi, currentOrder: order, items: multi.items.filter((s) => s.order !== order) }, target);
+    const base = afterSave?.multi ?? multi;
+    if (!base) return;
+    const target = base.items.find((s) => s.order === order);
+    if (target) openSlot({ ...base, currentOrder: order, items: base.items.filter((s) => s.order !== order) }, target);
   };
 
   const finishMulti = () => {
@@ -330,7 +338,9 @@ function RecipeEditor({ initial, draft = null, multi = null, onSwitch }: RecipeE
         pendingDraft = null;
         storeDraft(null);
         if (multi && multi.items.length > 0) {
-          setAfterSave({ title: saved.title, id: saved.id });
+          const nextMulti = { ...multi, saved: [...multi.saved, { order: multi.currentOrder, title: saved.title }] };
+          storeMulti(nextMulti);
+          setAfterSave({ id: saved.id, multi: nextMulti });
           return;
         }
         resetRecipeDraft();
@@ -340,18 +350,19 @@ function RecipeEditor({ initial, draft = null, multi = null, onSwitch }: RecipeE
     });
   };
 
-  // 여러 요리 가져오기(17절 ⑤): 저장한 뒤 같은 페이지에 남은 요리가 있으면 폼 대신 이 화면을 보여준다
-  if (afterSave && multi) {
+  // 여러 요리 가져오기(17절 ⑤): 저장한 뒤 같은 페이지에 남은 요리가 있으면 폼 대신 이 화면을 보여준다(시안 그대로: 남은 것 + 저장함 목록)
+  if (afterSave) {
+    const justSaved = afterSave.multi.saved[afterSave.multi.saved.length - 1];
     return (
       <main className="page">
         <header className="topbar">
           <div>
-            <h1>{withJosa(afterSave.title, "을", "를")} 저장했어요</h1>
-            <p className="summary">같은 페이지의 요리 {multi.items.length}개가 남았어요</p>
+            <h1>{withJosa(justSaved.title, "을", "를")} 저장했어요</h1>
+            <p className="summary">같은 페이지의 요리 {afterSave.multi.items.length}개가 남았어요</p>
           </div>
         </header>
         <ul className="list">
-          {multi.items.map((item) => (
+          {afterSave.multi.items.map((item) => (
             <li key={item.order} className="r3-crow">
               <span className="row-main">
                 <span className="row-title">{item.draft.title}</span>
@@ -360,6 +371,15 @@ function RecipeEditor({ initial, draft = null, multi = null, onSwitch }: RecipeE
               <button type="button" className="btn accent-sm" aria-label={`${item.draft.title} 확인하기`} onClick={() => continueTo(item.order)}>
                 확인하기
               </button>
+            </li>
+          ))}
+          {afterSave.multi.saved.map((s) => (
+            <li key={s.order} className="r3-crow">
+              <span className="row-main">
+                <span className="row-title">{s.title}</span>
+                <span className="row-sub">내 레시피에 저장했어요</span>
+              </span>
+              <span className="r3-saved-tag">저장함</span>
             </li>
           ))}
         </ul>

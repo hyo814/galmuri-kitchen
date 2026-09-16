@@ -160,12 +160,17 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
   padding: 28px 20px 0;
 }
 
-.topbar h1 {
+/* 페이지 제목(.rc-head h1은 레시피 상세·AI 레시피용, 같은 모양). 긴 이름이 낱말 가운데서 끊기지 않게(.summary와 같은 규칙) */
+.topbar h1,
+.rc-head h1 {
   margin: 0;
   font-size: 26px;
   line-height: 34px;
   font-weight: 700;
   letter-spacing: -0.5px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
 .summary {
@@ -1775,15 +1780,6 @@ button.row-btn > svg {
   padding: 20px 20px 0;
 }
 
-.rc-head h1 {
-  margin: 0;
-  font-size: 26px;
-  line-height: 34px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  word-break: keep-all;
-}
-
 .rc-sec {
   margin: 16px 20px 0;
   padding: 20px;
@@ -3012,6 +3008,13 @@ button.row-btn > svg {
   background: var(--accent-tint);
   color: var(--accent-strong);
   font-size: 14px;
+}
+/* 여러 요리 가져오기(17절 ⑤) 저장한 줄의 `저장함` 표시: 확인하기 버튼 자리를 대신하는 평범한 글자(시안 .saved) */
+.r3-saved-tag {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-3);
 }
 .r3-toggle {
   position: relative;
