@@ -1,3 +1,4 @@
+import math
 from datetime import timedelta
 
 from flask import Blueprint, abort, g, jsonify, request
@@ -632,12 +633,12 @@ def shopping_rows(needs, stock, listed, today):
             bucket, reason = ("skip", "enough") if has_stock else ("seasoning", None)
         elif len(need) >= 2 or (have and unit not in have):
             bucket, reason = "manual", None
-            quantity = max(quantity, 0.01)  # 인분 배율로 반올림하면 0이 될 수 있어 최소값을 둔다
+            quantity = max(math.ceil(quantity), 1)  # 담을 양은 정수로 올린다. 인분 배율로 반올림하면 0이 될 수 있어 최소 1
         else:
             short = round(need[unit] - have.get(unit, 0), 2)  # 반올림 먼저: 문턱값 오차로 0짜리 buy가 생기지 않게
             bucket, reason = ("buy", None) if short > 0 else ("skip", "enough")
             if short > 0:
-                quantity = short
+                quantity = math.ceil(short)  # 0.67개 → 1개, 16.67g → 17g: 모자라게 사지 않게 개·무게 모두 정수로 올린다
 
         buckets[bucket].append((planned_on.isoformat(), index, {
             "name": name,

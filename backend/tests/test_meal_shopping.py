@@ -140,12 +140,35 @@ def test_spoon_unit_without_stock_is_seasoning_one_pack():
 
 
 def test_manual_tiny_scaled_amount_clamped_to_min():
-    # 1판 × 0.001 인분 배율 → 반올림하면 0이라 최소 0.01로 올린다(bulk 담기 400 방지)
+    # 1판 × 0.001 인분 배율 → 반올림하면 0이라 최소 1로 올린다(bulk 담기 400 방지)
     needs = [("달걀", "1판", 0.001, date(2026, 9, 16))]
     stock = [("계란", 1, "개")]  # 단위가 달라 manual로 간다
     row = by_name(shopping_rows(needs, stock, [], TODAY)["manual"], "달걀")
-    assert (row["quantity"], row["unit"], row["reason"]) == (0.01, "판", None)
-    assert row["quantity"] >= 0.01
+    assert (row["quantity"], row["unit"], row["reason"]) == (1, "판", None)
+
+
+def test_manual_quantity_rounds_up_to_whole_number():
+    needs = [("대파", "1/2대", 5, date(2026, 9, 16))]  # 2.5대, 재고는 단 → 단위가 달라요
+    row = by_name(shopping_rows(needs, [("대파", 1, "단")], [], TODAY)["manual"], "대파")
+    assert (row["quantity"], row["unit"]) == (3, "대")
+    assert row["need"] == [{"quantity": 2.5, "unit": "대"}]
+
+
+def test_buy_rounds_up_to_whole_number_for_count_and_weight():
+    # 운영에서 `0.67개 담기`·`16.67g 담기`가 보였다 — 담을 양은 정수로 올린다(모자라게 사지 않게), 필요·있음 양은 그대로 둔다
+    needs = [("애호박", "1/3개", 5, date(2026, 9, 16)), ("돼지고기 앞다리살", "925g", 2 / 3, date(2026, 9, 16))]
+    stock = [("애호박", 1, "개"), ("돼지고기 앞다리살", 600, "g")]
+    buy = shopping_rows(needs, stock, [], TODAY)["buy"]
+    zucchini, pork = by_name(buy, "애호박"), by_name(buy, "돼지고기 앞다리살")
+    assert (zucchini["quantity"], zucchini["unit"], zucchini["need"]) == (1, "개", [{"quantity": 1.67, "unit": "개"}])
+    assert (pork["quantity"], pork["unit"], pork["need"]) == (17, "g", [{"quantity": 616.67, "unit": "g"}])
+    assert all(isinstance(row["quantity"], int) for row in buy)
+
+
+def test_buy_whole_shortfall_is_not_bumped():
+    needs = [("두부", "1/2모", 6, date(2026, 9, 16))]  # 3모 − 1모 = 딱 2모
+    row = by_name(shopping_rows(needs, [("두부", 1, "모")], [], TODAY)["buy"], "두부")
+    assert row["quantity"] == 2
 
 
 def test_uncountable_without_stock_is_seasoning_one_pack():

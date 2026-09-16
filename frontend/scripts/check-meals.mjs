@@ -105,6 +105,12 @@ assert.equal(previewDetail(R([[0.5, "포기"]], [[1, "포기"]], "enough")), "½
 assert.equal(previewDetail(R([[1, "개"]], [], "listed")), "장보기 목록에 이미 있어서 건너뛰어요"); // 양파
 assert.equal(previewDetail(R([], [], null, ["약간"])), "약간 필요 · 없어요"); // 소금(재고 없음 → 양념 묶음)
 assert.equal(previewDetail(R([], [], null, ["2큰술", "1큰술"])), "2큰술 + 1큰술 필요 · 없어요"); // 된장(재고 없음 → 양념 묶음)
+// 필요·있음 양은 딱 떨어지는 분수가 아니면 소수 첫째 자리까지(운영에서 1.67개·616.67g이 보였다), .0은 뺀다
+assert.equal(previewDetail(R([[1.67, "개"]], [[1, "개"]])), "1.7개 필요 · 1개 있어요"); // 애호박 ⅓개 × 5
+assert.equal(previewDetail(R([[616.67, "g"]], [[600, "g"]])), "616.7g 필요 · 600g 있어요"); // 돼지고기 925g × ⅔
+assert.equal(previewDetail(R([[0.33, "모"]], [[2.5, "모"]], "enough")), "0.3모 필요 · 2½모 있어요");
+assert.equal(previewDetail(R([[2, "모"], [1.05, "g"]], [])), "2모 + 1.1g 필요 · 없어요");
+assert.equal(previewDetail(R([[0.03, "모"]], [])), "0.1모 필요 · 없어요"); // 아주 적어도 0으로 보이지 않게
 assert.equal(previewDetail(R([], [[1, "병"]], "enough", ["2큰술"])), "2큰술 필요 · 1병 있어요"); // 간장
 assert.equal(buyDayText("2026-09-14", "2026-09-14"), "오늘 사요");
 assert.equal(buyDayText("2026-09-13", "2026-09-14"), "오늘 사요");

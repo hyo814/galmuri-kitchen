@@ -1,7 +1,7 @@
 // 식단 날짜 계산(스펙 20절). 브라우저 API·Date.now()를 부르지 않고 오늘은 인자로 받는다 — scripts/check-meals.mjs가 node로 읽는다.
 import type { MealKind, MealPlanSummary, MealShoppingRow } from "../api";
 import { addDays } from "../format.ts";
-import { quantityText } from "../shopping/sync.ts";
+import { amountInputText } from "../seasoning.ts";
 
 export const MEALS: [MealKind, string][] = [["breakfast", "아침"], ["lunch", "점심"], ["dinner", "저녁"], ["snack", "간식"]];
 export const mealLabel = (meal: MealKind) => MEALS.find(([k]) => k === meal)![1];
@@ -94,7 +94,12 @@ export const urgentChip = (name: string, expiresOn: string | null, today: string
 /** 살 날 태그: 오늘(또는 지남) "오늘 사요", 아니면 "16일(수)에 사요" */
 export const buyDayText = (plannedOn: string, today: string) =>
   plannedOn <= today ? "오늘 사요" : `${parts(plannedOn)[2]}일(${DOW[weekday(plannedOn)]})에 사요`;
-const amounts = (list: { quantity: number; unit: string }[], extra: string[] = []) => [...list.map((a) => quantityText(a.quantity, a.unit)), ...extra].join(" + ");
+/** 미리보기 필요·있음 양: 딱 떨어지는 분수(½·2½)는 그대로, 아니면 소수 첫째 자리까지(1.67 → 1.7, 아주 적어도 0.1) */
+const shownAmount = ({ quantity, unit }: { quantity: number; unit: string }) => {
+  const text = amountInputText(quantity);
+  return (text.includes(".") ? String(Math.max(Number(quantity.toFixed(1)), 0.1)) : text) + unit;
+};
+const amounts = (list: { quantity: number; unit: string }[], extra: string[] = []) => [...list.map(shownAmount), ...extra].join(" + ");
 /** 줄 설명: buy·enough "2모 필요 · 1모 있어요"/"2개 필요 · 없어요", seasoning "2큰술 필요 · 없어요", manual "있음 8개 · 필요 2판", listed "장보기 목록에 이미 있어서 건너뛰어요" */
 export function previewDetail(row: MealShoppingRow): string {
   if (row.reason === "listed") return "장보기 목록에 이미 있어서 건너뛰어요";

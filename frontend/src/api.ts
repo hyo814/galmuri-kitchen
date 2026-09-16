@@ -471,7 +471,7 @@ export interface RecipeChoice {
   urgent_names: string[];
 }
 
-/** GET /api/meal-plans/<id>/shopping-preview 한 줄(오늘 이후 끼니만). quantity·unit은 담을 양(skip 줄도 값이 있다) */
+/** GET /api/meal-plans/<id>/shopping-preview 한 줄(오늘 이후 끼니만). quantity·unit은 담을 양(buy·manual은 정수로 올린 값, skip 줄도 값이 있다) */
 export interface MealShoppingRow { name: string; quantity: number; unit: string; planned_on: string; need: { quantity: number; unit: string }[]; need_extra: string[]; have: { quantity: number; unit: string }[]; reason: "listed" | "enough" | null }
 export interface MealShoppingPreview { /** 식단 이름(담기 source_label) */ name: string; start_on: string; end_on: string; recipe_slot_count: number; buy: MealShoppingRow[]; manual: MealShoppingRow[]; /** 숟가락·약간 양뿐이고 재고에 없는 재료(체크 꺼짐, 담으면 1개) */ seasoning: MealShoppingRow[]; skip: MealShoppingRow[] }
 
