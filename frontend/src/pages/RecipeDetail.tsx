@@ -7,6 +7,7 @@ import RecipeNutrition from "../components/RecipeNutrition";
 import ShoppingAddButton from "../components/ShoppingAddButton";
 import { starsText } from "../foodlog/log.ts";
 import { SOURCE_LABEL, imageSrc, scaleAmount, withJosa } from "../format";
+import { spoonHint } from "../seasoning";
 import { recipeQuantity } from "../shopping/sync";
 import { useAsyncAction } from "../useAsyncAction";
 import { goBack, navigate } from "../useHashRoute";
@@ -86,22 +87,37 @@ export function RecipeBody({
           </div>
         )}
         <ul className="rc-ings">
-          {ingredients.map((item, index) => (
-            <li key={index} className="plain-row">
-              <span className="staple-name">
-                {item.name}
-                {item.amount && <span className="rc-amt">{scaleAmount(item.amount, ratio)}</span>}
-              </span>
-              {item.have ? (
-                <span className="stock-ok">
-                  <Icon name="check" size={16} />
-                  {item.matched_name ? `있음 · ${item.matched_name}` : "있음"}
+          {ingredients.map((item, index) => {
+            const amount = scaleAmount(item.amount, ratio);
+            // 인분을 바꿔 양이 달라진 큰술·작은술만 아래 회색 줄(레시피 인분이면 지금과 같다)
+            const hint = amount !== item.amount ? spoonHint(recipeQuantity(amount)) : null;
+            return (
+              <li key={index} className="plain-row">
+                <span className="staple-name">
+                  {item.name}
+                  {item.amount && (
+                    <span className={hint ? "rc-amt rc-spoon" : "rc-amt"}>
+                      {amount}
+                      {hint && (
+                        <small>
+                          <span className="sr-only">, </span>
+                          {hint}
+                        </small>
+                      )}
+                    </span>
+                  )}
                 </span>
-              ) : (
-                <span className="badge">없음</span>
-              )}
-            </li>
-          ))}
+                {item.have ? (
+                  <span className="stock-ok">
+                    <Icon name="check" size={16} />
+                    {item.matched_name ? `있음 · ${item.matched_name}` : "있음"}
+                  </span>
+                ) : (
+                  <span className="badge">없음</span>
+                )}
+              </li>
+            );
+          })}
         </ul>
         {missing.length > 0 && (
           <ShoppingAddButton

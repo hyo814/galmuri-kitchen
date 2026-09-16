@@ -1848,6 +1848,19 @@ button.row-btn > svg {
   font-weight: 400;
 }
 
+/* 인분 조절 밥숟가락 줄: 양 바로 아래 회색 줄(스펙 23절 D1, 계산기 .r3-samt span과 같은 글자) */
+.rc-spoon {
+  display: inline-flex;
+  flex-direction: column;
+}
+
+.rc-spoon small {
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 18px;
+  word-break: keep-all;
+}
+
 .rc-ings .stock-ok svg {
   flex-shrink: 0;
   color: var(--accent-strong);
