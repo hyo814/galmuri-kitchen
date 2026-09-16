@@ -2,7 +2,7 @@
 import type { CookDraftRow, CookLogItem, CookLogListItem, CookReport, MealKind } from "../api";
 import { formatQuantity, formatWon, withJosa } from "../format.ts";
 import { monthLabel } from "../foodlog/log.ts";
-import { mealLabel } from "../meals/plan.ts";
+import { mealLabel, slotDateText } from "../meals/plan.ts";
 
 export const MAX_COOK_SERVINGS = 20;
 export const MAX_EAT_OUT = 1_000_000;
@@ -74,17 +74,19 @@ export const undoneText = (r: { restored: string[]; skipped: string[] }) =>
 /** 쓴 양 칸 옆 "재고 600g" */
 export const stockText = (row: Pick<CookDraftRow, "stock_quantity" | "stock_unit">) =>
   row.stock_quantity === null ? "재고에 없어요" : `재고 ${formatQuantity(row.stock_quantity)}${row.stock_unit ?? ""}`;
+/** "마지막 9월 15일" */
+const lastOnText = (iso: string) => `마지막 ${Number(iso.slice(5, 7))}월 ${Number(iso.slice(8, 10))}일`;
 /** 레시피 상세 "마지막 9월 15일 · ★★★★☆" */
 export function cookedLine(c: { last_on: string; last_rating: number | null }, stars: (n: number) => string): string {
-  const day = `마지막 ${Number(c.last_on.slice(5, 7))}월 ${Number(c.last_on.slice(8, 10))}일`;
-  return c.last_rating === null ? day : `${day} · ${stars(c.last_rating)}`;
+  return c.last_rating === null ? lastOnText(c.last_on) : `${lastOnText(c.last_on)} · ${stars(c.last_rating)}`;
 }
 
 // ---- Task 10: 요리 일기 목록·상세(시안 3·4) ----
-/** 목록 행 아낀 돈 조각(결정 14·15). good이면 초록 글자 */
-export function savedRowText(log: Pick<CookLogListItem, "saved" | "eat_out_price" | "excluded_count">): { text: string; good: boolean } {
+/** 목록 행 아낀 돈 조각(결정 14·15). good이면 초록 글자. 직접 쓴 일기는 재료 줄이 없어 `재료비 모름` */
+export function savedRowText(log: Pick<CookLogListItem, "manual" | "saved" | "eat_out_price" | "excluded_count">): { text: string; good: boolean } {
   if (log.saved !== null) return overSpent(log.saved) ? { text: `${aboutWon(log.saved)} 더 듦`, good: false } : { text: `${aboutWon(log.saved)} 아낌`, good: true };
   if (log.eat_out_price === null) return { text: "사 먹으면 얼마 모름", good: false };
+  if (log.manual) return { text: "재료비 모름", good: false };
   return { text: log.excluded_count ? `재료 ${log.excluded_count}개 가격 모름` : "재료 가격 모름", good: false };
 }
 /** "9월 15일 · 2인분" */
@@ -123,6 +125,25 @@ export function excludedNote(items: Pick<CookLogItem, "name" | "used" | "unit" |
   parts.push("참고용이에요");
   return parts.join(" · ");
 }
+
+// ---- 요리 일기 쓰기·추천 레시피 요리했어요(29절 추가 2026-09-16, 시안 docs/design/diary-write) ----
+/** 무엇을 요리했나요 시트의 레시피 줄 설명 "요리 2번 · 마지막 9월 14일" */
+export const cookedChoiceText = (c: { count: number; last_on: string } | null) =>
+  c ? `요리 ${c.count}번 · ${lastOnText(c.last_on)}` : "아직 요리 기록이 없어요";
+/** 추천 레시피 요리했어요 시트 맨 위 한 줄(결정 C). created가 아니면 전에 저장해 둔 복사본을 쓴 것 */
+export const savedRecipeNote = (title: string, created: boolean) =>
+  `${created ? `${withJosa(title, "을", "를")} 내 레시피에 저장했어요` : `${withJosa(title, "은", "는")} 이미 내 레시피에 있어요`}. 다음부터는 내 레시피에서 열 수 있어요.`;
+/** 상세 설명 "9월 16일 수요일 · 2인분 · 직접 쓴 일기" */
+export const diaryDetailDesc = (log: Pick<CookLogListItem, "cooked_on" | "servings" | "manual">) =>
+  [slotDateText(log.cooked_on, ""), `${log.servings}인분`, log.manual && "직접 쓴 일기"].filter(Boolean).join(" · ");
+/** 직접 쓴 일기 계산표 합계 줄 오른쪽(시안 ④, 왼쪽은 `아낀 돈`): 금액, 아니면 무엇을 적으면 계산하는지 */
+export function manualTotal(log: Pick<CookLogListItem, "saved" | "eat_out_price" | "ingredient_cost">): string {
+  if (log.saved !== null) return overSpent(log.saved) ? savedText(log.saved) : aboutWon(log.saved);
+  if (log.eat_out_price !== null) return "재료비를 적으면 아낀 돈을 계산해요";
+  return log.ingredient_cost === null ? "사 먹으면 얼마와 재료비를 적으면 아낀 돈을 계산해요" : "사 먹으면 얼마를 적으면 아낀 돈을 계산해요";
+}
+/** 직접 쓴 일기 계산표 아래 안내 */
+export const manualNote = "레시피가 없어 재료별로 나누지 않았어요 · 참고용이에요";
 
 // ---- Task 11: 집밥 리포트(시안 5) ----
 /** 리포트 머리 "2026년 9월 집밥 리포트" */

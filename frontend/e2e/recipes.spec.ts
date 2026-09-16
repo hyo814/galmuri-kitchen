@@ -31,7 +31,7 @@ test("추천 탭의 예시 레시피를 내 레시피로 저장하면 내 레시
   await page.getByRole("region", { name: "예시 레시피" }).getByRole("link", { name: "계란말이" }).click();
   await expect(page.getByRole("heading", { name: "계란말이" })).toBeVisible();
 
-  await page.getByRole("button", { name: "내 레시피로 저장" }).click();
+  await page.getByRole("button", { name: "내 레시피로 저장만 하기" }).click();
   await expect(page.getByRole("button", { name: "수정" })).toBeVisible(); // 저장 뒤 내 레시피 상세로 바뀐다
 
   await openRecipes(page, "내 레시피");

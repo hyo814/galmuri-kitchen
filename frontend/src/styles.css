@@ -6994,6 +6994,95 @@ button.ck-month {
   line-height: 19px;
 }
 
+/* ---- 요리 일기 쓰기·추천 레시피 요리했어요 (시안 docs/design/diary-write, 스펙 29절 추가 2026-09-16) ---- */
+/* ① 제목 옆 `일기 쓰기` */
+.btn.ck-write {
+  flex: none;
+  width: auto;
+  min-height: 44px;
+  margin-left: auto;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+/* ① 레시피 없이 쓴 일기 줄 꼬리표 */
+.ck-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--neutral-tint);
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  vertical-align: 2px;
+  white-space: nowrap;
+}
+
+/* ② 목록과 요리 이름 칸 사이 */
+.ck-or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--text-3);
+}
+
+.ck-or::before,
+.ck-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+/* ③ 사 먹으면 얼마 · 재료비 두 칸(384px에서 한 줄에 둘) */
+.ck-wons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 8px;
+  word-break: keep-all;
+}
+
+.ck-wons .ck-won {
+  padding: 0 14px;
+}
+
+/* ⑥ 추천 레시피를 저장하고 연 요리했어요 시트 맨 위 한 줄 */
+.ck-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 19px;
+  word-break: keep-all;
+}
+
+.ck-note svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--accent-strong);
+}
+
+/* ⑤ 추천 레시피 아래 바: 저장만(작게) + 요리했어요(크게) */
+.cta-bar .btn.ck-save-only {
+  padding: 0 8px;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
 /* ---- 첫인상 (시안 docs/design/first-impression, 스펙 30절) ---- */
 
 /* A. PC(넓이 1024px 이상): 왼쪽 소개(index.html의 .pitch) + 오른쪽 폰 크기 앱.

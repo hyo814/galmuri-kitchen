@@ -303,6 +303,7 @@ def test_patch_fields_and_recompute(client, login, app):
         ({"recipe_id": 1, "food_code": "D1"}, BAD),
         ({"title": ""}, "무엇을 먹었는지는 1~60자로 입력해주세요."),
         ({"title": "가" * 61}, "무엇을 먹었는지는 1~60자로 입력해주세요."),
+        ({"title": "라\x00면"}, BAD),  # 이름 칸 공통 검사(validation.text) — PostgreSQL 500 대신 400
         ({"food_code": "없는코드"}, "음식을 다시 골라주세요."),
         ({"recipe_id": "1"}, BAD),
         ({"recipe_id": True}, BAD),

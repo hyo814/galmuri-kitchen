@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, localToday, type CookLogDetail, type CookLogListItem, type CookLogPage, type CookReport, type User } from "../api";
+import { api, localToday, type CookLogDetail, type CookLogListItem, type CookLogPage, type CookReport, type CookSaveResult, type User } from "../api";
 import CookLogSheet from "../components/CookLogSheet";
+import { toastSaved } from "../components/CookSheet";
+import DiaryWriteSheet from "../components/DiaryWriteSheet";
 import Icon from "../components/Icon";
 import InfiniteSentinel from "../components/InfiniteSentinel";
 import { diaryDateText, diaryHeader, firstLine, savedRowText } from "../cooklog/cook.ts";
@@ -23,7 +25,8 @@ export function resetCookDiaryView(): void {
   pendingOpen = null;
 }
 
-/** 시안 3 · DIARY: 이번 달 카드 + 날짜 역순 무한 스크롤(결정 20). 누르면 상세 시트(시안 4) */
+/** 시안 3 · DIARY: 이번 달 카드 + 날짜 역순 무한 스크롤(결정 20). 누르면 상세 시트(시안 4).
+ *  제목 옆 `일기 쓰기`(시안 diary-write ①): 내 레시피를 고르거나 레시피 없이 쓴다 */
 export default function CookDiary({ user }: { user: User }) {
   const today = localToday();
   const report = useResource<CookReport>(`/api/cook-report?month=${monthOf(today)}`);
@@ -33,6 +36,7 @@ export default function CookDiary({ user }: { user: User }) {
     ["cook-logs"],
   );
   const [openId, setOpenId] = useState(() => pendingOpen);
+  const [writing, setWriting] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   // 먹은 기록 날짜 상세 `보기`로 들어왔으면 뒤로가 먹은 기록으로 간다(history.back) — 들어올 때 한 번 읽어 이름을 맞춘다(CookReport와 같게)
   const [fromFoodLog] = useState(() => (history.state as { from?: string } | null)?.from === "/food-log");
@@ -67,6 +71,13 @@ export default function CookDiary({ user }: { user: User }) {
     [items, patch, reload, report.reload],
   );
 
+  // 새 일기는 날짜 순서 어디든 들어갈 수 있어 목록을 처음부터 다시 받는다. 되돌리면 App이 화면을 새로 만든다
+  const written = (result: CookSaveResult) => {
+    toastSaved(result);
+    reload();
+    void report.reload();
+  };
+
   const closeSheet = () => {
     const target = focusOnClose.current;
     focusOnClose.current = undefined;
@@ -88,6 +99,11 @@ export default function CookDiary({ user }: { user: User }) {
         <h1 ref={heading} tabIndex={-1}>
           요리 일기
         </h1>
+        {/* data-cook-button: 알림에서 되돌린 뒤 포커스가 돌아올 자리 */}
+        <button type="button" className="btn ck-write" aria-haspopup="dialog" data-cook-button onClick={() => setWriting(true)}>
+          <Icon name="plus" size={16} />
+          일기 쓰기
+        </button>
       </header>
 
       {/* 받기 전에도 늘 그린다 — 뒤늦게 끼어들며 목록을 밀지 않게, 이번 달 0번이어도 리포트로 가게(R11-5) */}
@@ -133,6 +149,12 @@ export default function CookDiary({ user }: { user: User }) {
                         </span>
                       </>
                     )}
+                    {log.manual && (
+                      <>
+                        {" "}
+                        <span className="ck-tag">직접 쓴 일기</span>
+                      </>
+                    )}
                     <small>
                       {diaryDateText(log)} · <span className={saved.good ? "ck-save" : undefined}>{saved.text}</span>
                     </small>
@@ -149,13 +171,14 @@ export default function CookDiary({ user }: { user: User }) {
       {!loading && !hasMore && items.length === 0 ? (
         <div className="empty">
           <p>아직 요리 일기가 없어요</p>
-          <p className="hint">레시피 상세의 요리했어요로 남겨요</p>
+          <p className="hint">일기 쓰기나 레시피 상세의 요리했어요로 남겨요</p>
         </div>
       ) : (
         <InfiniteSentinel onVisible={loadMore} hasMore={hasMore} multiPage={multiPage} loading={loading} error={error} onRetry={loadMore} />
       )}
 
       {openId !== null && <CookLogSheet id={openId} today={today} user={user} onChanged={onChanged} onClose={closeSheet} />}
+      {writing && <DiaryWriteSheet user={user} onSaved={written} onClose={() => setWriting(false)} />}
     </main>
   );
 }

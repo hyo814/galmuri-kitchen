@@ -474,6 +474,8 @@ export interface RecipeChoice {
   have_count: number;
   total_count: number;
   urgent_names: string[];
+  /** 요리 일기 쓰기 시트 `요리 2번 · 마지막 9월 14일`(29절 추가 2026-09-16). 일기가 없으면 null */
+  cooked: { count: number; last_on: string } | null;
 }
 
 /** GET /api/meal-plans/<id>/shopping-preview 한 줄(오늘 이후 끼니만). quantity·unit은 담을 양(buy·manual은 정수로 올린 값, skip 줄도 값이 있다) */
@@ -606,9 +608,11 @@ export interface CookLogItem {
   price: number | null; price_quantity: number | null; cost: number | null; excluded: "seasoning" | "no_price" | null;
 }
 export interface CookLogListItem {
-  id: number; recipe_id: number | null; title: string; cooked_on: string; servings: number; rating: number | null; memo: string | null;
+  /** manual: 레시피 없이 쓴 일기(쓴 재료 줄 없음, 29절 추가 2026-09-16) */
+  id: number; recipe_id: number | null; manual: boolean; title: string; cooked_on: string; servings: number; rating: number | null; memo: string | null;
   photo_url: string | null; eat_out_price: number | null; eat_out_source: EatOutSource | null;
-  ingredient_cost: number; saved: number | null; excluded_count: number; created_at: string;
+  /** 직접 쓴 일기에서 재료비를 비웠으면 null(레시피 일기는 가격 있는 줄 합, 없으면 0) */
+  ingredient_cost: number | null; saved: number | null; excluded_count: number; created_at: string;
 }
 export interface CookLogDetail extends CookLogListItem { items: CookLogItem[]; food_log_id: number | null; undo_until: string }
 export interface CookLogPage { items: CookLogListItem[]; next_cursor: string | null }

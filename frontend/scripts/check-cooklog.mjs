@@ -6,6 +6,7 @@ import {
   barWidths,
   compareLine,
   cookMeal,
+  cookedChoiceText,
   cookedLine,
   costLine,
   dateChip,
@@ -13,16 +14,20 @@ import {
   defaultAmount,
   defaultChecked,
   diaryDateText,
+  diaryDetailDesc,
   diaryHeader,
   eatOutLine,
   excludedNote,
   firstLine,
   foodLogLine,
+  manualNote,
+  manualTotal,
   parseAmountInput,
   parseWon,
   reportLead,
   reportNote,
   reportTitle,
+  savedRecipeNote,
   savedRowText,
   savedText,
   seoulHour,
@@ -141,12 +146,12 @@ assert.equal(cookedLine({ last_on: "2026-09-15", last_rating: null }, starsText)
 
 // ---- Task 10: 요리 일기 목록·상세 ----
 // 목록 행 아낀 돈 조각(결정 14·15)
-assert.deepEqual(savedRowText({ saved: 10820, eat_out_price: 9000, excluded_count: 0 }), { text: "약 10,800원 아낌", good: true });
-assert.deepEqual(savedRowText({ saved: -1200, eat_out_price: 9000, excluded_count: 0 }), { text: "약 1,200원 더 듦", good: false });
-assert.deepEqual(savedRowText({ saved: -40, eat_out_price: 9000, excluded_count: 0 }), { text: "약 0원 아낌", good: true });
-assert.deepEqual(savedRowText({ saved: null, eat_out_price: null, excluded_count: 0 }), { text: "사 먹으면 얼마 모름", good: false });
-assert.deepEqual(savedRowText({ saved: null, eat_out_price: 9000, excluded_count: 2 }), { text: "재료 2개 가격 모름", good: false });
-assert.deepEqual(savedRowText({ saved: null, eat_out_price: 9000, excluded_count: 0 }), { text: "재료 가격 모름", good: false });
+assert.deepEqual(savedRowText({ manual: false, saved: 10820, eat_out_price: 9000, excluded_count: 0 }), { text: "약 10,800원 아낌", good: true });
+assert.deepEqual(savedRowText({ manual: false, saved: -1200, eat_out_price: 9000, excluded_count: 0 }), { text: "약 1,200원 더 듦", good: false });
+assert.deepEqual(savedRowText({ manual: false, saved: -40, eat_out_price: 9000, excluded_count: 0 }), { text: "약 0원 아낌", good: true });
+assert.deepEqual(savedRowText({ manual: false, saved: null, eat_out_price: null, excluded_count: 0 }), { text: "사 먹으면 얼마 모름", good: false });
+assert.deepEqual(savedRowText({ manual: false, saved: null, eat_out_price: 9000, excluded_count: 2 }), { text: "재료 2개 가격 모름", good: false });
+assert.deepEqual(savedRowText({ manual: false, saved: null, eat_out_price: 9000, excluded_count: 0 }), { text: "재료 가격 모름", good: false });
 
 assert.equal(diaryDateText({ cooked_on: "2026-09-15", servings: 2 }), "9월 15일 · 2인분");
 assert.equal(diaryDateText({ cooked_on: "2026-09-05", servings: 1 }), "9월 5일 · 1인분"); // 앞자리 0 없이
@@ -213,5 +218,32 @@ assert.equal(compareLine({ cooked: 3, discarded: 0, previous: { cooked: 0, disca
 assert.deepEqual(barWidths([{ saved: 23100 }, { saved: 12400 }, { saved: 9800 }]), [100, 54, 42]);
 assert.deepEqual(barWidths([{ saved: 23100 }, { saved: 500 }]), [100, 4]);
 assert.deepEqual(barWidths([]), []);
+
+// ---- 요리 일기 쓰기·추천 레시피 요리했어요(29절 추가 2026-09-16, 시안 docs/design/diary-write) ----
+// 무엇을 요리했나요 줄 설명
+assert.equal(cookedChoiceText({ count: 2, last_on: "2026-09-14" }), "요리 2번 · 마지막 9월 14일");
+assert.equal(cookedChoiceText(null), "아직 요리 기록이 없어요");
+
+// 추천 레시피 요리했어요 시트 맨 위 한 줄(조사는 받침으로)
+assert.equal(savedRecipeNote("두부조림", true), "두부조림을 내 레시피에 저장했어요. 다음부터는 내 레시피에서 열 수 있어요.");
+assert.equal(savedRecipeNote("김치찌개", true), "김치찌개를 내 레시피에 저장했어요. 다음부터는 내 레시피에서 열 수 있어요.");
+assert.equal(savedRecipeNote("된장국", false), "된장국은 이미 내 레시피에 있어요. 다음부터는 내 레시피에서 열 수 있어요."); // 저장해 둔 복사본을 썼다
+assert.equal(savedRecipeNote("김치찌개", false), "김치찌개는 이미 내 레시피에 있어요. 다음부터는 내 레시피에서 열 수 있어요.");
+
+// 목록 행: 직접 쓴 일기에서 재료비를 비웠으면 재료 수 대신 재료비 모름
+assert.deepEqual(savedRowText({ manual: true, saved: null, eat_out_price: 9000, excluded_count: 0 }), { text: "재료비 모름", good: false });
+assert.deepEqual(savedRowText({ manual: true, saved: null, eat_out_price: null, excluded_count: 0 }), { text: "사 먹으면 얼마 모름", good: false });
+assert.deepEqual(savedRowText({ manual: true, saved: 11500, eat_out_price: 9000, excluded_count: 0 }), { text: "약 11,500원 아낌", good: true });
+
+// 상세 설명·계산표(시안 ④)
+assert.equal(diaryDetailDesc({ cooked_on: "2026-09-16", servings: 2, manual: true }), "9월 16일 수요일 · 2인분 · 직접 쓴 일기");
+assert.equal(diaryDetailDesc({ cooked_on: "2026-09-15", servings: 1, manual: false }), "9월 15일 화요일 · 1인분");
+assert.equal(manualTotal({ saved: 11500, eat_out_price: 9000, ingredient_cost: 6500 }), "약 11,500원");
+assert.equal(manualTotal({ saved: -1200, eat_out_price: 3000, ingredient_cost: 7200 }), "약 1,200원 더 들었어요");
+assert.equal(manualTotal({ saved: -40, eat_out_price: 3000, ingredient_cost: 6040 }), "약 0원"); // 100원 반올림 기준 하나(overSpent)
+assert.equal(manualTotal({ saved: null, eat_out_price: 9000, ingredient_cost: null }), "재료비를 적으면 아낀 돈을 계산해요");
+assert.equal(manualTotal({ saved: null, eat_out_price: null, ingredient_cost: 6500 }), "사 먹으면 얼마를 적으면 아낀 돈을 계산해요");
+assert.equal(manualTotal({ saved: null, eat_out_price: null, ingredient_cost: null }), "사 먹으면 얼마와 재료비를 적으면 아낀 돈을 계산해요");
+assert.equal(manualNote, "레시피가 없어 재료별로 나누지 않았어요 · 참고용이에요");
 
 console.log("check-cooklog: ok");
