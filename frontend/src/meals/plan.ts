@@ -95,7 +95,7 @@ export const urgentChip = (name: string, expiresOn: string | null, today: string
 export const buyDayText = (plannedOn: string, today: string) =>
   plannedOn <= today ? "오늘 사요" : `${parts(plannedOn)[2]}일(${DOW[weekday(plannedOn)]})에 사요`;
 const amounts = (list: { quantity: number; unit: string }[], extra: string[] = []) => [...list.map((a) => quantityText(a.quantity, a.unit)), ...extra].join(" + ");
-/** 줄 설명: buy·enough "2모 필요 · 1모 있어요"/"2개 필요 · 없어요", manual "있음 8개 · 필요 2판"(재고 없으면 "필요 약간 · 없어요"), listed "장보기 목록에 이미 있어서 건너뛰어요" */
+/** 줄 설명: buy·enough "2모 필요 · 1모 있어요"/"2개 필요 · 없어요"/"2큰술 필요 · 없어요"(숟가락 양뿐인데 재고가 없어 1개 담기), manual "있음 8개 · 필요 2판", listed "장보기 목록에 이미 있어서 건너뛰어요" */
 export function previewDetail(row: MealShoppingRow): string {
   if (row.reason === "listed") return "장보기 목록에 이미 있어서 건너뛰어요";
   const need = amounts(row.need, row.need_extra) || "조금";

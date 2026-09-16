@@ -113,9 +113,9 @@ test("식단으로 장보기 목록을 만들면 장보기 탭에 생기고 새�
   await expect(page.getByRole("heading", { name: "장보기 목록 만들기" })).toBeVisible();
   await expect(page.locator(".topbar .summary")).toBeVisible(); // 재료 계산이 끝나야 담을 줄이 보인다
 
-  // "단위가 달라요" 묶음은 기본으로 꺼져 있다 — 담을 줄이 하나도 없을 수 있어 모두 켠다
-  const offChecks = page.locator(".ml-prow.off .sh-check");
-  while (await offChecks.count()) await offChecks.first().click();
+  // 재고에 없는 숟가락 양 재료(된장 2큰술 등)는 한 통(1개)을 담는 줄로 처음부터 체크돼 있다 — 누르지 않아도 담을 수 있다
+  await expect(page.getByRole("checkbox", { name: "된장 1개 담기" })).toBeChecked();
+  await expect(page.getByText("단위가 달라요 · 직접 골라주세요")).toHaveCount(0);
 
   const addButton = page.getByRole("button", { name: /개 장보기에 담기$/ });
   await expect(addButton).toBeEnabled();
