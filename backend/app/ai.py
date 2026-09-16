@@ -1,5 +1,7 @@
 import base64
+import json
 from datetime import timedelta
+from pathlib import Path
 from typing import Literal
 
 import anthropic
@@ -126,6 +128,22 @@ def scan_mode(user):
             return "sample"
         return "on"
     return "sample" if current_app.config["DEV_MODE"] else "off"
+
+
+# 체험 계정의 예시 사진(frontend/public/samples/<id>.jpg)과 사진 종류. 스펙 31절. 사진·결과는 `flask make-sample-scans`가 만든다
+SAMPLE_PHOTOS = {"receipt": "receipt", "ereceipt": "receipt", "fridge": "fridge"}
+SAMPLE_SCANS_FILE = Path(__file__).parent / "data" / "sample_scans.json"
+
+
+def sample_scans():
+    """예시 사진을 실제 AI로 미리 읽어 둔 결과 {id: {"kind", "items", "purchased_on"}}. 아는 id·종류가 맞는 것만. 파일이 없으면 {}."""
+    try:
+        data = json.loads(SAMPLE_SCANS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {k: v for k, v in data.items() if isinstance(v, dict) and SAMPLE_PHOTOS.get(k) == v.get("kind")}
 
 
 def sample_result(kind, today):

@@ -1,2 +1,3 @@
 -r requirements.txt
 pytest==9.1.1
+Pillow==12.3.0  # flask make-sample-scans(체험 예시 사진 만들기)만 쓴다

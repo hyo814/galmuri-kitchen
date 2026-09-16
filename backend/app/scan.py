@@ -1,7 +1,11 @@
+import io
+import json
 import math
 import zlib
 from datetime import datetime, time, timedelta, timezone
+from pathlib import Path
 
+import click
 from flask import Blueprint, abort, current_app, g, jsonify, request
 from sqlalchemy import text
 
@@ -14,7 +18,7 @@ from .matching import normalize
 from .models import AiCall, db, utcnow
 from .validation import iso_date
 
-bp = Blueprint("scan", __name__, url_prefix="/api/scan")
+bp = Blueprint("scan", __name__, url_prefix="/api/scan", cli_group=None)  # 명령은 `flask make-sample-scans`
 
 UPLOAD_KINDS = ("fridge", "receipt", "order", "memo")
 SCAN_KINDS = ("fridge", "receipt", "order", "memo")  # 일일 한도를 함께 세는 kind (memo는 장보기 메모 사진)
@@ -185,7 +189,10 @@ def scan():
     if mode == "off":
         abort(503, "사진 인식을 지금은 쓸 수 없어요.")
     if mode == "sample":
-        return jsonify(**clean_result(kind, ai.sample_result(kind, today), today), sample=True)
+        # 체험 계정이 예시 사진을 보냈으면 그 사진을 미리 실제 AI로 읽어 둔 결과를 준다(스펙 31절). 모르는 id는 일반 예시 결과
+        stored = ai.sample_scans().get(request.form.get("sample")) if g.user.provider == "demo" else None
+        raw = stored if stored and stored["kind"] == kind else ai.sample_result(kind, today)
+        return jsonify(**clean_result(kind, raw, today), sample=True)
 
     check_ai_limits(g.user.id, SCAN_KINDS, ai_daily_limit(g.user, "AI_DAILY_SCAN_LIMIT"), "사진 인식은")
     # 업로드 검증(kind·사진 수·사진 유무·형식)에서 걸린 요청은 세지 않는다. 여러 장이어도 한 번 부르고 한 번 센다.
@@ -196,3 +203,54 @@ def scan():
         abort(502, "인식에 실패했어요. 직접 입력해주세요.")
     finish_ai_call(call, usage)
     return jsonify(**clean_result(kind, raw, today, merge=len(images) > 1), sample=False)
+
+
+SAMPLE_PHOTO_DIR = Path(__file__).resolve().parents[2] / "frontend" / "public" / "samples"
+SAMPLE_MAX_SIDE = 1568  # frontend/src/image.ts resizeImage와 같은 긴 변
+
+
+@bp.cli.command("make-sample-scans")
+@click.argument("folder", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.argument("ids", nargs=-1)
+def make_sample_scans(folder, ids):
+    """FOLDER의 예시 사진(<id>.jpg·.jpeg·.png, id는 ai.SAMPLE_PHOTOS)을 사진 정보(EXIF)를 뺀 긴 변 1568px JPEG로
+    frontend/public/samples/<id>.jpg에 쓰고, 실제 AI로 한 번씩 읽어 app/data/sample_scans.json에 합친다(스펙 31절).
+    IDS를 주면 그 사진만 다시 만든다. 사진은 올리기 전에 개인 정보(카드 번호·이름·주소·전화번호)를 가려 둔다."""
+    try:
+        from PIL import Image, ImageOps  # 이 명령에서만 쓴다(운영 서버에는 없음)
+    except ImportError:
+        raise click.ClickException("Pillow가 필요해요: .venv/bin/pip install Pillow") from None
+    if not current_app.config["ANTHROPIC_API_KEY"]:
+        raise click.ClickException("ANTHROPIC_API_KEY가 없어요(backend/.env).")
+    unknown = [i for i in ids if i not in ai.SAMPLE_PHOTOS]
+    if unknown:
+        raise click.ClickException(f"모르는 사진 id: {', '.join(unknown)} (쓸 수 있는 id: {', '.join(ai.SAMPLE_PHOTOS)})")
+    photos = {}
+    for sample_id in ids or ai.SAMPLE_PHOTOS:
+        found = [folder / f"{sample_id}{ext}" for ext in (".jpg", ".jpeg", ".png") if (folder / f"{sample_id}{ext}").is_file()]
+        if found:
+            photos[sample_id] = found[0]
+        elif ids:
+            raise click.ClickException(f"{folder}에 {sample_id}.jpg(.png)가 없어요.")
+    if not photos:
+        raise click.ClickException(f"{folder}에 예시 사진이 없어요 ({', '.join(f'{i}.jpg' for i in ai.SAMPLE_PHOTOS)}).")
+
+    stored = ai.sample_scans()
+    SAMPLE_PHOTO_DIR.mkdir(parents=True, exist_ok=True)
+    for sample_id, path in photos.items():
+        with Image.open(path) as image:
+            image = ImageOps.exif_transpose(image).convert("RGB")  # 회전을 반영한 뒤 새로 저장하므로 EXIF는 따라가지 않는다
+            image.thumbnail((SAMPLE_MAX_SIDE, SAMPLE_MAX_SIDE))
+            buffer = io.BytesIO()
+            image.save(buffer, "JPEG", quality=85)
+        data = buffer.getvalue()
+        kind = ai.SAMPLE_PHOTOS[sample_id]
+        try:
+            raw, usage = ai.extract(kind, [(data, "image/jpeg")])
+        except ai.AiError as e:
+            raise click.ClickException(f"{sample_id} 사진을 읽지 못했어요({e}).") from None
+        (SAMPLE_PHOTO_DIR / f"{sample_id}.jpg").write_bytes(data)
+        stored[sample_id] = {"kind": kind, **clean_result(kind, raw, seoul_today())}
+        click.echo(f"{sample_id}: 재료 {len(stored[sample_id]['items'])}개 (토큰 {usage['input_tokens']}+{usage['output_tokens']})")
+    ai.SAMPLE_SCANS_FILE.write_text(json.dumps(stored, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    click.echo(f"{ai.SAMPLE_SCANS_FILE.name}에 {len(stored)}장을 저장했어요.")
