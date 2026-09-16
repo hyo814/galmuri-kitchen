@@ -591,6 +591,11 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
   white-space: nowrap;
 }
 
+/* 버튼이 하나뿐일 때(화면 캡처 사진 단계의 취소) — 왼쪽 1fr 칸에만 있으면 덜 만든 것처럼 보여 가로 가득 */
+.actions.actions-single {
+  grid-template-columns: 1fr;
+}
+
 .hint {
   margin: 0;
   font-size: 13px;

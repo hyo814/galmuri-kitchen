@@ -285,9 +285,9 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
                 )}
               </div>
               <p className="r3-quota">사진은 AI가 정리해요{remainingText(usage)}</p>
-              {/* 화면 캡처로 왔으면 글 붙여넣기와 같은 자리에 취소: 글 단계(쓰던 글·경고 그대로)나 영상 보기로 돌아간다 */}
+              {/* 화면 캡처로 왔으면 글 붙여넣기처럼 맨 아래에 취소(혼자라 가로 가득): 글 단계(쓰던 글·경고 그대로)나 영상 보기로 돌아간다 */}
               {capture && (
-                <div className="actions">
+                <div className="actions actions-single">
                   <button type="button" className="btn outline" onClick={cancel}>
                     취소
                   </button>
