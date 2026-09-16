@@ -216,8 +216,8 @@ test("요리 일기의 일기 쓰기로 레시피 없이 쓰면 재고는 그대
   await expect(sheet.getByText("2인분", { exact: true })).toBeVisible();
   await expect(sheet.getByRole("button", { name: /추정해줘요/ })).toHaveCount(0); // 레시피가 없어 AI 추정은 없다
   await sheet.getByLabel("사 먹으면 얼마 (1인분)").fill("9000");
-  await sheet.getByLabel("전체 재료비 (선택)").fill("6500");
-  await expect(sheet.getByLabel("전체 재료비 (선택)")).toHaveAccessibleDescription("2인분 전체"); // 옆 칸은 1인분이라
+  await sheet.getByLabel("재료비 (선택)").fill("6500");
+  await expect(sheet.getByLabel("재료비 (선택)")).toHaveAccessibleDescription("2인분을 합친 값이에요"); // 옆 칸은 1인분이라
   await sheet.getByRole("radiogroup", { name: "별점" }).getByRole("radio", { name: "5점" }).click();
   await sheet.getByRole("button", { name: "메모 (선택)" }).click();
   await sheet.getByLabel("메모").fill("양념을 조금 줄였더니 딱 좋았어요");
@@ -248,8 +248,8 @@ test("요리 일기의 일기 쓰기로 레시피 없이 쓰면 재고는 그대
   // 재료비를 비우면 계산하지 못했다고 알려준다
   await detail.getByRole("button", { name: "고치기" }).click();
   const edit = page.getByRole("dialog", { name: "제육덮밥 고치기" });
-  await expect(edit.getByLabel("전체 재료비 (선택)")).toHaveValue("6,500");
-  await edit.getByLabel("전체 재료비 (선택)").fill("");
+  await expect(edit.getByLabel("재료비 (선택)")).toHaveValue("6,500");
+  await edit.getByLabel("재료비 (선택)").fill("");
   await edit.getByRole("button", { name: "저장", exact: true }).click();
   await expect(edit).toHaveCount(0);
   await expect(calc.getByText("계산하지 못했어요")).toBeVisible();
