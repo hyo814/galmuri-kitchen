@@ -97,6 +97,7 @@ MANUAL_VALIDATION = [
     ({"title": "   "}, TITLE_ERROR),
     ({"title": "가" * 61}, TITLE_ERROR),
     ({"title": 3}, TITLE_ERROR),
+    ({"title": "제육\x00덮밥"}, BAD),  # PostgreSQL이 받지 않는 글자 → 500 대신 400
     ({"servings": 0}, "인분은 1~20 사이 정수로 입력해주세요."),
     ({"servings": 21}, "인분은 1~20 사이 정수로 입력해주세요."),
     ({"cooked_on": "2026-09-16"}, "아직 오지 않은 날은 남길 수 없어요."),
