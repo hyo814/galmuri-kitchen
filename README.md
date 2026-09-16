@@ -7,7 +7,7 @@
 냉장고 재고를 기록하면 상하기 전에 알려 주고, 남은 재료로 레시피를 찾아 주고, 식단·장보기·먹은 기록까지 이어 주는 모바일 웹 서비스입니다.
 앱 설치 없이 휴대폰 브라우저에서 씁니다. "갈무리"는 물건을 잘 간수하고 일을 끝맺는다는 뜻의 순우리말이고, 마스코트는 셰프 다람쥐 **다람이**입니다.
 
-- 체험: https://galmuri-kitchen.onrender.com → 로그인 화면의 **로그인 없이 체험하기**
+- 체험: https://galmuri-kitchen.onrender.com/?demo=1 — 누르면 로그인 없이 체험 계정으로 바로 열립니다. 로그인 화면은 https://galmuri-kitchen.onrender.com (**로그인 없이 체험하기** 버튼도 있습니다)
 - 제출 자료: [서비스 소개서](docs/submission/01-서비스-소개서.md) · [시연 시나리오](docs/submission/02-시연-시나리오.md) · [AI 개발 과정](docs/submission/03-AI-개발-과정.md) · [제출 체크리스트](docs/submission/04-제출-체크리스트.md)
 
 ## 문제
