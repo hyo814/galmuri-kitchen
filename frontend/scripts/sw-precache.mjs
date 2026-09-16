@@ -4,10 +4,11 @@ import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-/** dist 안 모든 파일 → 서비스 워커가 미리 받을 주소(index.html은 "/"). sw.js·소스맵·링크 미리보기 그림(og.png, 앱에서 안 씀)은 뺀다. 정렬해서 돌려준다 */
+/** dist 안 모든 파일 → 서비스 워커가 미리 받을 주소(index.html은 "/"). sw.js·소스맵·링크 미리보기 그림(og.png, 앱에서 안 씀)·
+ *  체험 예시 사진(samples/, 체험 계정만 여는 큰 사진, 스펙 31절)은 뺀다. 정렬해서 돌려준다 */
 export function precacheList(files) {
   return files
-    .filter((f) => f !== "sw.js" && f !== "og.png" && !f.endsWith(".map"))
+    .filter((f) => f !== "sw.js" && f !== "og.png" && !f.startsWith("samples/") && !f.endsWith(".map"))
     .map((f) => (f === "index.html" ? "/" : `/${f}`))
     .sort();
 }

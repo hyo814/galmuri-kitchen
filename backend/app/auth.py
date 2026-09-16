@@ -5,7 +5,7 @@ from authlib.integrations.base_client import OAuthError
 from authlib.integrations.flask_client import OAuth
 from flask import Blueprint, abort, current_app, g, jsonify, redirect, session, url_for
 
-from .ai import scan_mode
+from .ai import sample_scans, scan_mode
 from .defaults import seed_user_defaults
 from .models import User, db
 
@@ -106,11 +106,14 @@ def user_json(user):
     from .foods import nutrition_mode  # foods.py가 auth.login_required를 쓰므로 여기서 불러온다
     from .videos import video_mode  # videos.py가 auth.login_required를 쓰므로 여기서 불러온다
     from . import storage  # storage.py가 auth.login_required를 쓰므로 여기서 불러온다
+    scan = scan_mode(user)
     return jsonify(
         id=user.id,
         nickname=user.nickname,
         provider=user.provider,  # 더보기 계정 묶음의 '카카오로 로그인했어요' 표시용 (스펙 27절). demo는 체험 계정
-        scan=scan_mode(user),
+        scan=scan,
+        # 체험 계정의 '예시 사진으로 해보기'에 보일 사진 id(미리 읽어 둔 결과가 있는 것만, 스펙 31절)
+        scan_samples=sorted(sample_scans()) if user.provider == "demo" and scan != "off" else [],
         scan_limit=ai_daily_limit(user, "AI_DAILY_SCAN_LIMIT"),
         recipe_limit=ai_daily_limit(user, "AI_DAILY_RECIPE_LIMIT"),
         videos=video_mode(user),

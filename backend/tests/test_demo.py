@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import io
+import json
 import os
 from datetime import datetime, time, timedelta, timezone
 
@@ -402,6 +403,89 @@ def test_demo_ai_calls_are_marked_demo(demo_app, monkeypatch):
     assert c.post("/api/recommendations/ai").status_code == 200
     with demo_app.app_context():
         assert [(a.kind, a.demo) for a in AiCall.query.all()] == [("recipe", True)]
+
+
+STORED_SCANS = {
+    "ereceipt": {"kind": "receipt", "items": [{"name": "애호박", "quantity": 1, "unit": "개", "location_kind": "fridge", "price": 1580}], "purchased_on": "2026-08-18"},
+    "fridge": {"kind": "fridge", "items": [{"name": "달걀", "quantity": 12, "unit": "개", "location_kind": "fridge", "price": None}], "purchased_on": None},
+    "order": {"kind": "order", "items": [], "purchased_on": None},  # 모르는 id는 무시한다
+}
+
+
+@pytest.fixture
+def stored_scans(tmp_path, monkeypatch):
+    path = tmp_path / "sample_scans.json"
+    path.write_text(json.dumps(STORED_SCANS, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(ai, "SAMPLE_SCANS_FILE", path)
+
+
+def scan_photo(c, kind, sample=None):
+    data = {"image": (io.BytesIO(b"\xff\xd8\xff" + b"jpeg"), "a.jpg", "image/jpeg")}
+    if sample:
+        data["sample"] = sample
+    return c.post(f"/api/scan?kind={kind}", data=data)
+
+
+def test_demo_sample_photo_in_sample_mode_returns_stored_result(demo_app, stored_scans, monkeypatch):
+    c = new_client(demo_app)
+    assert c.post("/api/demo-login").get_json()["scan_samples"] == []  # 키 없는 운영(off)이면 숨긴다
+    demo_app.config.update(ANTHROPIC_API_KEY="test-key", DEMO_AI_GLOBAL_DAILY=1)
+    use_demo_budget(demo_app, 1)
+    monkeypatch.setattr(ai, "extract", fail_if_called)
+    assert c.get("/api/me").get_json()["scan_samples"] == ["ereceipt", "fridge"]
+    res = scan_photo(c, "receipt", "ereceipt").get_json()
+    assert res == {**{k: v for k, v in STORED_SCANS["ereceipt"].items() if k != "kind"}, "sample": True}
+    assert scan_photo(c, "fridge", "fridge").get_json()["items"][0]["name"] == "달걀"
+    # 모르는 id·종류가 다른 id·파일 없음은 일반 예시 결과
+    generic = [row[0] for row in ai.SAMPLES["receipt"]]
+    for sample in ("receipt", "../x", "fridge"):
+        assert [i["name"] for i in scan_photo(c, "receipt", sample).get_json()["items"]] == generic
+    monkeypatch.setattr(ai, "SAMPLE_SCANS_FILE", ai.SAMPLE_SCANS_FILE.with_name("missing.json"))
+    assert [i["name"] for i in scan_photo(c, "receipt", "ereceipt").get_json()["items"]] == generic
+    assert c.get("/api/me").get_json()["scan_samples"] == []
+    with demo_app.app_context():
+        assert AiCall.query.count() == 1  # use_demo_budget만 — 예시 결과는 세지 않는다
+
+
+def test_demo_sample_photo_in_real_mode_calls_ai_and_counts(demo_app, stored_scans, monkeypatch):
+    c = new_client(demo_app)
+    c.post("/api/demo-login")
+    demo_app.config["ANTHROPIC_API_KEY"] = "test-key"
+    seen = []
+
+    def fake_extract(kind, images):
+        seen.append(kind)
+        return {"items": [{"name": "고등어", "quantity": 1, "unit": "팩", "location_kind": "fridge", "price": 24980}], "purchased_on": None}, {
+            "model": "m", "input_tokens": 1, "output_tokens": 1}
+
+    monkeypatch.setattr(ai, "extract", fake_extract)
+    res = scan_photo(c, "receipt", "ereceipt").get_json()
+    assert (res["sample"], [i["name"] for i in res["items"]], seen) == (False, ["고등어"], ["receipt"])
+    assert c.get("/api/ai-usage").get_json()["scan"] == {"used": 1, "limit": 5}
+    with demo_app.app_context():
+        assert [(a.kind, a.demo) for a in AiCall.query.all()] == [("receipt", True)]
+
+
+def test_non_demo_user_sample_field_is_ignored(client, login, stored_scans, monkeypatch):
+    login()
+    monkeypatch.setattr(ai, "extract", fail_if_called)
+    assert client.get("/api/me").get_json()["scan_samples"] == []
+    res = scan_photo(client, "receipt", "ereceipt").get_json()  # 개발 모드 키 없음 = 예시 결과
+    assert [i["name"] for i in res["items"]] == [row[0] for row in ai.SAMPLES["receipt"]]
+
+
+def test_sample_scans_file_is_read_again_only_when_it_changes(tmp_path, monkeypatch):
+    path = tmp_path / "sample_scans.json"
+    monkeypatch.setattr(ai, "SAMPLE_SCANS_FILE", path)
+    assert ai.sample_scans() == {}  # 파일 없음
+    path.write_text(json.dumps({"fridge": STORED_SCANS["fridge"]}), encoding="utf-8")
+    ai.sample_scans().clear()  # 부른 쪽이 바꿔도 기억한 값은 그대로
+    hits = ai._read_sample_scans.cache_info().hits
+    assert ai.sample_scans() == {"fridge": STORED_SCANS["fridge"]}
+    assert ai._read_sample_scans.cache_info().hits == hits + 1  # 파일을 다시 읽지 않았다
+    path.write_text(json.dumps(STORED_SCANS), encoding="utf-8")
+    os.utime(path, ns=(path.stat().st_atime_ns, path.stat().st_mtime_ns + 1_000_000_000))  # 같은 순간에 고쳐도 시각이 달라지게
+    assert sorted(ai.sample_scans()) == ["ereceipt", "fridge"]  # 서버를 다시 켜지 않아도 새 내용
 
 
 def test_demo_videos_are_sample_even_with_key(demo_app):

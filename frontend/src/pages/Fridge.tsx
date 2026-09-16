@@ -355,6 +355,7 @@ export default function Fridge({ user }: { user: User }) {
         <ScanSheet
           mode={user.scan}
           limit={user.scan_limit}
+          samples={user.scan_samples}
           locations={locations}
           onAdded={scanned}
           onManual={() => openNew()}

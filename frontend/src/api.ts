@@ -56,6 +56,8 @@ export interface User {
   /** 로그인한 방법(더보기 계정 묶음 표시용). demo는 로그인 없이 체험하기로 만든 하루짜리 계정 */
   provider: "kakao" | "naver" | "google" | "dev" | "demo";
   scan: ScanMode;
+  /** 체험 계정의 `예시 사진으로 해보기`에 보일 사진 id(미리 읽어 둔 결과가 있는 것만, 스펙 31절). 그 밖의 계정은 [] */
+  scan_samples: string[];
   scan_limit: number;
   recipe_limit: number;
   videos: VideoMode;

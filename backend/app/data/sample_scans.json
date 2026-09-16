@@ -1,0 +1,168 @@
+{
+  "ereceipt": {
+    "kind": "receipt",
+    "items": [
+      {
+        "name": "애호박",
+        "quantity": 1.0,
+        "unit": "개",
+        "location_kind": "fridge",
+        "price": 1580
+      },
+      {
+        "name": "체리",
+        "quantity": 500.0,
+        "unit": "g",
+        "location_kind": "fridge",
+        "price": 9980
+      },
+      {
+        "name": "고등어",
+        "quantity": 1.0,
+        "unit": "팩",
+        "location_kind": "freezer",
+        "price": 24980
+      },
+      {
+        "name": "꽃갈비살",
+        "quantity": 1.0,
+        "unit": "팩",
+        "location_kind": "freezer",
+        "price": 22210
+      },
+      {
+        "name": "청아한돈",
+        "quantity": 1.0,
+        "unit": "팩",
+        "location_kind": "freezer",
+        "price": 9130
+      },
+      {
+        "name": "칵테일새우",
+        "quantity": 1.0,
+        "unit": "팩",
+        "location_kind": "freezer",
+        "price": 19980
+      }
+    ],
+    "purchased_on": "2026-08-18"
+  },
+  "fridge": {
+    "kind": "fridge",
+    "items": [
+      {
+        "name": "계란",
+        "quantity": 5.0,
+        "unit": "개",
+        "location_kind": "fridge",
+        "price": null
+      },
+      {
+        "name": "계란",
+        "quantity": 6.0,
+        "unit": "개",
+        "location_kind": "fridge",
+        "price": null
+      },
+      {
+        "name": "간장",
+        "quantity": 1.0,
+        "unit": "병",
+        "location_kind": "fridge",
+        "price": null
+      },
+      {
+        "name": "우유",
+        "quantity": 1.0,
+        "unit": "병",
+        "location_kind": "fridge",
+        "price": null
+      },
+      {
+        "name": "식초",
+        "quantity": 1.0,
+        "unit": "병",
+        "location_kind": "fridge",
+        "price": null
+      },
+      {
+        "name": "마요네즈",
+        "quantity": 1.0,
+        "unit": "병",
+        "location_kind": "fridge",
+        "price": null
+      },
+      {
+        "name": "올리고당",
+        "quantity": 1.0,
+        "unit": "병",
+        "location_kind": "fridge",
+        "price": null
+      },
+      {
+        "name": "맛술",
+        "quantity": 1.0,
+        "unit": "병",
+        "location_kind": "fridge",
+        "price": null
+      },
+      {
+        "name": "생수",
+        "quantity": 1.0,
+        "unit": "병",
+        "location_kind": "fridge",
+        "price": null
+      },
+      {
+        "name": "딸기잼",
+        "quantity": 1.0,
+        "unit": "병",
+        "location_kind": "fridge",
+        "price": null
+      },
+      {
+        "name": "마늘소스",
+        "quantity": 1.0,
+        "unit": "병",
+        "location_kind": "fridge",
+        "price": null
+      },
+      {
+        "name": "저당사이다",
+        "quantity": 1.0,
+        "unit": "병",
+        "location_kind": "fridge",
+        "price": null
+      },
+      {
+        "name": "고추기름",
+        "quantity": 1.0,
+        "unit": "병",
+        "location_kind": "fridge",
+        "price": null
+      },
+      {
+        "name": "고추장아찌",
+        "quantity": 1.0,
+        "unit": "병",
+        "location_kind": "fridge",
+        "price": null
+      },
+      {
+        "name": "참기름",
+        "quantity": 1.0,
+        "unit": "병",
+        "location_kind": "fridge",
+        "price": null
+      },
+      {
+        "name": "들기름",
+        "quantity": 1.0,
+        "unit": "병",
+        "location_kind": "fridge",
+        "price": null
+      }
+    ],
+    "purchased_on": null
+  }
+}

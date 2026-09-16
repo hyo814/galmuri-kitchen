@@ -1,0 +1,378 @@
+<title>예시 사진 체험 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+  :root {
+    --board: #e6e8eb;
+    --bg: #f3f4f6;
+    --surface: #ffffff;
+    --field: #f3f4f6;
+    --text: #17191c;
+    --text-2: #5b616b;
+    --text-3: #63697a;
+    --line: #eef0f2;
+    --chip-line: #d3d7dd;
+    --scrim: rgb(15 17 20 / 0.48);
+    --accent: #0b7a4c;
+    --accent-strong: #086a41;
+    --accent-tint: #e7f6ef;
+    --on-accent: #ffffff;
+    --warn: #8f5500;
+    --warn-tint: #fff3dc;
+    --photo-a: #d9c3a1;
+    --photo-b: #b9cfa8;
+    --photo-c: #c7b3c9;
+    --note: #3a3f46;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --scrim: rgb(0 0 0 / 0.6); --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --photo-a: #5a4a33; --photo-b: #3f5436; --photo-c: #4d3f50; --note: #d3d7dc;
+    }
+  }
+  :root[data-theme="dark"] {
+    --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --scrim: rgb(0 0 0 / 0.6); --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --photo-a: #5a4a33; --photo-b: #3f5436; --photo-c: #4d3f50; --note: #d3d7dc;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 16px 56px; background: var(--board); color: var(--text); font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .intro { max-width: 1700px; margin: 0 auto 28px; }
+  .intro h1 { margin: 0 0 8px; font-size: 26px; line-height: 34px; font-weight: 700; text-wrap: balance; }
+  .intro p { margin: 0 0 6px; max-width: 66ch; font-size: 15px; line-height: 24px; color: var(--text-2); word-break: keep-all; }
+  .intro b { color: var(--note); }
+  .asks { max-width: 1700px; margin: 0 auto 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; }
+  .ask { padding: 14px 16px; border-radius: 16px; background: var(--surface); }
+  .ask h3 { margin: 0 0 4px; font-size: 15px; }
+  .ask p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+  .ask .rec { color: var(--accent-strong); font-weight: 600; }
+
+  .board { max-width: 1700px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(384px, 100%), 1fr)); gap: 32px 24px; align-items: start; }
+  .option { display: grid; gap: 12px; justify-items: center; }
+  .cap { width: min(384px, 100%); display: grid; gap: 4px; }
+  .tag { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: 0.06em; color: var(--text-3); }
+  .cap h2 { margin: 0; font-size: 18px; line-height: 26px; }
+  .cap p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+
+  /* 폰 */
+  .phone { position: relative; width: min(384px, 100%); height: 800px; overflow: hidden; border-radius: 28px; background: var(--bg); }
+  .under { padding: 24px 20px; }
+  .under h3 { margin: 0 0 4px; font-size: 26px; font-weight: 700; }
+  .under p { margin: 0; color: var(--text-3); font-size: 15px; }
+  .scrim { position: absolute; inset: 0; background: var(--scrim); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 92%; overflow: hidden; padding: 12px 20px 24px; border-radius: 24px 24px 0 0; background: var(--surface); display: grid; gap: 14px; }
+  .sheet.tall { top: 7%; }
+  .handle { justify-self: center; width: 40px; height: 4px; border-radius: 2px; background: var(--chip-line); }
+  .sh-title { margin: 0; font-size: 21px; line-height: 28px; font-weight: 700; }
+  .sh-desc { margin: 2px 0 0; font-size: 14px; line-height: 20px; color: var(--text-2); word-break: keep-all; }
+  .hint { display: flex; gap: 6px; align-items: flex-start; font-size: 13px; line-height: 19px; color: var(--text-3); word-break: keep-all; }
+  .hint svg { flex: none; margin-top: 2px; }
+
+  .btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 56px; border-radius: 16px; font-size: 17px; font-weight: 600; white-space: nowrap; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); }
+  .btn.secondary { background: var(--field); color: var(--text); }
+  .actions { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; }
+
+  /* 사진 모으기 */
+  .kindline { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--field); font-size: 15px; font-weight: 600; }
+  .kindline .ic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--surface); color: var(--accent-strong); }
+  .kindline span.chg { margin-left: auto; font-size: 14px; color: var(--accent-strong); }
+  .tray { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .thumb { position: relative; aspect-ratio: 1; max-width: 100%; border-radius: 14px; overflow: hidden; }
+  .thumb .img { position: absolute; inset: 0; }
+  .thumb .n { position: absolute; left: 6px; bottom: 6px; padding: 1px 7px; border-radius: 10px; background: rgb(0 0 0 / 0.55); color: #fff; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .thumb .x { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 14px; background: rgb(0 0 0 / 0.55); color: #fff; }
+  .add { display: grid; place-items: center; align-content: center; gap: 4px; aspect-ratio: 1; border-radius: 14px; box-shadow: inset 0 0 0 1.5px var(--chip-line); color: var(--text-2); font-size: 13px; font-weight: 600; }
+  .add svg { color: var(--accent-strong); }
+  .count { display: flex; justify-content: space-between; font-size: 14px; color: var(--text-2); }
+  .count b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+  /* 기다리기 */
+  .wait { display: grid; justify-items: center; gap: 14px; padding: 20px 0 8px; text-align: center; }
+  .stack { position: relative; width: 132px; height: 110px; }
+  .stack i { position: absolute; width: 84px; height: 96px; border-radius: 12px; box-shadow: 0 2px 8px rgb(0 0 0 / 0.12); }
+  .stack i:nth-child(1) { left: 0; top: 8px; transform: rotate(-9deg); background: var(--photo-b); }
+  .stack i:nth-child(2) { left: 24px; top: 2px; transform: rotate(-2deg); background: var(--photo-c); }
+  .stack i:nth-child(3) { left: 48px; top: 10px; transform: rotate(7deg); background: var(--photo-a); }
+  .bar { width: 100%; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .bar i { display: block; width: 46%; height: 100%; border-radius: 2px; background: var(--accent); }
+  .wait h4 { margin: 0; font-size: 19px; line-height: 26px; }
+  .wait p { margin: 0; font-size: 14px; color: var(--text-2); }
+
+  /* 확인 */
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 8px; background: var(--accent-tint); color: var(--accent-strong); font-size: 12px; font-weight: 600; }
+  .label { font-size: 14px; font-weight: 600; color: var(--text-2); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; height: 36px; padding: 0 12px; border-radius: 18px; background: var(--field); color: var(--text-2); font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .chip.on { background: var(--accent-tint); color: var(--accent-strong); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .chip.small { height: 32px; padding: 0 10px; font-size: 13px; }
+  .picked { font-size: 13px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .items { display: grid; }
+  .item { display: grid; grid-template-columns: 28px minmax(0, 1fr) 24px; align-items: center; gap: 10px; min-height: 60px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .cb { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; background: var(--accent); color: var(--on-accent); }
+  .cb.off { background: none; box-shadow: inset 0 0 0 2px var(--chip-line); }
+  .it-name { font-size: 16px; font-weight: 600; }
+  .it-sub { font-size: 13px; line-height: 18px; color: var(--text-3); }
+  .it-sub .own { color: var(--warn); font-weight: 600; }
+  .chev { color: var(--text-3); }
+  .edit { grid-column: 1 / -1; display: grid; gap: 10px; padding: 4px 0 10px 38px; }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .fld { display: grid; gap: 4px; }
+  .fld span { font-size: 12px; color: var(--text-3); }
+  .fld div { height: 44px; display: flex; align-items: center; padding: 0 12px; border-radius: 12px; background: var(--field); font-size: 15px; }
+  .foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 20px 20px; background: var(--surface); box-shadow: 0 -1px 0 var(--line); }
+
+  /* 재고 목록 */
+  .list { margin: 0 16px; border-radius: 20px; background: var(--surface); }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 14px 16px; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .row b { font-size: 16px; }
+  .row small { display: block; margin-top: 2px; font-size: 13px; color: var(--text-3); }
+  .pill { font-size: 12px; font-weight: 600; color: var(--warn); background: var(--warn-tint); padding: 3px 8px; border-radius: 8px; }
+
+  svg { flex: none; }
+  .foot-note { width: min(384px, 100%); font-size: 13px; line-height: 20px; color: var(--text-3); word-break: keep-all; }
+</style>
+<style>
+  /* 예시 사진 체험 추가 */
+  .sheet.tall { align-content: start; }
+  .guide { margin: 0 16px 12px; padding: 16px; border-radius: 20px; background: var(--surface); display: grid; gap: 10px; }
+  .guide-top { display: flex; align-items: flex-start; gap: 8px; }
+  .guide-top b { font-size: 17px; line-height: 24px; }
+  .guide-top small { display: block; font-size: 13px; color: var(--text-3); }
+  .guide-top .close { margin-left: auto; color: var(--text-3); padding: 2px; }
+  .guide-row { display: grid; grid-template-columns: 36px minmax(0,1fr) 16px; align-items: center; gap: 10px; min-height: 52px; padding: 6px 10px; border-radius: 14px; background: var(--field); }
+  .guide-row .ic { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; background: var(--surface); color: var(--accent-strong); }
+  .guide-row b { font-size: 15px; display: block; }
+  .guide-row small { font-size: 12px; color: var(--text-3); }
+  .guide-row .chev { color: var(--text-3); }
+  .under-head { display: flex; justify-content: space-between; align-items: flex-end; padding: 24px 20px 16px; }
+  .under-head h3 { margin: 0; font-size: 26px; font-weight: 700; }
+  .under-head p { margin: 2px 0 0; color: var(--text-3); font-size: 14px; }
+  .banner { margin: 0 16px 12px; padding: 12px 14px; border-radius: 16px; background: var(--surface); display: flex; gap: 10px; align-items: center; font-size: 15px; font-weight: 600; }
+  .banner i { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 16px; background: #fde8e8; color: #c62828; font-style: normal; font-weight: 700; }
+  .dock { position: absolute; left: 16px; right: 16px; bottom: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .dock .btn { height: 52px; font-size: 16px; }
+  .dock .btn.outline { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--chip-line); color: var(--text); }
+
+  .sec-label { display: flex; align-items: baseline; justify-content: space-between; font-size: 14px; font-weight: 600; color: var(--text-2); }
+  .sec-label small { font-weight: 500; color: var(--text-3); font-size: 12px; }
+  .samples { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .sample { display: grid; gap: 6px; }
+  .sample .pic { position: relative; aspect-ratio: 3 / 4; max-width: 100%; border-radius: 14px; overflow: hidden; }
+  .sample .pic.on { box-shadow: 0 0 0 2.5px var(--accent); }
+  .sample span { font-size: 13px; font-weight: 600; text-align: center; }
+  .or { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-3); }
+  .or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .choice-mini { display: flex; gap: 6px; }
+  .choice-mini .chip { flex: 1; justify-content: center; }
+
+  /* 사진 그림 (실제로는 사용자가 찍은 사진) */
+  .ph-receipt { position: absolute; inset: 0; background: #cfc6b8; display: grid; place-items: center; }
+  .ph-receipt .paper { width: 74%; height: 90%; background: #faf8f3; transform: rotate(-4deg); padding: 7% 8%; display: grid; align-content: start; gap: 5%; box-shadow: 0 3px 8px rgb(0 0 0 / .18); }
+  .ph-receipt .paper i { display: block; height: 3px; border-radius: 2px; background: #8d8a84; }
+  .ph-receipt .paper i.s { width: 60%; } .ph-receipt .paper i.m { width: 85%; } .ph-receipt .paper i.t { width: 40%; margin: 0 auto 6%; height: 4px; background: #5f5c57; }
+  .ph-fridge { position: absolute; inset: 0; background: linear-gradient(#eef3f5, #dfe7ea); }
+  .ph-fridge .shelf { position: absolute; left: 0; right: 0; height: 3px; background: #b9c6cb; }
+  .ph-fridge .f { position: absolute; border-radius: 4px; }
+  .ph-order { position: absolute; inset: 0; background: #f7f7f8; padding: 12% 10%; display: grid; align-content: start; gap: 8%; }
+  .ph-order .ln { display: grid; grid-template-columns: 26% 1fr; gap: 8%; align-items: center; }
+  .ph-order .ln b { aspect-ratio: 1; border-radius: 4px; }
+  .ph-order .ln i { height: 4px; border-radius: 2px; background: #9a9ca3; }
+  .ph-order .hd { height: 6px; width: 55%; border-radius: 3px; background: #5a5d66; }
+
+  .preview { position: relative; height: 330px; border-radius: 18px; overflow: hidden; }
+  .preview .cap-tag { position: absolute; left: 10px; bottom: 10px; padding: 4px 10px; border-radius: 10px; background: rgb(0 0 0 / .6); color: #fff; font-size: 12px; font-weight: 600; }
+  .real { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; color: var(--accent-strong); }
+
+  .scanbox { position: relative; width: 150px; height: 190px; border-radius: 14px; overflow: hidden; }
+  .scanline { position: absolute; left: 0; right: 0; top: 42%; height: 26%; background: linear-gradient(transparent, rgb(47 192 127 / .35)); border-bottom: 2px solid var(--accent); }
+  @media (prefers-reduced-motion: no-preference) {
+    .scanline { animation: sweep 2.4s ease-in-out infinite alternate; }
+    @keyframes sweep { from { top: -26%; } to { top: 100%; } }
+  }
+  .steps { display: grid; gap: 6px; width: 100%; text-align: left; }
+  .steps li { list-style: none; display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--text-3); }
+  .steps li.done { color: var(--text-2); }
+  .steps li.now { color: var(--text); font-weight: 600; }
+  .steps .dot { width: 18px; height: 18px; border-radius: 9px; display: grid; place-items: center; box-shadow: inset 0 0 0 2px var(--chip-line); }
+  .steps li.done .dot { background: var(--accent); box-shadow: none; color: var(--on-accent); }
+  .steps li.now .dot { box-shadow: inset 0 0 0 2px var(--accent); }
+
+  .compare { position: relative; height: 150px; border-radius: 14px; overflow: hidden; }
+  .compare .fold { position: absolute; right: 8px; top: 8px; padding: 4px 10px; border-radius: 10px; background: rgb(0 0 0 / .6); color: #fff; font-size: 12px; font-weight: 600; }
+  .compare .ph-receipt .paper { width: 46%; height: 150%; transform: rotate(-4deg) translateY(12%); }
+  .title-row { display: grid; grid-template-columns: minmax(0,1fr) 64px; gap: 12px; align-items: center; }
+  .mini { position: relative; width: 64px; height: 80px; border-radius: 10px; overflow: hidden; }
+  .mini .zoom { position: absolute; right: 3px; bottom: 3px; width: 22px; height: 22px; border-radius: 11px; display: grid; place-items: center; background: rgb(0 0 0 / .6); color: #fff; }
+  .it-sub .price { font-variant-numeric: tabular-nums; }
+  .ai-note { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: 14px; background: var(--accent-tint); color: var(--accent-strong); font-size: 13px; line-height: 19px; font-weight: 600; word-break: keep-all; }
+  .ai-note.warn { background: var(--warn-tint); color: var(--warn); }
+  .ai-note svg { margin-top: 1px; }
+  .ai-note a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+  .overlay { position: absolute; inset: 0; background: rgb(8 9 10 / .92); display: grid; grid-template-rows: auto 1fr auto; padding: 16px; gap: 12px; color: #fff; }
+  .overlay .top { display: flex; justify-content: space-between; font-size: 15px; font-weight: 600; }
+  .overlay .big { position: relative; border-radius: 12px; overflow: hidden; }
+  .overlay .big .ph-receipt .paper { width: 70%; height: 92%; }
+  .overlay p { margin: 0; font-size: 13px; color: #c9ccd2; text-align: center; }
+</style>
+
+<header class="intro">
+  <h1>예시 사진으로 체험하기 시안</h1>
+  <p>투표하러 온 사람은 냉장고 앞에 있지 않아요. 그래서 <b>체험 계정에만</b> 직접 찍은 예시 사진 3장을 두고, 고르면 <b>진짜 AI가 그 자리에서 읽어요</b>. 저장해 둔 결과를 바로 띄우지 않아요.</p>
+  <p>가짜처럼 보이지 않게 하는 장치: ① 결과 화면에서 <b>사진과 찾은 재료를 같이</b> 보여 줘요 ② 읽는 데 걸린 시간을 적어요 ③ 예산이 떨어져 저장된 결과를 쓸 때는 <b>그렇다고 밝혀요</b>.</p>
+  <p>화면 흐름: ① 체험 첫 안내 → ② 사진으로 추가(예시 사진) → ③ 사진 확인 → ④ 읽는 중 → ⑤ 확인(사진 비교) → ⑥ 예산이 떨어졌을 때. 사진 자리는 그림이고, 실제로는 직접 찍어 주신 사진을 가려서 써요.</p>
+</header>
+
+<section class="asks" aria-label="정할 것">
+  <div class="ask"><h3>A. 사진과 결과를 어떻게 비교할까</h3><p><span class="rec">⑤-A 위에 사진 띠</span>를 추천해요. 스크롤하면서 영수증 줄과 재료를 바로 맞춰 봐요. ⑤-B는 작은 사진을 눌러 크게 보는 방식이에요.</p></div>
+  <div class="ask"><h3>B. 예시 사진 몇 장</h3><p><span class="rec">3장 · 영수증 · 냉장고 · 주문 캡처</span>. 지금 사진 종류 3개와 같아서 고른 사진이 종류도 정해요.</p></div>
+  <div class="ask"><h3>C. 체험 첫 안내 카드</h3><p><span class="rec">체험 계정 재고 화면 맨 위, 닫으면 다시 안 보임</span>. 로그인 사용자에게는 안 보여요.</p></div>
+  <div class="ask"><h3>D. PC에서 보면</h3><p>‘카메라로 찍기’는 PC에 카메라가 없어 헷갈려요. <span class="rec">PC에서는 ‘사진 파일 올리기’ 버튼 하나</span>로 바꿔요(화면은 같음).</p></div>
+</section>
+
+<main class="board">
+
+  <!-- ① 체험 첫 안내 -->
+  <section class="option" aria-labelledby="f1">
+    <div class="cap"><span class="tag">① FIRST VISIT</span><h2 id="f1">체험 첫 안내</h2><p>체험하기로 들어오면 재고 맨 위에 한 번만 떠요. 줄을 누르면 해당 화면으로 가고, ✕로 닫아요.</p></div>
+    <div class="phone">
+      <div class="under-head"><div><h3>내 재고</h3><p>재료 10개 · 빨리 먹어야 할 재료 2개</p></div></div>
+      <div class="guide">
+        <div class="guide-top"><div><b>갈무리부엌 체험 중이에요</b><small>예시 재고가 들어 있어요 · 하루 뒤 사라져요</small></div><span class="close" aria-label="안내 닫기"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></span></div>
+        <div class="guide-row"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h2l1.5-2h6l1.5 2h2A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.5"/></svg></span><span><b>영수증 사진으로 재료 넣기</b><small>예시 사진을 AI가 실제로 읽어요</small></span><svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 5l7 7-7 7"/></svg></div>
+        <div class="guide-row"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg></span><span><b>두부·대파로 AI 레시피 받기</b><small>곧 먹어야 할 재료를 먼저 써요</small></span><svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 5l7 7-7 7"/></svg></div>
+      </div>
+      <div class="banner"><i>!</i>필수품 1개가 떨어졌어요</div>
+      <div class="list">
+        <div class="row"><div><b>두부</b><small>1모 · 냉장실 · 9월 12일 구입</small></div><span class="pill" style="color:#c62828;background:#fde8e8">D-1</span></div>
+        <div class="row"><div><b>대파</b><small>1단 · 냉장실 · 9월 10일 구입</small></div><span class="pill" style="color:#c62828;background:#fde8e8">D-2</span></div>
+        <div class="row"><div><b>김치</b><small>1kg · 냉장실 · 9월 5일 구입</small></div><span class="pill">구입 10일째</span></div>
+      </div>
+      <div class="dock"><span class="btn outline">사진으로 추가</span><span class="btn primary">+ 재료 추가</span></div>
+    </div>
+  </section>
+
+  <!-- ② 사진으로 추가 -->
+  <section class="option" aria-labelledby="f2">
+    <div class="cap"><span class="tag">② ADD BY PHOTO</span><h2 id="f2">사진으로 추가 · 체험 계정</h2><p>맨 위에 예시 사진 3장. 아래 ‘내 사진으로’는 지금 화면 그대로예요(종류는 칩으로 줄였어요).</p></div>
+    <div class="phone">
+      <div class="under"><h3>내 재고</h3><p>재료 10개</p></div>
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <p class="sh-title">사진으로 추가</p>
+        <div class="sec-label">예시 사진으로 해보기 <small>직접 찍은 사진이에요</small></div>
+        <div class="samples">
+          <div class="sample"><div class="pic"><div class="ph-receipt"><div class="paper"><i class="t"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i></div></div></div><span>영수증</span></div>
+          <div class="sample"><div class="pic"><div class="ph-fridge"><div class="shelf" style="top:38%"></div><div class="shelf" style="top:70%"></div><div class="f" style="left:10%;top:14%;width:30%;height:22%;background:#f1e7c9"></div><div class="f" style="left:48%;top:8%;width:18%;height:28%;background:#8fbf6a"></div><div class="f" style="left:70%;top:18%;width:20%;height:18%;background:#e9e2d0"></div><div class="f" style="left:12%;top:46%;width:24%;height:22%;background:#c94a3a"></div><div class="f" style="left:42%;top:50%;width:36%;height:18%;background:#f6f6f2"></div><div class="f" style="left:18%;top:76%;width:60%;height:16%;background:#6aa15a"></div></div></div><span>냉장고</span></div>
+          <div class="sample"><div class="pic"><div class="ph-order"><span class="hd"></span><div class="ln"><b style="background:#e9d8b4"></b><i></i></div><div class="ln"><b style="background:#b8d19a"></b><i></i></div><div class="ln"><b style="background:#f0c9b8"></b><i></i></div><div class="ln"><b style="background:#d6dbe3"></b><i></i></div></div></div><span>주문 캡처</span></div>
+        </div>
+        <div class="or">내 사진으로</div>
+        <div class="choice-mini"><span class="chip on">냉장고</span><span class="chip">영수증</span><span class="chip">주문 캡처</span></div>
+        <div class="actions actions-even" style="grid-template-columns:1fr 1fr"><span class="btn secondary">앨범에서 고르기</span><span class="btn primary">카메라로 찍기</span></div>
+        <p class="hint"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.01"/></svg>체험 계정은 하루 5번까지 · 예시 사진도 1번으로 세요</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ③ 사진 확인 -->
+  <section class="option" aria-labelledby="f3">
+    <div class="cap"><span class="tag">③ CONFIRM</span><h2 id="f3">예시 사진 확인</h2><p>사진을 크게 먼저 보여 줘요. 무엇이 찍혔는지 본 뒤에 읽어야 결과와 맞춰 볼 수 있어요.</p></div>
+    <div class="phone">
+      <div class="under"><h3>내 재고</h3><p>재료 10개</p></div>
+      <div class="scrim"></div>
+      <div class="sheet tall">
+        <div class="handle"></div>
+        <div><p class="sh-title">영수증 예시</p><p class="sh-desc">동네 마트에서 받은 영수증이에요 · 카드 번호와 매장 정보는 가렸어요</p></div>
+        <div class="preview"><div class="ph-receipt"><div class="paper"><i class="t"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i><i class="m"></i></div></div><span class="cap-tag">예시 사진</span></div>
+        <span class="real"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/></svg>이 사진을 AI가 지금 읽어요 · 오늘 4번 남음</span>
+        <div class="actions"><span class="btn secondary">다른 사진</span><span class="btn primary">이 사진 읽기</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ④ 읽는 중 -->
+  <section class="option" aria-labelledby="f4">
+    <div class="cap"><span class="tag">④ READING</span><h2 id="f4">읽는 중</h2><p>사진 위를 훑는 줄과 단계 표시. 기다리는 동안 뭘 하는지 보이면 결과를 믿기 쉬워요.</p></div>
+    <div class="phone">
+      <div class="under"><h3>내 재고</h3><p>재료 10개</p></div>
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <div class="wait">
+          <div class="scanbox"><div class="ph-receipt"><div class="paper"><i class="t"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i><i class="m"></i></div></div><div class="scanline"></div></div>
+          <div><h4>영수증에서 재료를 찾고 있어요</h4><p>10초쯤 걸려요</p></div>
+          <ul class="steps" style="padding:0;margin:0">
+            <li class="done"><span class="dot"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>사진 보냈어요</li>
+            <li class="now"><span class="dot"></span>글자와 품목을 읽는 중</li>
+            <li><span class="dot"></span>식재료만 골라 보관 위치 정하기</li>
+          </ul>
+        </div>
+        <span class="btn secondary">취소</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑤-A 확인: 사진 띠 -->
+  <section class="option" aria-labelledby="f5a">
+    <div class="cap"><span class="tag">⑤-A REVIEW · 추천</span><h2 id="f5a">확인 — 위에 사진 띠</h2><p>사진을 150px 띠로 위에 두고 목록은 그 아래에서 스크롤해요. 영수증 금액이 재료 줄에 같이 보여 맞춰 보기 쉬워요. ‘접기’로 숨겨요.</p></div>
+    <div class="phone">
+      <div class="scrim"></div>
+      <div class="sheet tall">
+        <div class="handle"></div>
+        <div><p class="sh-title">찾은 재료 6개</p><p class="sh-desc">영수증 1장을 11초 만에 읽었어요 · 휴지·세제는 뺐어요</p></div>
+        <div class="compare"><div class="ph-receipt"><div class="paper"><i class="t"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i><i class="m"></i></div></div><span class="fold">사진 접기</span></div>
+        <div class="items">
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><div><div class="it-name">두부</div><div class="it-sub">1모 · 냉장실 · <span class="price">1,500원</span></div></div><svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg></div>
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><div><div class="it-name">대파</div><div class="it-sub">1단 · 냉장실 · <span class="price">2,980원</span></div></div><svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg></div>
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><div><div class="it-name">달걀</div><div class="it-sub">30구 · 냉장실 · <span class="price">7,980원</span></div></div><svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg></div>
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><div><div class="it-name">삼겹살</div><div class="it-sub">600g · 냉장실 · <span class="price">12,900원</span></div></div><svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg></div>
+        </div>
+      </div>
+      <div class="foot"><span class="btn primary">재료 6개 넣기</span></div>
+    </div>
+  </section>
+
+  <!-- ⑤-B 확인: 작은 사진 -->
+  <section class="option" aria-labelledby="f5b">
+    <div class="cap"><span class="tag">⑤-B REVIEW</span><h2 id="f5b">확인 — 작은 사진 눌러 크게</h2><p>제목 옆 작은 사진을 누르면 사진이 크게 떠요(오른쪽 겹친 화면). 목록이 넓지만 비교하려면 한 번 더 눌러야 해요.</p></div>
+    <div class="phone">
+      <div class="scrim"></div>
+      <div class="sheet tall">
+        <div class="handle"></div>
+        <div class="title-row"><div><p class="sh-title">찾은 재료 6개</p><p class="sh-desc">영수증 1장을 11초 만에 읽었어요</p></div><div class="mini"><div class="ph-receipt"><div class="paper"><i class="t"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i></div></div><span class="zoom"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></span></div></div>
+        <div class="items">
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><div><div class="it-name">두부</div><div class="it-sub">1모 · <span class="price">1,500원</span></div></div><span></span></div>
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><div><div class="it-name">대파</div><div class="it-sub">1단 · <span class="price">2,980원</span></div></div><span></span></div>
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><div><div class="it-name">달걀</div><div class="it-sub">30구 · <span class="price">7,980원</span></div></div><span></span></div>
+        </div>
+      </div>
+      <div class="overlay" style="left:34%;top:10%;border-radius:18px 0 0 0">
+        <div class="top"><span>영수증 예시</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></div>
+        <div class="big"><div class="ph-receipt"><div class="paper"><i class="t"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i><i class="m"></i></div></div></div>
+        <p>두 손가락으로 크게 볼 수 있어요</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ⑥ 예산 소진 -->
+  <section class="option" aria-labelledby="f6">
+    <div class="cap"><span class="tag">⑥ BUDGET OUT</span><h2 id="f6">체험 AI를 다 썼을 때</h2><p>그 사진을 미리 실제 AI로 읽어 둔 결과를 보여 주고, 맨 위에서 그렇다고 밝혀요. 결과는 사진과 맞으니 비교는 그대로 돼요. 시간 문구는 빼요.</p></div>
+    <div class="phone">
+      <div class="scrim"></div>
+      <div class="sheet tall">
+        <div class="handle"></div>
+        <div><p class="sh-title">찾은 재료 6개</p><p class="sh-desc">휴지·세제는 뺐어요</p></div>
+        <div class="ai-note warn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.01"/></svg><span>오늘 체험용 AI를 다 써서, 이 사진을 미리 읽어 둔 결과를 보여줘요. <a>카카오로 로그인</a>하면 내 사진을 바로 읽어요.</span></div>
+        <div class="compare"><div class="ph-receipt"><div class="paper"><i class="t"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i><i class="m"></i><i class="s"></i><i class="m"></i></div></div><span class="fold">사진 접기</span></div>
+        <div class="items">
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><div><div class="it-name">두부</div><div class="it-sub">1모 · 냉장실 · <span class="price">1,500원</span></div></div><svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg></div>
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><div><div class="it-name">대파</div><div class="it-sub">1단 · 냉장실 · <span class="price">2,980원</span></div></div><svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg></div>
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><div><div class="it-name">달걀</div><div class="it-sub">30구 · 냉장실 · <span class="price">7,980원</span></div></div><svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg></div>
+        </div>
+      </div>
+      <div class="foot"><span class="btn primary">재료 6개 넣기</span></div>
+    </div>
+  </section>
+
+</main>
+<p class="foot-note" style="max-width:1700px;width:auto;margin:28px auto 0">만들 때: 예시 사진은 체험 계정에서만 보이고, 고르면 지금 사진 올리기와 같은 길로 서버에 보내요(한도·예산도 같음). 저장된 결과는 예산이 떨어졌을 때만 쓰고, 사진마다 미리 실제 AI로 읽어 둔 값이에요. 로그인 사용자 화면은 지금과 같아요.</p>

@@ -1,5 +1,8 @@
 import base64
+import json
 from datetime import timedelta
+from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 import anthropic
@@ -140,6 +143,33 @@ def scan_mode(user):
             return "sample"
         return "on"
     return "sample" if current_app.config["DEV_MODE"] else "off"
+
+
+# 체험 계정의 예시 사진(frontend/public/samples/<id>.jpg)과 사진 종류. 스펙 31절. 사진·결과는 `flask make-sample-scans`가 만든다
+SAMPLE_PHOTOS = {"receipt": "receipt", "ereceipt": "receipt", "fridge": "fridge"}
+SAMPLE_SCANS_FILE = Path(__file__).parent / "data" / "sample_scans.json"
+
+
+def sample_scans():
+    """예시 사진을 실제 AI로 미리 읽어 둔 결과 {id: {"kind", "items", "purchased_on"}}. 아는 id·종류가 맞는 것만. 파일이 없으면 {}.
+    /api/me·/api/scan마다 부르므로 읽은 값을 파일 수정 시각·크기로 기억한다(파일이 바뀌면 서버를 다시 켜지 않아도 새로 읽는다).
+    부른 쪽이 dict를 바꿔도(make-sample-scans) 기억한 값은 그대로이게 얕은 복사를 돌려준다 — 항목 dict는 바꾸지 않는다."""
+    try:
+        stat = SAMPLE_SCANS_FILE.stat()
+    except OSError:
+        return {}
+    return dict(_read_sample_scans(SAMPLE_SCANS_FILE, stat.st_mtime_ns, stat.st_size))
+
+
+@lru_cache(maxsize=4)
+def _read_sample_scans(path, mtime_ns, size):  # mtime_ns·size는 기억 열쇠로만 쓴다
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {k: v for k, v in data.items() if isinstance(v, dict) and SAMPLE_PHOTOS.get(k) == v.get("kind")}
 
 
 def sample_result(kind, today):
