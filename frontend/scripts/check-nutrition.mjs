@@ -109,10 +109,11 @@ assert.equal(mixed.approx, true);
 assert.equal(mixed.counted, 1);
 assert.equal(mixed.filled, 2);
 
-// ai 칸: hasAi true, 탄단지 안 더함(값이 있어도)
-const aiDay = daySum([{ nutrition: { kcal: 420, carbs_g: 999, protein_g: 999, fat_g: 999, sugars_g: 999, sodium_mg: 999, approx: true, source: "ai" } }]);
+// ai 칸(kcal만 있는 AI 초안·체험 직접 쓰기 칸): hasAi true, 탄단지 안 더함(값이 있어도), 다섯 영양소 모두 빠진 이름에 칸 제목
+const aiDay = daySum([{ title: "토스트", nutrition: { kcal: 420, carbs_g: 999, protein_g: 999, fat_g: 999, sugars_g: 999, sodium_mg: 999, approx: true, source: "ai" } }]);
 assert.equal(aiDay.hasAi, true);
 assert.equal(aiDay.carbs_g, 0);
+assert.deepEqual(aiDay.incomplete, { carbs_g: ["토스트"], protein_g: ["토스트"], fat_g: ["토스트"], sugars_g: ["토스트"], sodium_mg: ["토스트"] });
 
 assert.equal(meterPercent(1190, 1294), 92);
 assert.equal(meterPercent(1520, 1294), 100);
@@ -158,7 +159,7 @@ assert.deepEqual(
 );
 
 // daySum calcKcal(I2): ai 칸의 kcal은 당류가 없어 당류 비율 분모에서 뺀다
-const mixedDay = daySum([{ nutrition: N(200, "calc", false, { sugars_g: 20 }) }, { nutrition: N(1200, "ai", true) }]);
+const mixedDay = daySum([{ title: "김치찌개", nutrition: N(200, "calc", false, { sugars_g: 20 }) }, { title: "카레라이스", nutrition: N(1200, "ai", true) }]);
 assert.equal(mixedDay.kcal, 1400);
 assert.equal(mixedDay.calcKcal, 200);
 assert.equal(mixedDay.sugars_g, 20);
@@ -167,19 +168,27 @@ assert.equal(sugarDay(mixedDay.sugars_g, mixedDay.kcal).warn, false);
 assert.deepEqual(sugarDay(mixedDay.sugars_g, mixedDay.calcKcal), { text: "총 에너지의 40% · WHO 10% 미만", percent: 100, warn: true });
 
 // ---- 값이 빠진 영양소(결정 14 개정 2): 아는 값만 더하고 "이상"(아는 값이 없으면 "알 수 없어요")·빠진 이름을 보여준다 ----
-// 하루 합계는 계산 칸의 빠진 이름을 한 번씩 모은다. AI 추정 칸은 탄단지를 아예 더하지 않으므로(결정 16) 모으지 않는다
+// 하루 합계는 계산 칸의 빠진 이름을 한 번씩 모으고, kcal만 있는 칸(AI 추정)은 탄단지를 아예 더하지 않으므로(결정 16) 다섯 영양소 모두에
+// 칸 제목을 더한다(칸이 보낸 incomplete는 쓰지 않는다) — 계산 칸 값만 더한 합계를 다 센 값처럼 보이지 않게(먹은 기록 날짜 상세와 같은 하한 규칙)
 const leftOutDay = daySum([
-  { nutrition: N(300, "calc", false, { sodium_mg: 7, incomplete: { sodium_mg: ["된장"], sugars_g: ["된장"] } }) },
-  { nutrition: N(300, "calc", false, { sodium_mg: 400, incomplete: { sodium_mg: ["된장", "고추장"] } }) },
-  { nutrition: { ...N(420, "ai", true), incomplete: { sodium_mg: ["무시"] } } },
-  { nutrition: N(100, "calc", false) },
+  { title: "된장찌개", nutrition: N(300, "calc", false, { sodium_mg: 7, incomplete: { sodium_mg: ["된장"], sugars_g: ["된장"] } }) },
+  { title: "쌈밥", nutrition: N(300, "calc", false, { sodium_mg: 400, incomplete: { sodium_mg: ["된장", "고추장"] } }) },
+  { title: "카레라이스", nutrition: { ...N(420, "ai", true), incomplete: { sodium_mg: ["무시"] } } },
+  { title: "두부조림", nutrition: N(100, "calc", false) },
 ]);
-assert.deepEqual(leftOutDay.incomplete, { sodium_mg: ["된장", "고추장"], sugars_g: ["된장"] });
+assert.deepEqual(leftOutDay.incomplete, {
+  carbs_g: ["카레라이스"], protein_g: ["카레라이스"], fat_g: ["카레라이스"],
+  sugars_g: ["된장", "카레라이스"], sodium_mg: ["된장", "고추장", "카레라이스"],
+});
 assert.equal(leftOutDay.sodium_mg, 407);
-assert.deepEqual(daySum([{ nutrition: N(100, "calc", false) }]).incomplete, {});
+assert.deepEqual(daySum([{ title: "두부조림", nutrition: N(100, "calc", false) }]).incomplete, {});
+assert.deepEqual(daySum([{ title: "두부조림", nutrition: N(100, "calc", false) }, { title: "비빔밥", nutrition: null }]).incomplete, {}); // kcal도 없는 칸은 `N개 중 M개`가 알린다
 
 assert.equal(isIncomplete(leftOutDay.incomplete, "sodium_mg"), true);
-assert.equal(isIncomplete(leftOutDay.incomplete, "fat_g"), false);
+assert.equal(isIncomplete(daySum([{ title: "된장찌개", nutrition: N(300, "calc", false, { incomplete: { sodium_mg: ["된장"] } }) }]).incomplete, "fat_g"), false);
+assert.deepEqual(incompleteNotes(mixedDay.incomplete, ["carbs_g", "protein_g", "fat_g", "sugars_g", "sodium_mg"]), [
+  "카레라이스는 탄수화물·단백질·지방·당류·나트륨 정보가 없어 빼고 계산했어요",
+]);
 assert.equal(isIncomplete({ fat_g: [] }, "fat_g"), false);
 
 // 값 글자: 빠진 값이 있으면 " 이상", 아는 값이 없으면(반올림해 0) "알 수 없어요" — 모든 화면이 같은 규칙

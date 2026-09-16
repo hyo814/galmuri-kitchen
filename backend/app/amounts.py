@@ -14,6 +14,8 @@ _SIMPLE_RE = re.compile(rf"(\d+(?:\.\d+)?)?(?:/(\d+))?([¼⅓½⅔¾])?\s*{_UNIT
 _FRACTIONS = {"¼": 1 / 4, "⅓": 1 / 3, "½": 1 / 2, "⅔": 2 / 3, "¾": 3 / 4}
 _SCALE = {"kg": ("g", 1000), "l": ("ml", 1000)}  # 같은 단위끼리 더하고 빼려고 작은 단위로 바꾼다
 SPOON_UNITS = {"큰술", "작은술", "숟가락", "스푼", "티스푼", "컵", "꼬집", "t", "ts", "tbsp", "tsp"}
+SEASONING_SPOONS = SPOON_UNITS - {"컵"}  # 29절 결정 5: 컵은 밀가루·쌀처럼 많이 쓰는 양이라 양념으로 보지 않는다
+TRACE_WORDS = {"약간", "적당량", "적당히", "조금", "소량", "취향껏"}  # 셀 수 없는 조금(영양은 0g으로 본다, 21절)
 
 
 def parse_amount(text):
@@ -45,6 +47,16 @@ def parse_amount(text):
 
 def is_spoon(unit):
     return unit.lower() in SPOON_UNITS
+
+
+def is_seasoning_amount(text):
+    """양념 양인가(29절 결정 5 · 23절 D4): `약간` 같은 조금 낱말이거나 컵이 아닌 숟가락 단위. 빈 글자·컵·범위(10~15마리)는 아니다.
+    요리 일기 양념 판정(cooklog.is_seasoning)과 식단 장보기 양념 묶음(meals.shopping_rows)이 같이 쓴다."""
+    text = (text or "").strip()
+    if text in TRACE_WORDS:
+        return True
+    parsed = parse_amount(text)
+    return parsed is not None and parsed[1].lower() in SEASONING_SPOONS
 
 
 def in_unit(amount_text, unit):

@@ -93,9 +93,10 @@ assert.equal(urgentChip("우유", "2026-09-10", "2026-09-14"), "우유 D-0");
 assert.equal(urgentChip("양파", null, "2026-09-14"), "양파");
 
 // 장보기 미리보기 줄 설명·살 날 태그(Task 9, 시안 ShoppingPreview 문구 그대로)
-const R = (need, have, reason = null, need_extra = []) => ({
+const amountsOf = (list) => list.map(([quantity, unit]) => ({ quantity, unit }));
+const R = (need, have, reason = null, need_extra = [], need_spoon = []) => ({
   name: "", quantity: 1, unit: "개", planned_on: "2026-09-14", reason, need_extra,
-  need: need.map(([quantity, unit]) => ({ quantity, unit })), have: have.map(([quantity, unit]) => ({ quantity, unit })),
+  need: amountsOf(need), have: amountsOf(have), need_spoon: amountsOf(need_spoon),
 });
 assert.equal(previewDetail(R([[2, "모"]], [[1, "모"]])), "2모 필요 · 1모 있어요"); // 두부
 assert.equal(previewDetail(R([[2, "개"]], [])), "2개 필요 · 없어요"); // 청양고추
@@ -103,8 +104,28 @@ assert.equal(previewDetail(R([[2, "판"]], [[8, "개"]])), "있음 8개 · 필�
 assert.equal(previewDetail(R([[4, "대"]], [[1, "단"]])), "있음 1단 · 필요 4대"); // 대파
 assert.equal(previewDetail(R([[0.5, "포기"]], [[1, "포기"]], "enough")), "½포기 필요 · 1포기 있어요"); // 김치
 assert.equal(previewDetail(R([[1, "개"]], [], "listed")), "장보기 목록에 이미 있어서 건너뛰어요"); // 양파
-assert.equal(previewDetail(R([], [], null, ["약간"])), "약간 필요 · 없어요"); // 소금(재고 없음)
-assert.equal(previewDetail(R([], [[1, "병"]], "enough", ["2큰술"])), "2큰술 필요 · 1병 있어요"); // 간장
+assert.equal(previewDetail(R([], [], null, ["약간"])), "약간 필요 · 없어요"); // 소금(재고 없음 → 양념 묶음)
+// 숟가락 양은 서버가 인분 배율을 곱해 단위별로 더한 값(need_spoon) — 분수 그대로, 못 읽는 글자(약간)는 뒤에
+assert.equal(previewDetail(R([], [], null, [], [[7, "큰술"]])), "7큰술 필요 · 없어요"); // 체험 된장 2큰술 × 2·2·3인분
+assert.equal(previewDetail(R([], [], null, [], [[5.5, "작은술"]])), "5½작은술 필요 · 없어요"); // 체험 다진 마늘
+assert.equal(previewDetail(R([], [], null, ["약간"], [[0.33, "큰술"], [1, "작은술"]])), "0.3큰술 + 1작은술 + 약간 필요 · 없어요");
+assert.equal(previewDetail(R([], [], null, ["10~15마리"])), "10~15마리 필요 · 없어요"); // 범위(단위가 달라요)
+assert.equal(previewDetail(R([], [], null, [], [[5, "컵"]])), "5컵 필요 · 없어요"); // 컵(단위가 달라요)
+assert.equal(previewDetail(R([], [])), "조금 필요 · 없어요"); // 빈 양(이름 안에 양이 든 공공 레시피)
+// 필요·있음 양은 딱 떨어지는 분수가 아니면 소수 첫째 자리까지(운영에서 1.67개·616.67g이 보였다), .0은 뺀다
+assert.equal(previewDetail(R([[1.67, "개"]], [[1, "개"]])), "1.7개 필요 · 1개 있어요"); // 애호박 ⅓개 × 5
+assert.equal(previewDetail(R([[616.67, "g"]], [[600, "g"]])), "616.7g 필요 · 600g 있어요"); // 돼지고기 925g × ⅔
+assert.equal(previewDetail(R([[0.33, "모"]], [[2.5, "모"]], "enough")), "0.3모 필요 · 2½모 있어요");
+assert.equal(previewDetail(R([[2, "모"], [1.05, "g"]], [])), "2모 + 1.1g 필요 · 없어요");
+assert.equal(previewDetail(R([[0.03, "모"]], [])), "0.1모 필요 · 없어요"); // 아주 적어도 0으로 보이지 않게
+assert.equal(previewDetail(R([], [[1, "병"]], "enough", [], [[2, "큰술"]])), "2큰술 필요 · 1병 있어요"); // 간장
+// 필요와 있음이 같은 글자로 보이는데 값이 다르면 그 쪽을 소수 둘째 자리까지(`1개 담기` 옆에 `1개 필요 · 1개 있어요`가 없게) — 양쪽 모두
+assert.equal(previewDetail(R([[1.04, "개"]], [[1, "개"]])), "1.04개 필요 · 1개 있어요");
+assert.equal(previewDetail(R([[1, "개"]], [[0.96, "개"]])), "1개 필요 · 0.96개 있어요"); // 요리했어요로 재고가 0.96개 남은 경우
+assert.equal(previewDetail(R([[600.04, "g"]], [[600, "g"]])), "600.04g 필요 · 600g 있어요");
+assert.equal(previewDetail(R([[0.96, "개"]], [[1, "개"]], "enough")), "0.96개 필요 · 1개 있어요");
+assert.equal(previewDetail(R([[1, "개"]], [[1, "개"]], "enough")), "1개 필요 · 1개 있어요"); // 값이 같으면 그대로
+assert.equal(previewDetail(R([[1.17, "개"]], [[0.5, "개"]])), "1.2개 필요 · ½개 있어요"); // 체험 애호박
 assert.equal(buyDayText("2026-09-14", "2026-09-14"), "오늘 사요");
 assert.equal(buyDayText("2026-09-13", "2026-09-14"), "오늘 사요");
 assert.equal(buyDayText("2026-09-16", "2026-09-14"), "16일(수)에 사요");

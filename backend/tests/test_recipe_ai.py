@@ -844,6 +844,7 @@ def test_import_blog_with_recipe_signal_is_text_only(client, login, app, monkeyp
         ("간장 2숟가락, 밥 1공기", True),
         (OWNER_SHORTS, False),
         ("5ton 트럭 · 용량 5GB · 10 Tips · 2tbspoon", False),  # 단위 뒤에 영문이 붙으면 양이 아니다
+        ("아이폰 13 사용 후기 · iPhone 13 Pro", False),  # 모델 번호는 단위가 아니다
         (RECIPE_LESS, False),
     ],
 )

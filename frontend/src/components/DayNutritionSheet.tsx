@@ -104,7 +104,7 @@ export default function DayNutritionSheet({ date, slots, goal, onClose }: Props)
           ))}
         </>
       )}
-      {sum.hasAi && <p className="muted">kcal 일부는 AI 추정치예요</p>}
+      {sum.hasAi && <p className="muted">kcal 일부는 추정치예요</p>}
       <div className="nt-kv">
         {MEALS.filter(([meal]) => bySlot.has(meal)).map(([meal, label]) => {
           const slot = bySlot.get(meal)!;

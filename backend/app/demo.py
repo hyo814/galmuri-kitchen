@@ -8,7 +8,7 @@ import ipaddress
 import json
 import secrets
 import zlib
-from datetime import timedelta
+from datetime import datetime, time, timedelta, timezone
 
 import click
 from flask import Blueprint, abort, current_app, jsonify, request
@@ -17,7 +17,7 @@ from sqlalchemy import text
 from . import cooklog, photos, storage
 from .auth import login_user, user_json
 from .defaults import seed_user_defaults
-from .ingredients import seasoning_names, seoul_today
+from .ingredients import SEOUL, seasoning_names, seoul_today
 from .models import (
     CookLog,
     CookLogItem,
@@ -53,7 +53,7 @@ INGREDIENTS = [
     ("대파", 1, "단", "fridge", 5, 2),
     ("달걀", 8, "개", "fridge", 4, None),
     ("우유", 1, "L", "fridge", 2, 6),
-    ("애호박", 1, "개", "fridge", 2, None),
+    ("애호박", 0.5, "개", "fridge", 2, None),  # 반 개 남음: 식단 된장찌개(⅓개씩)에 모자라 장보기 미리보기에 체크된 줄이 생긴다(자정을 넘겨도)
     ("김치", 1, "kg", "fridge", 10, None),
     ("돼지고기 앞다리살", 600, "g", "freezer", 12, None),
     ("냉동 만두", 1, "봉지", "freezer", 30, None),
@@ -92,12 +92,23 @@ SHOPPING_MEMO = {"place": "이마트 성수점", "body": "세일 수요일까지
 MEAL_PLAN_DAYS = 7
 MEAL_PLAN_SERVINGS = 2
 _ORDINALS = ["첫째", "둘째", "셋째", "넷째", "다섯째", "여섯째"]
-# (오늘부터 며칠 뒤, 끼니, RECIPE_SAMPLES 인덱스(None=직접 쓰기), 직접 쓸 때 제목)
+# (오늘부터 며칠 뒤, 끼니, RECIPE_SAMPLES 인덱스(0 된장찌개, 1 김치찌개) 또는 직접 쓴 제목, 직접 쓴 칸의 1인분 kcal[, 인분 — 없으면 MEAL_PLAN_SERVINGS])
+# 저녁은 매일, 점심은 사흘, 아침은 하루만 채워 주 보기에 빈 날이 없고 AI 초안이 채울 빈 칸도 남는다. 같은 레시피는 이어진 날에 두지 않는다.
+# 직접 쓴 칸 kcal은 식약처 식품영양성분 자료집(2020) 음식 1인분 값(괄호 안 무게)을 반올림한 것 — AI 초안 칸처럼 est_kcal로 보인다
 MEAL_PLAN_SLOTS = [
-    (0, "dinner", 0, None),  # 오늘 저녁: 된장찌개(SAMPLE-01)
-    (1, "lunch", 1, None),  # 내일 점심: 김치찌개(SAMPLE-02)
-    (1, "breakfast", None, "토스트"),  # 내일 아침: 직접 쓰기(레시피 없음)
-    (2, "dinner", 0, None),  # 모레 저녁: 된장찌개 재사용
+    (0, "dinner", 0, None),  # 오늘 저녁은 레시피 칸: 먹었어요·요리했어요를 바로 해 본다(오늘 아침은 먹은 기록 토스트라 비운다)
+    (1, "breakfast", "토스트", 366),  # 식빵토스트 100g
+    (1, "lunch", 1, None),
+    (1, "dinner", "카레라이스", 518),  # 480g
+    (2, "lunch", "김밥", 323),  # 230g
+    (2, "dinner", 0, None),
+    (3, "dinner", "비빔밥", 638),  # 450g
+    (4, "lunch", "잔치국수", 310),  # 700g
+    (4, "dinner", 1, None),
+    (5, "dinner", "제육덮밥", 950),  # 470g
+    # 일부러 3인분(손님): 애호박 필요 양이 늘어 장보기 미리보기가 체크된 줄 `애호박 1개 담기`로 시작한다(양념은 꺼진 채라 0개로 시작하지 않게).
+    # 오늘 저녁 칸이 빠지는 자정 뒤에도 ⅓ × (1 + 1.5) = 0.83개 > 재고 ½개라 그 줄이 남는다
+    (6, "dinner", 0, None, 3),
 ]
 # (며칠 전, 끼니, 예시 레시피 제목 또는 None, 직접 쓴 이름, 어디서, 만족도, 메모) — 결정 16
 FOOD_LOGS = [
@@ -226,15 +237,16 @@ def seed_demo_data(user_id):
         days=MEAL_PLAN_DAYS,
         default_servings=MEAL_PLAN_SERVINGS,
     )
-    for days_ahead, meal, recipe_index, free_title in MEAL_PLAN_SLOTS:
-        recipe = recipe_rows[recipe_index] if recipe_index is not None else None
+    for days_ahead, meal, dish, kcal, *servings in MEAL_PLAN_SLOTS:
+        recipe = recipe_rows[dish] if isinstance(dish, int) else None
         plan.slots.append(
             MealSlot(
                 date=today + timedelta(days=days_ahead),
                 meal=meal,
                 recipe=recipe,
-                title=recipe.title if recipe else free_title,
-                servings=MEAL_PLAN_SERVINGS,
+                title=recipe.title if recipe else dish,
+                servings=servings[0] if servings else MEAL_PLAN_SERVINGS,
+                est_kcal=kcal,
             )
         )
     db.session.add(plan)
@@ -263,12 +275,17 @@ def seed_demo_data(user_id):
         recipe.eat_out_price, recipe.eat_out_source = price, source
 
     staples = seasoning_names(user_id)
+    undo_closed = utcnow() - timedelta(seconds=cooklog.UNDO_SECONDS + 60)
     for days_ago, title, servings, rating, memo, items, extra in COOK_LOGS:
         recipe = next(r for r in recipe_rows if r.title == title)
+        cooked_on = today - timedelta(days=days_ago)
         log = CookLog(
-            user_id=user_id, recipe=recipe, title=title, cooked_on=today - timedelta(days=days_ago),
+            user_id=user_id, recipe=recipe, title=title, cooked_on=cooked_on,
             servings=servings, rating=rating, memo=memo,
             eat_out_price=recipe.eat_out_price, eat_out_source=recipe.eat_out_source,
+            # 요리한 날 저녁(서울 19시)에 남긴 것으로 — 기본값(만든 시각)이면 체험하기 직후 2분 동안 되돌리기가 예시 일기를 지웠다.
+            # 19시가 아직 안 왔으면(오늘 일기) 되돌리기 창이 이미 닫힌 시각으로
+            created_at=min(datetime.combine(cooked_on, time(19), SEOUL), undo_closed).astimezone(timezone.utc),
         )
         for name, used, unit, price, price_quantity, excluded in items:
             log.items.append(CookLogItem(

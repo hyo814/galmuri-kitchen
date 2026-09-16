@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.exceptions import TooManyRequests
 
 from . import ai, foods, scan
-from .amounts import parse_amount
+from .amounts import TRACE_WORDS, parse_amount
 from .auth import get_owned_or_404, login_required
 from .foods import NUTRIENTS, OFF, missing_count, name_parts, nutrition_mode
 from .matching import normalize
@@ -24,7 +24,6 @@ bp = Blueprint("nutrition", __name__, url_prefix="/api")
 
 SPOON_GRAMS = {"큰술": 15, "숟가락": 15, "스푼": 15, "tbs": 15, "tbsp": 15,
                "작은술": 5, "티스푼": 5, "tsp": 5, "컵": 200, "꼬집": 0.5}  # 22절 계량 기준(결정 5). 영문 키는 소문자, t·ts는 fixed_grams가 가른다
-TRACE_WORDS = {"약간", "적당량", "적당히", "조금", "소량", "취향껏"}
 COUNTED = ("ok", "estimated")
 MISSING = ("unmatched", "needs_weight", "no_estimate", "unknown_amount", "pending")
 MAX_MATCHES = 2000

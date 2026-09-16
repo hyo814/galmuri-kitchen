@@ -16,6 +16,21 @@ export function rememberLoginProvider(provider: string) {
   }
 }
 
+/** 바로 체험 주소(`/?demo=1`, 스펙 30절 D)로 열었는지. 앱을 열 때 한 번 읽고 주소에서 지운다 — 새로고침하거나 주소를 공유해도 되풀이되지 않게(해시 경로는 그대로) */
+let demoLink = (() => {
+  const params = new URLSearchParams(location.search);
+  if (!params.has("demo")) return false;
+  params.delete("demo");
+  const search = params.toString();
+  history.replaceState(history.state, "", `${location.pathname}${search && `?${search}`}${location.hash}`);
+  return true;
+})();
+
+/** 이미 로그인돼 있었으면 바로 체험 주소를 버린다(나중에 로그아웃해도 체험 계정을 새로 만들지 않게) */
+export function dropDemoLink() {
+  demoLink = false;
+}
+
 function lastLoginProvider(): string | null {
   try {
     return localStorage.getItem(LAST_LOGIN_KEY);
@@ -147,6 +162,8 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
 
   const [last] = useState(lastLoginProvider);
   const [busy, setBusy] = useState(false);
+  // 바로 체험 주소로 왔으면 로그인 화면 대신 여는 중 안내를 보인다(실패하면 로그인 화면과 오류)
+  const [opening, setOpening] = useState(demoLink);
   const postLogin = async (url: string) => {
     if (busy) return;
     setBusy(true);
@@ -156,8 +173,17 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);
+      setOpening(false);
     }
   };
+
+  // 체험하기를 누른 것처럼 한 번만 연다 — StrictMode에서 두 번 돌거나 로그아웃 뒤 다시 떠도 계정을 또 만들지 않게
+  useEffect(() => {
+    if (!demoLink) return;
+    demoLink = false;
+    void postLogin("/api/demo-login");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const providers = LOGIN_PROVIDERS.filter((name) => options?.providers.includes(name));
   // 처음 온 분은 체험하기를 먼저, 이 기기에서 소셜 로그인한 적 있는 분은 그 버튼을 먼저 보여준다
@@ -183,6 +209,13 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
       <p className="login-note">예시 재고가 들어 있는 체험 공간이 열려요. 하루 뒤 사라져요.</p>
     </>
   );
+
+  if (opening)
+    return (
+      <p className="center muted" role="status">
+        체험 공간을 여는 중이에요
+      </p>
+    );
 
   return (
     <main className="login">

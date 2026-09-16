@@ -1,7 +1,7 @@
 // 식단 날짜 계산(스펙 20절). 브라우저 API·Date.now()를 부르지 않고 오늘은 인자로 받는다 — scripts/check-meals.mjs가 node로 읽는다.
 import type { MealKind, MealPlanSummary, MealShoppingRow } from "../api";
 import { addDays } from "../format.ts";
-import { quantityText } from "../shopping/sync.ts";
+import { amountInputText } from "../seasoning.ts";
 
 export const MEALS: [MealKind, string][] = [["breakfast", "아침"], ["lunch", "점심"], ["dinner", "저녁"], ["snack", "간식"]];
 export const mealLabel = (meal: MealKind) => MEALS.find(([k]) => k === meal)![1];
@@ -94,12 +94,26 @@ export const urgentChip = (name: string, expiresOn: string | null, today: string
 /** 살 날 태그: 오늘(또는 지남) "오늘 사요", 아니면 "16일(수)에 사요" */
 export const buyDayText = (plannedOn: string, today: string) =>
   plannedOn <= today ? "오늘 사요" : `${parts(plannedOn)[2]}일(${DOW[weekday(plannedOn)]})에 사요`;
-const amounts = (list: { quantity: number; unit: string }[], extra: string[] = []) => [...list.map((a) => quantityText(a.quantity, a.unit)), ...extra].join(" + ");
-/** 줄 설명: buy·enough "2모 필요 · 1모 있어요"/"2개 필요 · 없어요", manual "있음 8개 · 필요 2판"(재고 없으면 "필요 약간 · 없어요"), listed "장보기 목록에 이미 있어서 건너뛰어요" */
+type Amount = { quantity: number; unit: string };
+/** 미리보기 필요·있음 수: 딱 떨어지는 분수(½·2½)는 그대로, 아니면 소수 첫째 자리까지(1.67 → 1.7, 아주 적어도 0.1) */
+const shownNumber = (quantity: number) => {
+  const text = amountInputText(quantity);
+  return text.includes(".") ? String(Math.max(Number(quantity.toFixed(1)), 0.1)) : text;
+};
+const amounts = (list: Amount[], extra: string[] = [], number = (a: Amount) => shownNumber(a.quantity)) =>
+  [...list.map((a) => number(a) + a.unit), ...extra].join(" + ");
+/** 줄 설명: buy·enough "2모 필요 · 1모 있어요"/"2개 필요 · 없어요", seasoning "7큰술 + 약간 필요 · 없어요", manual "있음 8개 · 필요 2판", listed "장보기 목록에 이미 있어서 건너뛰어요" */
 export function previewDetail(row: MealShoppingRow): string {
   if (row.reason === "listed") return "장보기 목록에 이미 있어서 건너뛰어요";
-  const need = amounts(row.need, row.need_extra) || "조금";
-  const have = amounts(row.have);
+  // 필요·있음이 같은 단위에서 같은 글자로 보이는데 값이 다르면(1.04개 · 1개, 1개 · 0.96개) 그 수를 소수 둘째 자리까지 — `1개 담기` 옆에 `1개 필요 · 1개 있어요`가 없게
+  const exact = (others: Amount[]) => (a: Amount) => {
+    const text = shownNumber(a.quantity);
+    const clash = others.some((o) => o.unit === a.unit && o.quantity !== a.quantity && shownNumber(o.quantity) === text);
+    return clash ? String(Number(a.quantity.toFixed(2))) : text;
+  };
+  const needs = [...row.need, ...row.need_spoon];
+  const need = amounts(needs, row.need_extra, exact(row.have)) || "조금";
+  const have = amounts(row.have, [], exact(needs));
   if (row.reason === null && row.have.length && !row.need.some((n) => row.have.some((h) => h.unit === n.unit)))
     return `있음 ${have} · 필요 ${need}`;
   return `${need} 필요 · ${have ? `${have} 있어요` : "없어요"}`;

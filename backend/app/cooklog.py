@@ -14,13 +14,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.attributes import flag_modified
 
 from . import food_logs, meals, photos, storage
-from .amounts import SPOON_UNITS, in_unit, parse_amount
+from .amounts import in_unit, is_seasoning_amount
 from .auth import get_owned_or_404, login_required
 from .ingredients import seasoning_names
 from .locations import default_location
 from .matching import match_prepared, names_match, normalize, prepare
 from .models import CookLog, CookLogItem, Ingredient, IngredientRemoval, Recipe, StorageLocation, db, utcnow
-from .nutrition import TRACE_WORDS
 from .recipe_parse import ingredient_key
 from .recipes import ALWAYS_HAVE, inventory_rows
 from .validation import decode_cursor, encode_cursor, integer, iso_datetime, memo, text
@@ -51,18 +50,10 @@ MANUAL_PATCH_FIELDS = PATCH_FIELDS | {"ingredient_cost"}  # 직접 쓴 일기는
 MANUAL_ONLY = {"title", "ingredient_cost"}  # 레시피 일기는 이름을 레시피에서, 재료비를 쓴 재료 줄에서 얻는다
 MANUAL_FIELDS = MANUAL_PATCH_FIELDS | MANUAL_ONLY | {"manual", "servings", "food_log", "meal"}  # 레시피·쓴 재료·식단 칸은 받지 않는다
 
-SEASONING_SPOONS = SPOON_UNITS - {"컵"}  # 결정 5: 컵은 밀가루·쌀처럼 많이 쓰는 양이라 양념으로 보지 않는다
-
 
 def is_seasoning(key, amount, staples):
-    """결정 5. key는 ingredient_key(재료 이름), staples는 seasoning_names(user_id)."""
-    if any(names_match(key, s) for s in staples):
-        return True
-    text = (amount or "").strip()
-    if text in TRACE_WORDS:
-        return True
-    parsed = parse_amount(text)
-    return parsed is not None and parsed[1].lower() in SEASONING_SPOONS
+    """결정 5. key는 ingredient_key(재료 이름), staples는 seasoning_names(user_id). 양 규칙은 식단 장보기 양념 묶음과 같다."""
+    return any(names_match(key, s) for s in staples) or is_seasoning_amount(amount)
 
 
 def round_won(value, step=10):
