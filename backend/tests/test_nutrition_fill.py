@@ -78,6 +78,18 @@ def test_sample_mode_fills_without_network_or_records(client, login, app, monkey
         assert AiCall.query.count() == 0
 
 
+def test_sample_mode_doenjang_is_left_out_of_sodium(client, login, app, monkeypatch):
+    """키 없는 개발 모드도 운영의 된장처럼 나트륨 값이 없는 식품을 맞춘다(예시 식품 된장_보리·된장_재래, 둘 다 나트륨 없음) —
+    당류까지 없는 보리보다 재래가 먼저(결정 10 개정 2)."""
+    monkeypatch.setattr("app.foods.fetch_page", fail)
+    login()
+    recipe_id = make_recipe(client, ("된장", "2큰술"))
+    assert fill(client, [recipe_id]).get_json() == {"pending_recipe_ids": []}
+    body = client.get(f"/api/recipes/{recipe_id}/nutrition").get_json()
+    assert (body["ingredients"][0]["status"], body["ingredients"][0]["food"]["name"]) == ("ok", "된장_재래")
+    assert (body["per_serving"]["sodium_mg"], body["incomplete"]) == (0, {"sodium_mg": ["된장"]})
+
+
 def test_on_mode_searches_then_estimates_once(client, login, app, monkeypatch):
     app.config.update(FOOD_NUTRITION_API_KEY="k", ANTHROPIC_API_KEY="k")
     asked = fake_pages(monkeypatch, {"두부": [api_row("D1", "두부", "원재료성")], "배추김치": [api_row("K1", "배추김치", "가공식품")]})

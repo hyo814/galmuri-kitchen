@@ -1,6 +1,8 @@
 // 양념 비율 순수 함수 검사 (3c 계획 태스크 1). `npm run check` — Node 24가 .ts를 바로 읽는다.
 import assert from "node:assert/strict";
-import { snapSpoon, scaleItem, scaleFactor, basisLabel, ratioLabel, parseAmountInput, amountInputText, RICE_SPOON_ML } from "../src/seasoning.ts";
+import { snapSpoon, scaleItem, scaleFactor, basisLabel, ratioLabel, parseAmountInput, amountInputText, spoonHint, RICE_SPOON_ML } from "../src/seasoning.ts";
+import { recipeQuantity } from "../src/shopping/sync.ts";
+import { scaleAmount } from "../src/format.ts";
 import { SEASONING_PRESETS } from "../src/data/seasoningPresets.ts";
 assert.equal(snapSpoon(0.33), "⅓"); assert.equal(snapSpoon(3.5), "3½"); assert.equal(snapSpoon(0.9), "1"); assert.equal(snapSpoon(12.4), "12");
 const item = (name, amount, unit, factor) => scaleItem({ name, amount, unit }, factor);
@@ -69,6 +71,21 @@ assert.equal(parseAmountInput("10000"), 10000); assert.equal(parseAmountInput("1
 assert.equal(parseAmountInput("0.01"), 0.01); assert.equal(parseAmountInput("0.009"), null); // 서버 최소 0.01과 같다
 // 폼에 채우는 양: 분수로 바꿔도 값이 거의 같을 때만 분수
 for (const [value, text] of [[0.5, "½"], [2 / 3, "⅔"], [1.5, "1½"], [3, "3"], [600, "600"], [12.5, "12.5"], [0.03, "0.03"], [0.35, "0.35"], [0.33, "0.33"], [1 / 3, "⅓"], [0.255, "0.255"], [0.1 + 0.2, "0.3"], [15 / 7, "2.1429"]]) assert.equal(amountInputText(value), text, String(value));
+
+// 인분 조절한 레시피 재료 양 아래 회색 줄(스펙 23절 D1): 계산기 scaleItem과 같은 규칙, 1큰술이 안 되거나 숟가락이 아니면 없음
+const hint = (text) => spoonHint(recipeQuantity(text));
+// 딱 떨어지지 않는 배율(10 → 11인분): 본문(scaleAmount, 소수 한 자리)과 줄(scaleItem, 분수로 맞춤)의 숫자가 달라서 줄은 늘 "약"
+const at11 = (amount) => { const text = scaleAmount(amount, 11 / 10); return [text, hint(text)]; };
+if (RICE_SPOON_ML === 12) {
+  for (const [text, line] of [["3큰술", "밥숟가락 약 4개"], ["1½큰술", "밥숟가락 약 2개"], ["2큰술(30g)", "밥숟가락 약 3개"], ["0.9큰술", "밥숟가락 약 1개"]]) assert.equal(hint(text), line, text);
+  assert.deepEqual(at11("2큰술"), ["2.2큰술", "밥숟가락 약 3개"]);
+}
+assert.deepEqual(at11("6작은술"), ["6.6작은술", "약 2¼큰술"]);
+for (const [text, line] of [
+  ["3작은술", "약 1큰술"], ["4½작은술", "약 1½큰술"], ["10큰술", "약 ¾컵"],  // 작은술은 큰술로, ½컵 이상은 컵으로(계산기의 굵은 양)
+  ["½큰술", null], ["1½작은술", null], ["¼작은술", null],                   // 1큰술이 안 되면 계산기도 밥숟가락을 안 보여준다
+  ["900g", null], ["약간", null], ["2개", null], ["1½컵", null], ["10~15개", null], ["1~2큰술", null], ["", null], ["2밥숟가락", null],
+]) assert.equal(hint(text), line, text);
 
 console.log("seasoning ok");
 

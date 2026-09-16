@@ -197,7 +197,7 @@ def test_ai_limit_shared_with_recipes(client, login, app, monkeypatch):
     assert client.get("/api/ai-usage").get_json()["recipe"] == {"used": 3, "limit": 2}
 
 
-def test_ai_error_502_still_counted(client, login, app, monkeypatch):
+def test_ai_error_502_is_a_miss(client, login, app, monkeypatch):
     login()
     app.config["ANTHROPIC_API_KEY"] = "k"
 
@@ -208,6 +208,7 @@ def test_ai_error_502_still_counted(client, login, app, monkeypatch):
     plan = make_plan(client).get_json()
     res = draft(client, plan["id"])
     assert (res.status_code, res.get_json()) == (502, {"error": FAIL})
+    assert [kind for _, kind in ai_calls(app)] == ["meal_miss"]  # 기록은 남는다(헛호출, 스펙 7절)
     assert ai_call_costs(app) == [("claude-sonnet-5", None, None)]
 
 
@@ -219,6 +220,7 @@ def test_ai_output_with_no_usable_slot_502(client, login, app, monkeypatch):
     plan = make_plan(client).get_json()
     res = draft(client, plan["id"])
     assert (res.status_code, res.get_json()) == (502, {"error": FAIL})
+    assert [kind for _, kind in ai_calls(app)] == ["meal_miss"]
     assert ai_call_costs(app) == [("claude-sonnet-5", 10, 20)]
 
 

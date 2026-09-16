@@ -63,7 +63,7 @@
 | `NAVER_CLIENT_ID` / `NAVER_CLIENT_SECRET` | 선택 | 로그인 | 네이버 개발자센터 |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 선택 | 로그인 | Google Cloud Console |
 | `ANTHROPIC_API_KEY` / `CLAUDE_MODEL` | 선택 | 2단계 사진으로 추가, 3단계 AI 레시피(없으면 개발 모드는 예시 결과, 운영은 버튼 숨김) | console.anthropic.com |
-| `AI_DAILY_SCAN_LIMIT` / `AI_DAILY_RECIPE_LIMIT` | 선택 | 사진 인식 / AI 레시피 하루 한도(기본 20, 서울 날짜). 체험 계정은 설정과 관계없이 5번까지 | 직접 설정 |
+| `AI_DAILY_SCAN_LIMIT` / `AI_DAILY_RECIPE_LIMIT` | 선택 | 사진 인식 / AI 레시피 하루 한도(기본 20, 서울 날짜). 체험 계정은 설정과 관계없이 5번까지. 찾지 못함·오류는 사용자마다 하루 3번까지 세지 않는다(`ai_calls.kind`가 `<kind>_miss`, 연속 호출 한도·전체 AI 예산에는 셈) | 직접 설정 |
 | `AI_SCAN_BURST_LIMIT` | 선택 | 사진 인식·AI 레시피 짧은 연속 호출 한도(기본 3, 60초) | 직접 설정 |
 | `FOODSAFETY_API_KEY` | 선택 | 3단계 레시피 추천. 배포 후 한 번 `flask sync-public-recipes`(없으면 `flask seed-sample-recipes` 예시 레시피) | 식약처 공공데이터포털(COOKRCP01) |
 | `FOOD_NUTRITION_API_KEY` | 선택(영양 계산에는 필수) | 영양 계산(레시피 1인분 영양·식단 kcal·식품 고르기). 공공데이터포털 **Decoding** 키를 그대로 넣는다(Encoding 키나 다시 인코딩하면 403). Blueprint에서는 `sync: false`라 처음 만들 때 입력 칸이 뜬다. 없으면 개발 모드는 예시 식품, 운영은 영양 칸을 숨긴다. 배포 뒤 아래 1-B 3번의 `warm-food-nutrients`로 캐시를 채운다 | 식약처 공공데이터포털(식품의약품안전처_식품영양성분DB정보, 15127578) |

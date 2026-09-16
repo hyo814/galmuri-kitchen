@@ -34,7 +34,11 @@
 
 | 내 재고 | 사진 인식 확인 |
 |---|---|
-| <img src="docs/submission/screenshots/02-fridge.png" width="220" alt="내 재고 화면: 임박 순 목록과 떨어진 필수품 배너"> | <img src="docs/submission/screenshots/03-scan-review.png" width="220" alt="사진 인식 확인 화면: 인식한 재료를 고르고 고치기"> |
+| <img src="docs/submission/screenshots/02-fridge.png" width="220" alt="내 재고 화면: 임박 순 목록과 떨어진 필수품 배너"> | <img src="docs/submission/screenshots/03-scan-review.png" width="220" alt="사진 2장 인식 확인 화면: 구입일 칩과 재료별 구입일"> |
+
+| 예시 사진으로 해보기 | 예시 사진 결과 |
+|---|---|
+| <img src="docs/submission/screenshots/35-scan-sample.png" width="220" alt="사진으로 추가 시트: 모바일 영수증·냉장고 예시 사진과 내 사진 고르기"> | <img src="docs/submission/screenshots/36-scan-sample-review.png" width="220" alt="예시 영수증 사진을 읽은 결과: 사진 띠, 영수증 날짜, 재료별 가격"> |
 
 - **임박 배지**: `D-2`, `구입 9일째`, `섭취 주의`. 유통기한을 적으면 그 날짜가 우선이고, 없으면 보관 위치 기준(냉장 7일, 냉동 60일)으로 판단합니다.
 - **품목별 경고**: 식약처 「식품유형별 소비기한 설정 보고서」 참고값(두부 23일, 발효유 32일, 햄 57일 등)을 구입일 기준으로 환산해 기본 규칙으로 넣었습니다. 사용자가 고칠 수 있습니다.
@@ -51,6 +55,10 @@
 | 링크 가져오기 | 영상 | 양념 비율 |
 |---|---|---|
 | <img src="docs/submission/screenshots/07-link-import.png" width="200" alt="링크로 가져온 레시피 확인 화면"> | <img src="docs/submission/screenshots/08-videos.png" width="200" alt="요리 채널 영상 목록"> | <img src="docs/submission/screenshots/09-seasoning-calc.png" width="200" alt="양념 비율 계산: 숟가락 단위 결과"> |
+
+| 레시피 추가 | 1인분 영양 |
+|---|---|
+| <img src="docs/submission/screenshots/26-recipe-add-sheet.png" width="200" alt="레시피 추가 시트: 링크·글 붙여넣기·사진·직접 쓰기"> | <img src="docs/submission/screenshots/37-nutrition.png" width="200" alt="레시피 1인분 영양: kcal, 탄수화물·단백질·지방, 당류·나트륨, 재료별 kcal"> |
 
 - **추천**: 내 레시피와 식약처 조리식품 레시피 DB(인증키 연결 후 약 1,100건, 키가 없으면 예시 레시피 12건)를 재고와 비교해 일치율 순으로 보여 줍니다. 임박 재료를 쓰는 레시피가 앞으로 옵니다.
 - **AI 레시피**: 재고로 레시피 3개를 만듭니다. 빨리 먹어야 할 재료를 먼저 넣습니다. 사진은 새로 만들지 않고, 이름이 비슷한 공공 레시피 사진을 `비슷한 요리 사진`으로 밝혀 씁니다.
@@ -81,7 +89,7 @@
 
 | 더보기 | 내보내기 |
 |---|---|
-| <img src="docs/submission/screenshots/16-more.png" width="200" alt="더보기 화면"> | <img src="docs/submission/screenshots/17-export-sheet.png" width="200" alt="데이터 내보내기 시트"> |
+| <img src="docs/submission/screenshots/16-more.png" width="200" alt="더보기 화면: 하루 칼로리 목표, AI 사용량, 데이터 출처, 약관 링크"> | <img src="docs/submission/screenshots/17-export-sheet.png" width="200" alt="데이터 내보내기 시트"> |
 
 - **화면 테마**: 시스템·밝게·어둡게. 두 테마 모두 본문 대비 WCAG AA(4.5:1)를 맞췄습니다.
 - **데이터 내보내기**: 재고·내 레시피·양념 비율·장보기·장보기 메모·식단·먹은 기록·요리 일기를 CSV 8개가 든 zip 하나로 받습니다(하루 5번).
@@ -93,7 +101,27 @@
 |---|---|---|
 | <img src="docs/submission/screenshots/18-fridge-dark.png" width="200" alt="다크 테마 재고 화면"> | <img src="docs/submission/screenshots/19-shopping-dark.png" width="200" alt="다크 테마 장보기 화면"> | <img src="docs/submission/screenshots/20-recipe-detail-dark.png" width="200" alt="다크 테마 레시피 상세"> |
 
+| 식단 (다크) |
+|---|
+| <img src="docs/submission/screenshots/27-meals-dark.png" width="200" alt="다크 테마 식단 주 보기"> |
+
 ### 식단
+
+| 주 보기 | 월 보기 | AI 식단 초안 |
+|---|---|---|
+| <img src="docs/submission/screenshots/21-meals-week.png" width="200" alt="식단 주 보기: 하루 목표 kcal과 날마다 합계 막대"> | <img src="docs/submission/screenshots/22-meals-month.png" width="200" alt="식단 월 보기: 식단 기간과 끼니 점"> | <img src="docs/submission/screenshots/23-meal-ai-draft.png" width="200" alt="AI 식단 초안: 칸마다 요리 후보, 1인분 kcal, 체크와 다른 걸로"> |
+
+| 식단으로 장보기 | 먹은 기록 달력 |
+|---|---|
+| <img src="docs/submission/screenshots/24-meal-shopping.png" width="200" alt="식단으로 장보기 목록 만들기: 모자란 만큼과 살 날"> | <img src="docs/submission/screenshots/33-food-log-calendar.png" width="200" alt="먹은 기록 달력: 하루 kcal과 요리 일기 표시"> |
+
+| 요리했어요 | 되돌리기 알림 | 요리 일기 |
+|---|---|---|
+| <img src="docs/submission/screenshots/28-cook-sheet.png" width="200" alt="요리했어요 시트: 쓴 재료, 사 먹으면 얼마, 별점"> | <img src="docs/submission/screenshots/29-cook-toast.png" width="200" alt="저장 뒤 알림: 재고에서 뺀 재료, 아낀 돈, 되돌리기"> | <img src="docs/submission/screenshots/30-cook-diary.png" width="200" alt="요리 일기 목록: 요리마다 아낀 돈"> |
+
+| 아낀 돈 내역 | 집밥 리포트 |
+|---|---|
+| <img src="docs/submission/screenshots/31-cook-diary-detail.png" width="200" alt="요리 일기 상세: 사 먹으면 얼마에서 재료비를 뺀 아낀 돈"> | <img src="docs/submission/screenshots/32-cook-report.png" width="200" alt="집밥 리포트: 한 달 아낀 돈, 요리 횟수, 버린 재료"> |
 
 - **식단 짜기**: 이번 주만 만들기(주 보기)와 이름·기간을 정하는 만들기, 여러 식단 중 고르기. 주 보기는 채운 끼니 줄과 빈 끼니 `+ 점심` 칩으로, 월 보기는 끼니 점으로 보여 줍니다.
 - **칸 채우기**: 내 레시피는 재고와 겹치는 재료로 보여 주고, 유튜브 영상은 확인 화면 없이 바로 레시피로 저장하고, 직접 쓰기도 됩니다. 인분을 바로 저장하거나 다른 걸로 바꾸고, 칸을 비웁니다.
@@ -170,7 +198,7 @@ Flask 한 앱이 `/api/*`와 React 빌드 결과를 같은 오리진에서 서�
 | 항목 | 방식 |
 |---|---|
 | SSRF 방어 | 블로그 링크는 https만 받습니다. DNS 결과가 모두 공인 IP인지 보고, 연결한 소켓의 상대 주소를 TLS 전에 다시 확인합니다. 리다이렉트는 매번 같은 검사로 3번까지, 응답은 `text/html`·3MB까지입니다. 리다이렉트까지 합친 전체 8초가 지나면 감시 타이머가 소켓을 끊어, 조금씩 흘려 보내는 서버도 제한 시간 안에 끝납니다. IPv4를 담는 IPv6 대역(NAT64·6to4 등)도 거절합니다. |
-| AI 비용 | 사용자별 하루 사진 인식 20번·AI 레시피 20번(가져오기·식단 초안·사 먹으면 얼마 추정 포함, 서울 날짜), 60초 안 3번 연속 제한. 영양 추정은 따로 하루 20번(체험 계정 2번, 체험 전체 하루 30번). 로그인 사용자 전체도 24시간 100번(`USER_AI_GLOBAL_DAILY`, 그중 영양 추정 하루 40번)에서 멈춰 체험 계정 몫을 지킵니다. 실패한 호출도 셉니다. 호출마다 모델·토큰을 `ai_calls`에 남겨 원가를 계산합니다. |
+| AI 비용 | 사용자별 하루 사진 인식 20번·AI 레시피 20번(가져오기·식단 초안·사 먹으면 얼마 추정 포함, 서울 날짜), 60초 안 3번 연속 제한. 영양 추정은 따로 하루 20번(체험 계정 2번, 체험 전체 하루 30번). 로그인 사용자 전체도 24시간 100번(`USER_AI_GLOBAL_DAILY`, 그중 영양 추정 하루 40번)에서 멈춰 체험 계정 몫을 지킵니다. 찾지 못했거나 실패한 호출은 사용자마다 하루 3번까지 하루 한도에서 빼고(`<kind>_miss`, 연속 제한·전체 예산에는 셉니다) 그 뒤로는 셉니다. 설명에 재료가 없는 유튜브·인스타그램 링크는 AI를 부르지 않습니다. 호출마다 모델·토큰을 `ai_calls`에 남겨 원가를 계산합니다. |
 | 체험 계정 AI | 계정당 하루 5번. 체험 계정 전체가 24시간에 80번(`DEMO_AI_GLOBAL_DAILY`, 배포 설정값)을 넘으면 AI를 부르지 않고 예시 결과를 보여 줍니다. 영상은 서버가 받아 둔 기본 채널 영상을 읽기만 해서 보기·검색은 유튜브 할당량을 쓰지 않습니다(`레시피로 가져오기`만 위 AI 한도 안에서 영상 1개당 1 unit). |
 | 유튜브 할당량 | `search.list`(100 units)를 쓰지 않습니다. 사용자별 하루 새로 받기 20번·채널 추가 30번, 전체 24시간 추정 8,000 units(무료 한도 10,000) 안에서만 받습니다. |
 | 체험 계정 격리 | 누를 때마다 새 계정을 만들고, 24시간 뒤 데이터와 사진 파일까지 지웁니다. 같은 IP에서 1시간 30개·하루 100개, 전체 5,000개입니다. IP는 저장하지 않고 HMAC 해시 16자만 씁니다. 세션은 `user_id`와 `provider_id`가 함께 맞아야 합니다. |
@@ -185,6 +213,13 @@ Flask 한 앱이 `/api/*`와 React 빌드 결과를 같은 오리진에서 서�
 3. 체험 계정은 24시간 뒤 사라집니다. 사진 인식과 AI 레시피(링크 가져오기 포함)는 하루 5번씩 쓸 수 있습니다.
 4. 메뉴(⋮) → **홈 화면에 추가**로 설치하면 주소창 없이 열립니다.
 
+| 로그인 | 체험 안내 |
+|---|---|
+| <img src="docs/submission/screenshots/01-login.png" width="200" alt="로그인 화면: 카카오·네이버·구글 버튼과 지난번 로그인 표시"> | <img src="docs/submission/screenshots/34-demo-guide.png" width="200" alt="체험 계정 첫 화면: 두부가 내일까지라고 알려 주는 안내 카드"> |
+
+| PC에서 열면 |
+|---|
+| <img src="docs/submission/screenshots/38-pc-home.png" width="600" alt="PC 화면: 왼쪽 소개와 폰 크기 재고 화면"> |
 
 ## 로컬 실행
 
@@ -274,6 +309,6 @@ docs/deploy.md      배포 가이드와 배포 전 로컬 검증
 
 ## 작성자
 
-- 이름: [이름]
-- 이메일: [이메일]
-- GitHub: [GitHub]
+- 이름: 임효진
+- 이메일: [ggamjige8888@naver.com](mailto:ggamjige8888@naver.com)
+- GitHub: [hyo814](https://github.com/hyo814)

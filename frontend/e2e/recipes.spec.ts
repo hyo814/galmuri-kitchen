@@ -79,6 +79,29 @@ test("식약처 레시피 제목을 검색하면 일치하는 레시피만 보�
   await expect(page.getByRole("region", { name: "예시 레시피" }).getByText("된장찌개")).toHaveCount(0);
 });
 
+test("레시피 인분을 늘리면 큰술 재료 아래에 밥숟가락 개수가 보이고 레시피 인분으로 돌아오면 사라진다", async ({ page }) => {
+  await openRecipes(page);
+  await page.getByPlaceholder("예시 레시피에서 찾기").fill("제육볶음");
+  await page.getByRole("region", { name: "예시 레시피" }).getByRole("link", { name: "제육볶음" }).click();
+  // 만드는 법에도 "고추장"이 나오므로 재료 칸 안에서만 찾는다
+  const ingredients = page.getByRole("region", { name: "재료", exact: true });
+  const row = (name: string) => ingredients.getByRole("listitem").filter({ hasText: name });
+  const stepper = ingredients.getByRole("group", { name: "인분 조절" });
+  await expect(row("고추장")).toContainText("2큰술");
+  await expect(ingredients.getByText("밥숟가락 약")).toHaveCount(0);
+
+  await stepper.getByRole("button", { name: "인분 늘리기" }).click();
+  await expect(stepper).toContainText("3인분");
+  await expect(row("고추장")).toContainText("3큰술, 밥숟가락 약 4개"); // 쉼표는 스크린리더에만(양 다음에 이어 읽는다)
+  await expect(row("고춧가루")).toContainText("1½큰술, 밥숟가락 약 2개");
+  await expect(row("참기름")).toContainText("1½작은술");
+  await expect(row("참기름")).not.toContainText("큰술"); // 3작은술이 안 되면 둘째 줄이 없다
+
+  await stepper.getByRole("button", { name: "인분 줄이기" }).click();
+  await expect(row("고추장")).toContainText("2큰술");
+  await expect(ingredients.getByText("밥숟가락 약")).toHaveCount(0);
+});
+
 test("AI 레시피를 만들면 예시 결과 3개가 나오고 자세히 보기·저장이 된다", async ({ page }) => {
   await openRecipes(page);
   await page.getByRole("button", { name: "만들기" }).click();
@@ -166,4 +189,44 @@ test("영상 목록과 채널 화면이 키 없는 상태에서 예시로 보인
   await expect(page.getByRole("heading", { name: "요리 채널" })).toBeVisible();
   await expect(page.getByText("예시 채널로 보여줘요")).toBeVisible();
   await expect(page.getByText("집밥 연구소")).toBeVisible();
+});
+
+test("영상 검색은 설명까지 찾고, 채널을 고르면 그 채널 안 YouTube 검색으로 잇는다", async ({ page }) => {
+  // 예시 채널은 유튜브 채널 ID가 없어서, 집밥 연구소에 ID가 있는 것처럼 응답을 바꾼다
+  const youtubeId = "UCabcdefghijklmnopqrstuv";
+  await page.route("**/api/channels", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.items.find((c: { title: string }) => c.title === "집밥 연구소").youtube_id = youtubeId;
+    await route.fulfill({ response, json: body });
+  });
+  await openRecipes(page, "영상");
+  const search = page.getByRole("searchbox", { name: "영상 제목·설명에서 찾기" });
+  const rows = page.locator(".r3-vlist > li");
+  // 검색어·채널을 바꾼 직후에는 목록이 잠깐 비어 '없음' 검사가 그냥 통과하므로, 새 결과의 줄 수부터 맞춘 뒤 본다
+  await search.fill("대파"); // 예시 영상 두 개의 설명에만 있다(검색 전 목록은 5줄)
+  await expect(rows).toHaveCount(2);
+  await expect(page.getByText("냉장고 털이 두부조림 10분 완성")).toBeVisible();
+  await expect(page.getByText("제육볶음 황금레시피, 이렇게만 하세요")).toBeVisible();
+  await expect(page.getByText("국물이 진한 된장찌개 비법 3가지")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "YouTube에서 더 찾기" })).toHaveAttribute(
+    "href",
+    `https://www.youtube.com/results?search_query=${encodeURIComponent("대파 레시피")}`,
+  );
+
+  await page.getByRole("button", { name: "집밥 연구소", exact: true }).click();
+  await expect(rows).toHaveCount(1); // 바꾸기 전 목록은 2줄
+  await expect(page.getByText("제육볶음 황금레시피, 이렇게만 하세요")).toBeVisible();
+  await expect(page.getByText("냉장고 털이 두부조림 10분 완성")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "YouTube 집밥 연구소 채널에서 더 찾기" })).toHaveAttribute(
+    "href",
+    `https://www.youtube.com/channel/${youtubeId}/search?query=${encodeURIComponent("대파")}`,
+  );
+
+  await search.fill("계란말이"); // 이 채널에는 없다 → 결과 없음 화면에도 채널 안 찾기
+  await expect(page.getByRole("link", { name: "YouTube 집밥 연구소 채널에서 찾기" })).toHaveAttribute(
+    "href",
+    `https://www.youtube.com/channel/${youtubeId}/search?query=${encodeURIComponent("계란말이")}`,
+  );
+  await expect(page.getByRole("button", { name: "전체 채널에서 찾기" })).toBeVisible();
 });

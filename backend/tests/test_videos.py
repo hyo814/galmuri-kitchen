@@ -53,7 +53,7 @@ def no_youtube(monkeypatch):
 
 
 def make_channel(app, name, *, default=False, fetched_ago=timedelta(0), videos_=(), user_rows=(), uploads=True):
-    """videos_: [(이름, 며칠 전, 제목)], user_rows: [(user_id, hidden)]. 채널 pk를 돌려준다."""
+    """videos_: [(이름, 며칠 전, 제목[, 설명])], user_rows: [(user_id, hidden)]. 채널 pk를 돌려준다."""
     with app.app_context():
         now = utcnow()
         channel = YoutubeChannel(
@@ -65,12 +65,13 @@ def make_channel(app, name, *, default=False, fetched_ago=timedelta(0), videos_=
         )
         db.session.add(channel)
         db.session.flush()
-        for video_name, days, title in videos_:
+        for video_name, days, title, *description in videos_:
             db.session.add(
                 YoutubeVideo(
                     video_id=vid(video_name),
                     channel_id=channel.id,
                     title=title,
+                    description=description[0] if description else None,
                     published_at=now - timedelta(days=days),
                     fetched_at=now,
                     duration_seconds=60,
@@ -117,11 +118,14 @@ def test_videos_modes(client, login, app, no_youtube):
     assert len(body["items"]) == 5 and all(v["thumbnail_url"] is None and len(v["video_id"]) == 11 for v in body["items"])
     assert body["items"][0]["duration_seconds"] == 724 and body["items"][0]["channel_title"] == "집밥 연구소"
     assert [v["id"] for v in client.get("/api/videos?q=두부").get_json()["items"]] == [2]
+    assert [v["id"] for v in client.get("/api/videos?q=대파").get_json()["items"]] == [1, 2]  # 설명에만 있다
+    assert [v["id"] for v in client.get("/api/videos?q=대파&channel=2").get_json()["items"]] == [2]
     assert [v["id"] for v in client.get("/api/videos?channel=2").get_json()["items"]] == [2, 5]
     assert client.get("/api/videos/1").get_json()["description"].startswith("재료 (3인분)")
     assert client.get("/api/videos/9").status_code == 404
     channels = client.get("/api/channels").get_json()
     assert (len(channels["items"]), channels["mine_count"], channels["mine_limit"], channels["sample"]) == (5, 2, 30, True)
+    assert all(c["youtube_id"] is None for c in channels["items"])  # 지어낸 채널이라 유튜브 채널 주소가 없다
     res = client.post("/api/channels", json={"url": "https://youtube.com/@cookhouse"})
     assert (res.status_code, res.get_json()["error"]) == (503, "지금은 채널을 추가할 수 없어요.")
     assert client.patch("/api/channels/3", json={"hidden": True}).status_code == 503
@@ -133,6 +137,19 @@ def test_videos_modes(client, login, app, no_youtube):
         assert (res.status_code, res.get_json()["error"]) == (503, "영상을 지금은 볼 수 없어요.")
     with app.app_context():
         assert YoutubeChannel.query.count() == 0
+
+
+def test_sample_search_puts_title_matches_first(client, login, monkeypatch, no_youtube):
+    login()
+    monkeypatch.setattr(videos, "SAMPLE_VIDEOS", [
+        ("새 영상", 1, 60, 1, "재료: 두부 1모"),
+        ("두부조림", 2, 60, 2, None),
+        ("옛 영상", 1, 60, 3, "DUBU 두부"),
+        ("상관없는 영상", 1, 60, 4, "대파"),
+    ])
+    search = lambda q: [v["title"] for v in client.get("/api/videos", query_string={"q": q}).get_json()["items"]]  # noqa: E731
+    assert search("두부") == ["두부조림", "새 영상", "옛 영상"]  # 제목 일치 먼저, 그 안은 최신순
+    assert search("dubu") == ["옛 영상"]  # 대소문자 무시
 
 
 def test_videos_lists_visible_channels_newest_first_with_cursor(on_client, on_login, on_app, no_youtube):
@@ -178,11 +195,70 @@ def test_videos_channel_filter(on_client, on_login, on_app, no_youtube):
 
 def test_videos_search_escapes_like_wildcards(on_client, on_login, on_app, no_youtube):
     on_login()
-    make_channel(on_app, "A", default=True, videos_=[("a1", 1, "할인 50% 장보기"), ("a2", 2, "된장_찌개"), ("a3", 3, "김치찌개")])
+    make_channel(on_app, "A", default=True, videos_=[
+        ("a1", 1, "할인 50% 장보기"),
+        ("a2", 2, "된장_찌개"),
+        ("a3", 3, "김치찌개"),
+        ("a4", 4, "설명에만 기호", "최대 30% 할인, 고추_장"),
+        ("a5", 5, "보통 영상", "보통 설명"),  # 와일드카드로 읽으면 여기에도 걸린다
+    ])
     search = lambda q: [v["title"] for v in on_client.get("/api/videos", query_string={"q": q}).get_json()["items"]]  # noqa: E731
-    assert search("%") == ["할인 50% 장보기"]
-    assert search("_") == ["된장_찌개"]
+    assert search("%") == ["할인 50% 장보기", "설명에만 기호"]
+    assert search("_") == ["된장_찌개", "설명에만 기호"]
     assert search("  찌개 ") == ["된장_찌개", "김치찌개"]
+
+
+def test_videos_search_title_matches_first_then_description(on_client, on_login, on_app, no_youtube):
+    on_login()
+    a = make_channel(on_app, "A", default=True, videos_=[
+        ("a1", 1, "새 영상", "재료: 돼지고기 600g, 제육 양념"),
+        ("a2", 3, "제육볶음 황금레시피"),
+        ("a3", 5, "제육 덮밥", "제육"),  # 제목·설명 둘 다 → 제목 쪽에 한 번만
+        ("a4", 2, "된장찌개", "된장 2큰술"),
+        ("a5", 6, "옛 영상", "Pork JEYUK 제육"),
+    ])
+    b = make_channel(on_app, "B", default=True, videos_=[("b1", 2, "B 영상", "제육 설명"), ("b2", 4, "B 제육")])
+    search = lambda **params: titles(on_client.get("/api/videos", query_string=params))  # noqa: E731
+    assert search(q="제육") == ["제육볶음 황금레시피", "B 제육", "제육 덮밥", "새 영상", "B 영상", "옛 영상"]
+    assert search(q="jeyuk") == ["옛 영상"]  # 설명도 대소문자 무시
+    assert search(q="제육", channel=a) == ["제육볶음 황금레시피", "제육 덮밥", "새 영상", "옛 영상"]
+    assert search(q="제육", channel=b) == ["B 제육", "B 영상"]
+    assert search(q="없는 말") == []
+
+
+def test_videos_search_returns_all_matches_at_once_up_to_100(on_client, on_login, on_app, no_youtube):
+    on_login()
+    make_channel(on_app, "A", default=True, videos_=[(f"v{i}", i, f"찌개 {i}") for i in range(101)])
+    body = on_client.get("/api/videos?q=찌개&limit=5").get_json()  # 검색은 limit와 상관없이 한 번에
+    assert (len(body["items"]), body["next_cursor"]) == (100, None)
+    assert (body["items"][0]["title"], body["items"][-1]["title"]) == ("찌개 0", "찌개 99")
+    cursor = on_client.get("/api/videos?limit=1").get_json()["next_cursor"]
+    assert titles(on_client.get(f"/api/videos?q=찌개&cursor={cursor}")) == [v["title"] for v in body["items"]]  # 커서는 무시
+    assert on_client.get("/api/videos?q=찌개&cursor=nope").status_code == 200
+
+
+def test_videos_search_caps_after_putting_title_matches_first(on_client, on_login, on_app, no_youtube):
+    on_login()
+    oldest_title = [("t0", 200, "찌개 옛날 영상")]  # 가장 오래됐고 가장 먼저 넣었다(id도 가장 작다)
+    newer = [(f"d{i}", i, f"설명 {i}", "찌개 끓이기") for i in range(100)]
+    make_channel(on_app, "A", default=True, videos_=oldest_title + newer)
+    found = titles(on_client.get("/api/videos?q=찌개"))
+    assert (len(found), found[0], found[-1]) == (100, "찌개 옛날 영상", "설명 98")  # 정렬한 뒤에 100개로 자른다
+
+
+def test_videos_search_orders_newest_first_within_each_group(on_client, on_login, on_app, no_youtube):
+    on_login()
+    make_channel(on_app, "A", default=True, videos_=[  # 넣은 순서(id)와 공개 날짜 순서가 다르다
+        ("d2", 2, "설명 2일 전", "찌개"),
+        ("t5", 5, "찌개 5일 전"),
+        ("d1", 1, "설명 1일 전", "찌개"),
+        ("t1", 1, "찌개 1일 전"),
+        ("d9", 9, "설명 9일 전", "찌개"),
+        ("t3", 3, "찌개 3일 전"),
+    ])
+    assert titles(on_client.get("/api/videos?q=찌개")) == [
+        "찌개 1일 전", "찌개 3일 전", "찌개 5일 전", "설명 1일 전", "설명 2일 전", "설명 9일 전",
+    ]
 
 
 def test_refresh_stale_limits_to_three_and_updates_fetched_at(on_client, on_login, on_app, monkeypatch):
@@ -319,7 +395,7 @@ def test_add_channel(on_client, on_login, on_app, monkeypatch):
     res = on_client.post("/api/channels", json={"url": "https://www.youtube.com/@cookhouse"})
     assert res.status_code == 201
     body = res.get_json()
-    assert (body["title"], body["video_count"], body["is_default"], body["hidden"]) == ("집밥 연구소", 248, False, False)
+    assert (body["title"], body["youtube_id"], body["video_count"], body["is_default"], body["hidden"]) == ("집밥 연구소", cid("NEW"), 248, False, False)
     assert lookups == [{"handle": "@cookhouse"}]
     assert [v["title"] for v in on_client.get("/api/videos").get_json()["items"]] == ["첫 영상"]  # 바로 받아 둠
     with on_app.app_context():
@@ -402,12 +478,12 @@ def test_channels_list_mine_first_then_defaults(on_client, on_login, on_app, no_
         db.session.add(UserChannel(user_id=me, channel_id=first))
         db.session.commit()
     body = on_client.get("/api/channels").get_json()
-    assert [(c["title"], c["is_default"], c["hidden"], c["unavailable"]) for c in body["items"]] == [
-        ("채널 M2", False, False, False),
-        ("채널 M1", False, False, False),
-        ("채널 D1", True, False, False),
-        ("채널 D2", True, True, False),
-        ("채널 D3", True, False, True),
+    assert [(c["title"], c["youtube_id"], c["is_default"], c["hidden"], c["unavailable"]) for c in body["items"]] == [
+        ("채널 M2", cid("M2"), False, False, False),
+        ("채널 M1", cid("M1"), False, False, False),
+        ("채널 D1", cid("D1"), True, False, False),
+        ("채널 D2", cid("D2"), True, True, False),
+        ("채널 D3", cid("D3"), True, False, True),
     ]
     assert (body["mine_count"], body["mine_limit"], body["sample"]) == (2, 30, False)
 
@@ -639,7 +715,7 @@ def test_videos_pagination_ties_filters_and_limits(on_client, on_login, on_app, 
                 return got
 
     assert all_pages("") == ["같은 시각 찌개 2", "같은 시각 찌개 1", "같은 시각 찌개 0", "B 찌개", "A 볶음"]
-    assert all_pages("&q=찌개") == ["같은 시각 찌개 2", "같은 시각 찌개 1", "같은 시각 찌개 0", "B 찌개"]
+    assert all_pages("&q=찌개") == ["같은 시각 찌개 2", "같은 시각 찌개 1", "같은 시각 찌개 0", "B 찌개"]  # 검색은 한 번에
     assert all_pages(f"&channel={a}") == ["같은 시각 찌개 2", "같은 시각 찌개 1", "같은 시각 찌개 0", "A 볶음"]
 
     for i in range(50):
@@ -651,8 +727,12 @@ def test_videos_pagination_ties_filters_and_limits(on_client, on_login, on_app, 
 
 def test_videos_search_backslash_is_literal(on_client, on_login, on_app, no_youtube):
     on_login()
-    make_channel(on_app, "A", default=True, videos_=[("a1", 1, "역슬래시 \\ 제목"), ("a2", 2, "보통 제목")])
-    assert titles(on_client.get("/api/videos", query_string={"q": "\\"})) == ["역슬래시 \\ 제목"]
+    make_channel(on_app, "A", default=True, videos_=[
+        ("a1", 1, "역슬래시 \\ 제목"),
+        ("a2", 2, "보통 제목", "보통 설명"),
+        ("a3", 3, "설명에 역슬래시", "C:\\레시피"),
+    ])
+    assert titles(on_client.get("/api/videos", query_string={"q": "\\"})) == ["역슬래시 \\ 제목", "설명에 역슬래시"]
 
 
 def test_old_video_detail_is_404(on_client, on_login, on_app, no_youtube):

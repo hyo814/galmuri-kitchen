@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type ChannelList, type Video, type VideoPage } from "../api";
+import { api, type Channel, type ChannelList, type Video, type VideoPage } from "../api";
 import Icon from "../components/Icon";
 import InfiniteSentinel from "../components/InfiniteSentinel";
 import Thumb from "../components/VideoThumb";
@@ -15,24 +15,27 @@ export function resetVideoFilter() {
   lastFilter = { channel: null, q: "" };
 }
 
-/** 받아 둔 영상(채널마다 최근 50개) 밖까지 찾게 유튜브 검색 결과를 새 창으로 연다(폰은 유튜브 앱). 쿼터를 쓰지 않는다 */
-function YoutubeSearchLink({ q, more }: { q: string; more: boolean }) {
-  const query = q.includes("레시피") ? q : `${q} 레시피`;
+/** 받아 둔 영상(채널마다 최근 50개) 밖까지 찾게 유튜브 검색 결과를 새 창으로 연다(폰은 유튜브 앱). 쿼터를 쓰지 않는다.
+ *  채널을 골랐으면 그 채널 안에서 찾는다 */
+function YoutubeSearchLink({ q, more, channel }: { q: string; more: boolean; channel?: Channel }) {
+  const find = more ? "더 찾기" : "찾기";
+  let href = `https://www.youtube.com/results?search_query=${encodeURIComponent(q.includes("레시피") ? q : `${q} 레시피`)}`;
+  let label = `YouTube에서 ${find}`;
+  if (channel?.youtube_id) {
+    const name = shortChannelName(channel.title);
+    href = `https://www.youtube.com/channel/${channel.youtube_id}/search?query=${encodeURIComponent(q)}`;
+    label = `YouTube ${name.endsWith("채널") ? name : `${name} 채널`}에서 ${find}`;
+  }
   return (
-    <a
-      className="btn secondary inline r3-yt-search"
-      href={`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`}
-      target="_blank"
-      rel="noopener noreferrer"
-    >
+    <a className="btn secondary inline r3-yt-search" href={href} target="_blank" rel="noopener noreferrer">
       <Icon name="external" size={16} />
-      {more ? "YouTube에서 더 찾기" : "YouTube에서 찾기"}
+      {label}
       <span className="sr-only">(새 창에서 열려요)</span>
     </a>
   );
 }
 
-/** 레시피 탭 `영상` 칸: 제목 검색 · 채널 칩 · 작은 썸네일 한 줄 목록 (시안 Videos) */
+/** 레시피 탭 `영상` 칸: 제목·설명 검색 · 채널 칩 · 작은 썸네일 한 줄 목록 (시안 Videos) */
 export default function Videos({ sample }: { sample: boolean }) {
   const [input, setInput] = useState(lastFilter.q);
   const [q, setQ] = useState(lastFilter.q);
@@ -42,6 +45,7 @@ export default function Videos({ sample }: { sample: boolean }) {
   const chips = channels?.items.filter((c) => !c.hidden && !c.unavailable) ?? [];
   // 뺀·숨긴 채널을 고른 채였으면 전체로
   const channel = channels && !chips.some((c) => c.id === selected) ? null : selected;
+  const current = chips.find((c) => c.id === channel);
 
   // 입력을 멈추고 300ms 뒤에 찾는다
   useEffect(() => {
@@ -84,11 +88,11 @@ export default function Videos({ sample }: { sample: boolean }) {
         <div className="r3-search">
           <label>
             <Icon name="search" size={20} />
-            <span className="sr-only">영상 제목에서 찾기</span>
+            <span className="sr-only">영상 제목·설명에서 찾기</span>
             <input
               ref={inputRef}
               type="search"
-              placeholder="영상 제목에서 찾기"
+              placeholder="영상 제목·설명에서 찾기"
               maxLength={50}
               enterKeyHint="search"
               value={input}
@@ -167,7 +171,7 @@ export default function Videos({ sample }: { sample: boolean }) {
                 전체 채널에서 찾기
               </button>
             )}
-            {q && channel === null && <YoutubeSearchLink q={q} more={false} />}
+            {q && (channel === null || current?.youtube_id) && <YoutubeSearchLink q={q} more={false} channel={current} />}
           </section>
         )
       ) : (
@@ -195,7 +199,7 @@ export default function Videos({ sample }: { sample: boolean }) {
             ))}
           </ul>
           <InfiniteSentinel onVisible={loadMore} hasMore={hasMore} multiPage={multiPage} loading={loading} error={error} onRetry={loadMore} />
-          {q && settled && <YoutubeSearchLink q={q} more />}
+          {q && settled && <YoutubeSearchLink q={q} more channel={current} />}
           <p className="r3-credit">YouTube 제공</p>
         </>
       )}

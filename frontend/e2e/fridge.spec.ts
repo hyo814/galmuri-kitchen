@@ -97,12 +97,13 @@ test("필수품 배너는 체험 안내 카드를 닫으면 보이고, 채워 �
   await addDialog.getByRole("button", { name: "저장", exact: true }).click();
   await expect(addDialog).toBeHidden();
 
-  await expect(page.getByRole("button", { name: /간장/ })).toBeVisible(); // 재고에 실제로 들어갔다
+  // 배너 버튼 이름에도 `간장`이 들어 있어, 재고 줄은 이름이 `간장`으로 시작하는 버튼으로 찾는다(배너가 사라지기 전 겹침 방지)
+  await expect(page.getByRole("button", { name: /^간장/ })).toBeVisible(); // 재고에 실제로 들어갔다
   await expect(page.getByRole("button", { name: /필수품.*떨어졌어요/ })).toHaveCount(0);
 
   await page.reload();
   await expect(page.getByRole("navigation", { name: "주요 메뉴" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /간장/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^간장/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /필수품.*떨어졌어요/ })).toHaveCount(0);
 });
 

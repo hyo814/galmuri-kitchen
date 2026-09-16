@@ -579,7 +579,8 @@ def test_demo_reads_cached_default_channel_videos_without_refresh(demo_app, monk
             YoutubeVideo(
                 video_id=vid("old"),
                 channel_id=default,
-                title="30일 넘어 캐시에서 빠진 영상",
+                title="30일 넘어 캐시에서 빠진 제육 영상",  # 제목·설명 모두 검색어에 걸려도 검색 결과에서 빠진다
+                description="제육 양념",
                 published_at=utcnow() - timedelta(days=40),
                 fetched_at=utcnow() - videos.KEEP_FOR - timedelta(days=1),
             )

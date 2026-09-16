@@ -303,7 +303,7 @@ export default function MealFillSheet({ plan, date, meal, current, user, onSaved
 
         {tab === "video" && (
           <>
-            <SearchBox label="영상 제목에서 찾기" value={videoInput} disabled={importing} onChange={setVideoInput} />
+            <SearchBox label="영상 제목·설명에서 찾기" value={videoInput} disabled={importing} onChange={setVideoInput} />
             {videos.result?.items.length ? (
               <>
                 {videos.error && <ListState error={videos.error} loading={false} empty="" onRetry={videos.retry} compact />}
