@@ -1,6 +1,7 @@
 from datetime import date
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from app import food_logs
@@ -118,7 +119,8 @@ def test_log_marks_nutrients_left_out(client, login, app):
     assert (patched["nutrition"], patched["incomplete"]) == (None, {})
     with app.app_context():
         assert db.session.get(FoodLog, log["id"]).nutrition_incomplete == SODIUM_LEFT_OUT
-        assert db.session.get(FoodLog, other["id"]).nutrition_incomplete is None
+        # JSON의 null이 아니라 SQL NULL(마이그레이션 전 기록과 같게)
+        assert db.session.execute(text("SELECT nutrition_incomplete IS NULL FROM food_logs WHERE id = :id"), {"id": other["id"]}).scalar_one()
         # 스냅숏이라 나중에 식품 값이 채워져도 지난 기록 표시는 그대로(결정 2)
         FoodNutrient.query.filter_by(food_code="R1").one().sodium_mg = 4000
         db.session.commit()
