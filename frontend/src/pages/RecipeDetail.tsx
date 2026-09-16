@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { api, type MyRecipe, type RecipeDetail as Detail, type RecipeIngredientStatus, type User } from "../api";
-import { cookedLine } from "../cooklog/cook.ts";
+import { cookedLine, savedRecipeNote } from "../cooklog/cook.ts";
 import CookSheet, { toastSaved } from "../components/CookSheet";
 import Icon from "../components/Icon";
 import RecipeNutrition from "../components/RecipeNutrition";
@@ -159,7 +159,9 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
     reload,
   } = useResource<Detail>(kind === "mine" ? `/api/recipes/${id}` : `/api/public-recipes/${id}`);
   const { busy, error: actionError, run } = useAsyncAction();
-  const [cooking, setCooking] = useState(false);
+  const opening = useAsyncAction(); // 추천 레시피 요리했어요(저장한 뒤 시트 열기)
+  // 요리했어요 시트: 내 레시피 id(추천 레시피는 저장한 복사본)와 맨 위 한 줄
+  const [cooking, setCooking] = useState<{ recipeId: number; note?: string } | null>(null);
 
   if (!recipe)
     return (
@@ -202,6 +204,18 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
       forgetRecipeCaches();
       navigate(`/recipes/mine/${saved.id}`, { replace: true });
     });
+
+  // 결정 C(29절 추가 2026-09-16): 추천 레시피의 요리했어요는 내 레시피로 저장(이미 저장했으면 그 복사본)한 뒤 같은 시트를 연다.
+  // 이 화면에 남는다 — 되돌려도 저장한 레시피는 그대로(되돌리기는 요리 일기만)
+  const cookPublic = () => {
+    if (busy) return;
+    void opening.run(async () => {
+      const res = await api<Response>(`/api/public-recipes/${recipe.id}/save`, { method: "POST", raw: true });
+      const saved = (await res.json()) as MyRecipe;
+      forgetRecipeCaches();
+      setCooking({ recipeId: saved.id, note: savedRecipeNote(saved.title, res.status === 201) });
+    });
+  };
 
   const remove = () => {
     if (!confirm(`${withJosa(recipe.title, "을", "를")} 삭제할까요?`)) return;
@@ -264,9 +278,9 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
         </p>
       )}
 
-      {actionError && (
+      {(actionError || opening.error) && (
         <p className="error" role="alert">
-          {actionError}
+          {actionError || opening.error}
         </p>
       )}
 
@@ -283,30 +297,38 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
           </div>
           {/* 알림이 떠 있으면 styles.css가 버튼을 알림 위로 올린다(시안 2). data-cook-button: 되돌린 뒤 포커스가 돌아올 자리 */}
           <div className="cta-bar">
-            <button className="btn primary" aria-haspopup="dialog" data-cook-button disabled={busy} onClick={() => setCooking(true)}>
+            <button className="btn primary" aria-haspopup="dialog" data-cook-button disabled={busy} onClick={() => setCooking({ recipeId: recipe.id })}>
               <Icon name="pan" />
               요리했어요
             </button>
           </div>
-          {cooking && (
-            <CookSheet
-              recipeId={recipe.id}
-              user={user}
-              onSaved={(result) => {
-                toastSaved(result); // 되돌리면 App이 지금 화면을 새로 만든다
-                void reload(); // 재고 표시·요리 표시를 새로
-              }}
-              onClose={() => setCooking(false)}
-            />
-          )}
         </>
       ) : (
         <div className="cta-bar">
-          <button className="btn primary" disabled={busy} onClick={save}>
-            <Icon name="bookmark" />
-            {busy ? "저장 중…" : "내 레시피로 저장"}
-          </button>
+          {/* 시안 ⑤: 저장만(작게) + 요리했어요(크게). 요리했어요는 저장하는 동안에도 disabled 대신 aria-disabled — 포커스가 남아 시트를 닫으면 돌아온다 */}
+          <div className="actions">
+            <button className="btn outline ck-save-only" aria-label={busy ? undefined : "내 레시피로 저장만 하기"} disabled={busy || opening.busy} onClick={save}>
+              <Icon name="bookmark" size={18} />
+              {busy ? "저장 중…" : "저장만"}
+            </button>
+            <button className="btn primary" aria-haspopup="dialog" aria-disabled={busy || opening.busy || undefined} data-cook-button onClick={cookPublic}>
+              <Icon name="pan" />
+              {opening.busy ? "저장 중…" : "요리했어요"}
+            </button>
+          </div>
         </div>
+      )}
+      {cooking && (
+        <CookSheet
+          recipeId={cooking.recipeId}
+          user={user}
+          note={cooking.note}
+          onSaved={(result) => {
+            toastSaved(result); // 되돌리면 App이 지금 화면을 새로 만든다
+            void reload(); // 재고 표시·요리 표시를 새로
+          }}
+          onClose={() => setCooking(null)}
+        />
       )}
     </main>
   );

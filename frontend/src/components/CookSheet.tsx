@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useId, useRef, useState, type ChangeEvent, type MouseEvent } from "react";
+import { Fragment, useEffect, useId, useRef, useState, type ChangeEvent, type MouseEvent, type ReactNode } from "react";
 import {
   ApiError,
   api,
@@ -46,6 +46,8 @@ interface Props {
   user: User;
   /** 식단 칸에서 열 때(결정 16·28) */
   start?: CookStart;
+  /** 시트 맨 위 한 줄(추천 레시피를 내 레시피에 저장한 뒤 열 때, 29절 추가 2026-09-16) */
+  note?: string;
   onSaved: (result: CookSaveResult) => void;
   onClose: () => void;
 }
@@ -148,12 +150,17 @@ export function DateChips({ value, today, onChange }: { value: string; today: st
 }
 
 export function WonField({
+  label = "사 먹으면 얼마 (1인분)",
+  placeholder = "예: 9,000",
   value,
   source,
   estimating,
   onChange,
   onEstimate,
 }: {
+  /** 직접 쓴 일기의 `재료비 (선택)`도 같은 칸(0~1,000,000원) */
+  label?: ReactNode;
+  placeholder?: string;
   value: string;
   source: EatOutSource | null;
   estimating: boolean;
@@ -168,7 +175,7 @@ export function WonField({
   return (
     <div className="field">
       <label className="field-label" htmlFor={`${id}-input`}>
-        사 먹으면 얼마 (1인분)
+        {label}
       </label>
       <div className="ck-won-row">
         {/* 칸 어디를 눌러도 입력으로(글자 폭만큼인 입력 칸 옆 빈자리) */}
@@ -179,7 +186,7 @@ export function WonField({
             className="input"
             inputMode="numeric"
             autoComplete="off"
-            placeholder="예: 9,000"
+            placeholder={placeholder}
             size={Math.max(7, value.length)}
             value={value}
             aria-invalid={invalid || undefined}
@@ -290,8 +297,134 @@ export function PhotoPicker({
   );
 }
 
+/** 직접 쓴 일기의 재료비 칸(선택, 0~1,000,000원) */
+export const CostField = ({ value, onChange }: { value: string; onChange: (text: string) => void }) => (
+  <WonField
+    label={
+      <>
+        재료비 <span className="optional">(선택)</span>
+      </>
+    }
+    placeholder="예: 6,500"
+    value={value}
+    source={null}
+    estimating={false}
+    onChange={onChange}
+  />
+);
+
+/** 인분 −/+ 1~20(결정 3) — 요리했어요·일기 쓰기 시트 공용 */
+export function ServingsStepper({ value, onChange }: { value: number; onChange: (servings: number) => void }) {
+  return (
+    <div className="ck-row">
+      <span className="field-label">인분</span>
+      <div className="stepper">
+        <button type="button" className="icon-btn" aria-label="인분 줄이기" disabled={value <= 1} onClick={() => onChange(value - 1)}>
+          <Icon name="minus" />
+        </button>
+        <output className="input rc-count" aria-live="polite">
+          {value}인분
+        </output>
+        <button type="button" className="icon-btn" aria-label="인분 늘리기" disabled={value >= MAX_COOK_SERVINGS} onClick={() => onChange(value + 1)}>
+          <Icon name="plus" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** 사진 한 장(저장소가 꺼져 있으면 없음) + 누르면 펼치는 메모 500자 */
+export function PhotoMemoRow({
+  photos,
+  photo,
+  onPhoto,
+  memo,
+  onMemo,
+}: {
+  photos: boolean;
+  photo: Blob | null;
+  onPhoto: (file: Blob | null) => void;
+  memo: string;
+  onMemo: (memo: string) => void;
+}) {
+  const [memoOpen, setMemoOpen] = useState(false);
+  return (
+    <div className="ck-row">
+      {photos && <PhotoPicker file={photo} currentUrl={null} onPick={onPhoto} />}
+      {memoOpen ? (
+        <div className="ck-memo">
+          <textarea className="input" aria-label="메모" rows={3} maxLength={500} autoFocus value={memo} onChange={(e) => onMemo(e.target.value)} />
+          <span className="muted" aria-hidden="true">
+            {memo.length} / 500
+          </span>
+        </div>
+      ) : (
+        <button type="button" className="btn secondary ck-memo-btn" onClick={() => setMemoOpen(true)}>
+          메모 (선택)
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** `먹은 기록에도 남기기`(결정 16). 이미 먹은 식단 칸이면 꺼진 채 막힌다 */
+export function FoodLogSwitch({ on, onChange, line, blocked = false }: { on: boolean; onChange: (on: boolean) => void; line: string; blocked?: boolean }) {
+  const id = useId();
+  return (
+    <div className="ck-row">
+      <span>
+        <b>먹은 기록에도 남기기</b>
+        <br />
+        <span className="muted" id={id}>
+          {blocked ? "이미 먹은 기록이 있어요" : line}
+        </span>
+      </span>
+      <button
+        type="button"
+        role="switch"
+        className="r3-toggle"
+        aria-checked={on && !blocked}
+        aria-label="먹은 기록에도 남기기"
+        aria-describedby={id}
+        disabled={blocked}
+        onClick={() => onChange(!on)}
+      />
+    </div>
+  );
+}
+
+/** POST /api/cook-logs(요리했어요·일기 쓰기 공통): 사진은 줄여서 함께 보내고, 저장하면 캐시를 지운 뒤 done */
+export function saveCook(save: ReturnType<typeof useAsyncAction>, data: Record<string, unknown>, photo: Blob | null, done: (result: CookSaveResult) => void) {
+  const session = undoToastSession();
+  void save.run(async () => {
+    const form = new FormData();
+    form.append("data", JSON.stringify(data));
+    if (photo) {
+      const image = await resizeImage(photo);
+      // 못 읽으면 resizeImage가 원본을 돌려주는데, 원본에는 위치 같은 사진 정보가 남아 있을 수 있어 올리지 않는다(uploadFoodPhoto와 같은 가드)
+      if (image === photo) throw new Error("이 사진은 올릴 수 없어요. 다른 사진을 골라주세요.");
+      form.append("image", image, "photo.jpg");
+    }
+    const result = await api<CookSaveResult>("/api/cook-logs", { method: "POST", body: form });
+    if (undoToastSession() !== session) return; // 그사이 로그아웃 — 다음 계정 화면에 앞 사용자 알림·캐시 지우기를 하지 않는다
+    forgetCookCaches();
+    done(result);
+  });
+}
+
+/** 추천 레시피를 저장한 뒤 연 시트 맨 위 한 줄(시안 ⑥) */
+export function SavedNote({ text }: { text?: string }) {
+  if (!text) return null;
+  return (
+    <p className="ck-note">
+      <Icon name="check" size={16} />
+      {text}
+    </p>
+  );
+}
+
 /** 시안 1 · COOKED: 요리했어요 시트. 초안을 받은 뒤에 폼을 그린다 */
-export default function CookSheet({ recipeId, user, start, onSaved, onClose }: Props) {
+export default function CookSheet({ recipeId, user, start, note, onSaved, onClose }: Props) {
   const [draft, setDraft] = useState<CookDraft>();
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -308,6 +441,7 @@ export default function CookSheet({ recipeId, user, start, onSaved, onClose }: P
   if (!draft) {
     return (
       <Sheet title="요리했어요" onClose={onClose}>
+        <SavedNote text={note} />
         {error ? (
           <>
             <p className="error" role="alert">
@@ -326,10 +460,10 @@ export default function CookSheet({ recipeId, user, start, onSaved, onClose }: P
       </Sheet>
     );
   }
-  return <CookForm draft={draft} user={user} start={start} onSaved={onSaved} onClose={onClose} />;
+  return <CookForm draft={draft} user={user} start={start} note={note} onSaved={onSaved} onClose={onClose} />;
 }
 
-function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeId"> & { draft: CookDraft }) {
+function CookForm({ draft, user, start, note, onSaved, onClose }: Omit<Props, "recipeId"> & { draft: CookDraft }) {
   const today = localToday();
   const { rows } = draft;
   // 식단 칸에서 열면 칸 인분으로 시작하고 줄마다 기본 양도 그 인분으로(결정 3). 서버가 레시피·칸 인분을 1~20으로 막는다
@@ -345,7 +479,6 @@ function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeI
   const [estimateError, setEstimateError] = useState("");
   const [rating, setRating] = useState<number | null>(null);
   const [photo, setPhoto] = useState<Blob | null>(null);
-  const [memoOpen, setMemoOpen] = useState(false);
   const [memo, setMemo] = useState("");
   const slotEaten = start?.slotEaten ?? false;
   const [foodLog, setFoodLog] = useState(!slotEaten);
@@ -412,35 +545,21 @@ function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeI
       e.currentTarget.closest("dialog")?.querySelector<HTMLElement>('[data-bad], [aria-invalid="true"]')?.focus();
       return;
     }
-    const session = undoToastSession();
-    void save.run(async () => {
-      const form = new FormData();
-      form.append(
-        "data",
-        JSON.stringify({
-          recipe_id: draft.recipe_id,
-          servings,
-          cooked_on: date,
-          rating,
-          memo: memo.trim() || null,
-          eat_out_price: parseWon(priceText) ?? null,
-          usages: rows.flatMap((row, i) =>
-            checked[i] && row.ingredient_id !== null ? [{ ingredient_id: row.ingredient_id, amount: parseAmountInput(amounts[i]) }] : [],
-          ),
-          food_log: foodLog && !slotEaten,
-          meal,
-          meal_slot_id: start?.slotId,
-        }),
-      );
-      if (photo) {
-        const image = await resizeImage(photo);
-        // 못 읽으면 resizeImage가 원본을 돌려주는데, 원본에는 위치 같은 사진 정보가 남아 있을 수 있어 올리지 않는다(uploadFoodPhoto와 같은 가드)
-        if (image === photo) throw new Error("이 사진은 올릴 수 없어요. 다른 사진을 골라주세요.");
-        form.append("image", image, "photo.jpg");
-      }
-      const result = await api<CookSaveResult>("/api/cook-logs", { method: "POST", body: form });
-      if (undoToastSession() !== session) return; // 그사이 로그아웃 — 다음 계정 화면에 앞 사용자 알림·캐시 지우기를 하지 않는다
-      forgetCookCaches();
+    const data = {
+      recipe_id: draft.recipe_id,
+      servings,
+      cooked_on: date,
+      rating,
+      memo: memo.trim() || null,
+      eat_out_price: parseWon(priceText) ?? null,
+      usages: rows.flatMap((row, i) =>
+        checked[i] && row.ingredient_id !== null ? [{ ingredient_id: row.ingredient_id, amount: parseAmountInput(amounts[i]) }] : [],
+      ),
+      food_log: foodLog && !slotEaten,
+      meal,
+      meal_slot_id: start?.slotId,
+    };
+    saveCook(save, data, photo, (result) => {
       onSaved(result);
       onClose();
     });
@@ -448,26 +567,8 @@ function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeI
 
   return (
     <Sheet title={`${draft.title} 요리했어요`} description="쓴 재료는 재고에서 빼요" locked={save.busy} onClose={onClose}>
-      <div className="ck-row">
-        <span className="field-label">인분</span>
-        <div className="stepper">
-          <button type="button" className="icon-btn" aria-label="인분 줄이기" disabled={servings <= 1} onClick={() => changeServings(servings - 1)}>
-            <Icon name="minus" />
-          </button>
-          <output className="input rc-count" aria-live="polite">
-            {servings}인분
-          </output>
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label="인분 늘리기"
-            disabled={servings >= MAX_COOK_SERVINGS}
-            onClick={() => changeServings(servings + 1)}
-          >
-            <Icon name="plus" />
-          </button>
-        </div>
-      </div>
+      <SavedNote text={note} />
+      <ServingsStepper value={servings} onChange={changeServings} />
 
       {rows.length > 0 && (
         <div className="field" role="group" aria-labelledby={`${id}-uses`}>
@@ -561,41 +662,9 @@ function CookForm({ draft, user, start, onSaved, onClose }: Omit<Props, "recipeI
         <StarPicker value={rating} label="별점" onChange={setRating} />
       </div>
 
-      <div className="ck-row">
-        {user.photos && <PhotoPicker file={photo} currentUrl={null} onPick={setPhoto} />}
-        {memoOpen ? (
-          <div className="ck-memo">
-            <textarea className="input" aria-label="메모" rows={3} maxLength={500} autoFocus value={memo} onChange={(e) => setMemo(e.target.value)} />
-            <span className="muted" aria-hidden="true">
-              {memo.length} / 500
-            </span>
-          </div>
-        ) : (
-          <button type="button" className="btn secondary ck-memo-btn" onClick={() => setMemoOpen(true)}>
-            메모 (선택)
-          </button>
-        )}
-      </div>
+      <PhotoMemoRow photos={user.photos} photo={photo} onPhoto={setPhoto} memo={memo} onMemo={setMemo} />
 
-      <div className="ck-row">
-        <span>
-          <b>먹은 기록에도 남기기</b>
-          <br />
-          <span className="muted" id={`${id}-food`}>
-            {slotEaten ? "이미 먹은 기록이 있어요" : foodLogLine(date, meal)}
-          </span>
-        </span>
-        <button
-          type="button"
-          role="switch"
-          className="r3-toggle"
-          aria-checked={foodLog && !slotEaten}
-          aria-label="먹은 기록에도 남기기"
-          aria-describedby={`${id}-food`}
-          disabled={slotEaten}
-          onClick={() => setFoodLog((on) => !on)}
-        />
-      </div>
+      <FoodLogSwitch on={foodLog} onChange={setFoodLog} line={foodLogLine(date, meal)} blocked={slotEaten} />
 
       {save.error && (
         <p className="error" role="alert">

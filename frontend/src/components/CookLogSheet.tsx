@@ -1,9 +1,8 @@
 import { Fragment, useId, useState } from "react";
 import { api, type CookLogDetail, type User } from "../api";
-import { aboutWon, costLine, eatOutLine, excludedNote, overSpent, savedText } from "../cooklog/cook.ts";
+import { aboutWon, costLine, diaryDetailDesc, eatOutLine, excludedNote, manualNote, manualTotal, overSpent, savedText } from "../cooklog/cook.ts";
 import { starsText } from "../foodlog/log.ts";
 import { formatWon } from "../format.ts";
-import { slotDateText } from "../meals/plan.ts";
 import { useAsyncAction } from "../useAsyncAction";
 import { useResource } from "../useResource";
 import { forgetCookCaches } from "./CookSheet";
@@ -21,7 +20,8 @@ interface Props {
   onClose: () => void;
 }
 
-/** 시안 4 · DETAIL: 사진·별점·메모와 아낀 돈 계산표(결정 13~15), 고치기·일기 지우기(결정 17·18) */
+/** 시안 4 · DETAIL: 사진·별점·메모와 아낀 돈 계산표(결정 13~15), 고치기·일기 지우기(결정 17·18).
+ *  직접 쓴 일기(시안 diary-write ④)는 재료 줄 대신 적은 재료비 한 줄로 계산한다 */
 export default function CookLogSheet({ id, today, user, onChanged, onClose }: Props) {
   const detail = useResource<CookLogDetail>(`/api/cook-logs/${id}`);
   const [editing, setEditing] = useState(false);
@@ -30,7 +30,8 @@ export default function CookLogSheet({ id, today, user, onChanged, onClose }: Pr
   const log = detail.data;
 
   function removeLog() {
-    if (!confirm("이 일기를 지울까요? 재고는 되돌리지 않아요.")) return;
+    // 직접 쓴 일기는 재고를 건드린 적이 없어 재고 안내를 붙이지 않는다
+    if (!confirm(log?.manual ? "이 일기를 지울까요?" : "이 일기를 지울까요? 재고는 되돌리지 않아요.")) return;
     void remove.run(async () => {
       await api(`/api/cook-logs/${id}`, { method: "DELETE" });
       forgetCookCaches();
@@ -70,7 +71,7 @@ export default function CookLogSheet({ id, today, user, onChanged, onClose }: Pr
 
   return (
     <>
-      <Sheet title={log.title} description={`${slotDateText(log.cooked_on, "")} · ${log.servings}인분`} locked={remove.busy} onClose={onClose}>
+      <Sheet title={log.title} description={diaryDetailDesc(log)} locked={remove.busy} onClose={onClose}>
         {log.rating !== null && (
           <p className="ck-sd">
             <span className="fl-stars" role="img" aria-label={`별점 ${log.rating}점`}>
@@ -108,20 +109,35 @@ export default function CookLogSheet({ id, today, user, onChanged, onClose }: Pr
                 <dd>{formatWon(log.eat_out_price * log.servings)}</dd>
               </>
             )}
-            {log.items.map(
-              (item, i) =>
-                item.cost !== null && (
-                  <Fragment key={i}>
-                    <dt>{costLine(item)}</dt>
-                    <dd>− {formatWon(item.cost)}</dd>
-                  </Fragment>
-                ),
+            {log.manual ? (
+              <>
+                {log.ingredient_cost !== null && (
+                  <>
+                    <dt>재료비 (직접 적음)</dt>
+                    <dd>− {formatWon(log.ingredient_cost)}</dd>
+                  </>
+                )}
+                <dt className="ck-tot">아낀 돈</dt>
+                <dd className="ck-tot">{manualTotal(log)}</dd>
+              </>
+            ) : (
+              <>
+                {log.items.map(
+                  (item, i) =>
+                    item.cost !== null && (
+                      <Fragment key={i}>
+                        <dt>{costLine(item)}</dt>
+                        <dd>− {formatWon(item.cost)}</dd>
+                      </Fragment>
+                    ),
+                )}
+                {/* 재료비는 저장값 그대로 — 바로 위 줄 값의 합과 같게(R10-14). 가격 있는 줄이 없으면 0원이 아니라 모름(R10-F7) */}
+                <dt className="ck-tot">재료비 {priced ? formatWon(log.ingredient_cost ?? 0) : "모름"}</dt>
+                <dd className="ck-tot">{total}</dd>
+              </>
             )}
-            {/* 재료비는 저장값 그대로 — 바로 위 줄 값의 합과 같게(R10-14). 가격 있는 줄이 없으면 0원이 아니라 모름(R10-F7) */}
-            <dt className="ck-tot">재료비 {priced ? formatWon(log.ingredient_cost) : "모름"}</dt>
-            <dd className="ck-tot">{total}</dd>
           </dl>
-          <p className="nt-src">{excludedNote(log.items)}</p>
+          <p className="nt-src">{log.manual ? manualNote : excludedNote(log.items)}</p>
         </section>
 
         {remove.error && (
@@ -138,7 +154,7 @@ export default function CookLogSheet({ id, today, user, onChanged, onClose }: Pr
             일기 지우기
           </button>
         </div>
-        <p className="nt-src">일기를 지워도 재고는 되돌리지 않아요.</p>
+        {!log.manual && <p className="nt-src">일기를 지워도 재고는 되돌리지 않아요.</p>}
       </Sheet>
       {/* 상세 시트 안이 아니라 옆에 둔다: 안쪽 dialog의 close가 바깥 시트 onClose까지 올라가지 않게(R10-8) */}
       {editing && (
