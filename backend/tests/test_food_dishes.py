@@ -64,6 +64,18 @@ def test_dish_items_dishes_then_packaged_in_order(app):
         assert first["kcal"] == 185.4  # 반올림하지 않는다(search_items와 다름)
 
 
+def test_dish_items_puts_rows_with_fewer_missing_values_first(app):
+    """식약처 음식은 같은 이름 행이 여럿이다(된장국_감자 D105·D305) — 이름까지 같으면 빠진 영양소가 적은 행 먼저(결정 10 개정 2)."""
+    full = dict.fromkeys(foods.NUTRIENTS[1:], 1.0)
+    add_foods(
+        app,
+        cached("D1", "된장국_감자", 25, group="음식", source="api", **{**full, "fat_g": None}),
+        cached("D2", "된장국_감자", 40, group="음식", source="api", **full),
+    )
+    with app.app_context():
+        assert [r["food_code"] for r in foods.dish_items("된장국")] == ["D2", "D1"]
+
+
 # --- food_by_code ---
 
 

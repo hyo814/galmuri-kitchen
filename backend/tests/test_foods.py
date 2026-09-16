@@ -455,6 +455,23 @@ def test_search_items_ranks_raw_row_above_substring_matches(app):
     assert names.index("파_대파_생것") < names.index("꼬치구이_닭고기_대파")
 
 
+def test_search_items_puts_rows_with_fewer_missing_values_first(app):
+    """결정 10(개정 2): 자동 맞추기와 같게 (조각·그룹·이름 길이)가 같으면 빠진 영양소가 적은 행 먼저 — 고르기 시트의 `가장 비슷`도 그 행."""
+    full = dict.fromkeys(foods.NUTRIENTS[1:], 1.0)
+    with app.app_context():
+        now = utcnow()
+        db.session.add_all([
+            FoodNutrient(food_code=code, name=name, name_key="된장", group_name="원재료성", kcal=150, source="api", fetched_at=now, **values)
+            for code, name, values in [
+                ("R2", "된장_보리", {**full, "sugars_g": None, "sodium_mg": None}),
+                ("R1", "된장_재래", {**full, "sodium_mg": None}),
+                ("R3", "된장_개량", full),
+            ]
+        ])
+        db.session.commit()
+        assert [row["food_code"] for row in foods.search_items("된장")] == ["R3", "R1", "R2"]
+
+
 # --- HTTP endpoint ---
 
 

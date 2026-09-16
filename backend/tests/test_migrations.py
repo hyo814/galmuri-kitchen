@@ -559,6 +559,28 @@ def test_cook_logs_migration_adds_and_removes_tables(app):
             assert not {"cook_logs", "cook_log_items"} & set(sa.inspect(conn).get_table_names())
 
 
+def test_food_log_nutrition_incomplete_migration(app):
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="h2c2o2o2k2l2")
+        with db.engine.begin() as conn:
+            conn.execute(sa.text("INSERT INTO users (id, provider, provider_id, nickname, created_at) VALUES (1, 'test', '1', 'u', CURRENT_TIMESTAMP)"))
+            conn.execute(sa.text(
+                "INSERT INTO food_logs (id, user_id, eaten_on, meal, source, title, kcal, sodium_mg, approx, nutrition_pending, created_at, updated_at) "
+                "VALUES (1, 1, '2026-09-14', 'dinner', 'manual', '된장찌개', 165, 7, TRUE, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ))
+
+        upgrade(directory=MIGRATIONS, revision="h3i3n3c3m3p3")
+        with db.engine.connect() as conn:
+            columns = {c["name"] for c in sa.inspect(conn).get_columns("food_logs")}
+            kept = conn.execute(sa.text("SELECT nutrition_incomplete FROM food_logs")).scalar_one()
+        assert "nutrition_incomplete" in columns
+        assert kept is None  # 지난 스냅숏은 어떤 값이 빠졌는지 알 수 없어 비워 둔다
+
+        downgrade(directory=MIGRATIONS, revision="h2c2o2o2k2l2")
+        with db.engine.connect() as conn:
+            assert "nutrition_incomplete" not in {c["name"] for c in sa.inspect(conn).get_columns("food_logs")}
+
+
 def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)

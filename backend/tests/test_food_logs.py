@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app import food_logs
-from app.models import CookLog, FoodLog, FoodSearch, UnitWeightEstimate, User, db, utcnow
+from app.models import CookLog, FoodLog, FoodNutrient, FoodSearch, UnitWeightEstimate, User, db, utcnow
 from tests.test_meal_ai import apply, new_dish
 from tests.test_meals import add_recipe, make_plan, put_slot
 from tests.test_nutrition import add_foods, cached
@@ -52,7 +52,7 @@ def test_create_text_log_and_day_list(client, login):
     assert {k: v for k, v in log.items() if k not in ("id", "created_at")} == {
         "eaten_on": "2026-09-14", "meal": "lunch", "source": "manual", "title": "제육덮밥", "recipe_id": None, "meal_slot_id": None,
         "slot_servings": None, "food_code": None, "servings": 1.0, "grams": None, "place": "out", "rating": 3,
-        "memo": "회사 앞 · 조금 짰어요", "nutrition": None, "approx": False, "nutrition_pending": False, "photos": [],
+        "memo": "회사 앞 · 조금 짰어요", "nutrition": None, "approx": False, "nutrition_pending": False, "incomplete": {}, "photos": [],
     }
 
     res = get_day(client)
@@ -96,6 +96,40 @@ def test_create_recipe_log_uses_per_serving(client, login, app):
     assert (log["title"], log["recipe_id"], log["source"], log["servings"]) == ("두부조림", recipe["id"], "manual", 1.5)
     assert log["nutrition"]["kcal"] == round(134 * 1.5) == 201
     assert (log["approx"], log["nutrition_pending"]) == (True, False)
+
+
+SODIUM_LEFT_OUT = {"sodium_mg": ["된장"]}
+
+
+def test_log_marks_nutrients_left_out(client, login, app):
+    """결정 14(개정 2): 레시피 기록은 저장할 때 계산한 incomplete(재료 이름)를 스냅숏으로 남기고,
+    값이 비어 있는 영양소(음식 행·AI 추정 칸)는 기록 이름으로 알린다. 영양이 없는 기록은 {}."""
+    login()
+    add_foods(app, cached("R1", "된장_재래", kcal=142, carbs_g=7.3, protein_g=13.6, fat_g=6.9, sugars_g=0.4),
+              FoodSearch(query_key="된장", total=1, searched_at=utcnow()))
+    recipe = add_recipe(client, "된장찌개", [{"name": "된장", "amount": "30g"}])
+    log = post_log(client, recipe_id=recipe["id"]).get_json()
+    assert (log["nutrition"]["kcal"], log["nutrition"]["sodium_mg"], log["incomplete"]) == (43, 0, SODIUM_LEFT_OUT)
+    assert get_day(client).get_json()["logs"][0]["incomplete"] == SODIUM_LEFT_OUT
+
+    # 무엇을 바꿔 영양이 사라지면 저장한 표시도 지운다
+    other = post_log(client, recipe_id=recipe["id"], meal="dinner").get_json()
+    patched = patch_log(client, other["id"], title="라면").get_json()
+    assert (patched["nutrition"], patched["incomplete"]) == (None, {})
+    with app.app_context():
+        assert db.session.get(FoodLog, log["id"]).nutrition_incomplete == SODIUM_LEFT_OUT
+        assert db.session.get(FoodLog, other["id"]).nutrition_incomplete is None
+        # 스냅숏이라 나중에 식품 값이 채워져도 지난 기록 표시는 그대로(결정 2)
+        FoodNutrient.query.filter_by(food_code="R1").one().sodium_mg = 4000
+        db.session.commit()
+    assert get_day(client).get_json()["logs"][0]["incomplete"] == SODIUM_LEFT_OUT
+    patched = patch_log(client, log["id"], servings=2).get_json()  # 출처가 있으면 양을 바꿀 때 다시 계산한다
+    assert (patched["nutrition"]["sodium_mg"], patched["incomplete"]) == (2400, {})
+
+    # 음식 기록: 식품 행에 없는 값은 기록 이름으로
+    dish(app, serving_g=400, carbs_g=22.0, sugars_g=5.5, sodium_mg=410)
+    food_log = post_log(client, food_code="D1", servings=1, meal="snack").get_json()
+    assert food_log["incomplete"] == {"protein_g": ["제육덮밥"], "fat_g": ["제육덮밥"]}
 
 
 def test_pending_recipe_is_recomputed_on_day_get(client, login, app):
@@ -416,8 +450,11 @@ def test_ai_slot_without_recipe_rescales(client, login):
 
     log = post_log(client, meal_slot_id=slot["id"]).get_json()
     assert (log["recipe_id"], log["nutrition"]["kcal"], log["servings"]) == (None, 420, 1.0)
+    # AI 추정 kcal만 있는 기록은 다른 영양소 값이 없다 — 하루 합계가 빼고 더한 것을 기록 이름으로 알린다(결정 14 개정 2)
+    missing = dict.fromkeys(("carbs_g", "protein_g", "fat_g", "sugars_g", "sodium_mg"), ["된장국"])
+    assert log["incomplete"] == missing
     patched = patch_log(client, log["id"], servings=2).get_json()
-    assert (patched["nutrition"]["kcal"], patched["approx"]) == (840, True)
+    assert (patched["nutrition"]["kcal"], patched["approx"], patched["incomplete"]) == (840, True, missing)
 
 
 def test_nutrition_off_keeps_snapshots(client, login, app):

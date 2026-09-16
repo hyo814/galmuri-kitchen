@@ -442,6 +442,7 @@ class FoodLog(db.Model):
     fat_g = db.Column(db.Float)
     sugars_g = db.Column(db.Float)
     sodium_mg = db.Column(db.Integer)
+    nutrition_incomplete = db.Column(db.JSON)  # 레시피 계산에서 값이 빠진 영양소 → 재료 이름 {"sodium_mg": ["된장"]}, 없으면 NULL
     approx = db.Column(db.Boolean, nullable=False, default=False)
     nutrition_pending = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
