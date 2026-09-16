@@ -260,8 +260,8 @@ def create_cook_log():
     data.manual이면 레시피 없이 쓴 일기(추가 2026-09-16): title·ingredient_cost를 받고 재고는 건드리지 않는다.
     ponytail: R2에 올리는 동안(최대 수 초) 사용자 잠금·재료 행 잠금을 잡고 있다 — 같은 사용자 요청만 기다린다."""
     data = _form_json()
-    manual = data.get("manual", False)
-    if not isinstance(manual, bool) or not (set(data) <= MANUAL_FIELDS if manual else not MANUAL_ONLY & set(data)):
+    manual, keys = data.get("manual", False), set(data)
+    if not isinstance(manual, bool) or (manual and not keys <= MANUAL_FIELDS) or (not manual and keys & MANUAL_ONLY):
         abort(400, food_logs.BAD_REQUEST)
     lock_user(g.user.id)  # 레시피(사 먹으면 얼마)·재료 행보다 먼저 — 모든 쓰기가 같은 순서로 잠근다(교착 방지)
     recipe = None if manual else get_owned_or_404(Recipe, food_logs._id(data.get("recipe_id")))
