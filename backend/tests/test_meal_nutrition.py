@@ -24,6 +24,10 @@ def test_recipe_slot_uses_calculated_per_serving(client, login, app):
 
     assert slot["nutrition"]["kcal"] == round((252 + 15.9) / 2) == 134
     assert (slot["nutrition"]["source"], slot["nutrition"]["approx"]) == ("calc", True)
+    # 값이 빠진 영양소는 레시피 계산의 incomplete를 그대로(결정 14 개정 2) — 두부는 단백질만, 간장은 나트륨만 있다
+    assert slot["nutrition"]["incomplete"] == {
+        "carbs_g": ["두부", "간장"], "protein_g": ["간장"], "fat_g": ["두부", "간장"], "sugars_g": ["두부", "간장"], "sodium_mg": ["두부"],
+    }
     assert get_plan(client, plan["id"]).get_json()["nutrition_pending_recipe_ids"] == []
 
 
@@ -40,12 +44,13 @@ def test_mostly_missing_recipe_falls_back_to_est_kcal(client, login, app):
     slot = get_plan(client, plan["id"]).get_json()["slots"][0]
     assert slot["nutrition"] == {
         "kcal": 420, "carbs_g": None, "protein_g": None, "fat_g": None, "sugars_g": None, "sodium_mg": None,
-        "approx": True, "source": "ai",
+        "approx": True, "source": "ai", "incomplete": {},
     }
 
     # 같은 레시피를 PUT으로 다시 넣으면(계산 줄은 여전히 모자라지만) est_kcal이 비워져 계산값(약)으로 바뀐다
     slot = put_slot(client, plan["id"], date="2026-09-15", meal="lunch", recipe_id=slot["recipe_id"]).get_json()
     assert (slot["nutrition"]["source"], slot["nutrition"]["approx"]) == ("calc", True)
+    assert slot["nutrition"]["incomplete"] == dict.fromkeys(("carbs_g", "protein_g", "fat_g", "sugars_g", "sodium_mg"), ["두부"])
 
 
 def test_text_slots(client, login, app):
@@ -66,7 +71,7 @@ def test_text_slots(client, login, app):
     assert ai_slot["recipe_id"] is None
     assert ai_slot["nutrition"] == {
         "kcal": 310, "carbs_g": None, "protein_g": None, "fat_g": None, "sugars_g": None, "sodium_mg": None,
-        "approx": True, "source": "ai",
+        "approx": True, "source": "ai", "incomplete": {},
     }
 
 

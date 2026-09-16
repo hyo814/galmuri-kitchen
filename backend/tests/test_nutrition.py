@@ -118,6 +118,30 @@ def test_recipe_nutrition_rounding_and_none_nutrients():
                              {"물": res("unsearched", key="물"), "소금": res("unsearched", key="소금")}, True)
     assert trace["per_serving"] == {"kcal": 0, "carbs_g": 0.0, "protein_g": 0.0, "fat_g": 0.0, "sugars_g": 0.0, "sodium_mg": 0}
     assert (trace["approx"], trace["pending"], trace["usable"], trace["missing_count"]) == (False, False, True, 0)
+    assert (missing["incomplete"], trace["incomplete"]) == ({}, {})
+
+
+def test_recipe_nutrition_marks_nutrients_left_out():
+    """결정 14(개정 2): 계산된 줄의 식품에 값이 없는 영양소는 아는 값만 더하고, 그 영양소에 빠진 재료 이름을 적는다(재료 순서, 한 번씩)."""
+    native = food("R1", "된장_재래", 142, carbs_g=7.26, protein_g=13.6, fat_g=6.89, sugars_g=0.41)
+    barley = food("R2", "된장_보리", 164, carbs_g=25.3, protein_g=10.9, fat_g=2.1)
+    soy = food("S2", "간장", 53, carbs_g=7.4, protein_g=7.0, fat_g=0, sugars_g=3.0, sodium_mg=5600)  # 0은 빠진 값이 아니다
+    ingredients = [
+        {"name": "된장", "amount": "2큰술"}, {"name": "간장", "amount": "1큰술"}, {"name": "보리된장", "amount": "1큰술"},
+        {"name": "된장", "amount": "1작은술"}, {"name": "양파", "amount": "1개"}, {"name": "물", "amount": "500ml"},
+    ]
+    resolved = {
+        "된장": res("auto", native, key="된장"), "간장": res("matched", soy, key="간장"),
+        "보리된장": res("matched", barley, key="보리된장"), "양파": res("unmatched", key="양파"), "물": res("unsearched", key="물"),
+    }
+    result = recipe_nutrition(ingredients, 1, resolved, True)
+    assert result["incomplete"] == {"sodium_mg": ["된장", "보리된장"], "sugars_g": ["보리된장"]}
+    assert result["per_serving"]["sodium_mg"] == 840  # 간장 15g만(5600mg/100g), 된장·보리된장은 빼고 더한다
+    assert result["per_serving"]["sugars_g"] == 0.6  # 간장 0.45 + 된장 35g 0.1435
+    assert result["per_serving"]["fat_g"] == 2.7  # 된장 2.4115 + 간장 0 + 보리된장 0.315
+    # 못 맞춘 줄(양파)·조금 줄(물)은 값이 빠진 재료로 적지 않는다(빠짐 배지 missing_count가 따로 알린다)
+    assert result["missing_count"] == 1
+    assert all("values" not in line for line in result["ingredients"])
 
 
 def test_recipe_nutrition_trace_with_pending_has_no_per_serving():
@@ -144,8 +168,23 @@ def test_recipe_nutrition_empty_key_is_left_out_not_pending():
     assert (result["pending"], result["approx"], result["missing_count"], result["per_serving"]["sodium_mg"]) == (False, True, 2, 380)
 
 
-def row(name, group="원재료성"):
-    return FoodNutrient(name=name, group_name=group)
+def row(name, group="원재료성", **values):
+    return FoodNutrient(name=name, group_name=group, **values)
+
+
+FULL = dict.fromkeys(foods.NUTRIENTS, 1.0)
+
+
+def test_auto_match_prefers_rows_with_fewer_missing_values():
+    """결정 10(개정 2): ('생것'·조각 수·이름 길이)가 같으면 빠진 영양소가 적은 행 먼저, 그다음 이름 순."""
+    barley = row("된장_보리", **{**FULL, "sugars_g": None, "sodium_mg": None})
+    native = row("된장_재래", **{**FULL, "sodium_mg": None})
+    assert auto_match("된장", [barley, native]) is native  # 이름 순이면 보리가 먼저지만 당류·나트륨이 둘 다 없다
+    improved = row("된장_개량", **{**FULL, "fat_g": 0.0})  # 0은 빠진 값이 아니다
+    assert auto_match("된장", [barley, native, improved]) is improved
+    # 조각 수·이름 길이가 먼저다: 값이 모두 있어도 조각이 많거나 이름이 긴 행은 뒤
+    assert auto_match("된장", [row("된장_재래_시판", **FULL), barley]) is barley
+    assert auto_match("된장", [row("된장_보리식", **FULL), barley]) is barley
 
 
 def test_auto_match_rules():
@@ -250,8 +289,9 @@ def test_recipe_nutrition_endpoint(client, raw_client, login, app):
     assert res.status_code == 200
     assert res.headers["Cache-Control"] == "no-store"
     body = res.get_json()
-    assert sorted(body) == sorted(["servings", "per_serving", "approx", "estimated_count", "missing_count", "pending", "usable", "ingredients"])
+    assert sorted(body) == sorted(["servings", "per_serving", "approx", "estimated_count", "missing_count", "pending", "usable", "incomplete", "ingredients"])
     assert body["per_serving"]["kcal"] == (252 + 18) / 2
+    assert body["incomplete"] == {n: ["두부", "간장"] for n in foods.NUTRIENTS[1:]}  # cached()는 kcal만 넣는다
     assert [r["status"] for r in body["ingredients"]] == ["ok", "ok"]
     assert body["ingredients"][0]["food"] == {"food_code": "T1", "name": "두부", "group": "원재료성", "kcal": 84}
 
@@ -290,6 +330,27 @@ def test_put_food_match_and_recompute(client, login, app):
     with app.app_context():
         match = FoodMatch.query.one()
         assert (match.ingredient_key, match.food_code, match.unit_grams) == ("두부", "T1", {})
+
+
+def test_auto_pick_is_not_stored_and_user_pick_is_kept(client, login, app):
+    """자동 맞추기는 어디에도 저장하지 않고 계산할 때마다 고른다 — 값이 더 찬 후보가 캐시에 들어오면 다음 계산부터 바뀐다.
+    사용자가 고른 식품(food_matches)은 값이 빠져 있어도 바꾸지 않는다."""
+    login()
+    add_foods(app, cached("R2", "된장_보리", kcal=164), FoodSearch(query_key="된장", total=1, searched_at=utcnow()))
+    recipe_id = client.post("/api/recipes", json=recipe_body(("된장", "30g"))).get_json()["id"]
+    url = f"/api/recipes/{recipe_id}/nutrition"
+    assert client.get(url).get_json()["ingredients"][0]["food"]["food_code"] == "R2"
+    with app.app_context():
+        assert FoodMatch.query.count() == 0
+
+    add_foods(app, cached("R1", "된장_재래", kcal=142, **dict.fromkeys(foods.NUTRIENTS[1:-1], 1.0)))  # 나트륨만 없음
+    body = client.get(url).get_json()
+    assert (body["ingredients"][0]["food"]["food_code"], body["incomplete"]) == ("R1", {"sodium_mg": ["된장"]})
+
+    assert client.put("/api/food-matches", json={"name": "된장", "food_code": "R2"}).status_code == 204
+    body = client.get(url).get_json()
+    assert (body["ingredients"][0]["status"], body["ingredients"][0]["food"]["food_code"]) == ("ok", "R2")
+    assert body["incomplete"] == dict.fromkeys(foods.NUTRIENTS[1:], ["된장"])
 
 
 @pytest.mark.parametrize(

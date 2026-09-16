@@ -13,7 +13,7 @@ from werkzeug.exceptions import TooManyRequests
 from . import ai, foods, scan
 from .amounts import parse_amount
 from .auth import get_owned_or_404, login_required
-from .foods import NUTRIENTS, OFF, name_parts, nutrition_mode
+from .foods import NUTRIENTS, OFF, missing_count, name_parts, nutrition_mode
 from .matching import normalize
 from .models import AiCall, FoodMatch, FoodNutrient, FoodSearch, Recipe, UnitWeightEstimate, db, utcnow
 from .recipe_parse import ingredient_key
@@ -58,13 +58,14 @@ def fixed_grams(unit):
 
 
 def auto_match(key, rows):
-    """결정 10(개정 1). rows는 key in name_parts(이름)인 FoodNutrient(source != 'ai') 후보. 고른 행 또는 None.
-    ① 원재료성 후보가 있으면 (조각에 '생것' 없음, 조각 수, 이름 길이, 이름) 순 첫 행 ② 없으면 normalize(이름) == key인 행이 딱 하나일 때 그것."""
+    """결정 10(개정 2). rows는 key in name_parts(이름)인 FoodNutrient(source != 'ai') 후보. 고른 행 또는 None.
+    ① 원재료성 후보가 있으면 (조각에 '생것' 없음, 조각 수, 이름 길이, 빠진 영양소 수, 이름) 순 첫 행 ② 없으면 normalize(이름) == key인 행이 딱 하나일 때 그것.
+    고른 행은 저장하지 않는다(요청마다 다시 고른다) — 사용자가 고른 식품만 food_matches에 남는다."""
     raw = [r for r in rows if r.group_name == "원재료성"]
     if raw:
         def order(r):
             parts = name_parts(r.name)
-            return "생것" not in parts, len(parts), len(r.name), r.name
+            return "생것" not in parts, len(parts), len(r.name), missing_count(r), r.name
         return min(raw, key=order)
     exact = [r for r in rows if normalize(r.name) == key]
     return exact[0] if len(exact) == 1 else None
@@ -195,7 +196,7 @@ def ingredient_row(item, resolved, can_estimate, servings):
         status, reason = ("pending", "weight") if can_estimate else ("needs_weight", None)
     else:
         grams = quantity * (per_unit if per_unit is not None else weight)
-        values = {n: (food[n] or 0) * grams / 100 for n in NUTRIENTS}
+        values = {n: None if food[n] is None else food[n] * grams / 100 for n in NUTRIENTS}  # None = 식품에 값이 없다
         status = "estimated" if state == "estimate" or weight_source in ("ai", "sample") else "ok"
 
     shows_food = state in ("matched", "auto") and food is not None
@@ -212,18 +213,22 @@ def ingredient_row(item, resolved, can_estimate, servings):
 
 
 def recipe_nutrition(ingredients, servings, resolved_by_key, can_estimate):
-    """레시피 1인분(결정 14). 값 없는 영양소는 0으로 더한다. per_serving은 COUNTED 줄이 있거나 모든 줄이 trace일 때만(아니면 None).
-    빈 키는 NO_KEY로 계산한다(resolved_by_key에 넣지 않는다)."""
+    """레시피 1인분(결정 14, 개정 2). 식품에 값이 없는 영양소는 아는 값만 더하고, incomplete에 {영양소: [빠진 재료 이름(재료 순서, 한 번씩)]}을 적는다.
+    per_serving은 COUNTED 줄이 있거나 모든 줄이 trace일 때만(아니면 None). 빈 키는 NO_KEY로 계산한다(resolved_by_key에 넣지 않는다)."""
     servings = max(servings or 0, 1)
     keys = [match_key(item["name"]) for item in ingredients]
     rows = [ingredient_row(item, resolved_by_key[key] if key else NO_KEY, can_estimate, servings) for item, key in zip(ingredients, keys)]
     statuses = [row["status"] for row in rows]
     counted_count, trace_count = sum(s in COUNTED for s in statuses), statuses.count("trace")
-    per_serving = None
+    per_serving, incomplete = None, {}
     if counted_count or (rows and trace_count == len(rows)):
         counted = [row for row in rows if row["values"] is not None]
-        totals = {n: sum(row["values"][n] for row in counted) / servings for n in NUTRIENTS}
+        totals = {n: sum(row["values"][n] or 0 for row in counted) / servings for n in NUTRIENTS}
         per_serving = {n: _round0(v) if n in ("kcal", "sodium_mg") else _round1(v) for n, v in totals.items()}
+        for row in counted:
+            for n, value in row["values"].items():
+                if value is None and row["name"] not in incomplete.setdefault(n, []):
+                    incomplete[n].append(row["name"])
     return {
         "servings": servings,
         "per_serving": per_serving,
@@ -232,6 +237,7 @@ def recipe_nutrition(ingredients, servings, resolved_by_key, can_estimate):
         "missing_count": sum(s in MISSING for s in statuses),
         "pending": "pending" in statuses,
         "usable": counted_count * 2 >= len(statuses) - trace_count,
+        "incomplete": incomplete,
         "ingredients": [{k: v for k, v in row.items() if k != "values"} for row in rows],
     }
 

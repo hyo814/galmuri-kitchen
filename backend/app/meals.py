@@ -65,15 +65,16 @@ def nutrition_results(recipes):
 
 
 def slot_nutrition(slot, result):
-    """칸 1인분 영양(결정 16). result는 그 칸 레시피의 recipe_nutrition 결과 또는 None."""
+    """칸 1인분 영양(결정 16). result는 그 칸 레시피의 recipe_nutrition 결과 또는 None.
+    incomplete는 계산값이면 레시피 결과 그대로(값이 빠진 영양소 → 재료 이름), AI 추정 kcal 칸은 탄단지를 아예 세지 않아 {}."""
     per = result["per_serving"] if result else None
     if per and result["usable"]:
-        return {**per, "approx": result["approx"], "source": "calc"}
+        return {**per, "approx": result["approx"], "source": "calc", "incomplete": result["incomplete"]}
     if slot.est_kcal:
         return {"kcal": slot.est_kcal, "carbs_g": None, "protein_g": None, "fat_g": None, "sugars_g": None, "sodium_mg": None,
-                "approx": True, "source": "ai"}
+                "approx": True, "source": "ai", "incomplete": {}}
     if per:
-        return {**per, "approx": True, "source": "calc"}
+        return {**per, "approx": True, "source": "calc", "incomplete": result["incomplete"]}
     return None
 
 

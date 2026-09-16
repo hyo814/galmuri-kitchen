@@ -53,6 +53,18 @@ def photo_json(photo):
     return {"id": photo.id, "url": f"/api/photos/{photo.photo_key}"}
 
 
+def incomplete_json(log):
+    """값이 빠져 빼고 더한 영양소 → 이름(결정 14 개정 2). 레시피 기록은 저장할 때 적은 재료 이름,
+    값이 비어 있는 영양소(음식 행에 없는 값·AI 추정 kcal만 있는 칸)는 기록 이름. 영양이 없으면 {}."""
+    if log.kcal is None:
+        return {}
+    names = dict(log.nutrition_incomplete or {})
+    for key in NUTRIENTS[1:]:
+        if getattr(log, key) is None:
+            names.setdefault(key, [log.title])
+    return names
+
+
 def log_json(log):
     return {
         "id": log.id, "eaten_on": log.eaten_on.isoformat(), "meal": log.meal, "source": log.source,
@@ -61,7 +73,7 @@ def log_json(log):
         "food_code": log.food_code, "servings": log.servings, "grams": log.grams,
         "place": log.place, "rating": log.rating, "memo": log.memo,
         "nutrition": None if log.kcal is None else {k: getattr(log, k) for k in NUTRIENTS},
-        "approx": log.approx, "nutrition_pending": log.nutrition_pending,
+        "approx": log.approx, "nutrition_pending": log.nutrition_pending, "incomplete": incomplete_json(log),
         "created_at": iso_datetime(log.created_at),
         "photos": [photo_json(p) for p in log.photos],
     }
@@ -303,7 +315,7 @@ def fill_snapshots(logs):
     results = meals.nutrition_results([log.recipe for log in logs if log.recipe is not None])  # off면 {}
     mode = nutrition_mode(g.user)
     for log in logs:
-        per, factor, approx, pending = None, 1, False, False
+        per, factor, approx, pending, incomplete = None, 1, False, False, None
         if log.food_code is not None:
             food = food_by_code(log.food_code) if mode != "off" else None
             grams = log.grams if log.grams is not None else ((food.serving_g or 0) * (log.servings or 0) if food else 0)
@@ -315,17 +327,18 @@ def fill_snapshots(logs):
             if slot is not None:
                 slot_per = meals.slot_nutrition(slot, result)
             elif result and result["per_serving"]:
-                slot_per = {**result["per_serving"], "approx": result["approx"] or not result["usable"]}
+                slot_per = {**result["per_serving"], "approx": result["approx"] or not result["usable"], "incomplete": result["incomplete"]}
             else:
                 slot_per = None
             if slot_per:
-                per, factor, approx = slot_per, log.servings or 1, slot_per["approx"]
+                per, factor, approx, incomplete = slot_per, log.servings or 1, slot_per["approx"], slot_per["incomplete"]
             pending = bool(result and result["pending"])
         values = scaled(per, factor)
         for key, value in values.items():
             setattr(log, key, value)
         log.approx = approx and values["kcal"] is not None
         log.nutrition_pending = pending
+        log.nutrition_incomplete = incomplete or None  # 음식 행·AI 칸의 빈 값은 스냅숏의 None이 알린다(incomplete_json)
 
 
 @bp.get("/food-logs")
