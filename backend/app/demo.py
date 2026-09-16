@@ -92,7 +92,7 @@ SHOPPING_MEMO = {"place": "이마트 성수점", "body": "세일 수요일까지
 MEAL_PLAN_DAYS = 7
 MEAL_PLAN_SERVINGS = 2
 _ORDINALS = ["첫째", "둘째", "셋째", "넷째", "다섯째", "여섯째"]
-# (오늘부터 며칠 뒤, 끼니, RECIPE_SAMPLES 인덱스(0 된장찌개, 1 김치찌개) 또는 직접 쓴 제목, 직접 쓴 칸의 1인분 kcal)
+# (오늘부터 며칠 뒤, 끼니, RECIPE_SAMPLES 인덱스(0 된장찌개, 1 김치찌개) 또는 직접 쓴 제목, 직접 쓴 칸의 1인분 kcal[, 인분 — 없으면 MEAL_PLAN_SERVINGS])
 # 저녁은 매일, 점심은 사흘, 아침은 하루만 채워 주 보기에 빈 날이 없고 AI 초안이 채울 빈 칸도 남는다. 같은 레시피는 이어진 날에 두지 않는다.
 # 직접 쓴 칸 kcal은 식약처 식품영양성분 자료집(2020) 음식 1인분 값(괄호 안 무게)을 반올림한 것 — AI 초안 칸처럼 est_kcal로 보인다
 MEAL_PLAN_SLOTS = [
@@ -106,7 +106,8 @@ MEAL_PLAN_SLOTS = [
     (4, "lunch", "잔치국수", 310),  # 700g
     (4, "dinner", 1, None),
     (5, "dinner", "제육덮밥", 950),  # 470g
-    (6, "dinner", 0, None),
+    # 일부러 3인분: 애호박(⅓개씩)이 재고 1개보다 모자라 장보기 미리보기가 체크된 줄 `애호박 1개 담기`로 시작한다(양념은 꺼진 채라 0개로 시작하지 않게)
+    (6, "dinner", 0, None, 3),
 ]
 # (며칠 전, 끼니, 예시 레시피 제목 또는 None, 직접 쓴 이름, 어디서, 만족도, 메모) — 결정 16
 FOOD_LOGS = [
@@ -235,7 +236,7 @@ def seed_demo_data(user_id):
         days=MEAL_PLAN_DAYS,
         default_servings=MEAL_PLAN_SERVINGS,
     )
-    for days_ahead, meal, dish, kcal in MEAL_PLAN_SLOTS:
+    for days_ahead, meal, dish, kcal, *servings in MEAL_PLAN_SLOTS:
         recipe = recipe_rows[dish] if isinstance(dish, int) else None
         plan.slots.append(
             MealSlot(
@@ -243,7 +244,7 @@ def seed_demo_data(user_id):
                 meal=meal,
                 recipe=recipe,
                 title=recipe.title if recipe else dish,
-                servings=MEAL_PLAN_SERVINGS,
+                servings=servings[0] if servings else MEAL_PLAN_SERVINGS,
                 est_kcal=kcal,
             )
         )

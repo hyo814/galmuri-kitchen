@@ -263,6 +263,9 @@ def test_demo_login_creates_meal_plan(demo_app):
     assert (slots[(day(1), "lunch")]["title"], slots[(day(1), "lunch")]["recipe_id"] is not None) == ("김치찌개", True)
     breakfast = slots[(day(1), "breakfast")]
     assert (breakfast["title"], breakfast["recipe_id"], breakfast["servings"]) == ("토스트", None, demo.MEAL_PLAN_SERVINGS)
+    # 마지막 날 저녁 된장찌개만 일부러 3인분(장보기 미리보기에 체크된 줄이 생기게). 오늘 저녁은 요리했어요 E2E가 쓰는 2인분 그대로
+    assert {key: slot["servings"] for key, slot in slots.items() if slot["servings"] != demo.MEAL_PLAN_SERVINGS} == {(day(6), "dinner"): 3}
+    assert (slots[(day(6), "dinner")]["title"], slots[(day(0), "dinner")]["servings"]) == ("된장찌개", 2)
 
     # 예시 레시피 둘을 쓰되 같은 레시피를 같은 날·이어진 날에 두지 않는다
     recipe_days = {}
@@ -286,14 +289,18 @@ def test_demo_login_creates_meal_plan(demo_app):
         assert MealSlot.query.join(MealPlan).filter(MealPlan.user_id == me["id"]).count() == len(demo.MEAL_PLAN_SLOTS)
 
 
-def test_demo_meal_plan_shopping_preview_puts_missing_seasonings_in_own_group(demo_app):
+def test_demo_meal_plan_shopping_preview_starts_with_one_checked_row(demo_app):
+    # 3인분 된장찌개 덕에 애호박(⅓개 × 1 + 1 + 1.5 = 1.17개, 재고 1개)이 모자라 체크된 줄 하나로 시작한다(0개 담기로 시작하지 않게).
     # 재고에 없는 숟가락 양 재료는 양념 묶음(담으면 1개) — 운영에서 네 줄이 `단위가 달라요`에 섞여 있었다
     c = new_client(demo_app)
     c.post("/api/demo-login")
     plan_id = c.get("/api/meal-plans").get_json()["items"][0]["id"]
     body = c.get(f"/api/meal-plans/{plan_id}/shopping-preview").get_json()
     assert body["recipe_slot_count"] == 5
-    assert (body["buy"], body["manual"]) == ([], [])
+    assert body["manual"] == []
+    assert [(row["name"], row["quantity"], row["unit"], row["need"], row["have"], row["planned_on"]) for row in body["buy"]] == [
+        ("애호박", 1, "개", [{"quantity": 1.17, "unit": "개"}], [{"quantity": 1, "unit": "개"}], seoul_today().isoformat()),
+    ]
     assert {row["name"]: (row["quantity"], row["unit"], row["need_extra"], row["have"]) for row in body["seasoning"]} == {
         "된장": (1, "개", ["2큰술"], []),
         "다진 마늘": (1, "개", ["1작은술"], []),
@@ -302,7 +309,7 @@ def test_demo_meal_plan_shopping_preview_puts_missing_seasonings_in_own_group(de
     }
     assert {row["name"]: row["reason"] for row in body["skip"]} == {
         "두부": "listed", "대파": "listed", "청양고추": "listed",
-        "애호박": "enough", "감자": "enough", "양파": "enough", "김치": "enough", "돼지고기": "enough",
+        "감자": "enough", "양파": "enough", "김치": "enough", "돼지고기": "enough",
     }
 
 
