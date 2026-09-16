@@ -56,8 +56,8 @@ def eat_out(client, monkeypatch, fake):
 ENDPOINTS = [
     ("memo", scan_memo, {"items": [{"name": "  "}], "purchased_on": None}, 200),  # 정리하고 나면 재료 0개
     ("recipe", ai_recipes, {"recipes": [draft(names=())]}, 502),
-    ("link", text_import, {"found": False, "recipe": None}, 422),
-    ("recipe_photo", photo_import, {"found": True, "recipe": draft(names=())}, 422),  # 찾았다지만 쓸 재료가 없다
+    ("link", text_import, {"found": False, "recipes": []}, 422),
+    ("recipe_photo", photo_import, {"found": True, "recipes": [draft(names=())]}, 422),  # 찾았다지만 쓸 재료가 없다
     ("meal", meal_ai_draft, {"dishes": [], "slots": []}, 502),
     ("eat_out", eat_out, {"price": 500}, 502),  # 1,000~100,000원 밖
 ]

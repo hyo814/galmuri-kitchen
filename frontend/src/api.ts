@@ -169,6 +169,19 @@ export interface RecipeDraft extends RecipeInput {
   sample?: boolean;
 }
 
+/** POST /api/recipes/import 결과에 레시피가 여러 개(최대 5개) 있을 때(17절 여러 요리 가져오기). 정확히 1개면 RecipeDraft 그대로 온다 */
+export interface MultiRecipeDraft {
+  recipes: RecipeInput[];
+  /** 이 호출에 사진을 함께 보냈는지(레시피별이 아니라 호출 전체 기준) — 고르기 화면의 `사진에서 읽었어요` 배지 */
+  from_image: boolean;
+  source: RecipeDraft["source"];
+  source_url: string | null;
+  source_card?: SourceCard | null;
+  /** 본문 사진 후보가 5장보다 많아 앞쪽만 읽었을 때 */
+  images_truncated: boolean;
+  sample?: boolean;
+}
+
 export interface AiUsage {
   scan: { used: number; limit: number };
   recipe: { used: number; limit: number };

@@ -1,0 +1,348 @@
+<title>여러 요리 가져오기 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+  :root {
+    --board: #e6e8eb;
+    --bg: #f3f4f6;
+    --surface: #ffffff;
+    --field: #f3f4f6;
+    --text: #17191c;
+    --text-2: #5b616b;
+    --text-3: #63697a;
+    --line: #eef0f2;
+    --chip-line: #d3d7dd;
+    --scrim: rgb(15 17 20 / 0.48);
+    --accent: #0b7a4c;
+    --accent-strong: #086a41;
+    --accent-tint: #e7f6ef;
+    --on-accent: #ffffff;
+    --warn: #8f5500;
+    --warn-tint: #fff3dc;
+    --photo-a: #d9c3a1;
+    --photo-b: #b9cfa8;
+    --photo-c: #c7b3c9;
+    --note: #3a3f46;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --scrim: rgb(0 0 0 / 0.6); --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --photo-a: #5a4a33; --photo-b: #3f5436; --photo-c: #4d3f50; --note: #d3d7dc;
+    }
+  }
+  :root[data-theme="dark"] {
+    --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --scrim: rgb(0 0 0 / 0.6); --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --photo-a: #5a4a33; --photo-b: #3f5436; --photo-c: #4d3f50; --note: #d3d7dc;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 16px 56px; background: var(--board); color: var(--text); font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .intro { max-width: 1700px; margin: 0 auto 28px; }
+  .intro h1 { margin: 0 0 8px; font-size: 26px; line-height: 34px; font-weight: 700; text-wrap: balance; }
+  .intro p { margin: 0 0 6px; max-width: 66ch; font-size: 15px; line-height: 24px; color: var(--text-2); word-break: keep-all; }
+  .intro b { color: var(--note); }
+  .asks { max-width: 1700px; margin: 0 auto 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; }
+  .ask { padding: 14px 16px; border-radius: 16px; background: var(--surface); }
+  .ask h3 { margin: 0 0 4px; font-size: 15px; }
+  .ask p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+  .ask .rec { color: var(--accent-strong); font-weight: 600; }
+
+  .board { max-width: 1700px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(384px, 100%), 1fr)); gap: 32px 24px; align-items: start; }
+  .option { display: grid; gap: 12px; justify-items: center; }
+  .cap { width: min(384px, 100%); display: grid; gap: 4px; }
+  .tag { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: 0.06em; color: var(--text-3); }
+  .cap h2 { margin: 0; font-size: 18px; line-height: 26px; }
+  .cap p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+
+  /* 폰 */
+  .phone { position: relative; width: min(384px, 100%); height: 800px; overflow: hidden; border-radius: 28px; background: var(--bg); }
+  .under { padding: 24px 20px; }
+  .under h3 { margin: 0 0 4px; font-size: 26px; font-weight: 700; }
+  .under p { margin: 0; color: var(--text-3); font-size: 15px; }
+  .scrim { position: absolute; inset: 0; background: var(--scrim); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 92%; overflow: hidden; padding: 12px 20px 24px; border-radius: 24px 24px 0 0; background: var(--surface); display: grid; gap: 14px; }
+  .sheet.tall { top: 7%; }
+  .handle { justify-self: center; width: 40px; height: 4px; border-radius: 2px; background: var(--chip-line); }
+  .sh-title { margin: 0; font-size: 21px; line-height: 28px; font-weight: 700; }
+  .sh-desc { margin: 2px 0 0; font-size: 14px; line-height: 20px; color: var(--text-2); word-break: keep-all; }
+  .hint { display: flex; gap: 6px; align-items: flex-start; font-size: 13px; line-height: 19px; color: var(--text-3); word-break: keep-all; }
+  .hint svg { flex: none; margin-top: 2px; }
+
+  .btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 56px; border-radius: 16px; font-size: 17px; font-weight: 600; white-space: nowrap; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); }
+  .btn.secondary { background: var(--field); color: var(--text); }
+  .actions { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; }
+
+  /* 사진 모으기 */
+  .kindline { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--field); font-size: 15px; font-weight: 600; }
+  .kindline .ic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--surface); color: var(--accent-strong); }
+  .kindline span.chg { margin-left: auto; font-size: 14px; color: var(--accent-strong); }
+  .tray { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .thumb { position: relative; aspect-ratio: 1; max-width: 100%; border-radius: 14px; overflow: hidden; }
+  .thumb .img { position: absolute; inset: 0; }
+  .thumb .n { position: absolute; left: 6px; bottom: 6px; padding: 1px 7px; border-radius: 10px; background: rgb(0 0 0 / 0.55); color: #fff; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .thumb .x { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 14px; background: rgb(0 0 0 / 0.55); color: #fff; }
+  .add { display: grid; place-items: center; align-content: center; gap: 4px; aspect-ratio: 1; border-radius: 14px; box-shadow: inset 0 0 0 1.5px var(--chip-line); color: var(--text-2); font-size: 13px; font-weight: 600; }
+  .add svg { color: var(--accent-strong); }
+  .count { display: flex; justify-content: space-between; font-size: 14px; color: var(--text-2); }
+  .count b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+  /* 기다리기 */
+  .wait { display: grid; justify-items: center; gap: 14px; padding: 20px 0 8px; text-align: center; }
+  .stack { position: relative; width: 132px; height: 110px; }
+  .stack i { position: absolute; width: 84px; height: 96px; border-radius: 12px; box-shadow: 0 2px 8px rgb(0 0 0 / 0.12); }
+  .stack i:nth-child(1) { left: 0; top: 8px; transform: rotate(-9deg); background: var(--photo-b); }
+  .stack i:nth-child(2) { left: 24px; top: 2px; transform: rotate(-2deg); background: var(--photo-c); }
+  .stack i:nth-child(3) { left: 48px; top: 10px; transform: rotate(7deg); background: var(--photo-a); }
+  .bar { width: 100%; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .bar i { display: block; width: 46%; height: 100%; border-radius: 2px; background: var(--accent); }
+  .wait h4 { margin: 0; font-size: 19px; line-height: 26px; }
+  .wait p { margin: 0; font-size: 14px; color: var(--text-2); }
+
+  /* 확인 */
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 8px; background: var(--accent-tint); color: var(--accent-strong); font-size: 12px; font-weight: 600; }
+  .label { font-size: 14px; font-weight: 600; color: var(--text-2); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; height: 36px; padding: 0 12px; border-radius: 18px; background: var(--field); color: var(--text-2); font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .chip.on { background: var(--accent-tint); color: var(--accent-strong); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .chip.small { height: 32px; padding: 0 10px; font-size: 13px; }
+  .picked { font-size: 13px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .items { display: grid; }
+  .item { display: grid; grid-template-columns: 28px minmax(0, 1fr) 24px; align-items: center; gap: 10px; min-height: 60px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .cb { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; background: var(--accent); color: var(--on-accent); }
+  .cb.off { background: none; box-shadow: inset 0 0 0 2px var(--chip-line); }
+  .it-name { font-size: 16px; font-weight: 600; }
+  .it-sub { font-size: 13px; line-height: 18px; color: var(--text-3); }
+  .it-sub .own { color: var(--warn); font-weight: 600; }
+  .chev { color: var(--text-3); }
+  .edit { grid-column: 1 / -1; display: grid; gap: 10px; padding: 4px 0 10px 38px; }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .fld { display: grid; gap: 4px; }
+  .fld span { font-size: 12px; color: var(--text-3); }
+  .fld div { height: 44px; display: flex; align-items: center; padding: 0 12px; border-radius: 12px; background: var(--field); font-size: 15px; }
+  .foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 20px 20px; background: var(--surface); box-shadow: 0 -1px 0 var(--line); }
+
+  /* 재고 목록 */
+  .list { margin: 0 16px; border-radius: 20px; background: var(--surface); }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 14px 16px; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .row b { font-size: 16px; }
+  .row small { display: block; margin-top: 2px; font-size: 13px; color: var(--text-3); }
+  .pill { font-size: 12px; font-weight: 600; color: var(--warn); background: var(--warn-tint); padding: 3px 8px; border-radius: 8px; }
+
+  svg { flex: none; }
+  .foot-note { width: min(384px, 100%); font-size: 13px; line-height: 20px; color: var(--text-3); word-break: keep-all; }
+</style>
+<style>
+  /* 여러 요리 가져오기 */
+  .sheet.tall { align-content: start; }
+  .field-l { display: grid; gap: 6px; }
+  .field-l > span { font-size: 14px; font-weight: 600; color: var(--text-2); }
+  .input { display: flex; align-items: center; min-height: 52px; padding: 0 14px; border-radius: 14px; background: var(--field); font-size: 15px; overflow-wrap: anywhere; box-shadow: inset 0 0 0 2px var(--accent); }
+  .quota { font-size: 13px; color: var(--text-3); text-align: center; }
+  .btn.outline { background: none; color: var(--text); box-shadow: inset 0 0 0 1.5px var(--chip-line); }
+  .pages { position: relative; width: 132px; height: 110px; }
+  .pages i { position: absolute; width: 70px; height: 96px; border-radius: 10px; box-shadow: 0 2px 8px rgb(0 0 0 / 0.12); display: grid; align-content: start; gap: 5px; padding: 10px 8px; }
+  .pages i b { display: block; height: 5px; border-radius: 3px; background: rgb(0 0 0 / 0.18); }
+  .pages i:nth-child(1) { left: 0; top: 10px; transform: rotate(-9deg); background: var(--photo-a); }
+  .pages i:nth-child(2) { left: 31px; top: 2px; transform: rotate(-1deg); background: var(--photo-b); }
+  .pages i:nth-child(3) { left: 62px; top: 12px; transform: rotate(8deg); background: var(--photo-c); }
+  .found { display: grid; gap: 8px; }
+  .dish { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; align-items: start; padding: 14px; border-radius: 16px; background: var(--field); }
+  .dish.on { background: var(--accent-tint); box-shadow: inset 0 0 0 2px var(--accent); }
+  .radio { width: 22px; height: 22px; margin-top: 2px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--chip-line); background: var(--surface); }
+  .dish.on .radio { box-shadow: inset 0 0 0 7px var(--accent); }
+  .dish b { display: block; font-size: 16px; line-height: 22px; }
+  .dish small { display: block; margin-top: 2px; font-size: 13px; line-height: 19px; color: var(--text-2); word-break: keep-all; }
+  .dish .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .badge.warn { background: var(--warn-tint); color: var(--warn); }
+  .badge.plain { background: var(--surface); color: var(--text-2); }
+  .dish.on .badge.plain { background: var(--surface); }
+  .spent { display: flex; gap: 6px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; background: var(--field); font-size: 13px; line-height: 19px; color: var(--text-2); word-break: keep-all; }
+  .spent svg { margin-top: 1px; color: var(--accent-strong); }
+  .spent.warn { background: var(--warn-tint); color: var(--warn); }
+  .spent.warn svg { color: var(--warn); }
+
+  /* 확인 페이지 */
+  .page-in { padding: 14px 20px 110px; display: grid; gap: 14px; }
+  .back { display: inline-flex; align-items: center; gap: 2px; font-size: 15px; color: var(--text-2); }
+  .page-in h3 { margin: 0; font-size: 26px; line-height: 34px; font-weight: 700; }
+  .summary { margin: 2px 0 0; font-size: 15px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+  .which { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-radius: 14px; background: var(--accent-tint); }
+  .which b { font-size: 14px; color: var(--accent-strong); font-variant-numeric: tabular-nums; }
+  .which span { font-size: 14px; font-weight: 600; color: var(--accent-strong); text-decoration: underline; text-underline-offset: 3px; }
+  .source { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 14px; background: var(--surface); }
+  .source .th { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 10px; background: var(--field); color: var(--text-3); }
+  .source b { display: block; font-size: 14px; line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .source small { display: block; font-size: 12px; color: var(--text-3); }
+  .source a { display: inline-flex; gap: 2px; align-items: center; font-size: 13px; color: var(--text-2); }
+  .form { display: grid; gap: 12px; padding: 16px; border-radius: 20px; background: var(--surface); }
+  .form .fld div { background: var(--field); }
+  .ing { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 6px; }
+  .ing div { height: 42px; display: flex; align-items: center; padding: 0 12px; border-radius: 12px; background: var(--field); font-size: 15px; }
+  .ing div.amt { color: var(--text-2); }
+  .ing div.guess { box-shadow: inset 0 0 0 1.5px var(--warn); }
+  .cta { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 20px 20px; background: var(--bg); }
+
+  /* 저장 뒤 */
+  .done { display: flex; align-items: center; gap: 10px; }
+  .done .ok { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 20px; background: var(--accent-tint); color: var(--accent-strong); }
+  .rest { display: grid; }
+  .rest-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 64px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .rest-row b { font-size: 16px; }
+  .rest-row small { display: block; font-size: 13px; color: var(--text-3); }
+  .rest-row .go { height: 40px; padding: 0 14px; border-radius: 12px; background: var(--accent-tint); color: var(--accent-strong); font-size: 14px; font-weight: 600; display: grid; place-items: center; }
+  .rest-row .saved { font-size: 13px; font-weight: 600; color: var(--text-3); }
+</style>
+
+<header class="intro">
+  <h1>여러 요리 가져오기 시안</h1>
+  <p>링크 한 페이지에 요리가 여러 개 있으면 지금은 <b>맨 위 하나만</b> 가져와요. 예로 든 페이지(우주떡집 메뉴 레시피)는 떡볶이 3종이 글이 아니라 <b>본문 사진 속</b>에 적혀 있어요.</p>
+  <p>바꾸는 방법: AI를 <b>한 번</b> 불러 페이지의 요리를 모두 찾고, 2개 이상이면 고르게 해요. 고른 요리는 지금의 “가져온 레시피 확인” 화면으로 가고, 저장한 뒤 나머지도 AI를 다시 부르지 않고 이어서 확인해요. 요리가 1개면 지금처럼 바로 확인 화면이에요.</p>
+</header>
+
+<section class="asks" aria-label="정하실 것">
+  <div class="ask"><h3>A. 고르는 방식</h3><p><span class="rec">③ 하나씩 골라 확인(추천)</span> · 또는 체크해서 한 번에 모두 저장. 한 번에 저장하면 확인 화면을 건너뛰어 AI가 잘못 읽은 재료가 그대로 저장될 수 있어요.</p></div>
+  <div class="ask"><h3>B. 저장한 뒤</h3><p><span class="rec">⑤ 남은 요리 이어서 확인(추천)</span> · 추가 AI 횟수 없이 열려요. 또는 저장하면 끝(남은 요리는 다시 가져오기).</p></div>
+  <div class="ask"><h3>C. 함께 읽는 본문 사진</h3><p><span class="rec">지금처럼 5장(추천)</span> · 요리가 많은 페이지는 ⑥처럼 “앞쪽 5장만 읽었어요”라고 밝혀요. 또는 10장까지(AI 비용 약 2배).</p></div>
+</section>
+
+<div class="board">
+
+  <!-- ① 링크 -->
+  <div class="option">
+    <div class="cap"><span class="tag">① LINK · 지금과 같음</span><h2>링크로 가져오기</h2><p>레시피 추가 → 링크로 가져오기. 화면은 그대로예요.</p></div>
+    <div class="phone" role="img" aria-label="링크로 가져오기 시트에 우주떡집 페이지 주소를 넣은 화면">
+      <div class="under"><h3>내 레시피</h3><p>레시피 12개</p></div>
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <div><p class="sh-title">링크로 가져오기</p><p class="sh-desc">유튜브·인스타그램·블로그 주소를 붙여 넣어주세요</p></div>
+        <div class="field-l"><span>링크</span><div class="input">https://m.eggiscoming.com/article/event/8/4904/</div></div>
+        <p class="quota">링크·글은 AI가 정리해요 · 오늘 3번 남음</p>
+        <div class="actions"><div class="btn outline">취소</div><div class="btn primary">가져오기</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② 정리 중 -->
+  <div class="option">
+    <div class="cap"><span class="tag">② READING</span><h2>정리하는 중</h2><p>본문 글에 레시피 표시가 없으면 본문 사진도 함께 읽어요(지금과 같음). 문구만 “요리를 모두 찾고 있어요”로.</p></div>
+    <div class="phone" role="img" aria-label="페이지 사진에서 요리를 찾는 중인 화면">
+      <div class="under"><h3>내 레시피</h3><p>레시피 12개</p></div>
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <div class="wait">
+          <div class="pages" aria-hidden="true"><i><b></b><b></b><b></b></i><i><b></b><b></b><b></b></i><i><b></b><b></b><b></b></i></div>
+          <div><h4>페이지에서 요리를 모두 찾고 있어요</h4><p>본문 사진 5장을 함께 읽어요 · 20초쯤 걸려요</p></div>
+          <div class="bar"><i></i></div>
+        </div>
+        <div class="btn secondary">취소</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ 고르기 -->
+  <div class="option">
+    <div class="cap"><span class="tag">③ PICK · 새 화면</span><h2>요리가 여러 개면 고르기</h2><p>찾은 순서대로 보여줘요. 재료가 일부만 읽힌 요리는 노란 표시로 알려요.</p></div>
+    <div class="phone" role="img" aria-label="이 페이지에서 찾은 떡볶이 3종 중 하나를 고르는 화면">
+      <div class="scrim"></div>
+      <div class="sheet tall">
+        <div class="handle"></div>
+        <div><p class="sh-title">요리가 3개 있어요</p><p class="sh-desc">우주떡집 메뉴 레시피에서 찾았어요. 먼저 확인할 요리를 골라주세요</p></div>
+        <div class="found" role="radiogroup" aria-label="가져올 요리">
+          <div class="dish on">
+            <span class="radio"></span>
+            <div><b>오리지날 떡볶이</b><small>떡 · 어묵 · 고추장 · 설탕 외 4개 · 만드는 법 5단계</small>
+              <div class="meta"><span class="badge plain">사진에서 읽었어요</span></div></div>
+          </div>
+          <div class="dish">
+            <span class="radio"></span>
+            <div><b>부트졸로키아 떡볶이</b><small>떡 · 어묵 · 부트졸로키아 소스 · 대파 외 5개 · 만드는 법 5단계</small>
+              <div class="meta"><span class="badge plain">사진에서 읽었어요</span></div></div>
+          </div>
+          <div class="dish">
+            <span class="radio"></span>
+            <div><b>옥황상제 떡볶이</b><small>떡 · 소고기 · 모차렐라 치즈 외 3개 · 만드는 법 4단계</small>
+              <div class="meta"><span class="badge warn">양이 안 보이는 재료 2개</span></div></div>
+          </div>
+        </div>
+        <p class="spent"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>AI는 1번만 썼어요. 하나를 저장한 뒤 나머지도 이어서 확인할 수 있어요.</p>
+        <div class="actions"><div class="btn outline">취소</div><div class="btn primary">이 요리 확인하기</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ 확인 -->
+  <div class="option">
+    <div class="cap"><span class="tag">④ REVIEW · 한 줄 추가</span><h2>가져온 레시피 확인</h2><p>지금 확인 화면 위에 “3개 중 1번째”와 요리 바꾸기만 더해요. 양이 안 보인 재료는 노란 테두리로(지금 규칙).</p></div>
+    <div class="phone" role="img" aria-label="오리지날 떡볶이 가져온 레시피 확인 화면, 3개 중 1번째 표시">
+      <div class="page-in">
+        <span class="back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>내 레시피</span>
+        <div><h3>가져온 레시피 확인</h3><p class="summary">AI가 정리했어요. 틀린 곳을 고친 뒤 저장해주세요</p></div>
+        <div class="which"><b>3개 중 1번째 · 오리지날 떡볶이</b><span>요리 바꾸기</span></div>
+        <div class="source">
+          <span class="th"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></span>
+          <span><b>[우주떡집] 지구 1호점 고흥 메뉴 레시피 EVENT</b><small>블로그 · 에그이즈커밍</small></span>
+          <a>원본</a>
+        </div>
+        <div class="form">
+          <div class="fld"><span>이름</span><div>오리지날 떡볶이</div></div>
+          <div class="fields"><div class="fld"><span>인분</span><div>2인분</div></div><div class="fld"><span>시간</span><div>15분</div></div></div>
+          <div class="fld"><span>재료 8개</span></div>
+          <div class="ing"><div>떡볶이 떡</div><div class="amt">300g</div></div>
+          <div class="ing"><div>어묵</div><div class="amt">2장</div></div>
+          <div class="ing"><div>고추장</div><div class="amt">2큰술</div></div>
+          <div class="ing"><div>물엿</div><div class="amt guess">양 확인</div></div>
+        </div>
+      </div>
+      <div class="cta"><div class="btn primary">저장</div></div>
+    </div>
+  </div>
+
+  <!-- ⑤ 이어서 -->
+  <div class="option">
+    <div class="cap"><span class="tag">⑤ NEXT · 새 화면</span><h2>저장한 뒤 이어서</h2><p>저장하면 내 레시피 상세로 가기 전에 한 번 물어요. 남은 요리는 이미 정리돼 있어 바로 열려요.</p></div>
+    <div class="phone" role="img" aria-label="오리지날 떡볶이를 저장한 뒤 남은 요리 2개를 이어서 확인할지 묻는 화면">
+      <div class="under"><h3>오리지날 떡볶이</h3><p>2인분 · 15분</p></div>
+      <div class="scrim"></div>
+      <div class="sheet">
+        <div class="handle"></div>
+        <div class="done">
+          <span class="ok"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span>
+          <div><p class="sh-title">오리지날 떡볶이를 저장했어요</p><p class="sh-desc">같은 페이지의 요리 2개가 남았어요</p></div>
+        </div>
+        <div class="rest">
+          <div class="rest-row"><span><b>부트졸로키아 떡볶이</b><small>재료 9개 · 만드는 법 5단계</small></span><span class="go">확인하기</span></div>
+          <div class="rest-row"><span><b>옥황상제 떡볶이</b><small>재료 6개 · 양 확인 2개</small></span><span class="go">확인하기</span></div>
+          <div class="rest-row"><span><b>오리지날 떡볶이</b><small>내 레시피에 저장했어요</small></span><span class="saved">저장함</span></div>
+        </div>
+        <p class="spent"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>AI를 다시 부르지 않아요. 앱을 닫으면 남은 요리는 사라져요.</p>
+        <div class="btn secondary">그만하고 레시피 보기</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑥ 많을 때 -->
+  <div class="option">
+    <div class="cap"><span class="tag">⑥ MANY · 한도 알림</span><h2>요리가 많은 페이지</h2><p>함께 읽는 사진은 5장까지라, 넘으면 그렇다고 밝히고 다른 방법을 알려요.</p></div>
+    <div class="phone" role="img" aria-label="사진이 많아 앞쪽 5장만 읽었다는 안내와 찾은 요리 4개를 보여주는 화면">
+      <div class="scrim"></div>
+      <div class="sheet tall">
+        <div class="handle"></div>
+        <div><p class="sh-title">요리가 4개 있어요</p><p class="sh-desc">먼저 확인할 요리를 골라주세요</p></div>
+        <p class="spent warn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>본문 사진이 많아 앞쪽 5장만 읽었어요. 빠진 요리는 사진으로 가져오기에 그 사진을 올려주세요.</p>
+        <div class="found" role="radiogroup" aria-label="가져올 요리">
+          <div class="dish on"><span class="radio"></span><div><b>간장 떡볶이</b><small>떡 · 간장 · 설탕 외 3개</small></div></div>
+          <div class="dish"><span class="radio"></span><div><b>로제 떡볶이</b><small>떡 · 고추장 · 우유 외 4개</small></div></div>
+          <div class="dish"><span class="radio"></span><div><b>짜장 떡볶이</b><small>떡 · 짜장 가루 · 양파 외 2개</small></div></div>
+          <div class="dish"><span class="radio"></span><div><b>국물 떡볶이</b><small>떡 · 멸치 육수 · 어묵 외 4개</small></div></div>
+        </div>
+        <div class="actions"><div class="btn outline">취소</div><div class="btn primary">이 요리 확인하기</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="intro" style="margin-top:28px"><small style="color:var(--text-3);font-size:13px;line-height:20px;display:block;max-width:66ch">만들 때: 가져오기 AI가 레시피 하나 대신 목록(최대 5개)을 돌려주고, 1개면 지금 흐름 그대로예요. 남은 요리는 앱 안(탭을 닫으면 사라지는 저장소)에만 두고 서버에 따로 저장하지 않아요. AI 레시피 하루 횟수는 이 링크에 1번만 세요. 떡볶이 재료·단계 수는 화면 설명용 예시예요.</small></p>

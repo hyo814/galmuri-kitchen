@@ -1,9 +1,11 @@
 import { Fragment, useEffect, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
-import { api, type MyRecipe, type RecipeDraft, type RecipeInput } from "../api";
+import { api, type MultiRecipeDraft, type MyRecipe, type RecipeDraft, type RecipeInput, type SourceCard } from "../api";
 import Icon from "../components/Icon";
 import { forgetFoodLogNutritionFill } from "../components/FoodLogDaySheet";
 import { forgetRecipeNutritionFill } from "../components/RecipeNutrition";
+import RecipePickSheet, { type PickSlot } from "../components/RecipePickSheet";
+import { remainingRowSummary, withJosa } from "../format";
 import { useAsyncAction } from "../useAsyncAction";
 import { goBack, navigate, setLeaveGuard } from "../useHashRoute";
 import { forgetRecipeCaches, useResource } from "../useResource";
@@ -60,10 +62,45 @@ function storedDraft(): RecipeDraft | null {
   }
 }
 
+// 여러 요리 가져오기(17절): 지금 폼에 없는 나머지 레시피. draft와 같은 방식(모듈 변수 + sessionStorage)으로 폼에 넘긴다.
+// 서버에는 저장하지 않고 탭에만 두며, 저장을 다 마치거나(요리가 안 남음) 나가면 지운다(앱을 닫아도 사라진다).
+interface MultiSession {
+  total: number;
+  currentOrder: number;
+  source: RecipeDraft["source"];
+  source_url: string | null;
+  source_card?: SourceCard | null;
+  fromImage: boolean;
+  items: PickSlot[]; // 지금 폼에 열려 있는 것 말고 나머지 전부(저장하지 않은 것만)
+}
+
+let pendingMulti: MultiSession | null = null;
+const MULTI_KEY = "recipe-multi";
+
+function storeMulti(session: MultiSession | null) {
+  try {
+    if (session) sessionStorage.setItem(MULTI_KEY, JSON.stringify(session));
+    else sessionStorage.removeItem(MULTI_KEY);
+  } catch {
+    // 저장소를 못 쓰면(사생활 보호 모드 등) 되살리기만 안 된다
+  }
+}
+
+function storedMulti(): MultiSession | null {
+  try {
+    const session = JSON.parse(sessionStorage.getItem(MULTI_KEY) ?? "null") as MultiSession | null;
+    return session && Array.isArray(session.items) ? session : null;
+  } catch {
+    return null;
+  }
+}
+
 /** 로그아웃 때 이전 사용자의 가져온 초안이 남지 않게 */
 export function resetRecipeDraft() {
   pendingDraft = null;
   storeDraft(null);
+  pendingMulti = null;
+  storeMulti(null);
 }
 
 /** 링크·글·사진에서 가져온 초안을 `가져온 레시피 확인` 폼으로 연다 */
@@ -71,6 +108,38 @@ export function openDraft(draft: RecipeDraft, { replace = false } = {}) {
   pendingDraft = draft;
   navigate("/recipes/new", { replace });
   history.replaceState({ ...(history.state as object | null), draft: true }, ""); // 이 칸으로 돌아오면 되살린다
+}
+
+function draftFromSlot(slot: PickSlot, session: Pick<MultiSession, "source" | "source_url" | "source_card">): RecipeDraft {
+  return {
+    title: slot.draft.title,
+    servings: slot.draft.servings,
+    ingredients: slot.draft.ingredients,
+    steps: slot.draft.steps,
+    source: session.source,
+    source_url: session.source_url,
+    source_card: session.source_card ?? null,
+    sample: false,
+  };
+}
+
+/** 여러 요리 가져오기(17절): 찾은 레시피 중 하나를 확인 폼으로 열고, 나머지는 세션에 남겨 이어서 확인할 수 있게 한다.
+ *  captureLink가 있으면(화면 캡처로 가져온 글·사진) 그 링크를 페이지 출처 대신 쓴다(단일 초안과 같은 규칙) */
+export function openMultiPick(result: MultiRecipeDraft, order: number, captureLink?: { source: RecipeDraft["source"]; source_url: string }) {
+  const slots: PickSlot[] = result.recipes.map((draft, i) => ({ order: i + 1, draft }));
+  const session: MultiSession = {
+    total: slots.length,
+    currentOrder: order,
+    source: captureLink?.source ?? result.source,
+    source_url: captureLink?.source_url ?? result.source_url,
+    source_card: result.source_card ?? null,
+    fromImage: result.from_image,
+    items: slots.filter((s) => s.order !== order),
+  };
+  const target = slots.find((s) => s.order === order)!;
+  pendingMulti = session;
+  storeMulti(session);
+  openDraft(draftFromSlot(target, session));
 }
 
 const SOURCE_NAME: Record<RecipeDraft["source"], string> = { youtube: "유튜브", instagram: "인스타그램", blog: "블로그", text: "", photo: "" };
@@ -124,7 +193,16 @@ function BackLink({ onClick, label = "레시피" }: { onClick: () => void; label
   );
 }
 
-function RecipeEditor({ initial, draft = null }: { initial: MyRecipe | null; draft?: RecipeDraft | null }) {
+interface RecipeEditorProps {
+  initial: MyRecipe | null;
+  draft?: RecipeDraft | null;
+  /** 여러 요리 가져오기(17절): 이 draft가 속한 세션. 단일 가져오기·레시피 수정에는 없다 */
+  multi?: MultiSession | null;
+  /** 세션 안에서 다른 레시피로 바꿔 연다(요리 바꾸기·이어서 확인하기). 페이지 이동 없이 폼을 다시 만든다(부모가 key를 바꿔 준다) */
+  onSwitch?: (draft: RecipeDraft, multi: MultiSession) => void;
+}
+
+function RecipeEditor({ initial, draft = null, multi = null, onSwitch }: RecipeEditorProps) {
   const start = initial ?? draft;
   const [title, setTitle] = useState(start?.title ?? "");
   const [servings, setServings] = useState(start?.servings ?? 2);
@@ -144,6 +222,36 @@ function RecipeEditor({ initial, draft = null }: { initial: MyRecipe | null; dra
   // 영상 보기에서 가져왔으면 뒤로 링크가 `영상`
   const [fromVideo] = useState(() => !!(history.state as { from?: string } | null)?.from?.startsWith("/recipes/videos/"));
   const { busy, error, setError, run } = useAsyncAction();
+  // 여러 요리 가져오기(17절): 요리 바꾸기 시트, 저장한 뒤 이어서 화면
+  const [switching, setSwitching] = useState(false);
+  const [afterSave, setAfterSave] = useState<{ title: string; id: number } | null>(null);
+
+  const openSlot = (nextMulti: MultiSession, target: PickSlot) => {
+    storeMulti(nextMulti);
+    onSwitch?.(draftFromSlot(target, nextMulti), nextMulti);
+  };
+
+  // 요리 바꾸기: 지금 편집한 내용을 세션에 남기고(스위치백 때 그대로 보이게) 고른 요리를 연다
+  const switchTo = (order: number) => {
+    if (!multi) return;
+    const pool = [...multi.items, { order: multi.currentOrder, draft: input() }];
+    const target = pool.find((s) => s.order === order);
+    if (target) openSlot({ ...multi, currentOrder: order, items: pool.filter((s) => s.order !== order) }, target);
+  };
+
+  // 저장한 뒤 이어서 확인하기: 방금 저장한 것은 이미 세션에서 빠져 있어 되살릴 필요가 없다
+  const continueTo = (order: number) => {
+    if (!multi) return;
+    const target = multi.items.find((s) => s.order === order);
+    if (target) openSlot({ ...multi, currentOrder: order, items: multi.items.filter((s) => s.order !== order) }, target);
+  };
+
+  const finishMulti = () => {
+    if (!afterSave) return;
+    pendingMulti = null;
+    storeMulti(null);
+    navigate(`/recipes/mine/${afterSave.id}`, { replace: true });
+  };
 
   const input = (): RecipeInput => ({
     title: title.trim(),
@@ -217,11 +325,56 @@ function RecipeEditor({ initial, draft = null }: { initial: MyRecipe | null; dra
       forgetRecipeNutritionFill(saved.id); // 재료가 바뀌었을 수 있다 — 영양 채우기를 다시 부르게
       forgetMealNutritionFill(saved.id);
       forgetFoodLogNutritionFill(saved.id);
-      if (draft) resetRecipeDraft();
+      if (draft) {
+        // 이 항목은 저장했으니 초안만 비운다. 여러 요리 가져오기(17절)로 남은 게 있으면 세션은 그대로 두고 이어서 화면을 보여준다
+        pendingDraft = null;
+        storeDraft(null);
+        if (multi && multi.items.length > 0) {
+          setAfterSave({ title: saved.title, id: saved.id });
+          return;
+        }
+        resetRecipeDraft();
+      }
       if (initial) goBack(`/recipes/mine/${saved.id}`);
       else navigate(`/recipes/mine/${saved.id}`, { replace: true }); // 뒤로가기하면 목록으로
     });
   };
+
+  // 여러 요리 가져오기(17절 ⑤): 저장한 뒤 같은 페이지에 남은 요리가 있으면 폼 대신 이 화면을 보여준다
+  if (afterSave && multi) {
+    return (
+      <main className="page">
+        <header className="topbar">
+          <div>
+            <h1>{withJosa(afterSave.title, "을", "를")} 저장했어요</h1>
+            <p className="summary">같은 페이지의 요리 {multi.items.length}개가 남았어요</p>
+          </div>
+        </header>
+        <ul className="list">
+          {multi.items.map((item) => (
+            <li key={item.order} className="r3-crow">
+              <span className="row-main">
+                <span className="row-title">{item.draft.title}</span>
+                <span className="row-sub">{remainingRowSummary(item.draft.ingredients, item.draft.steps)}</span>
+              </span>
+              <button type="button" className="btn accent-sm" aria-label={`${item.draft.title} 확인하기`} onClick={() => continueTo(item.order)}>
+                확인하기
+              </button>
+            </li>
+          ))}
+        </ul>
+        <p className="mo-note">
+          <Icon name="info" size={16} />
+          <span>AI를 다시 부르지 않아요. 앱을 닫으면 남은 요리는 사라져요.</span>
+        </p>
+        <div className="cta-bar">
+          <button type="button" className="btn secondary" onClick={finishMulti}>
+            그만하고 레시피 보기
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="page">
@@ -240,6 +393,16 @@ function RecipeEditor({ initial, draft = null }: { initial: MyRecipe | null; dra
           <h1>{initial ? "레시피 수정" : "레시피 추가"}</h1>
         )}
       </header>
+      {draft && multi && (
+        <div className="scan-kindline r3-which">
+          <span className="row-title">
+            {multi.total}개 중 {multi.currentOrder}번째 · {title}
+          </span>
+          <button type="button" className="scan-change" disabled={busy} onClick={() => setSwitching(true)}>
+            요리 바꾸기
+          </button>
+        </div>
+      )}
       {draft && <SourceCardView draft={draft} />}
 
       <form className="rc-page-form" onSubmit={submit}>
@@ -408,6 +571,19 @@ function RecipeEditor({ initial, draft = null }: { initial: MyRecipe | null; dra
           </div>
         </div>
       </form>
+
+      {switching && multi && (
+        <RecipePickSheet
+          title="요리 바꾸기"
+          items={multi.items}
+          fromImage={multi.fromImage}
+          onPick={(order) => {
+            setSwitching(false);
+            switchTo(order);
+          }}
+          onClose={() => setSwitching(false)}
+        />
+      )}
     </main>
   );
 }
@@ -442,11 +618,24 @@ function EditRecipe({ id }: { id: string }) {
 function NewRecipe() {
   // StrictMode가 초기화 함수를 두 번 불러도 같은 초안을 받게, 비우는 건 effect에서 한다.
   // 넘겨받은 초안이 없어도 가져온 초안의 히스토리 칸이면(뒤로 → 앞으로·새로고침) 고치던 내용을 되살린다.
-  const [draft] = useState(() => pendingDraft ?? ((history.state as { draft?: boolean } | null)?.draft ? storedDraft() : null));
+  const [state, setState] = useState(() => ({
+    draft: pendingDraft ?? ((history.state as { draft?: boolean } | null)?.draft ? storedDraft() : null),
+    multi: pendingMulti ?? ((history.state as { draft?: boolean } | null)?.draft ? storedMulti() : null),
+  }));
   useEffect(() => {
     pendingDraft = null;
+    pendingMulti = null;
   }, []);
-  return <RecipeEditor initial={null} draft={draft} />;
+  // 여러 요리 가져오기(17절)로 다른 레시피로 바꾸면 key를 바꿔 RecipeEditor를 새로 만든다(페이지 이동 없이 폼 상태를 초기화)
+  return (
+    <RecipeEditor
+      key={state.multi?.currentOrder ?? 0}
+      initial={null}
+      draft={state.draft}
+      multi={state.multi}
+      onSwitch={(draft, multi) => setState({ draft, multi })}
+    />
+  );
 }
 
 export default function RecipeForm({ id }: { id?: string }) {

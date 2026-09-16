@@ -210,6 +210,11 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
   margin: 16px 20px 0;
 }
 
+/* 여러 요리 가져오기(17절 ⑤) 이어서 화면처럼 목록 바로 뒤에 안내가 오는 페이지 */
+.page > .mo-note {
+  margin: 16px 20px 0;
+}
+
 .list {
   margin: 16px 20px 0;
   padding: 6px 0;
@@ -2996,6 +3001,18 @@ button.row-btn > svg {
   color: var(--danger);
   font-size: 14px;
 }
+/* 줄 안의 작은 확인 버튼(여러 요리 가져오기 17절 ⑤ 남은 요리 `확인하기`): danger-sm과 같은 모양, 강조색 */
+.btn.accent-sm {
+  flex-shrink: 0;
+  width: auto;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-size: 14px;
+}
 .r3-toggle {
   position: relative;
   flex-shrink: 0;
@@ -5123,6 +5140,16 @@ button.sh-offline svg:last-child {
   width: 32px;
   height: 32px;
   border-radius: 10px;
+}
+
+/* 여러 요리 가져오기(17절) 확인 화면의 `N개 중 K번째` 줄: scan-kindline 자리·scan-change 버튼을 그대로 쓰고 배경만 강조 */
+.r3-which {
+  background: var(--accent-tint);
+}
+
+.r3-which .row-title {
+  font-size: 14px;
+  color: var(--accent-strong);
 }
 
 .scan-change {

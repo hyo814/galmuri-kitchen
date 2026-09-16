@@ -145,6 +145,114 @@ test("사진으로 레시피를 가져오면 확인 폼에 채워진다", async 
   await expect(page.getByLabel("이름", { exact: true })).toHaveValue("제육볶음");
 });
 
+// --- 여러 요리 가져오기(17절, 2026-09-17) ---
+
+const MULTI_TITLES = ["오리지날 떡볶이", "부트졸로키아 떡볶이", "옥황상제 떡볶이"];
+
+function multiDraft(title: string, missingAmount = false) {
+  return {
+    title,
+    servings: 2,
+    ingredients: [
+      { name: "떡", amount: "300g" },
+      { name: "고추장", amount: missingAmount ? "" : "2큰술" },
+    ],
+    steps: ["끓는 물에 떡을 삶아요.", "양념을 넣고 볶아요."],
+  };
+}
+
+/** JSON 요청에만 응답하고(사진 multipart는 그대로 흘려보내고) 부른 횟수를 센다 */
+function jsonRoute(page: Page, json: unknown) {
+  const calls = { count: 0 };
+  page.route("**/api/recipes/import", (route) => {
+    if (!route.request().headers()["content-type"]?.startsWith("application/json")) return route.continue();
+    calls.count++;
+    return route.fulfill({ json });
+  });
+  return calls;
+}
+
+test("여러 요리 가져오기: 골라서 확인하고, 요리를 바꿔도 고친 내용이 남고, 저장한 뒤 남은 요리를 이어서 확인한다", async ({ page }) => {
+  const sheet = page.getByRole("dialog");
+  const calls = jsonRoute(page, {
+    recipes: [multiDraft(MULTI_TITLES[0]), multiDraft(MULTI_TITLES[1]), multiDraft(MULTI_TITLES[2], true)],
+    from_image: true,
+    images_truncated: true,
+    source: "blog",
+    source_url: "https://recipe.example.com/many",
+    source_card: { title: "우주떡집 메뉴", author: "에그이즈커밍", thumbnail_url: null },
+    sample: false,
+  });
+
+  await openRecipes(page, "내 레시피");
+  await page.getByRole("button", { name: "레시피 추가" }).click();
+  await sheet.getByRole("button", { name: "링크로 가져오기" }).click();
+  await sheet.getByLabel("링크", { exact: true }).fill("https://recipe.example.com/many");
+  await sheet.getByRole("button", { name: "가져오기", exact: true }).click();
+
+  // ③ 고르기: 3개, ⑥ 사진이 많다는 안내, 양이 안 보이는 재료 배지
+  await expect(sheet.getByRole("heading", { name: "요리가 3개 있어요" })).toBeVisible();
+  await expect(sheet.getByText("본문 사진이 많아 앞쪽 5장만 읽었어요")).toBeVisible();
+  await expect(sheet.getByText("양이 안 보이는 재료 1개")).toBeVisible();
+  await expect(sheet.getByRole("radio")).toHaveCount(3);
+  await sheet.getByRole("radio", { name: MULTI_TITLES[1] }).check({ force: true });
+  await sheet.getByRole("button", { name: "이 요리 확인하기" }).click();
+
+  // ④ 확인: 3개 중 2번째, 이름을 고친다
+  await expect(page.getByRole("heading", { name: "가져온 레시피 확인" })).toBeVisible();
+  await expect(app(page).getByText(`3개 중 2번째 · ${MULTI_TITLES[1]}`)).toBeVisible();
+  await page.getByLabel("이름", { exact: true }).fill(`${MULTI_TITLES[1]} 특제`);
+
+  // 요리 바꾸기: 지금 편집 중인 건 목록에 없다(둘만)
+  await page.getByRole("button", { name: "요리 바꾸기" }).click();
+  await expect(sheet.getByRole("heading", { name: "요리 바꾸기" })).toBeVisible();
+  await expect(sheet.getByRole("radio")).toHaveCount(2);
+  await sheet.getByRole("radio", { name: MULTI_TITLES[0] }).check({ force: true });
+  await sheet.getByRole("button", { name: "이 요리 확인하기" }).click();
+  await expect(app(page).getByText(`3개 중 1번째 · ${MULTI_TITLES[0]}`)).toBeVisible();
+  await expect(page.getByLabel("이름", { exact: true })).toHaveValue(MULTI_TITLES[0]);
+
+  // 다시 바꾸면(고친 이름) 그대로 남아 있다
+  await page.getByRole("button", { name: "요리 바꾸기" }).click();
+  await sheet.getByRole("radio", { name: MULTI_TITLES[1] }).check({ force: true });
+  await sheet.getByRole("button", { name: "이 요리 확인하기" }).click();
+  await expect(page.getByLabel("이름", { exact: true })).toHaveValue(`${MULTI_TITLES[1]} 특제`);
+
+  // 저장 → ⑤ 이어서 화면(2개 남음)
+  await page.getByRole("button", { name: "저장" }).click();
+  await expect(page.getByRole("heading", { name: `${MULTI_TITLES[1]} 특제를 저장했어요` })).toBeVisible();
+  await expect(app(page).getByText("같은 페이지의 요리 2개가 남았어요")).toBeVisible();
+
+  // 남은 것 중 하나 확인하기 → 저장(1개 남음)
+  await app(page).getByRole("listitem").filter({ hasText: MULTI_TITLES[2] }).getByRole("button", { name: "확인하기" }).click();
+  await expect(app(page).getByText(`3개 중 3번째 · ${MULTI_TITLES[2]}`)).toBeVisible();
+  await page.getByRole("button", { name: "저장" }).click();
+  await expect(page.getByRole("heading", { name: `${MULTI_TITLES[2]}를 저장했어요` })).toBeVisible();
+  await expect(app(page).getByText("같은 페이지의 요리 1개가 남았어요")).toBeVisible();
+
+  // 그만하고 레시피 보기 → 저장한 레시피 상세로, 남은 목록은 지운다
+  await page.getByRole("button", { name: "그만하고 레시피 보기" }).click();
+  await expect(page.getByRole("heading", { name: MULTI_TITLES[2] })).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem("recipe-multi"))).toBeNull();
+  expect(calls.count).toBe(1); // AI는 한 번만
+});
+
+test("요리가 1개면 여러 요리 고르기 없이 지금 확인 화면 그대로다", async ({ page }) => {
+  // 서버는 1개일 때 목록(recipes)이 아니라 지금과 같은 평평한 모양으로 준다(17절, 하위 호환)
+  jsonRoute(page, { ...multiDraft("된장찌개"), source: "text", source_url: null, source_card: null, sample: false });
+  const sheet = page.getByRole("dialog");
+  await openRecipes(page, "내 레시피");
+  await page.getByRole("button", { name: "레시피 추가" }).click();
+  await sheet.getByRole("button", { name: "글 붙여넣기" }).click();
+  await sheet.getByLabel("레시피 글").fill("된장찌개 재료: 두부 1모, 애호박 1/2개");
+  await sheet.getByRole("button", { name: "정리하기" }).click();
+
+  await expect(page.getByRole("heading", { name: "가져온 레시피 확인" })).toBeVisible();
+  await expect(page.getByLabel("이름", { exact: true })).toHaveValue("된장찌개");
+  await expect(app(page).getByText(/개 중 \d+번째/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "요리 바꾸기" })).toHaveCount(0);
+});
+
 const VIDEO_MISS = "영상 설명에서 레시피를 찾지 못했어요. 설명에 있으면 복사해 붙여 넣고, 영상에만 있으면 보면서 재료와 만드는 법을 아래에 적어주세요.";
 const CAPTURE_HINT = "영상을 멈추고 재료와 만드는 법이 나온 화면을 캡처해 올려주세요 · 5장까지";
 const PHOTO_MISS = "사진에서 레시피를 찾지 못했어요. 글자가 잘 보이는 사진으로 다시 올리거나 글 붙여넣기를 써주세요.";
