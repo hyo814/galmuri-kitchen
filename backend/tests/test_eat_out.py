@@ -78,14 +78,14 @@ def test_limits_and_failures(client, login, app, monkeypatch):
         AiCall.query.delete()
         db.session.commit()
 
-    # ② AiError -> 502, AiCall 1행(토큰 None), 값 None
+    # ② AiError -> 502, AiCall 1행(헛호출, 토큰 None), 값 None
     clock["now"] += timedelta(minutes=5)
     monkeypatch.setattr(ai, "estimate_eat_out", lambda *a: (_ for _ in ()).throw(ai.AiError("x")))
     res = estimate(client, recipe["id"])
     assert (res.status_code, res.get_json()) == (502, {"error": FAIL})
     with app.app_context():
         rows = AiCall.query.all()
-        assert len(rows) == 1 and rows[0].kind == "eat_out" and rows[0].input_tokens is None
+        assert len(rows) == 1 and rows[0].kind == "eat_out_miss" and rows[0].input_tokens is None
     assert client.get(f"/api/recipes/{recipe['id']}").get_json()["eat_out_price"] is None
 
     # ③ 범위 밖 가격(500·150000)·불리언(True) -> 502, 값 None

@@ -99,19 +99,22 @@ def ai_recipes():
     if mode == "off":
         abort(503, "AI 레시피를 지금은 쓸 수 없어요.")
     if mode == "sample":
-        raw = {"recipes": ai.SAMPLE_SUGGESTIONS}
+        raw, call = {"recipes": ai.SAMPLE_SUGGESTIONS}, None
     else:
         scan.check_ai_limits(g.user.id, scan.RECIPE_KINDS, ai_daily_limit(g.user, "AI_DAILY_RECIPE_LIMIT"), "AI 레시피는")
         call = scan.start_ai_call(g.user.id, "recipe")
         try:
             raw, usage = ai.suggest_recipes([f"{name} (빨리)" if urgent else name for name, urgent in stock])
         except ai.AiError:
+            scan.miss_ai_call(call)
             abort(502, FAIL)
         scan.finish_ai_call(call, usage)
 
     rows = raw.get("recipes") if isinstance(raw, dict) and isinstance(raw.get("recipes"), list) else []
     drafts = [d for d in map(clean_draft, rows) if d][:MAX_SUGGESTIONS]
     if not drafts:
+        if call:
+            scan.miss_ai_call(call)
         abort(502, FAIL)
 
     urgent = {name for name, is_urgent in stock if is_urgent}
@@ -143,17 +146,26 @@ NEED_TEXT = {
     "blog": "이 링크에서는 레시피를 읽지 못했어요. 글을 복사한 뒤 아래에 붙여 넣어주세요.",
     "text": "레시피를 찾지 못했어요. 재료와 만드는 법이 담긴 글을 붙여 넣어주세요.",
 }
+# 영상 설명·캡션에 레시피 표시(RECIPE_SIGNAL)가 없어 AI를 부르지 않았을 때. 표시 규칙이 놓친 레시피(양배추 1/4통)일 수도 있어 복사도 안내한다
+NO_RECIPE = {
+    "youtube": "영상 설명에서 레시피를 찾지 못했어요. 설명에 있으면 복사해 붙여 넣고, 영상에만 있으면 보면서 재료와 만드는 법을 아래에 적어주세요.",
+    "instagram": "게시물 설명에서 레시피를 찾지 못했어요. 설명에 있으면 길게 눌러 복사해 붙여 넣고, 영상에만 있으면 보면서 재료와 만드는 법을 아래에 적어주세요.",
+}
 
 
-def need_text(source):
+def need_text(source, messages=NEED_TEXT):
     """링크를 못 읽었거나 레시피가 없을 때. 화면은 글 붙여넣기로 바꿔 이 문구를 보여준다."""
-    return jsonify(error=NEED_TEXT[source], need_text=True), 422
+    return jsonify(error=messages[source], need_text=True), 422
 
 
 # 블로그 본문 글에 이 표시가 하나도 없으면 레시피가 사진에만 있는 글로 보고 본문 사진을 함께 읽는다.
-# 숫자와 단위는 같은 줄에서만 본다(꼬리말 "02218\n개인정보"), 단위 뒤에 영문이 붙으면(5GB) 양이 아니다.
-# ponytail: 낱말·단위 규칙이라 "컵케이크"처럼 표시가 섞인 글은 글만 보낸다. 놓치는 글이 많으면 표시 개수 기준으로 바꾸거나 사진 후보가 있을 때 늘 함께 보낸다(비용↑).
-RECIPE_SIGNAL = re.compile(r"재료|큰술|작은술|스푼|컵|꼬집|\d[ \t]*(?:g|ml|개|모|대|쪽)(?![a-z])", re.I)
+# 유튜브 설명·인스타그램 캡션에 없으면 AI를 부르지 않고 글 붙여넣기로 보낸다(NO_RECIPE).
+# 숫자와 단위는 같은 줄에서만 본다(꼬리말 "02218\n개인정보"), 단위 뒤에 영문이 붙으면(5GB·5ton) 양이 아니다.
+# 2026-09-16 숟가락·숟갈과 숫자 뒤 공기·T·t·ts·tbsp·tsp를 더했다(간장 3T·2숟가락만 적은 영상 설명도 AI가 읽게).
+# ponytail: 낱말·단위 규칙이라 "컵케이크"·"1 T-shirt"처럼 표시가 섞인 글은 글만 보낸다. 놓치는 글이 많으면 표시 개수 기준으로 바꾸거나 사진 후보가 있을 때 늘 함께 보낸다(비용↑).
+RECIPE_SIGNAL = re.compile(
+    r"재료|큰술|작은술|스푼|숟가락|숟갈|컵|꼬집|\d[ \t]*(?:g|ml|개|모|대|쪽|공기|tbsp|tsp|ts|t)(?![a-z])", re.I
+)
 
 MAX_IMPORT_PHOTOS = 5
 PHOTO_NOT_FOUND = "사진에서 레시피를 찾지 못했어요. 글자가 잘 보이게 다시 찍거나 글 붙여넣기를 써주세요."
@@ -188,10 +200,12 @@ def import_photos():
     try:
         raw, usage = ai.extract_recipe_from_images(images)
     except ai.AiError:
+        scan.miss_ai_call(call)
         abort(502, "레시피를 정리하지 못했어요. 잠시 후 다시 시도해주세요.")
     scan.finish_ai_call(call, usage)
     draft = clean_draft(raw.get("recipe")) if isinstance(raw, dict) and raw.get("found") is True else None
     if draft is None:
+        scan.miss_ai_call(call)
         # 글 붙여넣기로 바꾸지 않고 사진 단계에 경고로 보여준다(need_text는 링크·글과 같은 모양으로 둔다)
         return jsonify(error=PHOTO_NOT_FOUND, need_text=True), 422
     return jsonify(**draft, source="photo", source_url=None, source_card=None, sample=False)
@@ -255,12 +269,22 @@ def import_recipe():
                 video = outbound.video_snippet(value, youtube_key)
                 if video is None:
                     abort(404, "영상을 찾을 수 없어요. 링크를 다시 확인해주세요.")
+                # 쇼츠처럼 레시피가 영상에만 있으면 AI를 불러도 못 찾는다. 제목의 양(계란 2개로…)은 레시피가 아니라 보지 않는다.
+                # ponytail: 표시 규칙에 없는 표기로만 적힌 설명 레시피(양배추 1/4통·계란 두 알)도 여기서 글 붙여넣기로 간다.
+                # 잦으면 RECIPE_SIGNAL을 늘린다(블로그 본문 사진 보내기 기준도 함께 바뀐다).
+                if not RECIPE_SIGNAL.search(video["description"]):
+                    return need_text(source, NO_RECIPE)
                 body = f"{video['title']}\n\n{video['description']}"
                 source_card = {"title": video["title"], "author": video["channel_title"], "thumbnail_url": video["thumbnail_url"]}
             elif kind == "instagram":
                 post = outbound.instagram_post(value)
                 if post is None:
                     return need_text(source)
+                # 릴스처럼 레시피가 영상에만 있거나 미리보기 캡션이 잘렸다.
+                # ponytail: 미리보기가 한국어(좋아요 1,234개)로 오면 그 수가 표시로 잡혀 거르지 못하고 예전처럼 AI를 부른다.
+                # 서버(싱가포르)는 영어 미리보기를 받는다고 보고 두었다 — 잦으면 좋아요·댓글 수를 떼고 본다.
+                if not RECIPE_SIGNAL.search(post["caption"]):
+                    return need_text(source, NO_RECIPE)
                 body = post["caption"]
                 source_card = {"title": post["title"], "author": None, "thumbnail_url": post["thumbnail_url"]}
             else:
@@ -281,10 +305,12 @@ def import_recipe():
     try:
         raw, usage = ai.extract_recipe(body, images)
     except ai.AiError:
+        scan.miss_ai_call(call)
         abort(502, "레시피를 정리하지 못했어요. 잠시 후 다시 시도해주세요.")
     scan.finish_ai_call(call, usage)
     draft = clean_draft(raw.get("recipe")) if isinstance(raw, dict) and raw.get("found") is True else None
     if draft is None:
+        scan.miss_ai_call(call)
         return need_text(source)
     return jsonify(**draft, source=source, source_url=source_url, source_card=source_card, sample=False)
 
@@ -313,10 +339,12 @@ def estimate_eat_out_price(recipe_id):
         try:
             raw, usage = ai.estimate_eat_out(recipe.title, [ingredient_key(i["name"]) for i in recipe.ingredients])
         except ai.AiError:
+            scan.miss_ai_call(call)
             abort(502, EAT_OUT_FAIL)
         scan.finish_ai_call(call, usage)
         price = raw.get("price") if isinstance(raw, dict) else None
         if isinstance(price, bool) or not isinstance(price, int) or not (EAT_OUT_MIN <= price <= EAT_OUT_MAX):
+            scan.miss_ai_call(call)
             abort(502, EAT_OUT_FAIL)
         source = "ai"
 
@@ -334,7 +362,7 @@ def estimate_eat_out_price(recipe_id):
 @bp.get("/ai-usage")
 @login_required
 def ai_usage():
-    """오늘(서울 날짜) 쓴 횟수와 한도. 화면의 `오늘 N번 남음`은 recipe.limit - recipe.used."""
+    """오늘(서울 날짜) 쓴 횟수(세지 않은 헛호출 _miss는 빼고)와 한도. 화면의 `오늘 N번 남음`은 recipe.limit - recipe.used."""
     return jsonify(
         scan={"used": scan.calls_today(g.user.id, scan.SCAN_KINDS), "limit": ai_daily_limit(g.user, "AI_DAILY_SCAN_LIMIT")},
         recipe={"used": scan.calls_today(g.user.id, scan.RECIPE_KINDS), "limit": ai_daily_limit(g.user, "AI_DAILY_RECIPE_LIMIT")},

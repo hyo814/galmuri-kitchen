@@ -111,18 +111,20 @@ class MemoScanResult(BaseModel):
 
 
 def demo_ai_budget_spent():
-    """체험 계정 전체가 지난 24시간 동안 쓴 사진 인식·AI 레시피 호출이 DEMO_AI_GLOBAL_DAILY 이상인지. 지워진 체험 계정 기록(user_id 없음)도 demo로 센다.
+    """체험 계정 전체가 지난 24시간 동안 쓴 사진 인식·AI 레시피 호출(헛호출 포함)이 DEMO_AI_GLOBAL_DAILY 이상인지. 지워진 체험 계정 기록(user_id 없음)도 demo로 센다.
     ponytail: 세고 부르기라 동시에 온 체험 요청 몇 개만큼 예산을 넘을 수 있다. 크게 넘으면 전역 잠금으로."""
-    from .scan import RECIPE_KINDS, SCAN_KINDS  # scan.py가 이 모듈을 쓰므로 여기서 불러온다
+    from .scan import MISS_KINDS, RECIPE_KINDS, SCAN_KINDS  # scan.py가 이 모듈을 쓰므로 여기서 불러온다
 
     used = AiCall.query.filter(
-        AiCall.demo.is_(True), AiCall.kind.in_(SCAN_KINDS + RECIPE_KINDS), AiCall.created_at >= utcnow() - timedelta(hours=24)
+        AiCall.demo.is_(True),
+        AiCall.kind.in_(SCAN_KINDS + RECIPE_KINDS + MISS_KINDS),
+        AiCall.created_at >= utcnow() - timedelta(hours=24),
     ).count()
     return used >= current_app.config["DEMO_AI_GLOBAL_DAILY"]
 
 
 def user_ai_budget_spent():
-    """로그인 사용자(체험 계정 제외) 전체가 지난 24시간 동안 쓴 Claude 호출(사진 인식·AI 레시피·영양 추정)이 USER_AI_GLOBAL_DAILY 이상인지.
+    """로그인 사용자(체험 계정 제외) 전체가 지난 24시간 동안 쓴 Claude 호출(사진 인식·AI 레시피·영양 추정, 헛호출 포함)이 USER_AI_GLOBAL_DAILY 이상인지.
     Claude 잔액이 바닥나 체험 계정까지 멈추지 않게 한다. 지워진 사용자 기록(user_id 없음)도 센다.
     ponytail: 세고 부르기라 동시에 온 요청 몇 개만큼 예산을 넘을 수 있다. 크게 넘으면 전역 잠금으로."""
     from .scan import AI_KINDS  # scan.py가 이 모듈을 쓰므로 여기서 불러온다

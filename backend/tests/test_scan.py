@@ -34,6 +34,8 @@ def ai_calls(app):
 
 
 USAGE = {"model": "claude-sonnet-5-answered", "input_tokens": 1500, "output_tokens": 120}
+# 재료를 찾은 응답. 재료 0개는 헛호출(스펙 7절)이라 하루 한도에 세지 않는다
+FOUND = {"items": [{"name": "두부", "quantity": 1, "unit": "모", "location_kind": "fridge", "price": None}], "purchased_on": None}
 
 
 def fail_if_called(*args):
@@ -274,7 +276,7 @@ def test_real_scan_cleans_result_and_logs_call(client, login, app, monkeypatch):
     assert ai_call_costs(app) == [("claude-sonnet-5-answered", 1500, 120)]  # 실제로 답한 모델로 덮어쓴다
 
 
-def test_ai_failure_is_502_and_counted(client, login, app, monkeypatch):
+def test_ai_failure_is_502_and_a_miss(client, login, app, monkeypatch):
     user = login()
     app.config["ANTHROPIC_API_KEY"] = "test-key"
 
@@ -284,15 +286,15 @@ def test_ai_failure_is_502_and_counted(client, login, app, monkeypatch):
     monkeypatch.setattr(ai, "extract", broken)
     res = upload(client)
     assert (res.status_code, res.get_json()) == (502, {"error": "인식에 실패했어요. 직접 입력해주세요."})
-    # F1: 실패도 비용이 들었으므로 한도에는 센다(업로드 검증 실패만 세지 않는다)
-    assert ai_calls(app) == [(user.id, "receipt")]
+    # 기록은 남기되 헛호출(스펙 7절)이라 하루 3번까지는 하루 한도에 세지 않는다. 몇 번이든 세는 규칙은 test_ai_miss.py
+    assert ai_calls(app) == [(user.id, "receipt_miss")]
     assert ai_call_costs(app) == [("claude-sonnet-5", None, None)]  # 실패하면 요청한 모델만 남고 토큰은 비워 둔다
 
 
 def test_daily_limit_counts_scan_kinds_in_seoul_day(client, login, app, monkeypatch):
     user = login()
     app.config.update(ANTHROPIC_API_KEY="test-key", AI_DAILY_SCAN_LIMIT=3)
-    monkeypatch.setattr(ai, "extract", lambda *args: ({"items": [], "purchased_on": None}, USAGE))
+    monkeypatch.setattr(ai, "extract", lambda *args: (FOUND, USAGE))
     fixed_today = date(2026, 9, 13)
     start = datetime.combine(fixed_today, time.min, tzinfo=SEOUL).astimezone(timezone.utc)
     fixed_now = start + timedelta(hours=12)  # 벽시계와 무관하게 고정 — burst 윈도우가 seed 데이터와 안 겹치게 정오로 둔다
@@ -409,7 +411,7 @@ def test_scan_many_photos_is_one_ai_call(client, login, app, monkeypatch, count)
 
     def fake_extract(kind, images):
         seen.append((kind, images))
-        return {"items": [], "purchased_on": None}, USAGE
+        return FOUND, USAGE
 
     monkeypatch.setattr(ai, "extract", fake_extract)
     photos = [JPEG_BYTES, PNG_BYTES, WEBP_BYTES, JPEG_BYTES + b"4", PNG_BYTES + b"5"][:count]
