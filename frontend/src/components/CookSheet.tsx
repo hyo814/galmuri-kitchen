@@ -159,10 +159,10 @@ export function WonField({
   onChange,
   onEstimate,
 }: {
-  /** 직접 쓴 일기의 `전체 재료비 (선택)`도 같은 칸(0~1,000,000원) */
+  /** 직접 쓴 일기의 `재료비 (선택)`도 같은 칸(0~1,000,000원) */
   label?: ReactNode;
   placeholder?: string;
-  /** 칸 아래 늘 보이는 도움말(재료비가 몇 인분 전체인지) */
+  /** 칸 아래 늘 보이는 도움말(재료비가 몇 인분을 합친 값인지) */
   help?: string;
   value: string;
   source: EatOutSource | null;
@@ -305,16 +305,16 @@ export function PhotoPicker({
   );
 }
 
-/** 직접 쓴 일기의 재료비 칸(선택, 0~1,000,000원). 옆 칸이 1인분이라 전체 값이라고 이름과 도움말로 알린다(리뷰 W3) */
+/** 직접 쓴 일기의 재료비 칸(선택, 0~1,000,000원). 옆 칸이 1인분이라 인분을 합친 값이라고 늘 알린다(리뷰 W3 — 이름은 시안 그대로) */
 export const CostField = ({ value, servings, onChange }: { value: string; servings: number; onChange: (text: string) => void }) => (
   <WonField
     label={
       <>
-        전체 재료비 <span className="optional">(선택)</span>
+        재료비 <span className="optional">(선택)</span>
       </>
     }
     placeholder="예: 6,500"
-    help={`${servings}인분 전체`}
+    help={`${servings}인분을 합친 값이에요`}
     value={value}
     source={null}
     estimating={false}
