@@ -39,7 +39,8 @@ test("체험 AI를 다 썼으면 예시 사진(냉장고)의 읽어둔 결과를
 
   await scanDialog.getByRole("button", { name: "오늘" }).click(); // 냉장고 사진은 구입일을 직접 골라야 한다
   await scanDialog.getByRole("button", { name: "16개 재고에 넣기" }).click();
-  await expect(app(page).getByRole("status")).toContainText("16개를 재고에 넣었어요");
+  // 앱 전체 되돌리기 알림(ck-toast)과 닫히는 시트의 읽힘 영역도 role=status라, 본문(main)의 그 글자 알림만 찾는다
+  await expect(page.getByRole("main").getByRole("status").filter({ hasText: "16개를 재고에 넣었어요" })).toBeVisible();
   await expect(app(page).getByRole("button", { name: /^간장/ })).toBeVisible();
 });
 
