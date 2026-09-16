@@ -15,6 +15,7 @@ import { BackLink } from "./RecipeDetail";
 const TITLE = "장보기 목록 만들기";
 const OFFLINE = "인터넷이 연결되면 담을 수 있어요";
 const BULK_MAX = 50; // 서버 한 번에 담기 상한
+type Pickable = "buy" | "manual" | "seasoning"; // 체크해 담는 묶음(buy만 처음부터 켬)
 
 /** #/meals/:id/shopping — 식단 레시피 칸의 재료를 재고·장보기 목록과 비교해 담는다(시안 ShoppingPreview) */
 export default function MealShopping({ id }: { id: string }) {
@@ -66,8 +67,8 @@ function Preview({ data, url, reload }: { data: MealShoppingPreview; url: string
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false); // busy는 다음 렌더에야 버튼을 막으니 빠른 두 번 누르기는 여기서 막는다
   const [error, setError] = useState("");
-  const isOn = (row: MealShoppingRow, bucket: "buy" | "manual") => toggled[`${bucket}:${row.name}`] ?? bucket === "buy";
-  const picked = [...data.buy.filter((r) => isOn(r, "buy")), ...data.manual.filter((r) => isOn(r, "manual"))];
+  const isOn = (row: MealShoppingRow, bucket: Pickable) => toggled[`${bucket}:${row.name}`] ?? bucket === "buy";
+  const picked = (["buy", "manual", "seasoning"] as const).flatMap((bucket) => data[bucket].filter((r) => isOn(r, bucket)));
 
   const add = async () => {
     if (inFlight.current) return;
@@ -123,7 +124,7 @@ function Preview({ data, url, reload }: { data: MealShoppingPreview; url: string
       </section>
     );
 
-  const checkRow = (bucket: "buy" | "manual") => (row: MealShoppingRow) => {
+  const checkRow = (bucket: Pickable) => (row: MealShoppingRow) => {
     const on = isOn(row, bucket);
     const amount = quantityText(row.quantity, row.unit);
     // 행 어디를 눌러도 체크가 바뀐다(체크 버튼 클릭도 여기로 올라온다). 스크린리더·키보드는 체크 버튼 하나로 다룬다
@@ -153,9 +154,11 @@ function Preview({ data, url, reload }: { data: MealShoppingPreview; url: string
         <Icon name="info" size={16} />
         <span>칸마다 인분에 맞춰 필요한 양을 계산하고, 재고에 있는 만큼 뺐어요. 살 날은 그 끼니 전날이에요.</span>
       </p>
-      {data.buy.length + data.manual.length + data.skip.length === 0 && <p className="center muted">장보기에 담을 재료가 없어요</p>}
+      {data.buy.length + data.manual.length + data.seasoning.length + data.skip.length === 0 && <p className="center muted">장보기에 담을 재료가 없어요</p>}
       {group("모자란 만큼 담아요", data.buy, checkRow("buy"))}
       {group("단위가 달라요 · 직접 골라주세요", data.manual, checkRow("manual"))}
+      {/* 집에 있지만 재고에 안 넣은 양념이 많아 기본으로 끈다 */}
+      {group("양념 · 집에 없으면 골라주세요", data.seasoning, checkRow("seasoning"))}
       {group("담지 않아요", data.skip, (row) => (
         <div key={row.name} className="ml-prow skip">
           <span className="row-main">

@@ -1,5 +1,7 @@
 from datetime import date
 
+import pytest
+
 import app.meals as meals_module
 from app.meals import shopping_rows
 from tests.test_meals import add_ingredient, add_recipe, make_plan, put_slot
@@ -121,25 +123,108 @@ def test_spoon_unit_with_stock_skips_enough():
     stock = [("간장", 1, "병")]
     row = by_name(shopping_rows(needs, stock, [], TODAY)["skip"], "간장")
     assert row["reason"] == "enough"
-    assert row["need"] == []
-    assert row["need_extra"] == ["2큰술"]
-    assert (row["quantity"], row["unit"]) == (1, "개")  # need가 비었을 때 기본값(manual과 같은 폴백)
+    assert (row["need"], row["need_spoon"], row["need_extra"]) == ([], [{"quantity": 2, "unit": "큰술"}], [])
+    assert (row["quantity"], row["unit"]) == (1, "개")  # need가 비었을 때 기본값(재고가 없을 때 담는 한 통과 같은 값)
+
+
+def test_spoon_unit_without_stock_is_seasoning_one_pack():
+    # 된장 2큰술: 재고에 전혀 없으면 양념 묶음(화면 체크 꺼짐, 담으면 한 통 1개) — 집에 있는데 재고에 안 넣은 양념을 자동으로 담지 않게.
+    # `단위가 달라요`는 진짜 단위 충돌만(AI 초안 레시피 11개를 넣으면 양념 11줄이 그 묶음에 섞였다)
+    needs = [("된장", "2큰술", 1, date(2026, 9, 16)), ("된장", "1큰술", 2, date(2026, 9, 17)), ("된장", "2큰술", 1, date(2026, 9, 18))]
+    result = shopping_rows(needs, [], [], TODAY)
+    assert result["buy"] == [] and result["manual"] == [] and result["skip"] == []
+    row = by_name(result["seasoning"], "된장")
+    assert (row["quantity"], row["unit"], row["reason"]) == (1, "개", None)
+    assert (row["need"], row["have"], row["need_extra"]) == ([], [], [])
+    assert row["need_spoon"] == [{"quantity": 6, "unit": "큰술"}]  # 2 + 1×2 + 2 — 인분 배율을 곱해 더한다
+    assert row["planned_on"] == "2026-09-15"
+
+
+def test_spoon_amounts_scaled_and_summed_per_unit():
+    # 체험 식단: 된장 2큰술 × 2·2·3인분(레시피 2인분) = 7큰술, 다진 마늘 1작은술 × 1·1·1·1·1.5 = 5½작은술. 못 읽는 글자(약간)만 한 번씩 남긴다
+    days = [date(2026, 9, 16), date(2026, 9, 18), date(2026, 9, 22)]
+    needs = [("된장", "2큰술", ratio, on) for ratio, on in zip([1, 1, 1.5], days)]
+    needs += [("다진 마늘", "1작은술", ratio, date(2026, 9, 16)) for ratio in [1, 1, 1, 1, 1.5]]
+    needs += [("소금", "1큰술", 1 / 3, date(2026, 9, 16)), ("소금", "1작은술", 1, date(2026, 9, 17)), ("소금", "약간", 1, date(2026, 9, 17)), ("소금", "약간", 2, date(2026, 9, 18))]
+    seasoning = shopping_rows(needs, [], [], TODAY)["seasoning"]
+    assert by_name(seasoning, "된장")["need_spoon"] == [{"quantity": 7, "unit": "큰술"}]
+    assert by_name(seasoning, "다진 마늘")["need_spoon"] == [{"quantity": 5.5, "unit": "작은술"}]
+    salt = by_name(seasoning, "소금")
+    assert (salt["need_spoon"], salt["need_extra"]) == ([{"quantity": 0.33, "unit": "큰술"}, {"quantity": 1, "unit": "작은술"}], ["약간"])
+
+
+@pytest.mark.parametrize(
+    "amounts, need_spoon, need_extra",
+    [
+        ([""], [], []),  # 공공 레시피 절반은 양이 이름 안에 있다(`돼지고기(50g)`)
+        (["2컵", "1컵"], [{"quantity": 5, "unit": "컵"}], []),  # 2컵 × 2 + 1컵. 컵은 쌀·우유처럼 많이 쓰는 양(29절 결정 5)
+        (["10~15마리"], [], ["10~15마리"]),
+        (["200~300g"], [], ["200~300g"]),
+        (["1큰술", ""], [{"quantity": 2, "unit": "큰술"}], []),  # 양념 양과 빈 양이 섞이면 양념으로 보지 않는다
+    ],
+)
+def test_blank_cup_range_amounts_without_stock_stay_manual(amounts, need_spoon, need_extra):
+    needs = [("재료(50g)", amount, 2 if index == 0 else 1, date(2026, 9, 16)) for index, amount in enumerate(amounts)]
+    result = shopping_rows(needs, [], [], TODAY)
+    assert result["buy"] == [] and result["seasoning"] == [] and result["skip"] == []
+    row = by_name(result["manual"], "재료(50g)")
+    assert (row["quantity"], row["unit"], row["need"], row["need_spoon"], row["need_extra"]) == (1, "개", [], need_spoon, need_extra)
+
+
+def test_listed_spoon_ingredient_is_skipped_not_seasoning():
+    needs = [("된장", "2큰술", 1, date(2026, 9, 16))]
+    result = shopping_rows(needs, [], ["된장"], TODAY)
+    assert result["seasoning"] == []
+    assert by_name(result["skip"], "된장")["reason"] == "listed"
 
 
 def test_manual_tiny_scaled_amount_clamped_to_min():
-    # 1판 × 0.001 인분 배율 → 반올림하면 0이라 최소 0.01로 올린다(bulk 담기 400 방지)
+    # 1판 × 0.001 인분 배율 → 반올림하면 0이라 최소 1로 올린다(bulk 담기 400 방지)
     needs = [("달걀", "1판", 0.001, date(2026, 9, 16))]
     stock = [("계란", 1, "개")]  # 단위가 달라 manual로 간다
     row = by_name(shopping_rows(needs, stock, [], TODAY)["manual"], "달걀")
-    assert (row["quantity"], row["unit"], row["reason"]) == (0.01, "판", None)
-    assert row["quantity"] >= 0.01
+    assert (row["quantity"], row["unit"], row["reason"]) == (1, "판", None)
 
 
-def test_uncountable_without_stock_is_manual_with_extra():
+def test_manual_quantity_rounds_up_to_whole_number():
+    needs = [("대파", "1/2대", 5, date(2026, 9, 16))]  # 2.5대, 재고는 단 → 단위가 달라요
+    row = by_name(shopping_rows(needs, [("대파", 1, "단")], [], TODAY)["manual"], "대파")
+    assert (row["quantity"], row["unit"]) == (3, "대")
+    assert row["need"] == [{"quantity": 2.5, "unit": "대"}]
+
+
+def test_buy_rounds_up_to_whole_number_for_count_and_weight():
+    # 운영에서 `0.67개 담기`·`16.67g 담기`가 보였다 — 담을 양은 정수로 올린다(모자라게 사지 않게), 필요·있음 양은 그대로 둔다
+    needs = [("애호박", "1/3개", 5, date(2026, 9, 16)), ("돼지고기 앞다리살", "925g", 2 / 3, date(2026, 9, 16))]
+    stock = [("애호박", 1, "개"), ("돼지고기 앞다리살", 600, "g")]
+    buy = shopping_rows(needs, stock, [], TODAY)["buy"]
+    zucchini, pork = by_name(buy, "애호박"), by_name(buy, "돼지고기 앞다리살")
+    assert (zucchini["quantity"], zucchini["unit"], zucchini["need"]) == (1, "개", [{"quantity": 1.67, "unit": "개"}])
+    assert (pork["quantity"], pork["unit"], pork["need"]) == (17, "g", [{"quantity": 616.67, "unit": "g"}])
+    assert all(isinstance(row["quantity"], int) for row in buy)
+
+
+def test_buy_whole_shortfall_is_not_bumped():
+    needs = [("두부", "1/2모", 6, date(2026, 9, 16))]  # 3모 − 1모 = 딱 2모
+    row = by_name(shopping_rows(needs, [("두부", 1, "모")], [], TODAY)["buy"], "두부")
+    assert row["quantity"] == 2
+
+
+def test_uncountable_without_stock_is_seasoning_one_pack():
     needs = [("소금", "약간", 1, date(2026, 9, 16))]
-    row = by_name(shopping_rows(needs, [], [], TODAY)["manual"], "소금")
-    assert (row["quantity"], row["unit"]) == (1, "개")
-    assert row["need_extra"] == ["약간"]
+    result = shopping_rows(needs, [], [], TODAY)
+    assert result["buy"] == [] and result["manual"] == []
+    row = by_name(result["seasoning"], "소금")
+    assert (row["quantity"], row["unit"], row["reason"]) == (1, "개", None)
+    assert (row["need_spoon"], row["need_extra"]) == ([], ["약간"])
+
+
+def test_spoon_unit_with_stock_in_other_unit_still_skips():
+    # 숟가락 양만 있으면 재고 단위와 맞춰 볼 수 없다 — 이름이 같은 재고가 있으면 충분해요(단위가 달라요 아님)
+    needs = [("고춧가루", "1큰술", 1, date(2026, 9, 16))]
+    result = shopping_rows(needs, [("고춧가루", 500, "g")], [], TODAY)
+    assert result["buy"] == [] and result["manual"] == [] and result["seasoning"] == []
+    assert by_name(result["skip"], "고춧가루")["reason"] == "enough"
 
 
 def test_always_have_water_excluded():
@@ -273,4 +358,4 @@ def test_preview_past_plan_empty(client, login, monkeypatch):
     assert res.status_code == 200
     body = res.get_json()
     assert body["recipe_slot_count"] == 0
-    assert body["buy"] == [] and body["manual"] == [] and body["skip"] == []
+    assert body["buy"] == [] and body["manual"] == [] and body["seasoning"] == [] and body["skip"] == []
