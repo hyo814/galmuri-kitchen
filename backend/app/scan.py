@@ -242,11 +242,14 @@ def make_sample_scans(folder, ids):
     stored = ai.sample_scans()
     SAMPLE_PHOTO_DIR.mkdir(parents=True, exist_ok=True)
     for sample_id, path in photos.items():
-        with Image.open(path) as image:
-            image = ImageOps.exif_transpose(image).convert("RGB")  # 회전을 반영한 뒤 새로 저장하므로 EXIF는 따라가지 않는다
-            image.thumbnail((SAMPLE_MAX_SIDE, SAMPLE_MAX_SIDE))
-            buffer = io.BytesIO()
-            image.save(buffer, "JPEG", quality=85)
+        try:
+            with Image.open(path) as image:
+                image = ImageOps.exif_transpose(image).convert("RGB")  # 회전을 반영한 뒤 새로 저장하므로 EXIF는 따라가지 않는다
+                image.thumbnail((SAMPLE_MAX_SIDE, SAMPLE_MAX_SIDE))
+                buffer = io.BytesIO()
+                image.save(buffer, "JPEG", quality=85)
+        except OSError as e:  # 사진이 아니거나 깨진 파일(PIL.UnidentifiedImageError도 OSError)
+            raise click.ClickException(f"{path.name} 파일을 사진으로 열지 못했어요({e}).") from None
         data = buffer.getvalue()
         kind = ai.SAMPLE_PHOTOS[sample_id]
         try:
@@ -255,6 +258,7 @@ def make_sample_scans(folder, ids):
             raise click.ClickException(f"{sample_id} 사진을 읽지 못했어요({e}).") from None
         (SAMPLE_PHOTO_DIR / f"{sample_id}.jpg").write_bytes(data)
         stored[sample_id] = {"kind": kind, **clean_result(kind, raw, seoul_today())}
+        # 사진마다 바로 저장한다 — 뒤 사진이 실패해도 새 사진 옆에 옛 결과가 남거나 이미 쓴 AI 호출이 버려지지 않게
+        ai.SAMPLE_SCANS_FILE.write_text(json.dumps(stored, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         click.echo(f"{sample_id}: 재료 {len(stored[sample_id]['items'])}개 (토큰 {usage['input_tokens']}+{usage['output_tokens']})")
-    ai.SAMPLE_SCANS_FILE.write_text(json.dumps(stored, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     click.echo(f"{ai.SAMPLE_SCANS_FILE.name}에 {len(stored)}장을 저장했어요.")
