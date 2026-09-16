@@ -4355,6 +4355,7 @@ button.sh-offline svg:last-child {
 
 .ml-eaten {
   color: var(--accent-strong);
+  white-space: nowrap; /* 384px에서 `먹었/어요`로 끊기지 않게 표시째 다음 줄로 */
 }
 
 .ml-add-chips {
