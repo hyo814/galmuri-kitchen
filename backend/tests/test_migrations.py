@@ -603,6 +603,44 @@ def test_food_log_nutrition_incomplete_migration(app):
         assert linked() == (1, 1)
 
 
+def test_cook_log_manual_migration(app):
+    """칸만 더하고 뺀다 — SQLite에서 cook_logs를 다시 만들면(batch) 외래 키 CASCADE로 쓴 재료 줄이 지워진다."""
+
+    def items():
+        with db.engine.connect() as conn:
+            return conn.execute(sa.text("SELECT COUNT(*) FROM cook_log_items WHERE cook_log_id = 1")).scalar_one()
+
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="h3i3n3c3m3p3")
+        with db.engine.begin() as conn:
+            conn.execute(sa.text("INSERT INTO users (id, provider, provider_id, nickname, created_at) VALUES (1, 'test', '1', 'u', CURRENT_TIMESTAMP)"))
+            conn.execute(sa.text(
+                "INSERT INTO cook_logs (id, user_id, title, cooked_on, servings, ingredient_cost, excluded_count, created_at, updated_at) "
+                "VALUES (1, 1, '김치찌개', '2026-09-14', 2, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ))
+            conn.execute(sa.text("INSERT INTO cook_log_items (id, cook_log_id, name, removed) VALUES (1, 1, '김치', FALSE)"))
+
+        upgrade(directory=MIGRATIONS, revision="h4d4i4a4r4y4")
+        with db.engine.begin() as conn:
+            # 칸을 빼고 넣어도 false(server_default) — 지난 일기는 모두 레시피로 남긴 것
+            conn.execute(sa.text(
+                "INSERT INTO cook_logs (id, user_id, title, cooked_on, servings, ingredient_cost, excluded_count, created_at, updated_at) "
+                "VALUES (2, 1, '된장찌개', '2026-09-15', 1, 0, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ))
+            manual = conn.execute(sa.text("SELECT id, manual FROM cook_logs ORDER BY id")).all()
+        assert [(i, bool(m)) for i, m in manual] == [(1, False), (2, False)]
+        assert items() == 1
+
+        downgrade(directory=MIGRATIONS, revision="h3i3n3c3m3p3")
+        with db.engine.connect() as conn:
+            assert "manual" not in {c["name"] for c in sa.inspect(conn).get_columns("cook_logs")}
+            assert "ix_cook_logs_user_id_cooked_on" in {ix["name"] for ix in sa.inspect(conn).get_indexes("cook_logs")}
+        assert items() == 1
+
+        upgrade(directory=MIGRATIONS, revision="h4d4i4a4r4y4")
+        assert items() == 1
+
+
 def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)

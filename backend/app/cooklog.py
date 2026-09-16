@@ -1,4 +1,5 @@
-"""요리 일기(스펙 29절). 요리했어요 초안·저장·되돌리기·목록·상세. 쓴 재료는 저장할 때 스냅숏(결정 1·7·8)."""
+"""요리 일기(스펙 29절). 요리했어요 초안·저장·되돌리기·목록·상세. 쓴 재료는 저장할 때 스냅숏(결정 1·7·8).
+레시피 없이 쓴 일기(manual, 추가 2026-09-16)는 쓴 재료 줄 없이 이름·적은 재료비만 남긴다."""
 
 import json
 import logging
@@ -22,7 +23,7 @@ from .models import CookLog, CookLogItem, Ingredient, IngredientRemoval, Recipe,
 from .nutrition import TRACE_WORDS
 from .recipe_parse import ingredient_key
 from .recipes import ALWAYS_HAVE, inventory_rows
-from .validation import decode_cursor, encode_cursor, integer, iso_datetime, memo
+from .validation import decode_cursor, encode_cursor, integer, iso_datetime, memo, text
 
 bp = Blueprint("cooklog", __name__, url_prefix="/api")
 
@@ -32,7 +33,7 @@ LIST_PAGE = 20
 MAX_COOK_LOGS = 5000
 MAX_USAGES = 50
 MAX_MEMO = 500
-MAX_EAT_OUT = 1_000_000
+MAX_WON = 1_000_000  # 사 먹으면 얼마(1인분)·직접 적은 재료비
 MAX_AMOUNT = 100_000
 UNDO_SECONDS = 120
 MAX_PHOTO_BYTES = 3 * 1024 * 1024
@@ -43,8 +44,12 @@ STOCK_CHANGED = "재고가 방금 바뀌었어요. 다시 불러와주세요."
 UNDO_EXPIRED = "되돌릴 수 있는 시간이 지났어요. 재고는 직접 고쳐주세요."
 PHOTO_FULL = "사진 저장 공간이 가득 찼어요. 오래된 일기 사진을 지워주세요."
 EAT_OUT_ERROR = "사 먹으면 얼마는 0~1,000,000원 사이 숫자로 입력해주세요."
+COST_ERROR = "재료비는 0~1,000,000원 사이 숫자로 입력해주세요."
 AMOUNT_ERROR = "쓴 양은 0보다 커야 해요."
 PATCH_FIELDS = {"cooked_on", "rating", "memo", "eat_out_price"}  # 결정 18: 고치기는 이 칸만 받는다
+MANUAL_PATCH_FIELDS = PATCH_FIELDS | {"ingredient_cost"}  # 직접 쓴 일기는 재료비도 고친다
+MANUAL_ONLY = {"title", "ingredient_cost"}  # 레시피 일기는 이름을 레시피에서, 재료비를 쓴 재료 줄에서 얻는다
+MANUAL_FIELDS = MANUAL_PATCH_FIELDS | MANUAL_ONLY | {"manual", "servings", "food_log", "meal"}  # 레시피·쓴 재료·식단 칸은 받지 않는다
 
 SEASONING_SPOONS = SPOON_UNITS - {"컵"}  # 결정 5: 컵은 밀가루·쌀처럼 많이 쓰는 양이라 양념으로 보지 않는다
 
@@ -147,11 +152,17 @@ def photo_url(cook_log):
     return f"/api/photos/{cook_log.photo_key}" if cook_log.photo_key else None
 
 
+def cost_known(cook_log):
+    """재료비를 아는가. 레시피 일기는 늘(가격 있는 줄이 없으면 0). 직접 쓴 일기는 비우면 0으로 저장해 아낀 돈이 있거나 0보다 크면 안다.
+    ponytail: 사 먹으면 얼마 없이 0원을 적은 일기는 빈 칸과 구별하지 못한다 — 칸 하나(manual)로 두려고 받아들인 한계, 문제되면 재료비 입력 여부 칸을 더한다."""
+    return not cook_log.manual or cook_log.saved is not None or cook_log.ingredient_cost > 0
+
+
 def list_json(cook_log):
-    return {"id": cook_log.id, "recipe_id": cook_log.recipe_id, "title": cook_log.title, "cooked_on": cook_log.cooked_on.isoformat(),
-            "servings": cook_log.servings, "rating": cook_log.rating, "memo": cook_log.memo, "photo_url": photo_url(cook_log),
-            "eat_out_price": cook_log.eat_out_price, "eat_out_source": cook_log.eat_out_source,
-            "ingredient_cost": cook_log.ingredient_cost, "saved": cook_log.saved, "excluded_count": cook_log.excluded_count,
+    return {"id": cook_log.id, "recipe_id": cook_log.recipe_id, "manual": cook_log.manual, "title": cook_log.title,
+            "cooked_on": cook_log.cooked_on.isoformat(), "servings": cook_log.servings, "rating": cook_log.rating, "memo": cook_log.memo,
+            "photo_url": photo_url(cook_log), "eat_out_price": cook_log.eat_out_price, "eat_out_source": cook_log.eat_out_source,
+            "ingredient_cost": cook_log.ingredient_cost if cost_known(cook_log) else None, "saved": cook_log.saved, "excluded_count": cook_log.excluded_count,
             "created_at": iso_datetime(cook_log.created_at)}
 
 
@@ -174,10 +185,22 @@ def parse_common(data, cook_log, creating):
     if "memo" in data:
         cook_log.memo = memo(data["memo"], MAX_MEMO)
     if "eat_out_price" in data:
-        value = data["eat_out_price"]
-        if value is not None and (isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= MAX_EAT_OUT):
-            abort(400, EAT_OUT_ERROR)
-        apply_eat_out(cook_log, value)
+        apply_eat_out(cook_log, won(data["eat_out_price"], EAT_OUT_ERROR))
+
+
+def won(value, message):
+    """None 또는 bool 아닌 0~MAX_WON 정수. 아니면 400 message."""
+    if value is not None and (isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= MAX_WON):
+        abort(400, message)
+    return value
+
+
+def manual_money(cook_log, cost, known):
+    """직접 쓴 일기(추가 2026-09-16): 재료비는 적은 값(비우면 0), 아낀 돈은 사 먹으면 얼마와 재료비를 둘 다 알 때만(결정 14와 같게 모르면 None)."""
+    cook_log.ingredient_cost = cost or 0
+    both = known and cook_log.eat_out_price is not None
+    cook_log.saved = cook_log.eat_out_price * cook_log.servings - cook_log.ingredient_cost if both else None
+    cook_log.excluded_count = 0
 
 
 def apply_eat_out(cook_log, value):
@@ -243,14 +266,20 @@ def _form_json():
 @login_required
 def create_cook_log():
     """multipart data(JSON) + 선택 image → 201 {log, deducted_names}. 순서는 스펙 29절 구현 세부(요리 일기 저장).
+    data.manual이면 레시피 없이 쓴 일기(추가 2026-09-16): title·ingredient_cost를 받고 재고는 건드리지 않는다.
     ponytail: R2에 올리는 동안(최대 수 초) 사용자 잠금·재료 행 잠금을 잡고 있다 — 같은 사용자 요청만 기다린다."""
     data = _form_json()
+    manual = data.get("manual", False)
+    if not isinstance(manual, bool) or not (set(data) <= MANUAL_FIELDS if manual else not MANUAL_ONLY & set(data)):
+        abort(400, food_logs.BAD_REQUEST)
     lock_user(g.user.id)  # 레시피(사 먹으면 얼마)·재료 행보다 먼저 — 모든 쓰기가 같은 순서로 잠근다(교착 방지)
-    recipe = get_owned_or_404(Recipe, food_logs._id(data.get("recipe_id")))
+    recipe = None if manual else get_owned_or_404(Recipe, food_logs._id(data.get("recipe_id")))
+    title = text(data.get("title"), "요리 이름은", 60) if manual else recipe.title
     servings = integer(data.get("servings"), "인분은", 1, 20)
-    cook_log = CookLog(user_id=g.user.id, recipe=recipe, title=recipe.title, servings=servings)
+    cook_log = CookLog(user_id=g.user.id, recipe=recipe, manual=manual, title=title, servings=servings)
     parse_common(data, cook_log, creating=True)
-    usages = parse_usages(data.get("usages"))
+    cost = won(data.get("ingredient_cost"), COST_ERROR)
+    usages = [] if manual else parse_usages(data.get("usages"))
 
     make_food = data.get("food_log", True)
     if not isinstance(make_food, bool):
@@ -276,7 +305,7 @@ def create_cook_log():
     if image is not None:
         check_photo_room(g.user, len(image[0]))
 
-    rows = draft_rows(recipe, g.user.id)  # 차감 전 재고로 판정
+    rows = [] if manual else draft_rows(recipe, g.user.id)  # 차감 전 재고로 판정
     ids = [usage["ingredient_id"] for usage in usages]
     # populate_existing: draft_rows가 잠그기 전에 읽어 둔 같은 행의 옛 수량을 쓰지 않게 잠근 뒤 값으로 덮는다
     locked = (
@@ -317,11 +346,15 @@ def create_cook_log():
     for row in rows:
         if row["ingredient_id"] is None and not row["seasoning"]:
             cook_log.items.append(CookLogItem(name=row["name"][:50], amount_text=row["amount"][:30] or None, excluded="no_price"))
-    for key, value in summarize(cook_log.eat_out_price, servings, cook_log.items).items():
-        setattr(cook_log, key, value)
+    if manual:
+        manual_money(cook_log, cost, cost is not None)
+    else:
+        for key, value in summarize(cook_log.eat_out_price, servings, cook_log.items).items():
+            setattr(cook_log, key, value)
 
     if make_food and not (slot is not None and slot.food_log is not None):  # 이미 먹은 칸은 SLOT_TAKEN 대신 만들지 않는다(결정 16)
-        fields = {"meal_slot_id": slot.id} if on_slot_day else {"recipe_id": recipe.id, "eaten_on": cook_log.cooked_on.isoformat(), "meal": meal}
+        what = {"title": cook_log.title} if manual else {"recipe_id": recipe.id}  # 직접 쓴 일기는 이름만 적은 먹은 기록(영양 없음)
+        fields = {"meal_slot_id": slot.id} if on_slot_day else {**what, "eaten_on": cook_log.cooked_on.isoformat(), "meal": meal}
         food = food_logs.build_log({**fields, "place": "home"})
         food.source = "cook_log"
         cook_log.food_log = food
@@ -425,13 +458,21 @@ def get_cook_log(log_id):
 @bp.patch("/cook-logs/<int:log_id>")
 @login_required
 def update_cook_log(log_id):
-    """결정 18. 인분·쓴 재료는 고치지 않는다(화면에 따로 안내가 있다). eat_out_price를 보내면 세 칸을 다시 계산한다."""
+    """결정 18. 인분·쓴 재료는 고치지 않는다(화면에 따로 안내가 있다). eat_out_price를 보내면 세 칸을 다시 계산한다.
+    직접 쓴 일기는 재료비(ingredient_cost)도 고치고, 안 보냈으면 적어 둔 재료비로 다시 계산한다."""
     cook_log = get_owned_or_404(CookLog, log_id)
     data = request.get_json(silent=True)
-    if not isinstance(data, dict) or not set(data) <= PATCH_FIELDS:
+    if not isinstance(data, dict) or not set(data) <= (MANUAL_PATCH_FIELDS if cook_log.manual else PATCH_FIELDS):
         abort(400, food_logs.BAD_REQUEST)
+    if "ingredient_cost" in data:
+        cost = won(data["ingredient_cost"], COST_ERROR)
+        known = cost is not None
+    else:
+        cost, known = cook_log.ingredient_cost, cost_known(cook_log)  # 다시 계산하기 전(saved가 그대로일 때) 읽는다
     parse_common(data, cook_log, creating=False)
-    if "eat_out_price" in data:
+    if cook_log.manual and ("eat_out_price" in data or "ingredient_cost" in data):
+        manual_money(cook_log, cost, known)
+    elif "eat_out_price" in data:
         for key, value in summarize(cook_log.eat_out_price, cook_log.servings, cook_log.items).items():
             setattr(cook_log, key, value)
     db.session.commit()
@@ -498,6 +539,18 @@ def delete_cook_log_photo(log_id):
     db.session.commit()
     storage.delete([old] if old else [])
     return "", 204
+
+
+def cooked_counts(recipe_ids, user_id):
+    """요리 일기 쓰기 시트의 레시피 줄(29절 추가 2026-09-16) → {recipe_id: {count, last_on}}(일기가 없는 레시피는 빠짐). 쿼리 하나."""
+    if not recipe_ids:
+        return {}
+    rows = (
+        db.session.query(CookLog.recipe_id, db.func.count(CookLog.id), db.func.max(CookLog.cooked_on))
+        .filter(CookLog.user_id == user_id, CookLog.recipe_id.in_(recipe_ids))
+        .group_by(CookLog.recipe_id)
+    )
+    return {recipe_id: {"count": count, "last_on": last_on.isoformat()} for recipe_id, count, last_on in rows}
 
 
 def recipe_cooked(recipe_id, user_id):

@@ -14,6 +14,7 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from . import scan
 from .auth import login_required
+from .cooklog import cost_known
 from .ingredients import SEOUL, seoul_today
 from .meals import MEALS
 from .models import AiCall, CookLog, FoodLog, Ingredient, MealPlan, MealSlot, Recipe, Seasoning, ShoppingItem, ShoppingNote, db
@@ -111,6 +112,13 @@ def used_text(item):
     if item.used is not None:
         return f"{item.name} {number(item.used)}{item.unit or ''}"
     return f"{item.name} {item.amount_text or ''}".strip()
+
+
+def used_cell(log):
+    """요리 일기 쓴 재료 칸. 직접 쓴 일기는 재료 줄이 없어 재료비를 적었으면 `재료비 직접 적음`(29절 추가 2026-09-16)."""
+    if log.manual:
+        return "재료비 직접 적음" if cost_known(log) else ""
+    return "; ".join(used_text(i) for i in log.items)
 
 
 def write_csv(archive, name, header, rows):
@@ -323,10 +331,10 @@ def export():
                     log.memo or "",
                     "" if log.eat_out_price is None else log.eat_out_price,
                     EAT_OUT_SOURCE_LABELS.get(log.eat_out_source, ""),
-                    log.ingredient_cost,
+                    log.ingredient_cost if cost_known(log) else "",
                     "" if log.saved is None else log.saved,
                     log.excluded_count,
-                    "; ".join(used_text(i) for i in log.items),
+                    used_cell(log),
                     os.path.basename(log.photo_key) if log.photo_key else "",
                     seoul_time(log.created_at),
                 ]

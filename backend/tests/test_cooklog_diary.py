@@ -71,7 +71,7 @@ def test_list_order_and_cursor(client, login, app):
     assert [i["title"] for i in body["items"]] == ["9/15b", "9/15a"]
     assert body["next_cursor"] is not None
     assert set(body["items"][0].keys()) == {
-        "id", "recipe_id", "title", "cooked_on", "servings", "rating", "memo", "photo_url",
+        "id", "recipe_id", "manual", "title", "cooked_on", "servings", "rating", "memo", "photo_url",
         "eat_out_price", "eat_out_source", "ingredient_cost", "saved", "excluded_count", "created_at",
     }
 
