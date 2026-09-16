@@ -2972,6 +2972,11 @@ button.row-btn > svg {
   word-break: keep-all;
   text-wrap: balance; /* 두 줄이면 `· 5장까지`만 따로 내려가지 않게 */
 }
+/* 링크 가져오기 기다리는 중 문구(.hint는 공유 클래스라 여기서만 낱말 가운데 줄바꿈을 막는다) */
+.r3-wait-hint {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .r3-crow {
   display: flex;
   align-items: center;
@@ -4622,6 +4627,7 @@ button.sh-offline svg:last-child {
   font-size: 14px;
   line-height: 21px;
   word-break: keep-all;
+  overflow-wrap: anywhere; /* `10초쯤, 요리가 여러 개면 1분쯤` 같은 긴 안내가 낱말 가운데서 끊기지 않게 */
 }
 
 /* 점 세 개는 .r3-dots의 prefers-reduced-motion 규칙으로 멈춘다 */

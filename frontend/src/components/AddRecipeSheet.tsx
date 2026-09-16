@@ -363,7 +363,7 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
             )}
             {/* 링크는 페이지를 읽고(본문 사진까지) 여러 요리를 찾을 수 있어(17절) 버튼 글자만으로는 조용히 1분 가까이 갈 수 있다 */}
             {busy && step === "link" && (
-              <p className="hint">페이지에서 요리를 모두 찾고 있어요 · 요리가 여러 개거나 본문 사진까지 읽으면 1분쯤 걸려요</p>
+              <p className="hint r3-wait-hint">페이지에서 요리를 모두 찾고 있어요 · 요리가 여러 개거나 본문 사진까지 읽으면 1분쯤 걸려요</p>
             )}
             <div className="actions">
               <button type="button" className="btn outline" onClick={cancel}>
