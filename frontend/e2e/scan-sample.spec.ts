@@ -1,11 +1,12 @@
-import { expect, test } from "./fixtures";
+import { app, expect, test } from "./fixtures";
 
 // 체험 계정 `예시 사진으로 해보기`(스펙 31절). E2E 서버는 키 없는 개발 모드라 사진 인식이 sample 모드 —
 // 예시 사진 id를 함께 보내면 서버가 그 사진을 미리 읽어 둔 결과(backend/app/data/sample_scans.json)를 준다.
 // 냉장고 사진의 결과는 16개(간장 포함)라, 일반 예시 결과(4개)와 달라 kind·sample이 함께 갔는지도 확인된다.
 test("예시 사진(냉장고)을 골라 사진을 확인하고 읽으면, 미리 읽어 둔 재료를 사진 띠와 함께 확인해 재고에 넣는다", async ({ page }) => {
-  await page.getByRole("button", { name: "사진으로 추가" }).click();
-  const scanDialog = page.getByRole("dialog");
+  // 체험 안내 카드가 떠 있어도 아래 고정 버튼으로 연다(카드 버튼 이름은 `사진 찍어보기`). 흔한 이름은 앱 화면·시트 안에서만 찾는다
+  await app(page).getByRole("button", { name: "사진으로 추가" }).click();
+  const scanDialog = app(page).getByRole("dialog");
   const samples = scanDialog.getByRole("list", { name: "예시 사진으로 해보기" });
   await expect(samples.getByRole("button")).toHaveText(["모바일 영수증", "냉장고"]);
   // 테스트 브라우저는 마우스 기기라 카메라 대신 파일 올리기 하나(시안 결정 D)
@@ -33,6 +34,6 @@ test("예시 사진(냉장고)을 골라 사진을 확인하고 읽으면, 미�
 
   await scanDialog.getByRole("button", { name: "오늘" }).click(); // 냉장고 사진은 구입일을 직접 골라야 한다
   await scanDialog.getByRole("button", { name: "16개 재고에 넣기" }).click();
-  await expect(page.getByRole("status")).toContainText("16개를 재고에 넣었어요");
-  await expect(page.getByRole("button", { name: /^간장/ })).toBeVisible();
+  await expect(app(page).getByRole("status")).toContainText("16개를 재고에 넣었어요");
+  await expect(app(page).getByRole("button", { name: /^간장/ })).toBeVisible();
 });
