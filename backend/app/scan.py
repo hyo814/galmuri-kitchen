@@ -24,7 +24,16 @@ UPLOAD_KINDS = ("fridge", "receipt", "order", "memo")
 SCAN_KINDS = ("fridge", "receipt", "order", "memo")  # 일일 한도를 함께 세는 kind (memo는 장보기 메모 사진)
 RECIPE_KINDS = ("recipe", "link", "recipe_photo", "meal", "eat_out")  # AI 레시피 제안 + 링크·글·사진 가져오기 + AI 식단 초안(스펙 20절) + eat_out: 사 먹으면 얼마 추정(29절 결정 11)
 NUTRITION_KINDS = ("nutrition",)  # 영양 채우기 AI 단위 무게·영양 추정(스펙 21절). AI 레시피 한도·체험 전체 AI 예산과 따로, /api/ai-usage에는 안 보인다
-AI_KINDS = SCAN_KINDS + RECIPE_KINDS + NUTRITION_KINDS  # Claude를 부르는 kind 전체(로그인 사용자 전체 AI 예산, ai.user_ai_budget_spent)
+MISS_FREE_DAILY = 3  # 헛호출(찾지 못함·오류) 중 사용자마다 하루(서울) 이만큼은 하루 한도·사용량에 세지 않는다(스펙 7절)
+
+
+def miss_kinds(kinds):
+    """kinds의 헛호출 kind(<kind>_miss). 하루 한도·/api/ai-usage에는 안 세고 전체 AI 예산·연속 호출 한도에는 센다."""
+    return tuple(f"{kind}_miss" for kind in kinds)
+
+
+MISS_KINDS = miss_kinds(SCAN_KINDS + RECIPE_KINDS)
+AI_KINDS = SCAN_KINDS + RECIPE_KINDS + NUTRITION_KINDS + MISS_KINDS  # Claude를 부르는 kind 전체(로그인 사용자 전체 AI 예산, ai.user_ai_budget_spent)
 FETCH_KINDS = ("link_fetch",)  # 링크 가져오기의 외부 요청(AI 호출 아님, 토큰 없음). AI 한도·사용량에는 세지 않는다
 MAX_ITEMS = 50
 MAX_PHOTOS = 5  # 한 번에 읽는 사진 수(AI 호출은 한 번)
@@ -65,18 +74,23 @@ def calls_recent(user_id, kinds):
     ).count()
 
 
-def check_ai_limits(user_id, kinds, limit, what, burst=None):
-    """연속 호출(burst, 없으면 AI_SCAN_BURST_LIMIT)·하루 한도를 넘거나, Claude를 부르는 kinds인데 로그인 사용자 전체 AI 예산(ai.user_ai_budget_spent)을 다 쓰면 429.
-    what은 문구 주어(예: "사진 인식은"). 체험 계정은 전체 체험 예산(ai.scan_mode)을 따로 본다.
-    바로 뒤에 start_ai_call을 불러 같은 트랜잭션에서 기록해야 한다(그 사이에 커밋하지 않는다).
-    PostgreSQL은 사용자·kind 묶음별 트랜잭션 잠금을 잡아, 동시에 온 요청이 같은 개수를 보고 함께 통과하지 못하게 한다(커밋·롤백 때 풀린다)."""
+def _lock(user_id, kinds):
+    """PostgreSQL은 사용자·kind 묶음별 트랜잭션 잠금을 잡아, 동시에 온 요청이 같은 개수를 보고 함께 통과하지 못하게 한다(커밋·롤백 때 풀린다)."""
     if db.session.get_bind().dialect.name == "postgresql":
         db.session.execute(
             text("SELECT pg_advisory_xact_lock(:group_key, :user_id)"),
             {"group_key": zlib.crc32(",".join(kinds).encode()) & 0x7FFFFFFF, "user_id": user_id},
         )
     # ponytail: SQLite(개발용)는 잠그지 않는다 — 동시에 보내면 한도를 조금 넘을 수 있다. 운영은 PostgreSQL이다.
-    if calls_recent(user_id, kinds) >= (burst or current_app.config["AI_SCAN_BURST_LIMIT"]):
+
+
+def check_ai_limits(user_id, kinds, limit, what, burst=None):
+    """연속 호출(burst, 없으면 AI_SCAN_BURST_LIMIT, 헛호출 포함)·하루 한도(헛호출 뺌)를 넘거나, Claude를 부르는 kinds인데
+    로그인 사용자 전체 AI 예산(ai.user_ai_budget_spent)을 다 쓰면 429.
+    what은 문구 주어(예: "사진 인식은"). 체험 계정은 전체 체험 예산(ai.scan_mode)을 따로 본다.
+    바로 뒤에 start_ai_call을 불러 같은 트랜잭션에서 기록해야 한다(그 사이에 커밋하지 않는다)."""
+    _lock(user_id, kinds)
+    if calls_recent(user_id, kinds + miss_kinds(kinds)) >= (burst or current_app.config["AI_SCAN_BURST_LIMIT"]):
         abort(429, "잠시 후 다시 시도해주세요.")
     if calls_today(user_id, kinds) >= limit:
         abort(429, f"오늘 {what} {limit}번까지 쓸 수 있어요. 내일 다시 써주세요.")
@@ -85,7 +99,7 @@ def check_ai_limits(user_id, kinds, limit, what, burst=None):
 
 
 def start_ai_call(user_id, kind):
-    """AI로 보낸 호출은 성공·실패와 관계없이 센다(실패도 비용이 들어 남용을 막기 위해). 호출 직전에 부른다.
+    """AI로 보내기 직전에 기록해 센다(찾지 못함·오류로 끝나면 miss_ai_call이 헛호출로 바꾼다).
     커밋하면 check_ai_limits가 잡은 잠금이 풀린다.
     created_at을 명시적으로 넣는다: 모델 기본값(utcnow) 대신 이 모듈의 utcnow를 써서
     calls_today/calls_recent와 같은 시계를 보게 한다(테스트에서 시계를 고정하기 쉽다)."""
@@ -100,6 +114,15 @@ def finish_ai_call(call, usage):
     # ponytail: 응답은 받았지만 AiError가 되는 호출(refusal·max_tokens·스키마 불일치)의 토큰은 버려진다.
     # 그런 호출이 잦아 원가가 어긋나면 AiError에 usage를 실어 기록한다.
     call.model, call.input_tokens, call.output_tokens = usage["model"], usage["input_tokens"], usage["output_tokens"]
+    db.session.commit()
+
+
+def miss_ai_call(call):
+    """쓸 것이 없거나(재료 0개·레시피 없음 등) AiError로 끝난 호출. 이 사용자의 오늘 헛호출이 MISS_FREE_DAILY번보다 적으면
+    kind에 _miss를 붙여 하루 한도에서 빼고, 아니면 그대로 센다(헛호출을 되풀이해 비용을 쓰지 못하게). 토큰 기록은 그대로다."""
+    _lock(call.user_id, MISS_KINDS)
+    if calls_today(call.user_id, MISS_KINDS) < MISS_FREE_DAILY:
+        call.kind = f"{call.kind}_miss"
     db.session.commit()
 
 
@@ -204,9 +227,13 @@ def scan():
     try:
         raw, usage = ai.extract(kind, images)
     except ai.AiError:
+        miss_ai_call(call)
         abort(502, "인식에 실패했어요. 직접 입력해주세요.")
     finish_ai_call(call, usage)
-    return jsonify(**clean_result(kind, raw, today, merge=len(images) > 1), sample=False)
+    result = clean_result(kind, raw, today, merge=len(images) > 1)
+    if not result["items"]:
+        miss_ai_call(call)
+    return jsonify(**result, sample=False)
 
 
 SAMPLE_PHOTO_DIR = Path(__file__).resolve().parents[2] / "frontend" / "public" / "samples"

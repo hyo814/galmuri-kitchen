@@ -284,7 +284,7 @@ def test_ai_recipes_returns_first_three_usable(client, login, app, monkeypatch):
     assert [r["title"] for r in make(client).get_json()["recipes"]] == titles[:3]
 
 
-def test_ai_recipes_failure_is_502_and_counted(client, login, app, monkeypatch):
+def test_ai_recipes_failure_is_502_and_a_miss(client, login, app, monkeypatch):
     user = login()
     app.config["ANTHROPIC_API_KEY"] = "test-key"
     add_ingredient(client, "두부")
@@ -301,7 +301,7 @@ def test_ai_recipes_failure_is_502_and_counted(client, login, app, monkeypatch):
     monkeypatch.setattr(ai, "suggest_recipes", lambda lines: ({"recipes": [draft(names=())]}, USAGE))
     res = make(client)
     assert (res.status_code, res.get_json()) == (502, {"error": FAIL})
-    assert ai_calls(app) == [(user.id, "recipe"), (user.id, "recipe")]
+    assert ai_calls(app) == [(user.id, "recipe_miss"), (user.id, "recipe_miss")]  # 헛호출(스펙 7절)
     assert ai_call_costs(app)[1] == ("claude-sonnet-5-answered", 1500, 120)
 
 
@@ -479,6 +479,8 @@ NEED_YOUTUBE = "유튜브 링크에서는 레시피를 읽지 못했어요. 영�
 NEED_INSTAGRAM = "인스타그램 링크에서는 레시피를 읽지 못했어요. 게시물 설명을 길게 눌러 복사한 뒤 아래에 붙여 넣어주세요."
 NEED_WEB = "이 링크에서는 레시피를 읽지 못했어요. 글을 복사한 뒤 아래에 붙여 넣어주세요."
 NEED_TEXT = "레시피를 찾지 못했어요. 재료와 만드는 법이 담긴 글을 붙여 넣어주세요."
+NO_RECIPE_YOUTUBE = "영상 설명에 레시피가 없어요. 쇼츠처럼 레시피가 영상에만 있으면, 보면서 재료와 만드는 법을 적어 붙여 넣어주세요."
+NO_RECIPE_INSTAGRAM = "게시물 설명에서 레시피를 찾지 못했어요. 설명을 길게 눌러 복사해 붙여 넣거나, 레시피가 영상에만 있으면 보면서 재료와 만드는 법을 적어 붙여 넣어주세요."
 IMPORT_FAIL = "레시피를 정리하지 못했어요. 잠시 후 다시 시도해주세요."
 RECIPE_LIMIT = "오늘 AI 레시피는 10번까지 쓸 수 있어요. 내일 다시 써주세요."
 SNIPPET = {"title": "제육볶음 황금레시피", "description": "재료: 돼지고기 앞다리살 600g", "channel_title": "집밥 연구소", "thumbnail_url": "https://i.ytimg.com/vi/x/hq.jpg"}
@@ -638,11 +640,30 @@ def test_import_youtube_fetch_error_422_not_counted(client, login, app, monkeypa
     assert (res.status_code, res.get_json()) == (422, {"error": NEED_YOUTUBE, "need_text": True})
     assert "import fetch failed: ReadTimeout" in caplog.text and "yt-key" not in caplog.text
 
-    # 설명이 거의 비어 있어도 AI를 부르지 않는다
+    # 설명이 거의 비어 있어도 AI를 부르지 않는다(설명에 레시피가 없다는 안내)
     monkeypatch.setattr(outbound, "video_snippet", lambda video_id, key: {**SNIPPET, "title": "짧", "description": "  "})
     res = import_(client, url=YOUTUBE)
-    assert (res.status_code, res.get_json()) == (422, {"error": NEED_YOUTUBE, "need_text": True})
+    assert (res.status_code, res.get_json()) == (422, {"error": NO_RECIPE_YOUTUBE, "need_text": True})
     assert ai_calls(app) == [(user.id, "link_fetch")] * 2  # AI 호출(link)은 없다
+
+
+def test_import_video_links_without_recipe_text_skip_ai(client, login, app, monkeypatch):
+    """쇼츠·릴스처럼 레시피가 영상에만 있어 설명·캡션에 재료·양 표시가 없으면 AI를 부르지 않는다(외부 요청 기록만 남고 AI 레시피 횟수는 그대로)."""
+    user = login()
+    live(app)
+    seen = []
+    shorts = {**SNIPPET, "title": "양배추 냉털 지지고 레시피 #절약 계란 2개", "description": "#shorts #양배추요리\n구독과 좋아요 부탁드려요!"}
+    monkeypatch.setattr(outbound, "video_snippet", lambda video_id, key: seen.append(video_id) or shorts)
+    reel = {"caption": "오늘 저녁은 양배추 지지고! 냉장고 털기 성공 #집밥", "title": "cook on Instagram", "thumbnail_url": None}
+    monkeypatch.setattr(outbound, "instagram_post", lambda code: reel)
+    monkeypatch.setattr(ai, "extract_recipe", fail_if_called)
+    res = import_(client, url="https://m.youtube.com/shorts/3PAszpPVMD0")
+    assert (res.status_code, res.get_json()) == (422, {"error": NO_RECIPE_YOUTUBE, "need_text": True})  # 제목의 양 표시(2개)는 보지 않는다
+    assert seen == ["3PAszpPVMD0"]
+    res = import_(client, url=INSTAGRAM)
+    assert (res.status_code, res.get_json()) == (422, {"error": NO_RECIPE_INSTAGRAM, "need_text": True})
+    assert ai_calls(app) == [(user.id, "link_fetch")] * 2
+    assert client.get("/api/ai-usage").get_json()["recipe"]["used"] == 0
 
 
 def test_import_instagram_without_caption_asks_for_text(client, login, app, monkeypatch):
@@ -659,7 +680,7 @@ def test_import_instagram_without_caption_asks_for_text(client, login, app, monk
     monkeypatch.setattr(outbound, "instagram_post", broken)
     assert import_(client, url=INSTAGRAM).get_json() == {"error": NEED_INSTAGRAM, "need_text": True}
     monkeypatch.setattr(outbound, "instagram_post", lambda code: {"caption": " 맛있어요 ", "title": "cook on Instagram", "thumbnail_url": None})
-    assert import_(client, url=INSTAGRAM).get_json() == {"error": NEED_INSTAGRAM, "need_text": True}  # 캡션 10자 미만
+    assert import_(client, url=INSTAGRAM).get_json() == {"error": NO_RECIPE_INSTAGRAM, "need_text": True}  # 캡션에 레시피 표시가 없다
     assert "link" not in [kind for _, kind in ai_calls(app)]
 
     seen = []
@@ -755,7 +776,7 @@ def test_import_blog_recipe_less_text_sends_page_images(client, login, app, monk
     calls.clear()
     assert import_(client, url=WEB).status_code == 200
     assert calls == [("\n\n레시피", [(JPEG_BYTES, "image/jpeg")])]
-    assert [kind for _, kind in ai_calls(app)] == ["link_fetch", "link"] * 4
+    assert [kind for _, kind in ai_calls(app)] == ["link_fetch", "link"] * 2 + ["link_fetch", "link_miss"] + ["link_fetch", "link"]
 
 
 @pytest.mark.parametrize(
@@ -798,11 +819,11 @@ def test_import_blog_without_image_candidates_is_text_only(client, login, app, m
     assert calls == [[]]
 
 
-def test_import_text_not_a_recipe_is_422_and_counted(client, login, app, monkeypatch):
+def test_import_text_not_a_recipe_is_422_and_a_miss(client, login, app, monkeypatch):
     user = login()
     live(app)
     monkeypatch.setattr(ai, "extract_recipe", lambda text, images: ({"found": False, "recipe": None}, USAGE))
-    res = import_(client, text="  오늘은 날씨가 좋아서 산책을 했어요.  ")
+    res = import_(client, text="  오늘은 날씨가 좋아서 산책을 했어요.  ")  # 붙여 넣은 글은 레시피 표시가 없어도 AI가 본다
     assert (res.status_code, res.get_json()) == (422, {"error": NEED_TEXT, "need_text": True})
 
     # found인데 쓸 수 있는 재료가 없으면 같은 422, 링크면 링크 종류 문구
@@ -810,7 +831,7 @@ def test_import_text_not_a_recipe_is_422_and_counted(client, login, app, monkeyp
     monkeypatch.setattr(outbound, "video_snippet", lambda video_id, key: SNIPPET)
     res = import_(client, url=YOUTUBE)
     assert (res.status_code, res.get_json()) == (422, {"error": NEED_YOUTUBE, "need_text": True})
-    assert ai_calls(app) == [(user.id, "link"), (user.id, "link_fetch"), (user.id, "link")]
+    assert ai_calls(app) == [(user.id, "link_miss"), (user.id, "link_fetch"), (user.id, "link_miss")]  # 헛호출(스펙 7절)
     assert ai_call_costs(app) == [("claude-sonnet-5-answered", 1500, 120), NO_TOKENS, ("claude-sonnet-5-answered", 1500, 120)]
 
 
@@ -828,7 +849,7 @@ def test_import_text_passes_trimmed_text(client, login, app, monkeypatch):
     assert [kind for _, kind in ai_calls(app)] == ["link", "link"]  # 글은 외부 요청 기록이 없다
 
 
-def test_import_ai_failure_502_counted(client, login, app, monkeypatch):
+def test_import_ai_failure_502_is_a_miss(client, login, app, monkeypatch):
     user = login()
     live(app)
 
@@ -838,7 +859,7 @@ def test_import_ai_failure_502_counted(client, login, app, monkeypatch):
     monkeypatch.setattr(ai, "extract_recipe", broken)
     res = import_(client, text=RECIPE_TEXT)
     assert (res.status_code, res.get_json()) == (502, {"error": IMPORT_FAIL})
-    assert ai_calls(app) == [(user.id, "link")]
+    assert ai_calls(app) == [(user.id, "link_miss")]
     assert ai_call_costs(app) == [("claude-sonnet-5", None, None)]
 
 
@@ -1005,7 +1026,7 @@ def test_import_photos_real_call_logs_tokens(client, login, app, monkeypatch):
     assert client.get(f"/api/recipes/{saved.get_json()['id']}").get_json()["source"] == "photo"
 
 
-def test_import_photos_not_found_is_422_and_counted(client, login, app, monkeypatch):
+def test_import_photos_not_found_is_422_and_a_miss(client, login, app, monkeypatch):
     user = login()
     live(app)
     monkeypatch.setattr(ai, "extract_recipe_from_images", lambda images: ({"found": False, "recipe": None}, USAGE))
@@ -1014,10 +1035,10 @@ def test_import_photos_not_found_is_422_and_counted(client, login, app, monkeypa
     monkeypatch.setattr(ai, "extract_recipe_from_images", lambda images: found(names=()))  # 찾았다지만 쓸 재료가 없다
     res = import_photos(client, JPEG_BYTES)
     assert (res.status_code, res.get_json()) == (422, {"error": PHOTO_NOT_FOUND, "need_text": True})
-    assert ai_calls(app) == [(user.id, "recipe_photo"), (user.id, "recipe_photo")]
+    assert ai_calls(app) == [(user.id, "recipe_photo_miss"), (user.id, "recipe_photo_miss")]  # 헛호출(스펙 7절)
 
 
-def test_import_photos_ai_failure_502_counted(client, login, app, monkeypatch):
+def test_import_photos_ai_failure_502_is_a_miss(client, login, app, monkeypatch):
     user = login()
     live(app)
 
@@ -1027,7 +1048,7 @@ def test_import_photos_ai_failure_502_counted(client, login, app, monkeypatch):
     monkeypatch.setattr(ai, "extract_recipe_from_images", broken)
     res = import_photos(client, JPEG_BYTES)
     assert (res.status_code, res.get_json()) == (502, {"error": IMPORT_FAIL})
-    assert ai_calls(app) == [(user.id, "recipe_photo")]
+    assert ai_calls(app) == [(user.id, "recipe_photo_miss")]
     assert ai_call_costs(app) == [("claude-sonnet-5", None, None)]
 
 

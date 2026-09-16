@@ -485,7 +485,7 @@ def draft_meal_plan(plan_id):
     db.session.commit()  # 목표 두 칸은 다음에 미리 채우도록 저장한다
 
     if mode == "sample":
-        raw = ai.sample_meal_draft(empty)
+        raw, call = ai.sample_meal_draft(empty), None
     else:
         scan.check_ai_limits(user_id, scan.RECIPE_KINDS, ai_daily_limit(g.user, "AI_DAILY_RECIPE_LIMIT"), "AI 레시피는")
         call = scan.start_ai_call(user_id, "meal")
@@ -499,11 +499,14 @@ def draft_meal_plan(plan_id):
                 goal_note,
             )
         except ai.AiError:
+            scan.miss_ai_call(call)
             abort(502, AI_DRAFT_FAIL)
         scan.finish_ai_call(call, usage)
 
     result = clean_meal_draft(raw, set(empty), mine_by_id, prepared_stock, urgent, public_image_candidates())
     if result is None:
+        if call:
+            scan.miss_ai_call(call)
         abort(502, AI_DRAFT_FAIL)
     return jsonify(
         **result, kept=[{"date": d, "meal": m, "title": title} for d, m, title in kept], sample=mode == "sample"
