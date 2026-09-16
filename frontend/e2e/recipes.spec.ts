@@ -79,6 +79,29 @@ test("식약처 레시피 제목을 검색하면 일치하는 레시피만 보�
   await expect(page.getByRole("region", { name: "예시 레시피" }).getByText("된장찌개")).toHaveCount(0);
 });
 
+test("레시피 인분을 늘리면 큰술 재료 아래에 밥숟가락 개수가 보이고 레시피 인분으로 돌아오면 사라진다", async ({ page }) => {
+  await openRecipes(page);
+  await page.getByPlaceholder("예시 레시피에서 찾기").fill("제육볶음");
+  await page.getByRole("region", { name: "예시 레시피" }).getByRole("link", { name: "제육볶음" }).click();
+  // 만드는 법에도 "고추장"이 나오므로 재료 칸 안에서만 찾는다
+  const ingredients = page.getByRole("region", { name: "재료", exact: true });
+  const row = (name: string) => ingredients.getByRole("listitem").filter({ hasText: name });
+  const stepper = ingredients.getByRole("group", { name: "인분 조절" });
+  await expect(row("고추장")).toContainText("2큰술");
+  await expect(ingredients.getByText("밥숟가락 약")).toHaveCount(0);
+
+  await stepper.getByRole("button", { name: "인분 늘리기" }).click();
+  await expect(stepper).toContainText("3인분");
+  await expect(row("고추장")).toContainText("3큰술, 밥숟가락 약 4개"); // 쉼표는 스크린리더에만(양 다음에 이어 읽는다)
+  await expect(row("고춧가루")).toContainText("1½큰술, 밥숟가락 약 2개");
+  await expect(row("참기름")).toContainText("1½작은술");
+  await expect(row("참기름")).not.toContainText("큰술"); // 3작은술이 안 되면 둘째 줄이 없다
+
+  await stepper.getByRole("button", { name: "인분 줄이기" }).click();
+  await expect(row("고추장")).toContainText("2큰술");
+  await expect(ingredients.getByText("밥숟가락 약")).toHaveCount(0);
+});
+
 test("AI 레시피를 만들면 예시 결과 3개가 나오고 자세히 보기·저장이 된다", async ({ page }) => {
   await openRecipes(page);
   await page.getByRole("button", { name: "만들기" }).click();
