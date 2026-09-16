@@ -159,10 +159,10 @@ export function WonField({
   onChange,
   onEstimate,
 }: {
-  /** 직접 쓴 일기의 `재료비 (선택)`도 같은 칸(0~1,000,000원) */
+  /** 직접 쓴 일기의 `전체 재료비 (선택)`도 같은 칸(0~1,000,000원) */
   label?: ReactNode;
   placeholder?: string;
-  /** 칸 아래 늘 보이는 도움말(재료비가 몇 인분을 합친 값인지) */
+  /** 칸 아래 늘 보이는 도움말(재료비가 몇 인분 전체인지) */
   help?: string;
   value: string;
   source: EatOutSource | null;
@@ -305,22 +305,54 @@ export function PhotoPicker({
   );
 }
 
-/** 직접 쓴 일기의 재료비 칸(선택, 0~1,000,000원). 옆 칸이 1인분이라 인분을 합친 값이라고 늘 알린다(리뷰 W3) */
+/** 직접 쓴 일기의 재료비 칸(선택, 0~1,000,000원). 옆 칸이 1인분이라 전체 값이라고 이름과 도움말로 알린다(리뷰 W3) */
 export const CostField = ({ value, servings, onChange }: { value: string; servings: number; onChange: (text: string) => void }) => (
   <WonField
     label={
       <>
-        재료비 <span className="optional">(선택)</span>
+        전체 재료비 <span className="optional">(선택)</span>
       </>
     }
     placeholder="예: 6,500"
-    help={`${servings}인분을 합친 값이에요`}
+    help={`${servings}인분 전체`}
     value={value}
     source={null}
     estimating={false}
     onChange={onChange}
   />
 );
+
+/** 요리 이름 칸 60자(일기 쓰기 고르기 시트·직접 쓴 일기 고치기 공용). onEnter가 있으면 Enter로 다음 */
+export function DishNameField({ value, invalid, onChange, onEnter }: { value: string; invalid?: boolean; onChange: (text: string) => void; onEnter?: () => void }) {
+  const id = useId();
+  return (
+    <div className="field">
+      <label className="field-label" htmlFor={id}>
+        요리 이름
+      </label>
+      <input
+        id={id}
+        className="input"
+        placeholder="예: 제육덮밥"
+        maxLength={60}
+        autoComplete="off"
+        enterKeyHint={onEnter ? "next" : undefined}
+        aria-invalid={invalid || undefined}
+        aria-describedby={invalid ? `${id}-hint` : undefined}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (onEnter && e.key === "Enter" && !e.nativeEvent.isComposing) onEnter();
+        }}
+      />
+      {invalid && (
+        <p id={`${id}-hint`} className="hint ck-invalid">
+          요리 이름을 적어주세요
+        </p>
+      )}
+    </div>
+  );
+}
 
 /** 인분 −/+ 1~20(결정 3) — 요리했어요·일기 쓰기 시트 공용 */
 export function ServingsStepper({ value, onChange }: { value: number; onChange: (servings: number) => void }) {

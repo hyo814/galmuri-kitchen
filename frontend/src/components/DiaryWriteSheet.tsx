@@ -2,7 +2,7 @@ import { useId, useRef, useState, type MouseEvent } from "react";
 import { localToday, type CookSaveResult, type RecipeChoice, type User } from "../api";
 import { cookMeal, cookedChoiceText, foodLogLine, parseWon, seoulHour } from "../cooklog/cook.ts";
 import { useAsyncAction } from "../useAsyncAction";
-import CookSheet, { CostField, DateChips, FoodLogSwitch, PhotoMemoRow, ServingsStepper, WonField, saveCook } from "./CookSheet";
+import CookSheet, { CostField, DateChips, DishNameField, FoodLogSwitch, PhotoMemoRow, ServingsStepper, WonField, saveCook } from "./CookSheet";
 import { ListState, SearchBox, useSearch } from "./MealFillSheet";
 import Sheet from "./Sheet";
 import StarPicker from "./StarPicker";
@@ -90,27 +90,14 @@ function PickSheet({ onNext, onClose }: { onNext: (step: Step) => void; onClose:
         )}
 
         <p className="ck-or">레시피가 없으면</p>
-        <div className="field">
-          <label className="field-label" htmlFor={`${id}-name`}>
-            요리 이름
-          </label>
-          <input
-            id={`${id}-name`}
-            className="input"
-            placeholder="예: 제육덮밥"
-            maxLength={60}
-            autoComplete="off"
-            enterKeyHint="next"
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              if (e.target.value.trim()) setRecipeId(null);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.nativeEvent.isComposing) next();
-            }}
-          />
-        </div>
+        <DishNameField
+          value={name}
+          onChange={(text) => {
+            setName(text);
+            if (text.trim()) setRecipeId(null);
+          }}
+          onEnter={next}
+        />
 
         {missing && (
           <p id={`${id}-missing`} className="hint ck-invalid" role="alert">

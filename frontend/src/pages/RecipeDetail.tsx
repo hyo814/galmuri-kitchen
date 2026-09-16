@@ -213,7 +213,10 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
     setOpening(true);
     void run(async () => {
       const res = await api<Response>(`/api/public-recipes/${recipe.id}/save`, { method: "POST", raw: true });
-      const saved = (await res.json()) as MyRecipe;
+      // 응답 본문을 못 읽으면 영어 SyntaxError 대신 공통 문구(api의 기본 오류와 같게, 리뷰 FYI3)
+      const saved: MyRecipe = await res.json().catch(() => {
+        throw new Error("문제가 생겼어요. 잠시 후 다시 시도해주세요.");
+      });
       forgetRecipeCaches();
       setCooking({ recipeId: saved.id, note: savedRecipeNote(saved.title, res.status === 201) });
     }).finally(() => setOpening(false));

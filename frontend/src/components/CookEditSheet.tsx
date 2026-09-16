@@ -3,7 +3,7 @@ import { api, type CookLogDetail } from "../api";
 import { parseWon, wonFieldText } from "../cooklog/cook.ts";
 import { resizeImage } from "../image.ts";
 import { useAsyncAction } from "../useAsyncAction";
-import { CostField, DateChips, PhotoPicker, WonField, forgetCookCaches } from "./CookSheet";
+import { CostField, DateChips, DishNameField, PhotoPicker, WonField, forgetCookCaches } from "./CookSheet";
 import Sheet from "./Sheet";
 import StarPicker from "./StarPicker";
 
@@ -17,11 +17,12 @@ interface Props {
 }
 
 /** 일기 고치기(결정 18): 날짜·사 먹으면 얼마·별점·사진·메모만. 인분·쓴 재료는 재고와 어긋나서 고치지 않는다.
- *  직접 쓴 일기는 재료비도 고친다(29절 추가 2026-09-16) */
+ *  직접 쓴 일기는 요리 이름(사용자 결정 2026-09-17)·재료비도 고친다(29절 추가 2026-09-16) */
 export default function CookEditSheet({ log: logProp, today, photos, onSaved, onClose }: Props) {
   // 글 칸 저장(PATCH)은 됐는데 사진 단계만 실패하면 시트에 남는다 — 그 뒤 비교 기준·닫을 때 넘길 값은 저장된 일기(FoodLogSheet savedLog와 같게, R10-6)
   const [savedLog, setSavedLog] = useState<CookLogDetail | null>(null);
   const log = savedLog ?? logProp;
+  const [titleText, setTitleText] = useState(logProp.title);
   const [date, setDate] = useState(logProp.cooked_on);
   const [priceText, setPriceText] = useState(() => wonFieldText(logProp.eat_out_price, ""));
   const [priceTouched, setPriceTouched] = useState(false);
@@ -33,7 +34,8 @@ export default function CookEditSheet({ log: logProp, today, photos, onSaved, on
   const [photoError, setPhotoError] = useState("");
   const save = useAsyncAction();
   const id = useId();
-  const invalid = parseWon(priceText) === undefined || (logProp.manual && parseWon(costText) === undefined);
+  const titleMissing = logProp.manual && !titleText.trim();
+  const invalid = parseWon(priceText) === undefined || (logProp.manual && parseWon(costText) === undefined) || titleMissing;
 
   const priceField = (
     <WonField
@@ -60,6 +62,7 @@ export default function CookEditSheet({ log: logProp, today, photos, onSaved, on
     const body: Record<string, unknown> = {};
     const price = parseWon(priceText) ?? null;
     const memoValue = memo.trim() || null;
+    if (log.manual && titleText.trim() !== log.title) body.title = titleText.trim();
     if (date !== log.cooked_on) body.cooked_on = date;
     if (price !== log.eat_out_price) body.eat_out_price = price;
     const cost = parseWon(costText) ?? null;
@@ -114,6 +117,7 @@ export default function CookEditSheet({ log: logProp, today, photos, onSaved, on
       locked={save.busy}
       onClose={closeSheet}
     >
+      {logProp.manual && <DishNameField value={titleText} invalid={titleMissing} onChange={setTitleText} />}
       <DateChips value={date} today={today} onChange={setDate} />
 
       {logProp.manual ? (

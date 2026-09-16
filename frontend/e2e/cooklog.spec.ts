@@ -216,8 +216,8 @@ test("요리 일기의 일기 쓰기로 레시피 없이 쓰면 재고는 그대
   await expect(sheet.getByText("2인분", { exact: true })).toBeVisible();
   await expect(sheet.getByRole("button", { name: /추정해줘요/ })).toHaveCount(0); // 레시피가 없어 AI 추정은 없다
   await sheet.getByLabel("사 먹으면 얼마 (1인분)").fill("9000");
-  await sheet.getByLabel("재료비 (선택)").fill("6500");
-  await expect(sheet.getByLabel("재료비 (선택)")).toHaveAccessibleDescription("2인분을 합친 값이에요"); // 옆 칸은 1인분이라
+  await sheet.getByLabel("전체 재료비 (선택)").fill("6500");
+  await expect(sheet.getByLabel("전체 재료비 (선택)")).toHaveAccessibleDescription("2인분 전체"); // 옆 칸은 1인분이라
   await sheet.getByRole("radiogroup", { name: "별점" }).getByRole("radio", { name: "5점" }).click();
   await sheet.getByRole("button", { name: "메모 (선택)" }).click();
   await sheet.getByLabel("메모").fill("양념을 조금 줄였더니 딱 좋았어요");
@@ -248,12 +248,50 @@ test("요리 일기의 일기 쓰기로 레시피 없이 쓰면 재고는 그대
   // 재료비를 비우면 계산하지 못했다고 알려준다
   await detail.getByRole("button", { name: "고치기" }).click();
   const edit = page.getByRole("dialog", { name: "제육덮밥 고치기" });
-  await expect(edit.getByLabel("재료비 (선택)")).toHaveValue("6,500");
-  await edit.getByLabel("재료비 (선택)").fill("");
+  await expect(edit.getByLabel("전체 재료비 (선택)")).toHaveValue("6,500");
+  await edit.getByLabel("전체 재료비 (선택)").fill("");
   await edit.getByRole("button", { name: "저장", exact: true }).click();
   await expect(edit).toHaveCount(0);
   await expect(calc.getByText("계산하지 못했어요")).toBeVisible();
   await expect(calc.getByRole("definition")).toHaveText(["18,000원", "재료비를 적으면 아낀 돈을 계산해요"]);
+
+  // 직접 쓴 일기는 이름도 고친다(사용자 결정 2026-09-17) — 비우면 저장하지 않고 이름 칸으로
+  await detail.getByRole("button", { name: "고치기" }).click();
+  const name = edit.getByLabel("요리 이름");
+  await expect(name).toHaveValue("제육덮밥");
+  await name.fill(" ");
+  await edit.getByRole("button", { name: "저장", exact: true }).press("Enter"); // 틀린 칸이 있으면 aria-disabled
+  await expect(name).toBeFocused();
+  await expect(name).toHaveAccessibleDescription("요리 이름을 적어주세요");
+  await name.fill("고추장 제육덮밥");
+  await edit.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(edit).toHaveCount(0);
+  const renamed = page.getByRole("dialog", { name: "고추장 제육덮밥", exact: true });
+  await expect(renamed).toHaveAccessibleDescription(/ · 직접 쓴 일기$/);
+  await page.keyboard.press("Escape");
+  await expect(renamed).toHaveCount(0);
+  await expect(row).toHaveText(/^고추장 제육덮밥/);
+});
+
+test("레시피 없이 쓴 일기는 알림의 되돌리기로 일기와 먹은 기록을 함께 지운다", async ({ page }) => {
+  await openCookDiary(page);
+  await app(page).getByRole("button", { name: "일기 쓰기" }).click();
+  const pick = page.getByRole("dialog", { name: "무엇을 요리했나요?" });
+  await pick.getByLabel("요리 이름").fill("비빔국수");
+  await pick.getByLabel("요리 이름").press("Enter"); // Enter로 다음
+  const sheet = page.getByRole("dialog", { name: "비빔국수 요리했어요" });
+  await sheet.getByRole("button", { name: "일기 저장" }).click();
+  await expect(sheet).toHaveCount(0);
+
+  const toast = undoToast(page);
+  await expect(toast).toContainText("요리 일기에 남겼어요");
+  await expect(diaryRows(page).first()).toHaveText(/^비빔국수/);
+  await toast.getByRole("button", { name: "방금 한 요리 되돌리기" }).click();
+  await expect(toast).toHaveText("요리 일기를 지웠어요"); // 재고를 뺀 게 없어 일기만 지웠다고
+  await expect(diaryRows(page)).toHaveText([/^김치찌개/, /^된장찌개/, /^김치찌개/]);
+  const day = await page.request.get(`/api/food-logs?date=${seoulToday()}`);
+  const { logs }: { logs: { title: string }[] } = await day.json();
+  expect(logs.map((log) => log.title)).not.toContain("비빔국수");
 });
 
 test("일기 쓰기에서 내 레시피를 고르면 요리했어요 시트로 이어지고, 취소·닫기 뒤 포커스는 일기 쓰기로 돌아온다", async ({ page }) => {
@@ -261,6 +299,7 @@ test("일기 쓰기에서 내 레시피를 고르면 요리했어요 시트로 �
   const write = app(page).getByRole("button", { name: "일기 쓰기" });
   const pick = page.getByRole("dialog", { name: "무엇을 요리했나요?" });
   await write.click();
+  await expect(pick.getByRole("heading", { name: "무엇을 요리했나요?" })).toBeFocused(); // 검색 칸이 아니라 제목 — 키보드가 목록을 가리지 않게
   await pick.getByRole("button", { name: "취소" }).click();
   await expect(pick).toHaveCount(0);
   await expect(write).toBeFocused();
