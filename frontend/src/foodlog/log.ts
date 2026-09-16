@@ -24,7 +24,7 @@ export const cellKcalText = (day: Pick<FoodLogMonthDay, "kcal" | "approx"> | und
 export function cellLabel(date: string, day: FoodLogMonthDay | undefined, today: string): string {
   const base = slotDateText(date, today);
   if (!day) return `${base}, 기록 없음`;
-  return [base, `끼니 ${day.meals}개`, day.kcal != null && `${cellKcalText(day)}kcal`, day.photo_url && "사진 있음"].filter(Boolean).join(", ");
+  return [base, day.meals > 0 && `끼니 ${day.meals}개`, day.kcal != null && `${cellKcalText(day)}kcal`, day.photo_url && "사진 있음", day.cooked && "요리 일기 있음"].filter(Boolean).join(", ");
 }
 
 /** 월 요약 카드(시안 MONTH) */

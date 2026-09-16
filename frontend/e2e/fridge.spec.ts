@@ -138,7 +138,8 @@ test("사진으로 재료를 추가하면(예시 결과) 검토한 뒤 재고에
   await scanDialog.getByRole("button", { name: "오늘" }).click(); // 냉장고 사진은 구입일을 직접 골라야 한다
   await scanDialog.getByRole("button", { name: "4개 재고에 넣기" }).click();
 
-  await expect(page.getByRole("status")).toContainText("4개를 재고에 넣었어요");
+  // 요리했어요 되돌리기 알림 영역(role=status)이 늘 있어 화면 안의 알림으로 좁힌다
+  await expect(page.getByRole("main").getByRole("status")).toContainText("4개를 재고에 넣었어요");
   await expect(page.getByRole("button", { name: /냉동만두/ })).toBeVisible();
 });
 

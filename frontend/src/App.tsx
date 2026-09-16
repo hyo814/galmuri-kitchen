@@ -1,7 +1,11 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ApiError, api, onUnauthorized, type User } from "./api";
+import { autoEstimateTried } from "./components/CookSheet";
 import Splash from "./components/Splash";
 import TabBar from "./components/TabBar";
+import UndoToast, { resetUndoToast, useUndoneCount } from "./components/UndoToast";
+import CookDiary, { resetCookDiaryView } from "./pages/CookDiary";
+import CookReport, { resetCookReportView } from "./pages/CookReport";
 import FoodLogPage, { resetFoodLogView } from "./pages/FoodLog";
 import Fridge from "./pages/Fridge";
 import Login, { rememberLoginProvider } from "./pages/Login";
@@ -58,6 +62,8 @@ const PAGES: Record<RoutePattern, (props: PageProps) => ReactNode> = {
   "/meals/:id/ai": ({ route, user }) => <MealAiDraft id={route.params.id} user={user} />,
   "/meals/:id/shopping": ({ route }) => <MealShopping id={route.params.id} />,
   "/food-log": ({ user }) => <FoodLogPage user={user} />,
+  "/cook-logs": ({ user }) => <CookDiary user={user} />,
+  "/cook-report": () => <CookReport />,
   "/more": ({ user, onLogout }) => <More user={user} onLogout={onLogout} />,
   "/tools": () => <Tools />,
 };
@@ -67,6 +73,7 @@ export default function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [offline, setOffline] = useState(false);
   const route = useHashRoute();
+  const undone = useUndoneCount();
 
   useEffect(() => {
     const onScroll = () => scrollTops.set(route.path, window.scrollY);
@@ -105,7 +112,8 @@ export default function App() {
     window.addEventListener("keydown", stop, { passive: true, once: true });
 
     return stop;
-  }, [route.path]);
+    // undone: 되돌리기로 화면을 새로 만들어 내용이 잠깐 짧아져도 보던 자리로
+  }, [route.path, undone]);
 
   // U-S1/S2: 경로가 바뀌면(첫 렌더 제외) 새 화면의 제목(h1)으로 포커스를 옮긴다 — 스크린리더 사용자가
   // 화면이 바뀐 걸 알 수 있게. 이미 자동 포커스된 입력(예: 레시피 추가 폼의 이름 칸)이 있으면 건너뛴다.
@@ -151,6 +159,10 @@ export default function App() {
     resetMealsView();
     resetRecipeNutrition();
     resetFoodLogView();
+    resetCookDiaryView();
+    resetCookReportView();
+    resetUndoToast();
+    autoEstimateTried.clear();
     scrollTops.clear();
     setUser(null);
   }, []);
@@ -229,8 +241,11 @@ export default function App() {
   return (
     <>
       {splash}
-      {/* key: 경로가 바뀌면 화면을 새로 만든다(상세 3 → 상세 4에서 이전 데이터가 남지 않게) */}
-      <Fragment key={route.path}>{PAGES[route.pattern]({ route, user, onLogout: logout })}</Fragment>
+      {/* key: 경로가 바뀌면 화면을 새로 만든다(상세 3 → 상세 4에서 이전 데이터가 남지 않게).
+          요리 되돌리기에 성공해도 새로 만든다 — 재고·먹은 기록·레시피 상세 어느 화면이든 되돌린 값으로(캐시는 undoCook이 지움) */}
+      <Fragment key={`${route.path}#${undone}`}>{PAGES[route.pattern]({ route, user, onLogout: logout })}</Fragment>
+      {/* 화면 밖(경로가 바뀌어도 남는다). 탭 막대 앞이라 요리했어요 버튼 다음 Tab이 되돌리기 */}
+      <UndoToast />
       <TabBar path={route.path} />
     </>
   );

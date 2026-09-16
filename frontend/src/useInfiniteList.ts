@@ -82,5 +82,16 @@ export function useInfiniteList<T extends { id: number | string }>(
     loadPage(null, true, gen);
   }, [key, loadPage]);
 
-  return { items: state.items, loading, error, hasMore: state.hasMore, multiPage: state.multiPage, loadMore, reload };
+  /** 받아 둔 항목만 고친다(고친 줄 바꾸기·지운 줄 빼기) — 다시 받지 않아 보던 자리·다음 커서가 그대로다 */
+  const patch = useCallback(
+    (fn: (items: T[]) => T[]) =>
+      setState((prev) => {
+        const next = { ...prev, items: fn(prev.items) };
+        cache.set(key, next);
+        return next;
+      }),
+    [key],
+  );
+
+  return { items: state.items, loading, error, hasMore: state.hasMore, multiPage: state.multiPage, loadMore, reload, patch };
 }

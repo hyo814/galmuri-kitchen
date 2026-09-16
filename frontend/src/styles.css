@@ -5979,6 +5979,39 @@ button.sh-offline svg:last-child {
 
 /* 요리 일기 (5) */
 
+/* 5 · Task 13 */
+/* 달력 칸 오른쪽 위 요리 일기 표시(시안 `.cook`, top 2px·right 3px). 384px에서 칸 폭은 약 45px(시안 목업도 같은 폭)이라
+   시안 값대로면 이미 2자리 날짜 숫자와 빠듯하게 겹치고, 오늘 원(24px)과도 겹친다(개정 1 Q37) — 화면 확인(브리프 Step 3)에서 실측해 칸 밖으로 더 뺐다.
+   오늘·평소 칸 모두 이 값 하나로 안 겹친다(Q37 전용 오늘 규칙은 따로 두지 않는다) */
+.fl-cook {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--warn-tint);
+  color: var(--warn);
+  font-size: 9px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+/* 범례의 요: 칸 표시와 같은 모양으로 글자 줄 안에 */
+.fl-legend .fl-cook {
+  position: static;
+  display: inline-grid;
+  vertical-align: 1px;
+}
+
+/* 날짜 상세 맨 위 요리 일기 줄(day.cook_logs)은 .fl-plan을 그대로 쓴다.
+   ponytail: .fl-cookrow에 아래 여백은 두지 않는다 — 시트 본문 gap(.sheet.fl-day .sheet-body)이 이미 줄 사이를 벌린다(개정 1 Q38, 브리프의 8px을 대신한다) */
+/* 두 글자 `보기`도 터치 영역 44px */
+.fl-cookrow .nt-link {
+  min-width: 44px;
+}
+
 /* 5 · Task 12 */
 .ck-reason {
   display: grid;
@@ -6011,6 +6044,617 @@ button.sh-offline svg:last-child {
   font-size: 12px;
   font-weight: 500;
   color: var(--text-3);
+}
+
+/* 5 · Task 8 */
+/* 저장 뒤 아래 알림(시안 2). 시트(<dialog> 맨 위 층)보다 아래, 화면·탭 막대보다 위 */
+.ck-toast {
+  position: fixed;
+  right: 16px;
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 12px);
+  left: 16px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 488px;
+  margin: 0 auto;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 14px;
+  line-height: 20px;
+  word-break: keep-all;
+}
+
+/* 알림이 없을 때도 읽힘 영역(role=status)은 남겨 두고 크기만 0(리뷰 I1) */
+.ck-toast:empty {
+  padding: 0;
+}
+
+.ck-toast p {
+  margin: 0;
+}
+
+/* 기본 포커스 선(--accent)은 다크 모드 밝은 알림 바탕에서 잘 안 보여 글자색을 따른다 */
+.ck-toast :focus-visible {
+  outline-color: currentColor;
+}
+
+/* --accent 그대로는 알림 바탕(라이트 어두움·다크 밝음)에서 글자 대비가 모자라 알림 글자색 쪽으로 섞는다(라이트 6.6:1 · 다크 4.8:1) */
+.ck-toast-strong,
+.ck-toast-undo {
+  color: color-mix(in srgb, var(--accent) 60%, var(--bg));
+}
+
+.ck-toast-undo {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  margin-left: auto;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* 되돌리는 중: disabled면 포커스가 빠져 aria-disabled(누름은 UndoToast가 무시) */
+.ck-toast-undo[aria-disabled="true"] {
+  opacity: 0.7;
+  cursor: default;
+}
+
+/* 알림이 떠 있는 동안 모든 화면의 아래 버튼을 알림 위로 올리고 페이지 끝에 같은 만큼 여백을 더한다 —
+   --ck-toast-h는 UndoToast가 잰 실제 높이(줄바꿈 포함). 화면마다 다른 아래 여백은 그대로 두고 더하기만 한다 */
+body:has(.ck-toast:not(:empty)) .cta-bar {
+  transform: translateY(calc(-12px - var(--ck-toast-h, 72px)));
+}
+
+body:has(.ck-toast:not(:empty)) .page::after {
+  content: "";
+  display: block;
+  height: calc(12px + var(--ck-toast-h, 72px));
+}
+
+.ck-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 줄 앞 이름·설명이 남는 폭을 쓰고 오른쪽 조절기(인분·별·스위치)는 제 폭 */
+.ck-row > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.ck-row b {
+  font-size: 15px;
+}
+
+.ck-row .muted {
+  font-size: 13px;
+}
+
+.ck-row > .btn {
+  flex: 1;
+  width: auto;
+  min-height: 44px;
+  padding: 0 8px;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.ck-use {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  border-top: 1px solid var(--line);
+}
+
+.ck-use:first-child {
+  border-top: 0;
+}
+
+/* 체크 상자(22px)와 이름을 한 label로 — 이름을 눌러도 체크된다 */
+.ck-pick {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 4px 0;
+  font-size: 15px;
+  line-height: 22px;
+  cursor: pointer;
+}
+
+.ck-pick small {
+  display: block;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-3);
+}
+
+.ck-pick .badge {
+  height: 22px;
+  margin-left: 6px;
+  padding: 0 7px;
+  font-size: 12px;
+  vertical-align: 1px;
+}
+
+.ck-box {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.ck-qty {
+  width: 108px;
+}
+
+.ck-qty .input {
+  height: 44px;
+  padding: 0 36px 0 10px;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ck-qty .input:disabled {
+  color: var(--text-3);
+}
+
+.ck-qty .suffix {
+  right: 10px;
+  font-size: 14px;
+}
+
+.ck-qty .input[aria-invalid="true"],
+.ck-won:has([aria-invalid="true"]) {
+  box-shadow: inset 0 0 0 1.5px var(--danger);
+}
+
+.ck-invalid {
+  margin-bottom: 8px;
+  color: var(--danger);
+}
+
+.ck-missing {
+  margin: 0;
+  font-size: 14px;
+}
+
+.ck-dates {
+  flex-wrap: wrap;
+  padding: 0;
+  overflow: visible;
+}
+
+.ck-dates .chip {
+  background: var(--field);
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+.ck-dates .chip[aria-pressed="true"] {
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.ck-dates .input {
+  flex-basis: 100%;
+}
+
+.ck-won-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 입력 칸은 글자 폭만큼(field-sizing) — `9,000원`처럼 원이 숫자 바로 뒤, 추정 표시는 오른쪽 */
+.ck-won {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  height: 56px;
+  padding: 0 16px;
+  border-radius: 14px;
+  background: var(--field);
+  cursor: text;
+}
+
+/* 틀린 칸의 빨간 안쪽 선과 함께 보이게 포커스는 바깥 선(.sh-date와 같게) */
+.ck-won:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ck-won .input {
+  width: auto;
+  min-width: 2ch;
+  height: auto;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  outline: none;
+  field-sizing: content;
+}
+
+.ck-won .suffix {
+  position: static;
+  transform: none;
+  font-size: 17px;
+}
+
+.ck-est {
+  margin-left: auto;
+  padding-left: 8px;
+  font-size: 13px;
+  font-style: normal;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.ck-photo {
+  flex: none;
+  width: 52px;
+}
+
+.btn.ck-memo-btn {
+  flex: 1.4;
+  color: var(--text-2);
+}
+
+.ck-memo {
+  display: flex;
+  flex-basis: 100%;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ck-memo textarea {
+  height: auto;
+  padding: 13px 16px;
+  font: inherit;
+  font-size: 16px;
+  line-height: 24px;
+  resize: none;
+}
+
+.ck-memo > .muted {
+  align-self: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+
+.ck-cooked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 8px 20px 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* 5 · Task 10 */
+/* 요리 일기 목록 위 이번 달 카드(시안 3) */
+.ck-month {
+  background: var(--accent-tint);
+}
+
+.ck-month b {
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.ck-list {
+  gap: 0;
+  padding-block: 4px;
+  list-style: none;
+}
+
+/* 일기 한 줄: 사진 64px + 글, 줄 사이 선 */
+.ck-diary {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 84px;
+  padding: 10px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  overflow-wrap: anywhere; /* 띄어쓰기 없는 긴 제목·메모(주소)가 384px 화면을 가로로 밀지 않게 */
+}
+
+.ck-list li:first-child .ck-diary {
+  border-top: 0;
+}
+
+.ck-diary b {
+  font-size: 16px;
+}
+
+.ck-diary small {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--text-3);
+  word-break: keep-all;
+}
+
+/* 메모는 첫 줄만 한 줄로(시안 3) */
+.ck-diary .ck-memo-line {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ck-ph,
+.ck-noph {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  object-fit: cover;
+}
+
+.ck-noph {
+  display: grid;
+  place-items: center;
+  background: var(--field);
+  color: var(--text-3);
+}
+
+.ck-save {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+/* 일기 상세(시안 4) */
+.ck-hero {
+  width: 100%;
+  height: 150px;
+  border-radius: 16px;
+  object-fit: cover;
+}
+
+/* 시트 설명 줄 바로 아래 별점 — 시트 본문 간격(20px)을 줄여 설명 줄에 붙인다 */
+.ck-sd {
+  margin: -16px 0 0;
+  line-height: 20px;
+}
+
+/* .ck-memo는 요리했어요 시트의 메모 입력 묶음(Task 8)이라 상세 메모 글은 따로 */
+.ck-memo-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 23px;
+  white-space: pre-line;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.ck-sum {
+  display: grid;
+  gap: 4px;
+}
+
+.ck-big {
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-strong);
+}
+
+.ck-big.ck-none {
+  color: var(--text-2);
+}
+
+.ck-big.ck-over {
+  color: var(--warn);
+}
+
+/* 오른쪽 칸은 반까지만 — 긴 합계 문구가 재료 줄 폭을 뺏지 않게 */
+.ck-table {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) fit-content(50%);
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  word-break: keep-all;
+}
+
+.ck-table dt,
+.ck-table dd {
+  margin: 0;
+}
+
+.ck-table dt {
+  overflow-wrap: anywhere;
+}
+
+.ck-table dd {
+  text-align: right;
+}
+
+.ck-table .badge {
+  height: 22px;
+  padding: 0 7px;
+  font-size: 12px;
+  vertical-align: 1px;
+}
+
+.ck-tot {
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+  font-weight: 700;
+}
+
+/* 별점 고르기(StarPicker, 요리했어요·고치기 시트 공용): 점수가 있으면 별 아래 오른쪽에 `별점 빼기`(먹은 기록은 `만족도 빼기`) */
+.ck-starpick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+/* `별점 빼기`로 줄이 높아져도 앞 `별점` 이름은 별(44px) 높이에 맞춘다 */
+.ck-row:has(> .ck-starpick) {
+  align-items: flex-start;
+}
+
+.ck-row:has(> .ck-starpick) > b {
+  line-height: 44px;
+}
+
+/* 5 · Task 11 */
+/* 집밥 리포트(시안 5) — 달 이동 제목은 페이지 h1 */
+.fl-mnav h1 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+}
+
+.ck-report .nt-card p {
+  margin: 0;
+}
+
+/* 시안 .muted 크기(13px) — 큰 숫자 위 글자·지난달 대비·버린 재료 안내 */
+.ck-report .nt-card .muted {
+  font-size: 13px;
+  line-height: 19px;
+  word-break: keep-all;
+}
+
+/* 카드 제목(많이 아낀 요리·버린 재료) */
+.ck-report .nt-card > b:first-child {
+  font-size: 15px;
+}
+
+.ck-hero-card {
+  gap: 4px;
+}
+
+/* 합계 묶음(4px)과 안내 사이는 카드 기본 간격만큼 — `.ck-report .nt-card p`보다 뒤·같은 무게라 이긴다 */
+.ck-hero-card p.nt-src {
+  margin-top: 6px;
+}
+
+.ck-hero-big {
+  font-size: 34px;
+  line-height: 42px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--accent-strong);
+}
+
+.ck-hero-sub {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ck-hero-empty {
+  font-size: 20px;
+  line-height: 28px;
+}
+
+.ck-stats4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* 음수 합계·버린 재료 수 */
+.ck-warn {
+  color: var(--warn);
+}
+
+/* 줄마다 같은 칸(subgrid) — 금액이 64px보다 길어도 모든 막대 폭이 같은 기준으로 줄어든다 */
+.ck-bars {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) minmax(64px, auto);
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ck-bar {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 긴 제목(60자까지)은 두 줄에서 자른다 */
+.ck-bar > span:first-child {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.ck-bar > span:last-child {
+  justify-self: end;
+  white-space: nowrap;
+  color: var(--text-2);
+}
+
+.ck-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 긴 재료 이름(50자까지)은 칩 안에서 줄바꿈 — .badge의 한 줄·고정 높이를 여기서만 푼다 */
+.ck-chips .badge {
+  max-width: 100%;
+  height: auto;
+  min-height: 28px;
+  padding-block: 4px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* 요리 일기 목록 위 이번 달 카드를 리포트로 가는 버튼으로(R11-5) */
+button.ck-month {
+  width: calc(100% - 40px);
+  border: 0;
+  text-align: left;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.ck-month .muted {
+  font-size: 13px;
+  line-height: 19px;
 }
 
 /* ---- 첫인상 (시안 docs/design/first-impression, 스펙 30절) ---- */
