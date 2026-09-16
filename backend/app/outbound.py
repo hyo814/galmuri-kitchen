@@ -321,14 +321,17 @@ def image_size(data):
 
 
 def page_images(urls):
-    """블로그 본문 사진 후보 주소를 앞에서부터 8개까지 차례로 받아 [(bytes, media_type)] 최대 5장.
-    페이지와 같은 공인 주소 검사·리다이렉트 3번, 한 장 1.5MB·합계 6MB(다음 사진이 넘기면 멈춘다). JPEG·PNG·WEBP 시그니처이고 15KB 이상, 머리에서 읽은 가로·세로가 8000px 이하만.
+    """블로그 본문 사진 후보 주소를 앞에서부터 8개까지 차례로 받아 (사진 목록 [(bytes, media_type)] 최대 5장, 5장을 채우고도 시도하지 않은 후보가 남았는지 — 17절 ⑥).
+    페이지와 같은 공인 주소 검사·리다이렉트 3번, 한 장 1.5MB·합계 6MB(다음 사진이 넘기면 멈춘다, 이때는 시도하지 않은 후보가 있어도 두 번째 값에 넣지 않는다 —
+    5장을 못 채웠는데 "5장만 읽었어요"라고 알릴 수 없다). JPEG·PNG·WEBP 시그니처이고 15KB 이상, 머리에서 읽은 가로·세로가 8000px 이하만.
     실패한 사진은 건너뛴다(모두 걸러지면 빈 목록 → 글만 보낸다).
     사진 요청 전체가 10초를 넘기지 않게 한 장마다 남은 시간만 준다. 사진은 저장하지 않는다."""
     images, total, deadline = [], 0, time.monotonic() + IMAGE_TOTAL_SECONDS
     for url in urls[:MAX_IMAGE_CANDIDATES]:
+        if len(images) == MAX_PAGE_IMAGES:
+            return images, True  # 채웠는데 시도하지 않은 후보(이 url부터)가 남았다
         left = deadline - time.monotonic()
-        if left <= 0 or len(images) == MAX_PAGE_IMAGES:
+        if left <= 0:
             break
         try:
             data = _fetch(url, public=True, image=True, seconds=left)[0]
@@ -340,7 +343,7 @@ def page_images(urls):
                 break
             images.append((data, media_type))
             total += len(data)
-    return images
+    return images, False
 
 
 def parse_link(value):

@@ -338,7 +338,8 @@ MAX_IMPORT_TEXT = 10_000
 _IMPORT_RULES = (
     "자료에 재료가 있는 요리 레시피가 있으면 found=true와 recipes를, 없으면 found=false와 recipes=[]를 쓴다. "
     "자료에 레시피가 여러 개 있으면(예: 요리 여러 가지를 소개하는 글 하나) 찾은 순서대로 최대 5개까지 recipes에 모두 쓴다. "
-    "5개가 넘게 있으면 앞의 5개만 쓴다. 레시피가 하나면 recipes에 그 하나만 쓴다. 자료에 없는 재료·양·단계를 지어내지 않는다. "
+    "5개가 넘게 있으면 앞의 5개만 쓴다. 레시피가 하나면 recipes에 그 하나만 쓴다. "
+    "같은 요리가 자료에 여러 번(예: 소개 글과 상세 설명에 겹쳐) 나와도 recipes에는 한 번만 쓴다. 자료에 없는 재료·양·단계를 지어내지 않는다. "
     "title은 요리 이름만 짧게 쓴다(광고 문구·이모지는 뺀다). servings는 자료에 적힌 인분을 쓰고, 없으면 재료 양으로 1~20 사이에서 추정한다. "
     "ingredients의 name은 재료 이름만, amount는 자료에 적힌 양을 '600g', '2큰술'처럼 짧게 쓰고 양이 없으면 빈 문자열로 둔다. "
     "steps는 자료의 만드는 법을 한 단계에 한 문장씩 쓰고, 없으면 빈 배열로 둔다."
@@ -401,16 +402,17 @@ IMPORT_MAX_TOKENS = 16_000
 
 def extract_recipe(text, images=()):
     """영상 설명·캡션·웹 글·붙여 넣은 글에서 레시피(최대 5개)를 정리한다. (결과, 토큰 사용량)을 돌려주고, 실패하면 AiError.
-    images(블로그 본문 사진 [(bytes, media_type)] 최대 5장)가 있으면 같은 호출에 사진을 먼저 넣는다."""
+    images(블로그 본문 사진 [(bytes, media_type)] 최대 5장)가 있으면 같은 호출에 사진을 먼저 넣는다.
+    max_tokens가 늘어난 만큼(16000, draft_meals와 같음) timeout도 90으로 맞춘다."""
     prompt = IMPORT_PROMPT + text[:MAX_IMPORT_TEXT] + "\n</자료>"
     if images:
-        return _parse(_image_blocks(images) + [{"type": "text", "text": PAGE_IMAGES_PROMPT + prompt}], ImportResult, IMPORT_MAX_TOKENS, "recipe import")
-    return _parse(prompt, ImportResult, IMPORT_MAX_TOKENS, "recipe import")
+        return _parse(_image_blocks(images) + [{"type": "text", "text": PAGE_IMAGES_PROMPT + prompt}], ImportResult, IMPORT_MAX_TOKENS, "recipe import", timeout=90)
+    return _parse(prompt, ImportResult, IMPORT_MAX_TOKENS, "recipe import", timeout=90)
 
 
 def extract_recipe_from_images(images):
     """요리책·캡처·손글씨 레시피 사진 [(bytes, media_type)] 1~5장에서 레시피(최대 5개)를 정리한다. (결과, 토큰 사용량)을 돌려주고, 실패하면 AiError."""
-    return _parse(_image_blocks(images) + [{"type": "text", "text": PHOTO_IMPORT_PROMPT}], ImportResult, IMPORT_MAX_TOKENS, "recipe photo import")
+    return _parse(_image_blocks(images) + [{"type": "text", "text": PHOTO_IMPORT_PROMPT}], ImportResult, IMPORT_MAX_TOKENS, "recipe photo import", timeout=90)
 
 
 class MealDish(BaseModel):

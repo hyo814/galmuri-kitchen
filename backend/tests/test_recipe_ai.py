@@ -109,6 +109,20 @@ def test_clean_drafts_caps_at_five_and_drops_invalid():
     assert clean_drafts([]) == []
 
 
+def test_clean_drafts_drops_exact_duplicate_titles():
+    """같은 요리가 소개 글과 상세 설명에 겹쳐 두 번 나와도(글자 그대로거나 공백만 다를 수 있다) 먼저 나온 것만 남긴다."""
+    dup = [
+        draft("제육볶음"),
+        draft("제육볶음", names=("돼지고기", "간장")),  # 글자 그대로 겹친 같은 요리
+        draft(" 제육볶음 "),  # 앞뒤 공백만 다름(clean_draft가 이미 지운다)
+        draft("돼지  불고기"),  # 새 요리(가운데 공백 두 칸)
+        draft("돼지 불고기"),  # 위와 같은 요리 — 공백을 정리하면 같아진다
+    ]
+    cleaned = clean_drafts(dup)
+    assert [d["title"] for d in cleaned] == ["제육볶음", "돼지  불고기"]
+    assert cleaned[0]["ingredients"][0]["name"] == "두부"  # 먼저 나온 원래 재료가 남는다(나중 것으로 바뀌지 않는다)
+
+
 # --- similar_public_image ---
 
 
@@ -482,6 +496,20 @@ def test_extract_recipe_with_page_images_sends_image_blocks_then_text(app, fake_
         assert isinstance(calls["parse"]["messages"][0]["content"], str)
 
 
+def test_extract_recipe_uses_90s_timeout_for_bigger_max_tokens(app, fake_anthropic):
+    """레시피 5개 분량이라 max_tokens를 늘린 만큼(16000) timeout도 90으로 맞춘다(draft_meals와 같음)."""
+    parsed = ai.ImportResult(found=True, recipes=[ai.RecipeDraft(title="제육볶음", servings=2, ingredients=[ai.DraftIngredient(name="돼지고기", amount="")], steps=[])])
+    calls = fake_anthropic(response=SimpleNamespace(stop_reason="end_turn", parsed_output=parsed, usage=SimpleNamespace(input_tokens=1, output_tokens=1), model="m"))
+    app.config["ANTHROPIC_API_KEY"] = "test-key"
+    with app.app_context():
+        ai.extract_recipe("레시피 글")
+        assert calls["client"]["timeout"] == 90
+        ai.extract_recipe("레시피 글", [(JPEG_BYTES, "image/jpeg")])
+        assert calls["client"]["timeout"] == 90
+        ai.extract_recipe_from_images([(JPEG_BYTES, "image/jpeg")])
+        assert calls["client"]["timeout"] == 90
+
+
 # --- POST /api/recipes/import ---
 
 YOUTUBE = "https://youtu.be/dQw4w9WgXcQ?si=x"
@@ -798,7 +826,7 @@ def test_import_blog_recipe_less_text_sends_page_images(client, login, app, monk
     app.config["AI_SCAN_BURST_LIMIT"] = 10  # AI 호출 4번을 이어서 보낸다
     fetched, calls = [], []
     monkeypatch.setattr(outbound, "web_page", lambda url: page(text=RECIPE_LESS, url=url, images=PAGE_IMAGES))
-    monkeypatch.setattr(outbound, "page_images", lambda urls: fetched.append(urls) or [(JPEG_BYTES, "image/jpeg"), (PNG_BYTES, "image/png")])
+    monkeypatch.setattr(outbound, "page_images", lambda urls: (fetched.append(urls) or [(JPEG_BYTES, "image/jpeg"), (PNG_BYTES, "image/png")], False))
     monkeypatch.setattr(ai, "extract_recipe", lambda text, images: calls.append((text, images)) or found())
     res = import_(client, url=WEB)
     body = res.get_json()
@@ -810,12 +838,12 @@ def test_import_blog_recipe_less_text_sends_page_images(client, login, app, monk
 
     # 사진을 하나도 받지 못해도 글만으로 AI를 부른다
     calls.clear()
-    monkeypatch.setattr(outbound, "page_images", lambda urls: [])
+    monkeypatch.setattr(outbound, "page_images", lambda urls: ([], False))
     assert import_(client, url=WEB).status_code == 200
     assert calls == [(f"제육볶음 만들기\n\n{RECIPE_LESS}", [])]
 
     # 사진을 보고도 레시피가 없으면 블로그 need_text
-    monkeypatch.setattr(outbound, "page_images", lambda urls: [(JPEG_BYTES, "image/jpeg")])
+    monkeypatch.setattr(outbound, "page_images", lambda urls: ([(JPEG_BYTES, "image/jpeg")], False))
     monkeypatch.setattr(ai, "extract_recipe", lambda text, images: ({"found": False, "recipes": []}, USAGE))
     res = import_(client, url=WEB)
     assert (res.status_code, res.get_json()) == (422, {"error": NEED_WEB, "need_text": True})
@@ -838,7 +866,7 @@ def test_import_web_page_multi_recipe_list(client, login, app, monkeypatch):
     live(app)
     titles = ["오리지날 떡볶이", "부트졸로키아 떡볶이", "옥황상제 떡볶이"]
     monkeypatch.setattr(outbound, "web_page", lambda url: page(text=RECIPE_LESS, url=url, images=PAGE_IMAGES))
-    monkeypatch.setattr(outbound, "page_images", lambda urls: [(JPEG_BYTES, "image/jpeg")])
+    monkeypatch.setattr(outbound, "page_images", lambda urls: ([(JPEG_BYTES, "image/jpeg")], False))
     monkeypatch.setattr(ai, "extract_recipe", lambda text, images: found_many(*titles))
     res = import_(client, url=WEB)
     body = res.get_json()
@@ -867,24 +895,16 @@ def test_import_multi_recipe_drops_invalid_and_collapses_to_single(client, login
 
 
 def test_import_web_page_images_truncated_flag(client, login, app, monkeypatch):
-    """본문 사진 후보(최대 8개)가 실제로 읽은 5장보다 많으면 알린다. 5장 이하면 알리지 않는다."""
+    """images_truncated는 outbound.page_images가 준 두 번째 값을 그대로 전달한다(그 판단 자체는 test_outbound.py에서 본다)."""
     login()
     live(app)
-    many_candidates = [f"https://recipe.example.com/upload/{i}.jpg" for i in range(7)]
-    monkeypatch.setattr(outbound, "web_page", lambda url: page(text=RECIPE_LESS, url=url, images=many_candidates))
-    monkeypatch.setattr(outbound, "page_images", lambda urls: [(JPEG_BYTES, "image/jpeg")] * 5)
+    monkeypatch.setattr(outbound, "web_page", lambda url: page(text=RECIPE_LESS, url=url, images=PAGE_IMAGES))
     monkeypatch.setattr(ai, "extract_recipe", lambda text, images: found_many("떡볶이", "김치볶음밥"))
+
+    monkeypatch.setattr(outbound, "page_images", lambda urls: ([(JPEG_BYTES, "image/jpeg")] * 5, True))
     assert import_(client, url=WEB).get_json()["images_truncated"] is True
 
-    monkeypatch.setattr(outbound, "web_page", lambda url: page(text=RECIPE_LESS, url=url, images=PAGE_IMAGES))  # 3개뿐
-    monkeypatch.setattr(outbound, "page_images", lambda urls: [(JPEG_BYTES, "image/jpeg")] * 3)
-    assert import_(client, url=WEB).get_json()["images_truncated"] is False
-
-    # 사진 후보가 많아도(7개) 하나도 못 읽었으면(모두 걸러짐) 알리지 않는다 — 더 있다고 말할 근거가 없다.
-    # (page_images가 빈 목록이면 images=[]라 이 요청은 실제로는 글만으로 AI를 부른다)
-    monkeypatch.setattr(outbound, "web_page", lambda url: page(text=RECIPE_LESS, url=url, images=many_candidates))
-    monkeypatch.setattr(outbound, "page_images", lambda urls: [])
-    monkeypatch.setattr(ai, "extract_recipe", lambda text, images: found_many("떡볶이", "김치볶음밥"))
+    monkeypatch.setattr(outbound, "page_images", lambda urls: ([(JPEG_BYTES, "image/jpeg")] * 3, False))
     assert import_(client, url=WEB).get_json()["images_truncated"] is False
 
 

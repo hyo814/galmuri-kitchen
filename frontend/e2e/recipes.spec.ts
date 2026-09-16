@@ -363,6 +363,30 @@ test("화면 캡처로 가져온 레시피는 못 읽은 영상 링크를 출처
   await expect(app(page).getByRole("link", { name: /원본 보기/ })).toHaveAttribute("href", watchUrl);
 });
 
+test("영상 보기의 레시피로 가져오기가 여러 개를 찾으면 고르기 화면이 열린다", async ({ page }) => {
+  const sheet = page.getByRole("dialog");
+  jsonRoute(page, {
+    recipes: [multiDraft(MULTI_TITLES[0]), multiDraft(MULTI_TITLES[1]), multiDraft(MULTI_TITLES[2])],
+    from_image: false,
+    images_truncated: false,
+    source: "youtube",
+    source_url: "https://www.youtube.com/watch?v=sample00001",
+    source_card: { title: "제육볶음 황금레시피, 이렇게만 하세요", author: "예시 채널", thumbnail_url: null },
+    sample: false,
+  });
+  await openRecipes(page, "영상");
+  await page.getByRole("link", { name: /제육볶음 황금레시피/ }).click();
+  await page.getByRole("button", { name: "레시피로 가져오기" }).click();
+
+  await expect(sheet.getByRole("heading", { name: "요리가 3개 있어요" })).toBeVisible();
+  await sheet.getByRole("radio", { name: MULTI_TITLES[1] }).check({ force: true });
+  await sheet.getByRole("button", { name: "이 요리 확인하기" }).click();
+
+  await expect(page.getByRole("heading", { name: "가져온 레시피 확인" })).toBeVisible();
+  await expect(page.getByLabel("이름", { exact: true })).toHaveValue(MULTI_TITLES[1]);
+  await expect(app(page).getByText(`3개 중 2번째 · ${MULTI_TITLES[1]}`)).toBeVisible();
+});
+
 test("영상 보기에서 가져오기를 못 하면 화면 캡처로 가져오기가 남고, 링크를 다시 읽지 않고 사진 시트를 연다", async ({ page }) => {
   const sent = await missImports(page);
   const sheet = page.getByRole("dialog");

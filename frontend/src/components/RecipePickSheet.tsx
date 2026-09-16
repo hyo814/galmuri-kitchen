@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { RecipeInput } from "../api";
+import type { MultiRecipeDraft, RecipeInput } from "../api";
 import { missingAmountCount, pickRowSummary } from "../format";
 import Icon from "./Icon";
 import Sheet from "./Sheet";
@@ -78,5 +78,30 @@ export default function RecipePickSheet({ title, subtitle, items, fromImage, ima
         </button>
       </div>
     </Sheet>
+  );
+}
+
+/** 방금 가져온 결과(MultiRecipeDraft)로 처음 고르기 화면을 연다 — AddRecipeSheet·VideoPlayer가 함께 쓴다(둘 다 `가져온 레시피 확인`으로 이어간다).
+ *  MealFillSheet의 빈 칸 채우기처럼 다른 문구가 필요하면 RecipePickSheet를 직접 쓴다. */
+export function ImportPickSheet({
+  result,
+  onPick,
+  onClose,
+}: {
+  result: MultiRecipeDraft;
+  onPick: (order: number) => void;
+  onClose: () => void;
+}) {
+  return (
+    <RecipePickSheet
+      title={`요리가 ${result.recipes.length}개 있어요`}
+      subtitle={result.source_card ? `${result.source_card.title}에서 찾았어요. 먼저 확인할 요리를 골라주세요` : "먼저 확인할 요리를 골라주세요"}
+      items={result.recipes.map((draft, i) => ({ order: i + 1, draft }))}
+      fromImage={result.from_image}
+      imagesTruncated={result.images_truncated}
+      note="AI는 1번만 썼어요. 하나를 저장한 뒤 나머지도 이어서 확인할 수 있어요."
+      onPick={onPick}
+      onClose={onClose}
+    />
   );
 }

@@ -55,9 +55,19 @@ def clean_draft(raw):
 
 
 def clean_drafts(raw_list):
-    """clean_draft를 목록에 적용해 최대 MAX_IMPORT_RECIPES개까지 정리한다(17절 여러 요리 가져오기). 못 쓰는 항목은 뺀다."""
+    """clean_draft를 목록에 적용해 최대 MAX_IMPORT_RECIPES개까지 정리한다(17절 여러 요리 가져오기). 못 쓰는 항목은 빼고,
+    이름이 같은 항목(공백 정리 뒤)은 AI가 자료에서 같은 요리를 두 번 봤다는 뜻이라 먼저 나온 것만 남긴다."""
     rows = raw_list[:MAX_IMPORT_RECIPES] if isinstance(raw_list, list) else []
-    return [d for d in map(clean_draft, rows) if d]
+    drafts, seen_titles = [], set()
+    for draft in map(clean_draft, rows):
+        if not draft:
+            continue
+        key = " ".join(draft["title"].split())  # 공백만 다른 같은 이름까지만 뺀다(다른 요리를 잘못 합치지 않게)
+        if key in seen_titles:
+            continue
+        seen_titles.add(key)
+        drafts.append(draft)
+    return drafts
 
 
 def public_image_candidates():
@@ -309,9 +319,8 @@ def import_recipe():
                 source_url = page["url"] if len(page["url"]) <= outbound.MAX_LINK else value  # 저장 폼은 500자까지 받는다
                 source_card = {"title": page["title"], "author": page["site_name"], "thumbnail_url": None}
                 if page["images"] and not RECIPE_SIGNAL.search(page["text"]):  # 사진 요청 실패는 건너뛰고 기록을 더하지 않는다
-                    images = outbound.page_images(page["images"])
-                    # 본문 사진 후보(최대 8개)가 실제로 읽은 5장보다 많으면 더 있다고 알린다(17절 ⑥, 사진으로 가져오기 안내)
-                    images_truncated = bool(images) and len(page["images"]) > outbound.MAX_PAGE_IMAGES
+                    # 5장을 채우고도 시도하지 않은 후보가 남았으면 더 있다고 알린다(17절 ⑥, 사진으로 가져오기 안내)
+                    images, images_truncated = outbound.page_images(page["images"])
         except outbound.FetchError as e:
             current_app.logger.warning("import fetch failed: %s", e)  # 예외·이유 이름만(주소·키 없음)
             return need_text(source, source_url)

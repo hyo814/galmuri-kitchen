@@ -1,11 +1,11 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
-import { ApiError, api, type AiUsage, type MultiRecipeDraft, type RecipeDraft } from "../api";
+import { ApiError, api, isMultiImport, type AiUsage, type MultiRecipeDraft, type RecipeDraft } from "../api";
 import { remainingText } from "../format";
 import { autoGrowTextarea, openDraft, openMultiPick } from "../pages/RecipeForm";
 import { navigate } from "../useHashRoute";
 import { useResource } from "../useResource";
 import Icon, { type IconName } from "./Icon";
-import RecipePickSheet from "./RecipePickSheet";
+import { ImportPickSheet } from "./RecipePickSheet";
 import { ScanWait, preparePhoto } from "./ScanSheet";
 import Sheet from "./Sheet";
 
@@ -134,7 +134,7 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
         () => void reloadUsage(), // 성공·실패 모두 AI 횟수를 셌을 수 있다
       );
       if (controller.signal.aborted) return;
-      if ("recipes" in result) {
+      if (isMultiImport(result)) {
         // 여러 요리 가져오기(17절): 저장 폼 대신 고르기 화면. AddRecipeSheet의 나머지 단계는 그대로 두고(취소하면 되돌아온다) 위에 겹쳐 보여준다
         setBusy(false);
         setMulti(result);
@@ -195,18 +195,7 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
   const value = step === "link" ? url : text;
 
   if (multi) {
-    return (
-      <RecipePickSheet
-        title={`요리가 ${multi.recipes.length}개 있어요`}
-        subtitle={multi.source_card ? `${multi.source_card.title}에서 찾았어요. 먼저 확인할 요리를 골라주세요` : "먼저 확인할 요리를 골라주세요"}
-        items={multi.recipes.map((draft, i) => ({ order: i + 1, draft }))}
-        fromImage={multi.from_image}
-        imagesTruncated={multi.images_truncated}
-        note="AI는 1번만 썼어요. 하나를 저장한 뒤 나머지도 이어서 확인할 수 있어요."
-        onPick={(order) => openMultiPick(multi, order, capture?.link)}
-        onClose={onClose}
-      />
-    );
+    return <ImportPickSheet result={multi} onPick={(order) => openMultiPick(multi, order, capture?.link)} onClose={onClose} />;
   }
 
   return (

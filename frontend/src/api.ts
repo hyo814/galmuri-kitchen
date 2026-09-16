@@ -182,6 +182,13 @@ export interface MultiRecipeDraft {
   sample?: boolean;
 }
 
+/** POST /api/recipes/import 응답이 레시피 목록(2개 이상)인지 좁혀 준다. 정확히 1개면 RecipeDraft 그대로 온다(17절).
+ *  이 응답을 받는 모든 곳(AddRecipeSheet·VideoPlayer·MealFillSheet)이 이 함수로 갈라야 한다 — 안 거르면 RecipeDraft를 기대하는 코드가
+ *  recipes 목록을 만나 필드가 없어 그대로 깨진다(빈 화면). */
+export function isMultiImport(result: RecipeDraft | MultiRecipeDraft): result is MultiRecipeDraft {
+  return "recipes" in result;
+}
+
 export interface AiUsage {
   scan: { used: number; limit: number };
   recipe: { used: number; limit: number };

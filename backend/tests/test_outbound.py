@@ -658,12 +658,12 @@ def test_page_images_filters_and_skips_failures(monkeypatch):
         ],
     )
     urls = [f"https://recipe.example.com/{i}.jpg" for i in range(9)]
-    # 후보는 앞 8개만 받는다: 앞의 6개는 건너뛰고 7·8번째만 사진(9번째 webp는 요청하지 않는다)
-    assert outbound.page_images(urls) == [(IMAGE, "image/jpeg"), (png, "image/png")]
+    # 후보는 앞 8개만 받는다: 앞의 6개는 건너뛰고 7·8번째만 사진(9번째 webp는 요청하지 않는다). 5장을 못 채웠으니 truncated는 False
+    assert outbound.page_images(urls) == ([(IMAGE, "image/jpeg"), (png, "image/png")], False)
     assert len(sent) == 8
 
     sent = fake_send(monkeypatch, [response(200, IMAGE, {"Content-Type": "image/jpeg"}), response(200, png, {}), response(200, webp, {})])
-    assert outbound.page_images(urls[:3]) == [(IMAGE, "image/jpeg"), (png, "image/png"), (webp, "image/webp")]
+    assert outbound.page_images(urls[:3]) == ([(IMAGE, "image/jpeg"), (png, "image/png"), (webp, "image/webp")], False)
     url, kwargs, headers = sent[0]
     assert (url, kwargs["allow_redirects"], kwargs["proxies"], headers["User-Agent"]) == (urls[0], False, {}, "galmuri-kitchen/1.0")
     assert kwargs["timeout"][1] <= 10
@@ -677,10 +677,10 @@ def test_page_images_skip_oversize_and_unreadable(monkeypatch):
     bad = [jpeg(1000, 8001), png(8001, 10), webp_extended(640, 9000), b"\xff\xd8\xff" + b"j" * 40]
     fake_send(monkeypatch, [response(200, data, {}) for data in (bad[0], ok[0], bad[1], ok[1], bad[2], bad[3], ok[2])])
     urls = [f"https://recipe.example.com/{i}.jpg" for i in range(7)]
-    assert outbound.page_images(urls) == [(ok[0], "image/jpeg"), (ok[1], "image/png"), (ok[2], "image/webp")]
+    assert outbound.page_images(urls) == ([(ok[0], "image/jpeg"), (ok[1], "image/png"), (ok[2], "image/webp")], False)
 
     fake_send(monkeypatch, [response(200, data, {}) for data in bad])
-    assert outbound.page_images(urls[:4]) == []  # 모두 걸러지면 빈 목록 → 가져오기는 글만 보낸다
+    assert outbound.page_images(urls[:4]) == ([], False)  # 모두 걸러지면 빈 목록 → 가져오기는 글만 보낸다
 
 
 def test_page_images_total_byte_budget(monkeypatch):
@@ -692,7 +692,8 @@ def test_page_images_total_byte_budget(monkeypatch):
     image = IMAGE + b"j" * (90 - len(IMAGE))
     small = IMAGE
     sent = fake_send(monkeypatch, [response(200, image, {}), response(200, image, {}), response(200, image, {}), response(200, small, {})])
-    assert outbound.page_images([f"https://recipe.example.com/{i}.jpg" for i in range(4)]) == [(image, "image/jpeg")] * 2
+    # 사진을 5장 못 채우고 멈췄으니(바이트 예산) truncated는 False — "5장만 읽었어요"라고 말할 근거가 없다
+    assert outbound.page_images([f"https://recipe.example.com/{i}.jpg" for i in range(4)]) == ([(image, "image/jpeg")] * 2, False)
     assert len(sent) == 3  # 세 번째에서 180 + 90 > 250 → 멈추고 네 번째는 요청하지 않는다
 
 
@@ -700,7 +701,17 @@ def test_page_images_stop_at_five(monkeypatch):
     monkeypatch.setattr(outbound, "MIN_IMAGE_BYTES", 20)
     fake_dns(monkeypatch, {"recipe.example.com": ["93.184.216.34"]})
     sent = fake_send(monkeypatch, [response(200, IMAGE, {}) for _ in range(8)])
-    assert outbound.page_images([f"https://recipe.example.com/{i}.jpg" for i in range(8)]) == [(IMAGE, "image/jpeg")] * 5
+    # 5장을 채우고도 후보 3개(6·7·8번째)가 남아 요청하지 않았다 → truncated는 True
+    assert outbound.page_images([f"https://recipe.example.com/{i}.jpg" for i in range(8)]) == ([(IMAGE, "image/jpeg")] * 5, True)
+    assert len(sent) == 5
+
+
+def test_page_images_exactly_five_candidates_is_not_truncated(monkeypatch):
+    """후보가 딱 5개라 다 써서 5장을 채웠으면(남은 후보가 없다) truncated는 False다."""
+    monkeypatch.setattr(outbound, "MIN_IMAGE_BYTES", 20)
+    fake_dns(monkeypatch, {"recipe.example.com": ["93.184.216.34"]})
+    sent = fake_send(monkeypatch, [response(200, IMAGE, {}) for _ in range(5)])
+    assert outbound.page_images([f"https://recipe.example.com/{i}.jpg" for i in range(5)]) == ([(IMAGE, "image/jpeg")] * 5, False)
     assert len(sent) == 5
 
 
@@ -717,7 +728,8 @@ def test_page_images_share_ten_second_budget(monkeypatch):
     monkeypatch.setattr(outbound.time, "monotonic", lambda: now[0])
     monkeypatch.setattr(outbound, "_fetch", fetch)
     monkeypatch.setattr(outbound, "MIN_IMAGE_BYTES", 20)
-    assert len(outbound.page_images([f"https://recipe.example.com/{i}.jpg" for i in range(8)])) == 3
+    images, truncated = outbound.page_images([f"https://recipe.example.com/{i}.jpg" for i in range(8)])
+    assert (len(images), truncated) == (3, False)  # 시간이 다 돼 멈췄다(5장을 못 채웠으니 truncated 아님)
     assert given == [10, 6, 2]
 
 
