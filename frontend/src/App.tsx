@@ -8,7 +8,7 @@ import CookDiary, { resetCookDiaryView } from "./pages/CookDiary";
 import CookReport, { resetCookReportView } from "./pages/CookReport";
 import FoodLogPage, { resetFoodLogView } from "./pages/FoodLog";
 import Fridge from "./pages/Fridge";
-import Login, { rememberLoginProvider } from "./pages/Login";
+import Login, { dropDemoLink, rememberLoginProvider } from "./pages/Login";
 import MealAiDraft from "./pages/MealAiDraft";
 import MealShopping from "./pages/MealShopping";
 import Meals, { resetMealsView } from "./pages/Meals";
@@ -180,6 +180,7 @@ export default function App() {
   // 기기 데이터가 이 사용자 것인지 확인한 뒤에 화면을 연다(다른 사용자의 대기 변경을 보내지 않게)
   const signIn = useCallback((me: User) => {
     rememberLoginProvider(me.provider);
+    dropDemoLink();
     void rememberUser(me).then(() => {
       setUser(me);
       startShopping();
@@ -204,6 +205,7 @@ export default function App() {
         // 인터넷이 없거나 서버가 잠시 안 되면 마지막으로 로그인한 사용자로 연다(마트 지하에서 장보기, 스펙 19절). 세션이 끝났으면 다음 요청의 401이 로그인으로 보낸다
         const saved = await savedUser();
         if (saved) {
+          dropDemoLink();
           setUser(saved);
           startShopping();
         } else setOffline(true);
