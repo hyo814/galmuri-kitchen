@@ -3,7 +3,7 @@ import { api, type CookLogDetail } from "../api";
 import { parseWon, wonFieldText } from "../cooklog/cook.ts";
 import { resizeImage } from "../image.ts";
 import { useAsyncAction } from "../useAsyncAction";
-import { DateChips, PhotoPicker, WonField, forgetCookCaches } from "./CookSheet";
+import { CostField, DateChips, DishNameField, PhotoPicker, WonField, forgetCookCaches } from "./CookSheet";
 import Sheet from "./Sheet";
 import StarPicker from "./StarPicker";
 
@@ -16,14 +16,17 @@ interface Props {
   onClose: () => void;
 }
 
-/** 일기 고치기(결정 18): 날짜·사 먹으면 얼마·별점·사진·메모만. 인분·쓴 재료는 재고와 어긋나서 고치지 않는다 */
+/** 일기 고치기(결정 18): 날짜·사 먹으면 얼마·별점·사진·메모만. 인분·쓴 재료는 재고와 어긋나서 고치지 않는다.
+ *  직접 쓴 일기는 요리 이름(사용자 결정 2026-09-17)·재료비도 고친다(29절 추가 2026-09-16) */
 export default function CookEditSheet({ log: logProp, today, photos, onSaved, onClose }: Props) {
   // 글 칸 저장(PATCH)은 됐는데 사진 단계만 실패하면 시트에 남는다 — 그 뒤 비교 기준·닫을 때 넘길 값은 저장된 일기(FoodLogSheet savedLog와 같게, R10-6)
   const [savedLog, setSavedLog] = useState<CookLogDetail | null>(null);
   const log = savedLog ?? logProp;
+  const [titleText, setTitleText] = useState(logProp.title);
   const [date, setDate] = useState(logProp.cooked_on);
   const [priceText, setPriceText] = useState(() => wonFieldText(logProp.eat_out_price, ""));
   const [priceTouched, setPriceTouched] = useState(false);
+  const [costText, setCostText] = useState(() => wonFieldText(logProp.ingredient_cost, ""));
   const [rating, setRating] = useState(logProp.rating);
   const [memo, setMemo] = useState(logProp.memo ?? "");
   const [file, setFile] = useState<Blob | null>(null);
@@ -31,7 +34,20 @@ export default function CookEditSheet({ log: logProp, today, photos, onSaved, on
   const [photoError, setPhotoError] = useState("");
   const save = useAsyncAction();
   const id = useId();
-  const invalid = parseWon(priceText) === undefined;
+  const titleMissing = logProp.manual && !titleText.trim();
+  const invalid = parseWon(priceText) === undefined || (logProp.manual && parseWon(costText) === undefined) || titleMissing;
+
+  const priceField = (
+    <WonField
+      value={priceText}
+      source={priceTouched ? null : log.eat_out_source}
+      estimating={false}
+      onChange={(text) => {
+        setPriceTouched(true);
+        setPriceText(text);
+      }}
+    />
+  );
 
   function closeSheet() {
     if (savedLog) onSaved(savedLog);
@@ -46,8 +62,11 @@ export default function CookEditSheet({ log: logProp, today, photos, onSaved, on
     const body: Record<string, unknown> = {};
     const price = parseWon(priceText) ?? null;
     const memoValue = memo.trim() || null;
+    if (log.manual && titleText.trim() !== log.title) body.title = titleText.trim();
     if (date !== log.cooked_on) body.cooked_on = date;
     if (price !== log.eat_out_price) body.eat_out_price = price;
+    const cost = parseWon(costText) ?? null;
+    if (log.manual && cost !== log.ingredient_cost) body.ingredient_cost = cost;
     if (rating !== log.rating) body.rating = rating;
     if (memoValue !== log.memo) body.memo = memoValue;
     // 새로 고른 사진이 있으면 바꾸기만, 없이 지금 사진을 뺐으면 지우기만(R10-5)
@@ -91,18 +110,24 @@ export default function CookEditSheet({ log: logProp, today, photos, onSaved, on
   }
 
   return (
-    <Sheet title={`${logProp.title} 고치기`} description="인분과 쓴 재료는 고칠 수 없어요" focusTitle locked={save.busy} onClose={closeSheet}>
+    <Sheet
+      title={`${logProp.title} 고치기`}
+      description={logProp.manual ? "인분은 고칠 수 없어요" : "인분과 쓴 재료는 고칠 수 없어요"}
+      focusTitle
+      locked={save.busy}
+      onClose={closeSheet}
+    >
+      {logProp.manual && <DishNameField value={titleText} invalid={titleMissing} onChange={setTitleText} />}
       <DateChips value={date} today={today} onChange={setDate} />
 
-      <WonField
-        value={priceText}
-        source={priceTouched ? null : log.eat_out_source}
-        estimating={false}
-        onChange={(text) => {
-          setPriceTouched(true);
-          setPriceText(text);
-        }}
-      />
+      {logProp.manual ? (
+        <div className="ck-wons">
+          {priceField}
+          <CostField value={costText} servings={logProp.servings} onChange={setCostText} />
+        </div>
+      ) : (
+        priceField
+      )}
 
       <div className="ck-row">
         <b>별점</b>

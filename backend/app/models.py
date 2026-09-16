@@ -476,6 +476,8 @@ class CookLog(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     recipe_id = db.Column(db.Integer, db.ForeignKey("recipes.id", ondelete="SET NULL"), index=True)
     food_log_id = db.Column(db.Integer, db.ForeignKey("food_logs.id", ondelete="SET NULL"), index=True)  # 먹은 기록을 지울 때 SET NULL이 cook_logs 전체를 훑지 않게(개정 1 T4⑤)
+    # 레시피 없이 쓴 일기(요리 일기 쓰기, 29절 추가 2026-09-16) — 레시피를 지워 recipe_id가 빈 일기와 구별한다. 쓴 재료 줄이 없다
+    manual = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
     title = db.Column(db.String(60), nullable=False)
     cooked_on = db.Column(db.Date, nullable=False)
     servings = db.Column(db.Integer, nullable=False)
@@ -485,7 +487,7 @@ class CookLog(db.Model):
     photo_size = db.Column(db.Integer)
     eat_out_price = db.Column(db.Integer)  # 1인분(원)
     eat_out_source = db.Column(db.String(10))  # user | ai | sample
-    ingredient_cost = db.Column(db.Integer, nullable=False, default=0)
+    ingredient_cost = db.Column(db.Integer, nullable=False, default=0)  # 직접 쓴 일기는 적은 재료비, 비우면 0(cooklog.cost_known)
     saved = db.Column(db.Integer)  # None = 계산 못 함(결정 14)
     excluded_count = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)

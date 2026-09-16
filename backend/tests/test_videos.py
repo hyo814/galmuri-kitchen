@@ -5,6 +5,7 @@ import pytest
 from app import outbound, videos
 from app.models import AiCall, User, UserChannel, YoutubeChannel, YoutubeVideo, db, utcnow
 from app.outbound import FetchError
+from tests.test_recipe_ai import fix_clock
 
 
 def cid(name):
@@ -653,11 +654,12 @@ def test_channel_add_daily_limit_counts_every_add(on_client, on_login, on_app, m
     me = on_login()
     known = make_channel(on_app, "KNOWN")
     monkeypatch.setattr(outbound, "channel_info", fail_if_called)
+    _, now = fix_clock(monkeypatch)  # 실제 시계를 쓰면 서울 자정 0~5분 사이에 "5분 전"이 어제로 셀 뻔했다
     assert on_client.post("/api/channels", json={"url": f"youtube.com/channel/{cid('KNOWN')}"}).status_code == 201
     assert on_client.delete(f"/api/channels/{known}").status_code == 204
     with on_app.app_context():
         assert AiCall.query.filter_by(user_id=me, kind="channel_add").count() == 1  # 캐시된 채널 추가도 센다
-        earlier = utcnow() - timedelta(minutes=5)
+        earlier = now - timedelta(minutes=5)
         db.session.add_all([AiCall(user_id=me, kind="channel_add", created_at=earlier) for _ in range(29)])
         db.session.commit()
     res = on_client.post("/api/channels", json={"url": f"youtube.com/channel/{cid('KNOWN')}"})

@@ -1,0 +1,353 @@
+<title>요리 일기 쓰기 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+  :root {
+    --board: #e6e8eb;
+    --bg: #f3f4f6;
+    --surface: #ffffff;
+    --field: #f3f4f6;
+    --text: #17191c;
+    --text-2: #5b616b;
+    --text-3: #63697a;
+    --line: #eef0f2;
+    --chip-line: #d3d7dd;
+    --scrim: rgb(15 17 20 / 0.48);
+    --accent: #0b7a4c;
+    --accent-strong: #086a41;
+    --accent-tint: #e7f6ef;
+    --on-accent: #ffffff;
+    --warn: #8f5500;
+    --warn-tint: #fff3dc;
+    --photo-a: #d9c3a1;
+    --photo-b: #b9cfa8;
+    --photo-c: #c7b3c9;
+    --note: #3a3f46;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --scrim: rgb(0 0 0 / 0.6); --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --photo-a: #5a4a33; --photo-b: #3f5436; --photo-c: #4d3f50; --note: #d3d7dc;
+    }
+  }
+  :root[data-theme="dark"] {
+    --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --scrim: rgb(0 0 0 / 0.6); --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --photo-a: #5a4a33; --photo-b: #3f5436; --photo-c: #4d3f50; --note: #d3d7dc;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 16px 56px; background: var(--board); color: var(--text); font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .intro { max-width: 1700px; margin: 0 auto 28px; }
+  .intro h1 { margin: 0 0 8px; font-size: 26px; line-height: 34px; font-weight: 700; text-wrap: balance; }
+  .intro p { margin: 0 0 6px; max-width: 66ch; font-size: 15px; line-height: 24px; color: var(--text-2); word-break: keep-all; }
+  .intro b { color: var(--note); }
+  .asks { max-width: 1700px; margin: 0 auto 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; }
+  .ask { padding: 14px 16px; border-radius: 16px; background: var(--surface); }
+  .ask h3 { margin: 0 0 4px; font-size: 15px; }
+  .ask p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+  .ask .rec { color: var(--accent-strong); font-weight: 600; }
+
+  .board { max-width: 1700px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(384px, 100%), 1fr)); gap: 32px 24px; align-items: start; }
+  .option { display: grid; gap: 12px; justify-items: center; }
+  .cap { width: min(384px, 100%); display: grid; gap: 4px; }
+  .tag { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: 0.06em; color: var(--text-3); }
+  .cap h2 { margin: 0; font-size: 18px; line-height: 26px; }
+  .cap p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+
+  /* 폰 */
+  .phone { position: relative; width: min(384px, 100%); height: 800px; overflow: hidden; border-radius: 28px; background: var(--bg); }
+  .under { padding: 24px 20px; }
+  .under h3 { margin: 0 0 4px; font-size: 26px; font-weight: 700; }
+  .under p { margin: 0; color: var(--text-3); font-size: 15px; }
+  .scrim { position: absolute; inset: 0; background: var(--scrim); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 92%; overflow: hidden; padding: 12px 20px 24px; border-radius: 24px 24px 0 0; background: var(--surface); display: grid; gap: 14px; }
+  .sheet.tall { top: 7%; }
+  .handle { justify-self: center; width: 40px; height: 4px; border-radius: 2px; background: var(--chip-line); }
+  .sh-title { margin: 0; font-size: 21px; line-height: 28px; font-weight: 700; }
+  .sh-desc { margin: 2px 0 0; font-size: 14px; line-height: 20px; color: var(--text-2); word-break: keep-all; }
+  .hint { display: flex; gap: 6px; align-items: flex-start; font-size: 13px; line-height: 19px; color: var(--text-3); word-break: keep-all; }
+  .hint svg { flex: none; margin-top: 2px; }
+
+  .btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 56px; border-radius: 16px; font-size: 17px; font-weight: 600; white-space: nowrap; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); }
+  .btn.secondary { background: var(--field); color: var(--text); }
+  .actions { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; }
+
+  /* 사진 모으기 */
+  .kindline { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--field); font-size: 15px; font-weight: 600; }
+  .kindline .ic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--surface); color: var(--accent-strong); }
+  .kindline span.chg { margin-left: auto; font-size: 14px; color: var(--accent-strong); }
+  .tray { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .thumb { position: relative; aspect-ratio: 1; max-width: 100%; border-radius: 14px; overflow: hidden; }
+  .thumb .img { position: absolute; inset: 0; }
+  .thumb .n { position: absolute; left: 6px; bottom: 6px; padding: 1px 7px; border-radius: 10px; background: rgb(0 0 0 / 0.55); color: #fff; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .thumb .x { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 14px; background: rgb(0 0 0 / 0.55); color: #fff; }
+  .add { display: grid; place-items: center; align-content: center; gap: 4px; aspect-ratio: 1; border-radius: 14px; box-shadow: inset 0 0 0 1.5px var(--chip-line); color: var(--text-2); font-size: 13px; font-weight: 600; }
+  .add svg { color: var(--accent-strong); }
+  .count { display: flex; justify-content: space-between; font-size: 14px; color: var(--text-2); }
+  .count b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+  /* 기다리기 */
+  .wait { display: grid; justify-items: center; gap: 14px; padding: 20px 0 8px; text-align: center; }
+  .stack { position: relative; width: 132px; height: 110px; }
+  .stack i { position: absolute; width: 84px; height: 96px; border-radius: 12px; box-shadow: 0 2px 8px rgb(0 0 0 / 0.12); }
+  .stack i:nth-child(1) { left: 0; top: 8px; transform: rotate(-9deg); background: var(--photo-b); }
+  .stack i:nth-child(2) { left: 24px; top: 2px; transform: rotate(-2deg); background: var(--photo-c); }
+  .stack i:nth-child(3) { left: 48px; top: 10px; transform: rotate(7deg); background: var(--photo-a); }
+  .bar { width: 100%; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .bar i { display: block; width: 46%; height: 100%; border-radius: 2px; background: var(--accent); }
+  .wait h4 { margin: 0; font-size: 19px; line-height: 26px; }
+  .wait p { margin: 0; font-size: 14px; color: var(--text-2); }
+
+  /* 확인 */
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 8px; background: var(--accent-tint); color: var(--accent-strong); font-size: 12px; font-weight: 600; }
+  .label { font-size: 14px; font-weight: 600; color: var(--text-2); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; height: 36px; padding: 0 12px; border-radius: 18px; background: var(--field); color: var(--text-2); font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .chip.on { background: var(--accent-tint); color: var(--accent-strong); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .chip.small { height: 32px; padding: 0 10px; font-size: 13px; }
+  .picked { font-size: 13px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .items { display: grid; }
+  .item { display: grid; grid-template-columns: 28px minmax(0, 1fr) 24px; align-items: center; gap: 10px; min-height: 60px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .cb { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; background: var(--accent); color: var(--on-accent); }
+  .cb.off { background: none; box-shadow: inset 0 0 0 2px var(--chip-line); }
+  .it-name { font-size: 16px; font-weight: 600; }
+  .it-sub { font-size: 13px; line-height: 18px; color: var(--text-3); }
+  .it-sub .own { color: var(--warn); font-weight: 600; }
+  .chev { color: var(--text-3); }
+  .edit { grid-column: 1 / -1; display: grid; gap: 10px; padding: 4px 0 10px 38px; }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .fld { display: grid; gap: 4px; }
+  .fld span { font-size: 12px; color: var(--text-3); }
+  .fld div { height: 44px; display: flex; align-items: center; padding: 0 12px; border-radius: 12px; background: var(--field); font-size: 15px; }
+  .foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 20px 20px; background: var(--surface); box-shadow: 0 -1px 0 var(--line); }
+
+  /* 재고 목록 */
+  .list { margin: 0 16px; border-radius: 20px; background: var(--surface); }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 14px 16px; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .row b { font-size: 16px; }
+  .row small { display: block; margin-top: 2px; font-size: 13px; color: var(--text-3); }
+  .pill { font-size: 12px; font-weight: 600; color: var(--warn); background: var(--warn-tint); padding: 3px 8px; border-radius: 8px; }
+
+  svg { flex: none; }
+  .foot-note { width: min(384px, 100%); font-size: 13px; line-height: 20px; color: var(--text-3); word-break: keep-all; }
+</style>
+<style>
+  /* 요리 일기 쓰기 */
+  .sheet.tall { align-content: start; }
+  .page-in { padding: 14px 20px 110px; display: grid; gap: 14px; align-content: start; }
+  .back { display: inline-flex; align-items: center; gap: 2px; font-size: 15px; color: var(--text-2); }
+  .ptitle { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .ptitle h3 { margin: 0; font-size: 26px; line-height: 34px; font-weight: 700; }
+  .write { display: inline-flex; align-items: center; gap: 4px; height: 40px; padding: 0 14px; border-radius: 12px; background: var(--accent-tint); color: var(--accent-strong); font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .month { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; padding: 16px; border-radius: 18px; background: var(--accent-tint); }
+  .month b { font-size: 16px; }
+  .month small { display: block; margin-top: 2px; font-size: 13px; color: var(--text-2); }
+  .diary { display: grid; border-radius: 18px; background: var(--surface); padding: 4px 16px; }
+  .drow { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+  .drow:first-child { border-top: 0; }
+  .ph { width: 56px; height: 56px; border-radius: 12px; background: var(--field); display: grid; place-items: center; color: var(--text-3); overflow: hidden; }
+  .ph.a { background: linear-gradient(135deg, var(--photo-a), var(--photo-c)); }
+  .ph.b { background: linear-gradient(135deg, var(--photo-b), var(--photo-a)); }
+  .drow b { font-size: 16px; }
+  .stars { color: #d49a00; font-size: 13px; letter-spacing: 1px; margin-left: 4px; }
+  .drow small { display: block; margin-top: 2px; font-size: 13px; color: var(--text-2); }
+  .drow small em { font-style: normal; color: var(--accent-strong); font-weight: 600; }
+  .tagline { display: inline-flex; margin-left: 4px; padding: 1px 6px; border-radius: 6px; background: var(--field); color: var(--text-3); font-size: 11px; font-weight: 600; vertical-align: 2px; }
+
+  .search { display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 14px; border-radius: 14px; background: var(--field); color: var(--text-3); font-size: 15px; }
+  .pick { display: grid; }
+  .pick-row { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 12px; align-items: center; min-height: 56px; border-top: 1px solid var(--line); }
+  .pick-row:first-child { border-top: 0; }
+  .radio { width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--chip-line); }
+  .pick-row.on .radio { box-shadow: inset 0 0 0 7px var(--accent); }
+  .pick-row b { font-size: 16px; }
+  .pick-row small { display: block; font-size: 13px; color: var(--text-3); }
+  .or { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-3); }
+  .or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .field-l { display: grid; gap: 6px; }
+  .field-l > span { font-size: 14px; font-weight: 600; color: var(--text-2); }
+  .input { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 48px; padding: 0 14px; border-radius: 14px; background: var(--field); font-size: 15px; }
+  .input.focus { box-shadow: inset 0 0 0 2px var(--accent); }
+  .input .unit { color: var(--text-3); font-size: 14px; }
+  .input .ph-t { color: var(--text-3); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stepper { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; height: 48px; border-radius: 14px; background: var(--field); text-align: center; font-size: 15px; font-weight: 600; }
+  .stepper i { font-style: normal; font-size: 20px; color: var(--text-2); }
+  .photo-pick { display: grid; grid-template-columns: 72px 1fr; gap: 10px; align-items: center; }
+  .photo-pick .ph { width: 72px; height: 72px; }
+  .photo-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .star-pick { display: flex; gap: 4px; font-size: 26px; color: #d49a00; }
+  .star-pick .off { color: var(--chip-line); }
+  .switch { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+  .switch b { font-size: 15px; }
+  .switch small { display: block; font-size: 13px; color: var(--text-3); }
+  .tog { width: 48px; height: 28px; border-radius: 14px; background: var(--accent); position: relative; }
+  .tog::after { content: ""; position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; }
+  .note { display: flex; gap: 6px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; background: var(--field); font-size: 13px; line-height: 19px; color: var(--text-2); word-break: keep-all; }
+  .note svg { margin-top: 1px; color: var(--accent-strong); }
+  .scroll-body { display: grid; gap: 14px; overflow: hidden; }
+
+  .calc { display: grid; gap: 8px; padding: 16px; border-radius: 18px; background: var(--surface); }
+  .calc .lead { font-size: 13px; color: var(--text-2); }
+  .calc .big { font-size: 30px; font-weight: 700; color: var(--accent-strong); line-height: 36px; font-variant-numeric: tabular-nums; }
+  .ln { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; font-size: 14px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .ln b { color: var(--text); font-weight: 600; }
+  .ln.sum { padding-top: 8px; border-top: 1px solid var(--line); color: var(--text); font-weight: 600; }
+  .src { font-size: 12px; color: var(--text-3); }
+  .toast { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 12px 14px; border-radius: 14px; background: #17191c; color: #f1f2f4; font-size: 14px; line-height: 20px; }
+  .toast span.u { color: #7ee2b0; font-weight: 600; }
+  .cta { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 20px 20px; background: var(--bg); display: grid; gap: 8px; }
+  .btn.outline { background: none; color: var(--text); box-shadow: inset 0 0 0 1.5px var(--chip-line); }
+  .ing { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 15px; }
+  .ing span { color: var(--text-2); }
+  .items .item > span:nth-child(2) > span { display: block; }
+</style>
+
+<header class="intro">
+  <h1>요리 일기 쓰기 시안</h1>
+  <p>지금은 <b>내 레시피 상세의 `요리했어요`</b>로만 요리 일기가 생겨요. 그래서 추천(식약처) 레시피로 만들었거나 앱에 레시피가 없는 요리는 일기로 남기지 못해요.</p>
+  <p>두 가지를 더해요. <b>① 요리 일기 화면의 `일기 쓰기`</b> — 내 레시피를 고르면 지금 시트로, 이름만 적으면 재료를 빼지 않는 간단한 일기로. <b>② 추천 레시피의 `요리했어요`</b> — 누르면 내 레시피에 저장한 뒤 같은 시트를 열어요.</p>
+</header>
+
+<section class="asks" aria-label="정하실 것">
+  <div class="ask"><h3>A. 일기 쓰기 입구</h3><p><span class="rec">요리 일기 제목 옆 버튼(추천)</span> · 또는 더보기 기록 묶음에 줄 하나. 먹은 기록 달력의 날짜 상세에도 `요리 일기 쓰기`를 둘 수 있어요.</p></div>
+  <div class="ask"><h3>B. 레시피 없는 일기의 재료비</h3><p><span class="rec">직접 적기, 선택(추천)</span> · 적으면 아낀 돈을 계산하고, 비우면 “재료비 모름”으로 둬요. 또는 받지 않기(리포트의 아낀 돈에 안 들어가요).</p></div>
+  <div class="ask"><h3>C. 추천 레시피에서 요리했어요</h3><p><span class="rec">누르면 바로 저장하고 시트 열기(추천)</span> · 저장했다고 시트 위에 한 줄로 알려요. 또는 “내 레시피에 저장할까요?”를 먼저 묻기.</p></div>
+</section>
+
+<div class="board">
+
+  <!-- ① 목록 -->
+  <div class="option">
+    <div class="cap"><span class="tag">① DIARY · 버튼 추가</span><h2>요리 일기에 일기 쓰기</h2><p>제목 옆에 `일기 쓰기`. 레시피 없이 쓴 일기는 줄에 `직접 쓴 일기` 꼬리표가 붙어요.</p></div>
+    <div class="phone" role="img" aria-label="요리 일기 목록 위에 일기 쓰기 버튼이 있는 화면">
+      <div class="page-in">
+        <span class="back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>더보기</span>
+        <div class="ptitle"><h3>요리 일기</h3><span class="write"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>일기 쓰기</span></div>
+        <div class="month"><span><b>9월 요리 3번 · 약 36,700원 아꼈어요</b><small>집밥 리포트 보기</small></span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div>
+        <div class="diary">
+          <div class="drow"><span class="ph a"></span><span><b>제육덮밥</b><span class="stars">★★★★★</span><span class="tagline">직접 쓴 일기</span><small>9월 16일 · 2인분 · <em>약 11,500원 아낌</em></small><small>양념을 조금 줄였더니 딱 좋았어요</small></span></div>
+          <div class="drow"><span class="ph b"></span><span><b>김치찌개</b><span class="stars">★★★★☆</span><small>9월 14일 · 2인분 · <em>약 10,400원 아낌</em></small><small>두부 마저 썼어요</small></span></div>
+          <div class="drow"><span class="ph"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10" cy="12" r="6"/><path d="M16 12h6"/></svg></span><span><b>된장찌개</b><span class="stars">★★★★★</span><small>9월 11일 · 2인분 · <em>약 14,800원 아낌</em></small></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② 무엇을 -->
+  <div class="option">
+    <div class="cap"><span class="tag">② WHAT · 새 시트</span><h2>무엇을 요리했나요</h2><p>내 레시피를 고르면 지금 `요리했어요` 시트로 넘어가요(재료를 재고에서 빼요). 없으면 이름만 적어요.</p></div>
+    <div class="phone" role="img" aria-label="내 레시피에서 고르거나 요리 이름을 직접 적는 시트">
+      <div class="scrim"></div>
+      <div class="sheet tall">
+        <div class="handle"></div>
+        <div><p class="sh-title">무엇을 요리했나요?</p><p class="sh-desc">내 레시피에서 고르면 쓴 재료를 재고에서 빼요</p></div>
+        <div class="search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>내 레시피에서 찾기</div>
+        <div class="pick" role="radiogroup" aria-label="내 레시피">
+          <div class="pick-row"><span class="radio"></span><span><b>김치찌개</b><small>요리 2번 · 마지막 9월 14일</small></span></div>
+          <div class="pick-row"><span class="radio"></span><span><b>된장찌개</b><small>요리 1번 · 마지막 9월 11일</small></span></div>
+          <div class="pick-row"><span class="radio"></span><span><b>두부조림</b><small>아직 요리 기록이 없어요</small></span></div>
+        </div>
+        <p class="or">레시피가 없으면</p>
+        <div class="field-l"><span>요리 이름</span><div class="input focus">제육덮밥</div></div>
+        <div class="actions"><div class="btn outline">취소</div><div class="btn primary">다음</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ 레시피 없이 쓰기 -->
+  <div class="option">
+    <div class="cap"><span class="tag">③ WRITE · 새 시트</span><h2>레시피 없이 쓰기</h2><p>지금 시트에서 재료 줄만 빠진 모양이에요. 사진은 나중에 찍은 것도 앨범에서 골라요.</p></div>
+    <div class="phone" role="img" aria-label="제육덮밥 일기를 레시피 없이 쓰는 시트">
+      <div class="scrim"></div>
+      <div class="sheet tall">
+        <div class="handle"></div>
+        <div><p class="sh-title">제육덮밥 요리했어요</p><p class="sh-desc">레시피가 없어 재고는 그대로예요</p></div>
+        <div class="scroll-body">
+          <div class="row2">
+            <div class="field-l"><span>언제</span><div class="chips"><span class="chip small on">오늘</span><span class="chip small">어제</span><span class="chip small">날짜</span></div></div>
+            <div class="field-l"><span>몇 인분</span><div class="stepper"><i>−</i>2인분<i>+</i></div></div>
+          </div>
+          <div class="field-l"><span>사진</span><div class="photo-pick"><span class="ph a"></span><div class="photo-btns"><span class="chip small">찍기</span><span class="chip small on">앨범</span><span class="chip small">사진 빼기</span></div></div></div>
+          <div class="row2">
+            <div class="field-l"><span>사 먹으면 얼마 (1인분)</span><div class="input">9,000<span class="unit">원</span></div></div>
+            <div class="field-l"><span>재료비 (선택)</span><div class="input">6,500<span class="unit">원</span></div></div>
+          </div>
+          <div class="field-l"><span>별점</span><div class="star-pick" aria-hidden="true">★★★★★</div></div>
+          <div class="field-l"><span>메모 (선택)</span><div class="input"><span class="ph-t">양념을 조금 줄였더니 딱 좋았어요</span></div></div>
+          <div class="switch"><span><b>먹은 기록에도 남기기</b><small>9월 16일 저녁 · 집밥</small></span><span class="tog" aria-hidden="true"></span></div>
+        </div>
+        <div class="btn primary">일기 저장</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ 상세 -->
+  <div class="option">
+    <div class="cap"><span class="tag">④ DETAIL · 계산표 모양만 다름</span><h2>직접 쓴 일기 상세</h2><p>재료 줄 대신 적은 재료비 한 줄로 계산해요. 재료비를 비웠으면 “재료비를 적으면 아낀 돈을 계산해요”.</p></div>
+    <div class="phone" role="img" aria-label="직접 쓴 제육덮밥 일기의 아낀 돈 계산표">
+      <div class="scrim"></div>
+      <div class="sheet tall">
+        <div class="handle"></div>
+        <div><p class="sh-title">제육덮밥</p><p class="sh-desc">9월 16일 수요일 · 2인분 · 직접 쓴 일기</p></div>
+        <div class="ph a" style="width:100%;height:150px;border-radius:16px" aria-hidden="true"></div>
+        <p class="sh-desc" style="margin:0;color:var(--text)">양념을 조금 줄였더니 딱 좋았어요</p>
+        <div class="calc" style="background:var(--field)">
+          <span class="lead">아낀 돈</span>
+          <span class="big">약 11,500원</span>
+          <div class="ln"><span>사 먹으면 9,000원 × 2인분</span><b>18,000원</b></div>
+          <div class="ln"><span>재료비 (직접 적음)</span><b>− 6,500원</b></div>
+          <div class="ln sum"><span>아낀 돈</span><span>약 11,500원</span></div>
+          <span class="src">레시피가 없어 재료별로 나누지 않았어요 · 참고용이에요</span>
+        </div>
+        <div class="actions"><div class="btn secondary">고치기</div><div class="btn outline" style="color:#b3261e;box-shadow:inset 0 0 0 1.5px #f1b7b2;background:#fdecea">일기 지우기</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ 추천 레시피 -->
+  <div class="option">
+    <div class="cap"><span class="tag">⑤ PUBLIC · 버튼 추가</span><h2>추천 레시피에서 요리했어요</h2><p>아래 바에 `요리했어요`를 크게, `내 레시피로 저장`은 옆에 작게. 둘 다 내 레시피에 저장돼요.</p></div>
+    <div class="phone" role="img" aria-label="식약처 추천 레시피 상세 아래에 요리했어요와 저장 버튼이 있는 화면">
+      <div class="page-in">
+        <span class="back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>레시피</span>
+        <div><h3 style="margin:0;font-size:26px;line-height:34px">두부조림</h3><p class="sh-desc">식약처 레시피 · 2인분</p></div>
+        <div class="calc">
+          <b style="font-size:17px">재료</b>
+          <div class="ing"><b>두부</b><span>1모 · 있음</span></div>
+          <div class="ing"><b>대파</b><span>1/2대 · 있음</span></div>
+          <div class="ing"><b>간장</b><span>2큰술 · 없음</span></div>
+          <div class="ing"><b>고춧가루</b><span>1큰술 · 없음</span></div>
+        </div>
+      </div>
+      <div class="cta" style="grid-template-columns: 1fr 1.8fr">
+        <div class="btn outline" style="font-size:15px">저장만</div>
+        <div class="btn primary">요리했어요</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑥ 저장 알림 -->
+  <div class="option">
+    <div class="cap"><span class="tag">⑥ SAVED · 한 줄 추가</span><h2>저장하고 같은 시트</h2><p>누르면 내 레시피에 저장한 뒤 지금의 `요리했어요` 시트를 열어요. 시트 위에 저장했다고 한 줄로 알려요.</p></div>
+    <div class="phone" role="img" aria-label="두부조림을 내 레시피에 저장했다는 안내와 요리했어요 시트">
+      <div class="scrim"></div>
+      <div class="sheet tall">
+        <div class="handle"></div>
+        <div><p class="sh-title">두부조림 요리했어요</p><p class="sh-desc">쓴 재료는 재고에서 빼요</p></div>
+        <p class="note"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>두부조림을 내 레시피에 저장했어요. 다음부터는 내 레시피에서 열 수 있어요.</p>
+        <div class="field-l"><span>몇 인분</span><div class="stepper"><i>−</i>2인분<i>+</i></div></div>
+        <div class="items">
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span><span><span class="it-name">두부</span><span class="it-sub">1모 쓰기 · 재고 1모 · 마저 써요</span></span><span></span></div>
+          <div class="item"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span><span><span class="it-name">대파</span><span class="it-sub">½대 쓰기 · 재고 1단</span></span><span></span></div>
+        </div>
+        <p class="hint">재고에 없는 재료: 간장 · 고춧가루</p>
+        <div class="btn primary">저장하고 재고에서 빼기</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="intro" style="margin-top:28px"><small style="color:var(--text-3);font-size:13px;line-height:20px;display:block;max-width:66ch">만들 때: 레시피 없는 일기는 cook_logs에 레시피 없이 이름·재료비만 저장하고(재고·재료 줄 없음), 리포트의 아낀 돈·요리 횟수에 똑같이 들어가요. 재료비를 비우면 “계산하지 못한 요리”로 세요. 추천 레시피의 요리했어요는 지금 “내 레시피로 저장”과 같은 저장을 먼저 한 뒤 시트를 열어요. 숫자와 사진 자리는 화면 설명용 예시예요.</small></p>

@@ -40,8 +40,9 @@ interface Props {
   onClose: () => void;
 }
 
-/** 검색 글자가 멈추고 300ms 뒤 다시 받는다(빈 칸이면 바로). 앞 요청은 끊는다. result.q는 목록이 어떤 검색어의 결과인지 */
-function useSearch<T>(path: string, input: string, enabled = true) {
+/** 검색 글자가 멈추고 300ms 뒤 다시 받는다(빈 칸이면 바로). 앞 요청은 끊는다. result.q는 목록이 어떤 검색어의 결과인지.
+ *  요리 일기 쓰기 시트(DiaryWriteSheet)도 쓴다 */
+export function useSearch<T>(path: string, input: string, enabled = true) {
   const [result, setResult] = useState<{ q: string; items: T[] } | null>(null);
   const [error, setError] = useState("");
   const [retries, setRetries] = useState(0);
@@ -68,7 +69,7 @@ function useSearch<T>(path: string, input: string, enabled = true) {
   return { result, error, retry: () => setRetries((n) => n + 1) };
 }
 
-function SearchBox({ label, value, disabled, onChange }: { label: string; value: string; disabled?: boolean; onChange: (value: string) => void }) {
+export function SearchBox({ label, value, disabled, onChange }: { label: string; value: string; disabled?: boolean; onChange: (value: string) => void }) {
   return (
     <div className="r3-search ml-sheet-search">
       <label>
@@ -81,7 +82,7 @@ function SearchBox({ label, value, disabled, onChange }: { label: string; value:
 }
 
 /** compact: 지난 목록 위에 붙이는 작은 오류(목록이 없을 때는 가운데 크게) */
-function ListState({ error, loading, empty, onRetry, compact }: { error: string; loading: boolean; empty: string; onRetry: () => void; compact?: boolean }) {
+export function ListState({ error, loading, empty, onRetry, compact }: { error: string; loading: boolean; empty: string; onRetry: () => void; compact?: boolean }) {
   if (error)
     return (
       <div className={compact ? "list-end ml-refetch" : "center"}>

@@ -390,7 +390,9 @@ def recommendations():
 @bp.get("/recipes/choices")
 @login_required
 def recipe_choices():
-    """식단 칸 채우기 시트의 `내 레시피` 목록(20절): 최근 200개 후보를 재고 일치 점수 순으로. q가 있으면 제목 필터."""
+    """식단 칸 채우기 시트의 `내 레시피` 목록(20절): 최근 200개 후보를 재고 일치 점수 순으로. q가 있으면 제목 필터.
+    줄마다 cooked(요리 일기 쓰기 시트의 `요리 2번 · 마지막 9월 14일`, 29절 추가 2026-09-16)."""
+    from .cooklog import cooked_counts  # cooklog가 recipes를 import하므로 여기서만(순환 import 방지)
     q = request.args.get("q", "").strip()[:QUERY_MAX]
     query = Recipe.query.filter_by(user_id=g.user.id)
     if q:
@@ -406,7 +408,8 @@ def recipe_choices():
         return rate + 0.1 * len(summary["urgent_names"])
 
     ranked = sorted(summaries, key=lambda pair: -score(pair[1]))[:CHOICES_MAX]
-    return jsonify(items=[{"id": r.id, "title": r.title, "servings": r.servings, **summary} for r, summary in ranked])
+    cooked = cooked_counts([r.id for r, _ in ranked], g.user.id)
+    return jsonify(items=[{"id": r.id, "title": r.title, "servings": r.servings, **summary, "cooked": cooked.get(r.id)} for r, summary in ranked])
 
 
 @bp.get("/recipes")

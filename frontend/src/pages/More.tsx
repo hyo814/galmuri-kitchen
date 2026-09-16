@@ -415,7 +415,7 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
         <Row
           icon={<Icon name="pan" />}
           title="요리 일기"
-          sub={report.data ? (report.data.cooked ? `이번 달 요리 ${report.data.cooked}번` : "요리했어요로 남긴 기록을 모아 봐요") : ""}
+          sub={report.data ? (report.data.cooked ? `이번 달 요리 ${report.data.cooked}번` : "요리한 기록을 모아봐요") : ""}
           onClick={() => navigate("/cook-logs")}
         />
         <Row

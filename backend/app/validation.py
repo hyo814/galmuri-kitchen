@@ -21,7 +21,10 @@ def commit_or_duplicate(message):
 
 
 def text(value, label, max_len):
-    """앞뒤 공백을 뺀 1~max_len자 문자열. label은 조사를 포함한다(예: "이름은")."""
+    """앞뒤 공백을 뺀 1~max_len자 문자열. label은 조사를 포함한다(예: "이름은").
+    NUL 글자는 PostgreSQL이 받지 않아(500) memo처럼 400 '잘못된 요청이에요.'."""
+    if isinstance(value, str) and "\x00" in value:
+        abort(400, "잘못된 요청이에요.")
     if not isinstance(value, str) or not 1 <= len(value.strip()) <= max_len:
         abort(400, f"{label} 1~{max_len}자로 입력해주세요.")
     return value.strip()
