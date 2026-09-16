@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { ApiError, api, type AiUsage, type RecipeDraft } from "../api";
-import { remainingText, videoSource } from "../format";
+import { remainingText } from "../format";
 import { autoGrowTextarea, openDraft } from "../pages/RecipeForm";
 import { navigate } from "../useHashRoute";
 import { useResource } from "../useResource";
@@ -19,12 +19,18 @@ const CHOICES: { step: AddStep | "manual"; icon: IconName; title: string; hint: 
   { step: "manual", icon: "pencil", title: "직접 쓰기", hint: "재료와 만드는 법을 하나씩" },
 ];
 
+/** 못 읽은 유튜브·인스타그램 링크. 서버가 422 need_text에 읽은 출처·표준 주소를 함께 준다(화면은 주소를 다시 해석하지 않는다) */
+export interface FailedLink {
+  source: "youtube" | "instagram";
+  source_url: string;
+}
+
 interface Props {
   /** 영상 보기처럼 글 붙여넣기·사진 단계부터 열 때 */
   initialStep?: AddStep;
   initialWarning?: string;
   /** 영상 보기에서 못 읽은 유튜브 링크: 처음부터 화면 캡처 흐름으로 연다 */
-  failedLink?: string;
+  failedLink?: FailedLink;
   onClose: () => void;
 }
 
@@ -46,15 +52,12 @@ export function CaptureButton({ onClick, onPage = false }: { onClick: () => void
 }
 
 /** 레시피 추가: 방법 고르기 → 링크 / 글 붙여넣기(링크를 못 읽으면 경고 상자와 함께 이 단계로) / 사진 → 가져온 레시피 확인 폼 */
-export default function AddRecipeSheet({ initialStep = "pick", initialWarning = "", failedLink = "", onClose }: Props) {
+export default function AddRecipeSheet({ initialStep = "pick", initialWarning = "", failedLink, onClose }: Props) {
   const [step, setStep] = useState<AddStep>(initialStep);
   const [warning, setWarning] = useState(initialWarning);
-  // 화면 캡처 흐름: 못 읽은 유튜브·인스타그램 링크(출처)와 그 경고. 있으면 글 단계 경고 아래 `화면 캡처로 가져오기`,
-  // 사진 단계는 앨범 먼저 + 취소, 사진으로 가져온 레시피의 출처도 이 링크로 남긴다. go()가 흐름 밖으로 옮길 때와 링크·글을 다시 보낼 때 지운다
-  const [capture, setCapture] = useState(() => {
-    const link = videoSource(failedLink);
-    return link && { link, warning: initialWarning };
-  });
+  // 화면 캡처 흐름: 못 읽은 유튜브·인스타그램 링크와 그 경고. 링크는 이 흐름(글 ↔ 사진)에서 가져온 레시피의 출처로 남고(사진 단계는 앨범 먼저 + 취소),
+  // 경고가 있으면 글 단계 경고 아래 `화면 캡처로 가져오기`. go()가 흐름 밖으로 옮기거나 시트를 닫으면 모두 지우고, 글을 다시 보내면 경고만 지운다
+  const [capture, setCapture] = useState(failedLink ? { link: failedLink, warning: initialWarning } : null);
   const [url, setUrl] = useState("");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -128,19 +131,20 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
         () => void reloadUsage(), // 성공·실패 모두 AI 횟수를 셌을 수 있다
       );
       if (controller.signal.aborted) return;
-      // 화면 캡처로 가져왔으면 출처는 못 읽은 영상 링크(서버가 준 표준 주소와 같은 모양, 카드 없음)
-      openDraft(step === "photo" && capture ? { ...draft, ...capture.link } : draft);
+      // 못 읽은 영상 링크의 흐름에서 글·화면 캡처로 가져왔으면 출처는 그 링크(카드 없음)
+      openDraft(capture ? { ...draft, ...capture.link } : draft);
     } catch (err) {
       if (controller.signal.aborted) return;
       setBusy(false);
       setWarning((err as Error).message);
       // 링크를 못 읽었으면 같은 시트를 글 붙여넣기로 바꾼다(포커스는 위 effect가 제목으로). 아니면 고칠 수 있게 입력 칸으로.
-      // 유튜브·인스타그램은 레시피가 영상에만 있을 수 있어 화면 캡처로 가져오기도 보여준다.
+      // 유튜브·인스타그램(서버가 출처·표준 주소를 준다)은 레시피가 영상에만 있을 수 있어 화면 캡처로 가져오기도 보여준다.
       // 사진은 422(need_text)여도 사진 단계에 남아 경고로 보여준다(다시 찍을 수 있게)
       if (err instanceof ApiError && err.body?.need_text === true && step === "link") {
         setStep("text");
-        const link = videoSource(url);
-        if (link) setCapture({ link, warning: err.message });
+        const { source, source_url } = err.body;
+        if ((source === "youtube" || source === "instagram") && typeof source_url === "string")
+          setCapture({ link: { source, source_url }, warning: err.message });
       } else fieldRef.current?.focus();
     }
   };
@@ -148,7 +152,9 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (busy) return;
-    setCapture(null); // 링크·글을 다시 보내면 화면 캡처 흐름은 끝(또 못 읽은 영상 링크면 위에서 다시 연다)
+    // 글을 다시 보내면 경고 아래 캡처 버튼만 치운다(그 요청이 실패해도 다시 두지 않는다). 링크는 남겨 이 글로 가져온 레시피의 출처로 쓴다.
+    // 링크 단계는 방법 고르기에서만 오므로(go가 흐름을 지웠다) 여기서는 늘 null이다
+    setCapture((c) => c && { ...c, warning: "" });
     importDraft(() => (step === "link" ? { url: url.trim() } : { text: text.trim() }));
   };
 
@@ -303,7 +309,7 @@ export default function AddRecipeSheet({ initialStep = "pick", initialWarning = 
                 <span>{warning}</span>
               </div>
             )}
-            {warning && capture && <CaptureButton onClick={() => go("photo", true)} />}
+            {warning && capture?.warning && <CaptureButton onClick={() => go("photo", true)} />}
             {step === "link" ? (
               <label className="field">
                 <span className="field-label">링크</span>

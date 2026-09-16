@@ -55,39 +55,6 @@ export function addDays(iso: string, days: number): string {
   return d.toLocaleDateString("sv-SE");
 }
 
-export interface VideoLink {
-  source: "youtube" | "instagram";
-  source_url: string;
-}
-
-/** 유튜브 영상·인스타그램 게시물 링크 → 서버와 같은 출처·표준 주소, 그 밖의 링크는 null(서버 outbound.parse_link와 같은 규칙).
- *  레시피가 영상에만 있을 수 있어 화면 캡처를 안내하고, 캡처로 가져온 레시피의 출처로 남긴다 */
-export function videoSource(link: string): VideoLink | null {
-  let parts: URL;
-  try {
-    parts = new URL(link.trim());
-  } catch {
-    return null; // 주소 모양이 아니다(서버도 받지 않는다)
-  }
-  if (parts.protocol !== "https:" && parts.protocol !== "http:") return null;
-  const host = parts.hostname.replace(/^(?:www|m)\./, ""); // 서버처럼 앞의 하나만 뗀다
-  const [, first = "", second = ""] = parts.pathname.split("/");
-  if (/^(?:(?:music\.)?youtube\.com|youtube-nocookie\.com|youtu\.be)$/.test(host)) {
-    const id =
-      host === "youtu.be"
-        ? first
-        : parts.pathname.replace(/\/+$/, "") === "/watch"
-          ? (parts.searchParams.get("v") ?? "")
-          : ["shorts", "live", "embed"].includes(first)
-            ? second
-            : "";
-    return /^[\w-]{11}$/.test(id) ? { source: "youtube", source_url: `https://www.youtube.com/watch?v=${id}` } : null;
-  }
-  if (host === "instagram.com" && ["p", "reel", "reels"].includes(first) && /^[\w-]{5,40}$/.test(second))
-    return { source: "instagram", source_url: `https://www.instagram.com/p/${second}/` };
-  return null;
-}
-
 /** 식약처 사진은 http 주소로 오지만 https로도 열린다(2026-09-13 확인). https 화면에서 섞인 콘텐츠로 막히지 않게 바꾼다. */
 export function imageSrc(url: string | null): string | null {
   return url ? url.replace(/^http:\/\/(www|openapi)\.foodsafetykorea\.go\.kr\//, "https://$1.foodsafetykorea.go.kr/") : null;

@@ -173,6 +173,8 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
   font-size: 15px;
   line-height: 22px;
   color: var(--text-2);
+  word-break: keep-all; /* `로그인하/면`처럼 낱말 가운데서 끊지 않게 */
+  overflow-wrap: break-word;
 }
 
 .text-btn {

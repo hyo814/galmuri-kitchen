@@ -158,7 +158,17 @@ export default function VideoPlayer({ id, user }: { id: string; user: User }) {
                 {importError}
               </p>
             )}
-            {needText && <CaptureButton onPage onClick={() => setSheet("photo")} />}
+            {needText && (
+              <CaptureButton
+                onPage
+                onClick={() => {
+                  // 가져오기를 다시 누른 채 열면 그 요청은 멈춘다 — 늦게 온 응답이 열린 사진 시트를 바꾸거나 초안으로 넘기지 않게
+                  abortRef.current?.abort();
+                  setBusy(false);
+                  setSheet("photo");
+                }}
+              />
+            )}
           </div>
         </div>
       )}
@@ -166,7 +176,7 @@ export default function VideoPlayer({ id, user }: { id: string; user: User }) {
         <AddRecipeSheet
           initialStep={sheet}
           initialWarning={sheet === "text" ? needText : ""}
-          failedLink={watchUrl}
+          failedLink={{ source: "youtube", source_url: watchUrl }}
           onClose={() => setSheet(null)}
         />
       )}
