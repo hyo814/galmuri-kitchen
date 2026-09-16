@@ -5975,6 +5975,7 @@ button.sh-offline svg:last-child {
 
 .sh-photo.add:disabled {
   opacity: 0.4;
+}
 
 /* 요리 일기 (5) */
 
@@ -6010,4 +6011,507 @@ button.sh-offline svg:last-child {
   font-size: 12px;
   font-weight: 500;
   color: var(--text-3);
+}
+
+/* ---- 첫인상 (시안 docs/design/first-impression, 스펙 30절) ---- */
+
+/* A. PC(넓이 1024px 이상): 왼쪽 소개(index.html의 .pitch) + 오른쪽 폰 크기 앱.
+   ponytail: 앱은 그대로 창 스크롤을 쓰고, 고정 틀(body::before)의 둥근 구멍 밖을 책상 색으로 덮어 폰처럼 보이게 한다.
+   고정 바(.tabbar·.cta-bar)와 시트(<dialog>, top layer라 조상을 무시)는 같은 변수로 앱 칸 안에 맞춘다. 새 position:fixed가 생기면 여기에도 한 줄. */
+.pitch {
+  display: none;
+}
+
+:root {
+  --desk: #dfe3e0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --desk: #121417;
+  }
+}
+
+:root[data-theme="dark"] {
+  --desk: #121417;
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --col-w: 420px;
+    /* 소개 440 + 사이 64 + 앱 420 묶음을 가운데 두었을 때 앱 왼쪽 끝. %는 쓰는 곳 기준(고정 요소는 화면 넓이) */
+    --col-x: calc(50% + 42px);
+    --frame-r: 28px;
+    --frame-h: min(calc(100dvh - 48px), 940px);
+    --frame-top: calc((100dvh - var(--frame-h)) / 2);
+  }
+
+  body {
+    background: var(--desk);
+  }
+
+  #root {
+    width: var(--col-w);
+    min-height: 100dvh;
+    margin-left: var(--col-x);
+    padding-block: var(--frame-top);
+    background: var(--bg);
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    top: var(--frame-top);
+    left: var(--col-x);
+    z-index: 20;
+    width: var(--col-w);
+    height: var(--frame-h);
+    border-radius: var(--frame-r);
+    box-shadow: 0 0 0 1px var(--line), 0 24px 60px rgb(0 0 0 / 0.18), 0 0 0 100vmax var(--desk);
+    pointer-events: none;
+  }
+
+  .pitch {
+    position: fixed;
+    top: 50%;
+    left: calc(50% - 462px);
+    z-index: 21;
+    display: grid;
+    gap: 24px;
+    width: 440px;
+    transform: translateY(-50%);
+    color: var(--text);
+  }
+
+  .tabbar,
+  .cta-bar {
+    right: auto;
+    left: var(--col-x);
+    width: var(--col-w);
+  }
+
+  .tabbar {
+    bottom: var(--frame-top);
+  }
+
+  /* 시작 화면도 틀 안에(index.html의 첫 화면과 같은 자리 — 틀 → 전체 → 틀로 깜빡이지 않게) */
+  .splash {
+    inset: var(--frame-top) auto auto var(--col-x);
+    width: var(--col-w);
+    height: var(--frame-h);
+    border-radius: var(--frame-r);
+  }
+
+  html {
+    scroll-padding-top: var(--frame-top);
+    scroll-padding-bottom: calc(var(--frame-top) + var(--tabbar-h));
+  }
+
+  .cta-bar {
+    bottom: calc(var(--frame-top) + var(--tabbar-h));
+  }
+
+  .login {
+    min-height: var(--frame-h);
+  }
+
+  .sheet {
+    width: var(--col-w);
+    max-height: calc(var(--frame-h) - 40px);
+    margin: auto 0 var(--frame-top) var(--col-x);
+    border-radius: 24px 24px var(--frame-r) var(--frame-r);
+  }
+
+  .sheet.scan-tall {
+    height: calc(var(--frame-h) - 40px);
+  }
+
+  .sheet::backdrop {
+    inset: var(--frame-top) auto auto var(--col-x);
+    width: var(--col-w);
+    height: var(--frame-h);
+    border-radius: var(--frame-r);
+  }
+}
+
+.pitch-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.pitch-title {
+  margin: 0;
+  font-size: 36px;
+  line-height: 1.3;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  word-break: keep-all;
+}
+
+.pitch-title em {
+  font-style: normal;
+  color: var(--accent-strong);
+}
+
+.pitch-flow {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pitch-flow li {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.pitch-flow li > span {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--accent-strong);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.pitch-flow p,
+.pitch-qr p {
+  margin: 0;
+}
+
+.pitch-flow b,
+.pitch-qr b {
+  display: block;
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.pitch-flow small {
+  display: block;
+  font-size: 14px;
+  line-height: 21px;
+  color: var(--text-2);
+  word-break: keep-all;
+}
+
+.pitch-qr {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: fit-content;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.pitch-qr img {
+  display: block;
+  padding: 4px;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.pitch-qr small {
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+/* B. 로그인 미리보기 캐러셀: 로고와 버튼 사이 남는 자리만 채운다(flex-basis 0 — 버튼을 아래로 밀지 않는다).
+   자리가 작으면 줄여 보여 주고(트랙 138~199px), 더 작으면 제목만(70~137px), 그보다 작으면 숨긴다. 크기는 .peek 컨테이너 쿼리로 본다 */
+.login .login-hero {
+  flex: none;
+}
+
+.peek {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-height: 0;
+  max-height: 286px; /* 트랙 260 + 점 22 + 사이 4 */
+  margin-block: auto;
+  container-type: size;
+}
+
+.peek-track {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.peek-slide {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  padding: 14px 16px;
+  opacity: 0;
+  transform: translateX(16px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.peek-slide.on {
+  opacity: 1;
+  transform: none;
+}
+
+.peek-step {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 700;
+  color: var(--accent-strong);
+}
+
+.peek-title {
+  margin: -6px 0 0;
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 700;
+  word-break: keep-all;
+}
+
+.peek-rows {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.peek-rows li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: var(--field);
+  font-size: 15px;
+}
+
+.peek-rows li > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.peek-rows .badge {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.peek-won {
+  font-variant-numeric: tabular-nums;
+}
+
+.peek-receipt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.peek-paper {
+  flex: none;
+  width: 46px;
+  height: 60px;
+  border-radius: 4px;
+  background: repeating-linear-gradient(to bottom, var(--chip-line) 0 2px, transparent 2px 8px) 8px 10px / 30px 44px no-repeat, var(--field);
+  box-shadow: inset 0 0 0 1px var(--chip-line);
+}
+
+.peek-arrow {
+  color: var(--text-3);
+  font-size: 18px;
+}
+
+.peek-dots {
+  display: flex;
+  justify-content: center;
+}
+
+.peek-dots button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+}
+
+.peek-dots button::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--chip-line);
+  transition: width 0.3s;
+}
+
+.peek-dots button[aria-current="true"]::before {
+  width: 20px;
+  background: var(--accent);
+}
+
+/* 트랙 200px 미만(점·사이 26px 포함 226px 미만): 줄여 보이기 */
+@container (max-height: 225.9px) {
+  .peek-slide {
+    gap: 6px;
+    padding: 8px 14px;
+  }
+
+  .peek-step {
+    display: none;
+  }
+
+  .peek-title {
+    margin: 0;
+    font-size: 16px;
+    line-height: 22px;
+  }
+
+  .peek-rows {
+    gap: 4px;
+  }
+
+  .peek-rows li {
+    min-height: 28px;
+    font-size: 14px;
+  }
+}
+
+/* 트랙 138px 미만: 한 줄 제목만 넘긴다 */
+@container (max-height: 163.9px) {
+  .peek-slide {
+    align-content: center;
+    gap: 2px;
+  }
+
+  .peek-step {
+    display: block;
+  }
+
+  .peek-rows,
+  .peek-receipt {
+    display: none;
+  }
+}
+
+/* 트랙 70px 미만: 숨기기 */
+@container (max-height: 95.9px) {
+  .peek > * {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .peek-slide,
+  .peek-dots button::before {
+    transition: none;
+  }
+}
+
+/* C. 체험 계정 첫 30초: 재고 맨 위 다람이 안내 카드 + 레시피 추천 AI 카드 짚기 */
+.demo-guide {
+  display: grid;
+  gap: 12px;
+  margin: 16px 20px 0;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: var(--accent-tint);
+}
+
+.demo-guide-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.demo-guide-head .rc-empty-mark {
+  flex: none;
+  margin: 0;
+  border-radius: 11px;
+}
+
+.demo-guide-head p {
+  flex: 1;
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  word-break: keep-all;
+}
+
+.demo-guide-head b {
+  color: var(--accent-strong);
+}
+
+.demo-guide-head .icon-btn {
+  margin: -10px -12px 0 -6px;
+}
+
+.demo-guide-acts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.demo-guide-acts > :only-child {
+  grid-column: 1 / -1;
+}
+
+.demo-guide-acts .btn {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 15px;
+}
+
+.demo-guide-acts .btn.secondary {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.r3-ai.spot {
+  box-shadow: 0 0 0 3px var(--accent), 0 0 0 9px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.r3-ai-tip {
+  position: relative;
+  margin: 18px 20px 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--inverse-bg);
+  color: var(--inverse-text);
+  font-size: 14px;
+  line-height: 20px;
+  word-break: keep-all;
+}
+
+.r3-ai-tip::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  right: 48px;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: inherit;
+  transform: rotate(45deg);
 }
