@@ -5274,7 +5274,9 @@ button.sh-offline svg:last-child {
 
 .scan-samples {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* 있는 사진 수만큼 나눈다 — 2장이면 반씩, 마트 영수증까지 3장이면 셋으로(빈 칸이 비어 보이지 않게) */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 8px;
   margin: 0;
   padding: 0;
