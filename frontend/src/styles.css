@@ -377,13 +377,14 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
   color: var(--text);
 }
 
+/* 흐려지는 곳은 위 여백(32px)뿐 — 버튼 위 안내·오류 줄은 꽉 찬 바탕 위에 둬 뒤 목록 글자가 비치지 않게(높이 %면 줄이 늘 때 흐린 곳에 걸렸다) */
 .cta-bar {
   position: fixed;
   right: 0;
   bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
   left: 0;
   padding: 32px 20px 16px;
-  background: linear-gradient(to bottom, transparent, var(--bg) 36%);
+  background: linear-gradient(to bottom, transparent, var(--bg) 32px);
   pointer-events: none;
 }
 
