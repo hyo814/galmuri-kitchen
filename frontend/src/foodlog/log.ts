@@ -1,7 +1,8 @@
 // 먹은 기록 달력 순수 로직(스펙 24절, 4b-3). 브라우저 API 없음 — 오늘은 인자로 받는다(scripts/check-foodlog.mjs가 node로 읽는다).
-import type { DishItem, FoodLog, FoodLogMonthDay, FoodLogMonthSummary, FoodLogNutrition, FoodPlace, MealKind } from "../api";
+import type { DishItem, FoodLog, FoodLogMonthDay, FoodLogMonthSummary, FoodLogNutrition, FoodPlace, Incomplete, MealKind } from "../api";
 import { slotDateText } from "../meals/plan.ts";
 import { kcalNumber } from "../nutrition/body.ts";
+import { addIncomplete, atLeast, incompleteNotes } from "../nutrition/day.ts";
 
 export const PLACE_LABEL: Record<FoodPlace, string> = { home: "집밥", out: "외식" };
 export const monthOf = (iso: string) => iso.slice(0, 7);
@@ -47,38 +48,42 @@ export function todayRowSub(logs: Pick<FoodLog, "meal">[] | undefined): string {
 
 // ---- 날짜 상세 시트(Task 8) ----
 
-export interface DayTotals { kcal: number; approx: boolean; sugars_g: number; sodium_mg: number }
-/** kcal 있는 기록만 더한다(결정 11·15). 당류·나트륨은 값 있는 것만. kcal 있는 기록이 없으면 null.
+export interface DayTotals { kcal: number; approx: boolean; sugars_g: number; sodium_mg: number; incomplete: Incomplete }
+/** kcal 있는 기록만 더한다(결정 11·15). 당류·나트륨은 값 있는 것만 더하고, 빠진 이름(기록마다 서버가 준 incomplete)을 모은다. kcal 있는 기록이 없으면 null.
  *  (이름 없는 사진 기록 수는 세지 않는다 — dayDescription이 logs.some으로 본다, 개정 1 D7) */
-export function dayTotals(logs: Pick<FoodLog, "nutrition" | "approx">[]): DayTotals | null {
+export function dayTotals(logs: Pick<FoodLog, "nutrition" | "approx" | "incomplete">[]): DayTotals | null {
   const counted = logs.filter((l) => l.nutrition);
   if (!counted.length) return null;
-  const t: DayTotals = { kcal: 0, approx: false, sugars_g: 0, sodium_mg: 0 };
+  const t: DayTotals = { kcal: 0, approx: false, sugars_g: 0, sodium_mg: 0, incomplete: {} };
   for (const l of counted) {
     t.kcal += l.nutrition!.kcal;
     t.approx ||= l.approx;
     t.sugars_g += l.nutrition!.sugars_g ?? 0;
     t.sodium_mg += l.nutrition!.sodium_mg ?? 0;
+    addIncomplete(t.incomplete, l.incomplete);
   }
   return t;
 }
 
+/** 시트 설명에 보인(합이 0이 아닌) 당류·나트륨 중 빼고 더한 것 안내 */
+export const dayLeftOutNotes = (t: DayTotals) => incompleteNotes(t.incomplete, (["sugars_g", "sodium_mg"] as const).filter((k) => t[k]));
+
 /** 시트 설명(시안 DAY·PHOTO FIRST) */
-export function dayDescription(logs: Pick<FoodLog, "nutrition" | "approx" | "title">[], goal: number | null): string {
+export function dayDescription(logs: Pick<FoodLog, "nutrition" | "approx" | "title" | "incomplete">[], goal: number | null): string {
   if (!logs.length) return "아직 남긴 기록이 없어요";
   const t = dayTotals(logs);
   const hint = logs.some((l) => l.title === null) ? "이름을 넣으면 kcal을 계산해요" : "";
   if (!t) return hint || "kcal을 계산할 수 있는 기록이 없어요";
   return [
     `${t.approx ? "약 " : ""}${kcalNumber(t.kcal)}${goal ? ` / 목표 ${kcalNumber(goal)}` : ""}kcal`,
-    t.sugars_g ? `당류 ${Math.round(t.sugars_g)}g` : "",
-    t.sodium_mg ? `나트륨 ${kcalNumber(t.sodium_mg)}mg` : "",
+    t.sugars_g ? `당류 ${Math.round(t.sugars_g)}g${atLeast(t.incomplete, "sugars_g")}` : "",
+    t.sodium_mg ? `나트륨 ${kcalNumber(t.sodium_mg)}mg${atLeast(t.incomplete, "sodium_mg")}` : "",
     hint,
   ].filter(Boolean).join(" · ");
 }
 
 /** 끼니 머리 오른쪽 "310kcal" / "약 400kcal" / "" */
-export const mealKcalText = (logs: Pick<FoodLog, "nutrition" | "approx" | "title">[]) => {
+export const mealKcalText = (logs: Pick<FoodLog, "nutrition" | "approx" | "title" | "incomplete">[]) => {
   const t = dayTotals(logs);
   return t ? `${t.approx ? "약 " : ""}${kcalNumber(t.kcal)}kcal` : "";
 };
@@ -122,10 +127,14 @@ export type Amount = { servings: number } | { grams: number };
 export const dishGrams = (item: Pick<DishItem, "serving_g">, amount: Amount) =>
   "grams" in amount ? amount.grams : item.serving_g === null ? null : item.serving_g * amount.servings;
 
-/** 미리보기 "약 370kcal · 당류 11g · 나트륨 820mg" */
-export function previewText(n: FoodLogNutrition | null, approx: boolean): string {
+/** 미리보기 "약 370kcal · 당류 11g · 나트륨 820mg"(레시피에서 빼고 더한 값은 "이상") */
+export function previewText(n: FoodLogNutrition | null, approx: boolean, incomplete: Incomplete = {}): string {
   if (!n) return "";
-  return [`${approx ? "약 " : ""}${kcalNumber(n.kcal)}kcal`, n.sugars_g ? `당류 ${Math.round(n.sugars_g)}g` : "", n.sodium_mg ? `나트륨 ${kcalNumber(n.sodium_mg)}mg` : ""].filter(Boolean).join(" · ");
+  return [
+    `${approx ? "약 " : ""}${kcalNumber(n.kcal)}kcal`,
+    n.sugars_g ? `당류 ${Math.round(n.sugars_g)}g${atLeast(incomplete, "sugars_g")}` : "",
+    n.sodium_mg ? `나트륨 ${kcalNumber(n.sodium_mg)}mg${atLeast(incomplete, "sodium_mg")}` : "",
+  ].filter(Boolean).join(" · ");
 }
 
 /** 음식 후보 설명 "음식 · 1인분(400g) 약 740kcal" / "가공식품 · 100g당 185kcal"(앞머리는 응답 group, Ruling C6) */

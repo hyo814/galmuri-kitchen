@@ -5599,6 +5599,15 @@ button.sh-offline svg:last-child {
   word-break: keep-all;
 }
 
+/* 값이 빠져 빼고 계산한 영양소 안내(결정 14 개정 2) — 출처 글자(.nt-src)보다 눈에 띄게 */
+.nt-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-2);
+  word-break: keep-all;
+}
+
 /* 시트 안 결과 상자: 카드 기본 여백(페이지용) 대신 폼 흐름에 맞춘다 */
 .field-bg {
   margin: 0;

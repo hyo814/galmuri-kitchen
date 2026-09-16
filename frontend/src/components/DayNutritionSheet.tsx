@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import type { MealSlot } from "../api";
 import { kcalNumber } from "../nutrition/body";
-import { daySum, macroSplit, meterPercent, slotKcalText, sodiumDay, sugarDay } from "../nutrition/day";
+import { atLeast, daySum, incompleteNotes, macroSplit, meterPercent, NUTRIENT_KEYS, slotKcalText, sodiumDay, sugarDay } from "../nutrition/day";
 import { dayHead, MEALS } from "../meals/plan";
 import Sheet from "./Sheet";
 
@@ -24,8 +24,11 @@ export default function DayNutritionSheet({ date, slots, goal, onClose }: Props)
   const over = goal !== null && sum.kcal > goal;
   const hasCalc = slots.some((s) => s.nutrition?.source === "calc");
   const [carbPct, proteinPct, fatPct] = macroSplit(sum.carbs_g, sum.protein_g, sum.fat_g);
-  const sugar = sugarDay(sum.sugars_g, sum.calcKcal);
-  const sodium = sodiumDay(sum.sodium_mg);
+  // 값이 빠진 영양소는 "이상"으로 보여주고 비율·막대는 확실할 때만(결정 14 개정 2, RecipeNutrition과 같게)
+  const { incomplete } = sum;
+  const splitKnown = !atLeast(incomplete, "carbs_g") && !atLeast(incomplete, "protein_g") && !atLeast(incomplete, "fat_g");
+  const sugar = sugarDay(sum.sugars_g, sum.calcKcal, !!atLeast(incomplete, "sugars_g"));
+  const sodium = sodiumDay(sum.sodium_mg, !!atLeast(incomplete, "sodium_mg"));
   const bySlot = new Map(slots.map((s) => [s.meal, s]));
 
   return (
@@ -44,46 +47,66 @@ export default function DayNutritionSheet({ date, slots, goal, onClose }: Props)
       )}
       {hasCalc && (
         <>
-          <div className="nt-split" role="img" aria-label={`탄수화물 ${carbPct}%, 단백질 ${proteinPct}%, 지방 ${fatPct}%`}>
-            <i style={{ flex: carbPct }} />
-            <i style={{ flex: proteinPct }} />
-            <i style={{ flex: fatPct }} />
-          </div>
+          {splitKnown && (
+            <div className="nt-split" role="img" aria-label={`탄수화물 ${carbPct}%, 단백질 ${proteinPct}%, 지방 ${fatPct}%`}>
+              <i style={{ flex: carbPct }} />
+              <i style={{ flex: proteinPct }} />
+              <i style={{ flex: fatPct }} />
+            </div>
+          )}
           <div className="nt-legend">
             <span className="c">
               탄수화물 <b>{Math.round(sum.carbs_g)}g</b>
+              {atLeast(incomplete, "carbs_g")}
             </span>
             <span className="p">
               단백질 <b>{Math.round(sum.protein_g)}g</b>
+              {atLeast(incomplete, "protein_g")}
             </span>
             <span className="f">
               지방 <b>{Math.round(sum.fat_g)}g</b>
+              {atLeast(incomplete, "fat_g")}
             </span>
           </div>
           <div className="nt-card field-bg">
             <div className="nt-row">
               <span className="muted" style={{ flex: 1, minWidth: 0 }}>
                 당류 <b style={{ color: "var(--text)" }}>{Math.round(sum.sugars_g)}g</b>
+                {atLeast(incomplete, "sugars_g")}
               </span>
-              <span className="muted" style={sugar.warn ? { color: "var(--warn)" } : undefined}>
-                {sugar.text}
-              </span>
+              {sugar && (
+                <span className="muted" style={sugar.warn ? { color: "var(--warn)" } : undefined}>
+                  {sugar.text}
+                </span>
+              )}
             </div>
-            <div className={sugar.warn ? "nt-meter warn" : "nt-meter"}>
-              <i style={{ width: `${sugar.percent}%` }} />
-            </div>
+            {sugar && (
+              <div className={sugar.warn ? "nt-meter warn" : "nt-meter"}>
+                <i style={{ width: `${sugar.percent}%` }} />
+              </div>
+            )}
             <div className="nt-row">
               <span className="muted" style={{ flex: 1, minWidth: 0 }}>
                 나트륨 <b style={{ color: "var(--text)" }}>{kcalNumber(sum.sodium_mg)}mg</b>
+                {atLeast(incomplete, "sodium_mg")}
               </span>
-              <span className="muted" style={sodium.warn ? { color: "var(--warn)" } : undefined}>
-                {sodium.text}
-              </span>
+              {sodium && (
+                <span className="muted" style={sodium.warn ? { color: "var(--warn)" } : undefined}>
+                  {sodium.text}
+                </span>
+              )}
             </div>
-            <div className={sodium.warn ? "nt-meter warn" : "nt-meter"}>
-              <i style={{ width: `${sodium.percent}%` }} />
-            </div>
+            {sodium && (
+              <div className={sodium.warn ? "nt-meter warn" : "nt-meter"}>
+                <i style={{ width: `${sodium.percent}%` }} />
+              </div>
+            )}
           </div>
+          {incompleteNotes(incomplete, NUTRIENT_KEYS).map((note) => (
+            <p key={note} className="nt-note">
+              {note}
+            </p>
+          ))}
         </>
       )}
       {sum.hasAi && <p className="muted">kcal 일부는 AI 추정치예요</p>}

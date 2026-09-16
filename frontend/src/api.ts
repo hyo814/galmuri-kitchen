@@ -425,7 +425,10 @@ export interface Nutrients {
   sodium_mg: number;
 }
 
-/** 칸 1인분 영양. source ai면 kcal만(AI 초안 추정), 나머지는 null */
+/** 값이 없어 빼고 더한 영양소 → 재료(먹은 기록은 기록) 이름. kcal은 늘 값이 있어 들어가지 않는다(스펙 21절 결정 14 개정 2) */
+export type Incomplete = Partial<Record<Exclude<keyof Nutrients, "kcal">, string[]>>;
+
+/** 칸 1인분 영양. source ai면 kcal만(AI 초안 추정), 나머지는 null(incomplete는 {}) */
 export interface SlotNutrition {
   kcal: number;
   carbs_g: number | null;
@@ -435,6 +438,7 @@ export interface SlotNutrition {
   sodium_mg: number | null;
   approx: boolean;
   source: "calc" | "ai";
+  incomplete: Incomplete;
 }
 
 /** 식단 한 칸. recipe_id가 있으면 재고 매칭(have_count·total_count·urgent_names), 없으면 null·[] */
@@ -549,6 +553,7 @@ export interface RecipeNutrition {
   missing_count: number;
   pending: boolean;
   usable: boolean;
+  incomplete: Incomplete;
   ingredients: NutritionIngredient[];
 }
 
@@ -566,8 +571,8 @@ export interface FoodSearchResult {
 
 // ---- 먹은 기록(스펙 24절, 4b-3) ----
 export type FoodPlace = "home" | "out";
-/** 칸 1인분 영양에서 approx·source만 뺀 모양(타입 한 벌, 개정 1 D8) — Task 9 scaleNutrition 인자도 이것 */
-export type FoodLogNutrition = Omit<SlotNutrition, "approx" | "source">;
+/** 칸 1인분 영양에서 approx·source·incomplete만 뺀 모양(타입 한 벌, 개정 1 D8) — Task 9 scaleNutrition 인자도 이것 */
+export type FoodLogNutrition = Omit<SlotNutrition, "approx" | "source" | "incomplete">;
 export interface FoodLogPhoto { id: number; url: string }
 export interface FoodLog {
   id: number; eaten_on: string; meal: MealKind; source: "manual" | "meal_plan" | "cook_log";
@@ -575,7 +580,7 @@ export interface FoodLog {
   title: string | null; recipe_id: number | null; meal_slot_id: number | null; slot_servings: number | null;
   food_code: string | null; servings: number | null; grams: number | null;
   place: FoodPlace | null; rating: number | null; memo: string | null;
-  nutrition: FoodLogNutrition | null; approx: boolean; nutrition_pending: boolean; created_at: string; photos: FoodLogPhoto[];
+  nutrition: FoodLogNutrition | null; approx: boolean; nutrition_pending: boolean; incomplete: Incomplete; created_at: string; photos: FoodLogPhoto[];
 }
 export interface FoodLogPlanSlot { id: number; meal: MealKind; title: string; servings: number; recipe_id: number | null }
 export interface FoodLogDay { date: string; logs: FoodLog[]; plan_slots: FoodLogPlanSlot[]; nutrition_pending_recipe_ids: number[]; cook_logs: FoodLogCookLog[] }

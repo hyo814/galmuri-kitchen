@@ -2,8 +2,8 @@
 import assert from "node:assert/strict";
 import { ageOf, dailyTarget, kcalNumber, parseProfileInput, targetNote } from "../src/nutrition/body.ts";
 import {
-  MAX_FILL_ATTEMPTS, candidateSub, closestMatch, dailyValue, daySum, dayHeadText, fillTargets, goalFor, gramsFieldValue, ingredientKcalText,
-  ingredientNote, macroSplit, meterPercent, pickTitle, slotKcalText, sodiumDay, sugarDay, unitGramsFrom,
+  MAX_FILL_ATTEMPTS, atLeast, candidateSub, closestMatch, dailyValue, daySum, dayHeadText, fillTargets, goalFor, gramsFieldValue, incompleteNotes,
+  ingredientKcalText, ingredientNote, macroSplit, meterPercent, pickTitle, slotKcalText, sodiumDay, sugarDay, unitGramsFrom,
 } from "../src/nutrition/day.ts";
 
 const TODAY = "2026-09-15";
@@ -85,6 +85,7 @@ const N = (kcal, source, approx, extra = {}) => ({
   sodium_mg: source === "ai" ? null : (extra.sodium_mg ?? 0),
   approx,
   source,
+  incomplete: extra.incomplete ?? {},
 });
 
 // 시안 하루: 310·400 정확 + 480 약
@@ -163,6 +164,44 @@ assert.equal(mixedDay.sugars_g, 20);
 // 전체 kcal로 나누면 6%(WHO 기준 안전으로 잘못 보임), calcKcal로 나누면 40%(실제로는 초과)
 assert.equal(sugarDay(mixedDay.sugars_g, mixedDay.kcal).warn, false);
 assert.deepEqual(sugarDay(mixedDay.sugars_g, mixedDay.calcKcal), { text: "총 에너지의 40% · WHO 10% 미만", percent: 100, warn: true });
+
+// ---- 값이 빠진 영양소(결정 14 개정 2): 아는 값만 더하고 "이상"·빠진 이름을 보여준다 ----
+// 하루 합계는 계산 칸의 빠진 이름을 한 번씩 모은다. AI 추정 칸은 탄단지를 아예 더하지 않으므로(결정 16) 모으지 않는다
+const leftOutDay = daySum([
+  { nutrition: N(300, "calc", false, { sodium_mg: 7, incomplete: { sodium_mg: ["된장"], sugars_g: ["된장"] } }) },
+  { nutrition: N(300, "calc", false, { sodium_mg: 400, incomplete: { sodium_mg: ["된장", "고추장"] } }) },
+  { nutrition: { ...N(420, "ai", true), incomplete: { sodium_mg: ["무시"] } } },
+  { nutrition: N(100, "calc", false) },
+]);
+assert.deepEqual(leftOutDay.incomplete, { sodium_mg: ["된장", "고추장"], sugars_g: ["된장"] });
+assert.equal(leftOutDay.sodium_mg, 407);
+assert.deepEqual(daySum([{ nutrition: N(100, "calc", false) }]).incomplete, {});
+
+assert.equal(atLeast(leftOutDay.incomplete, "sodium_mg"), " 이상");
+assert.equal(atLeast(leftOutDay.incomplete, "fat_g"), "");
+assert.equal(atLeast({ fat_g: [] }, "fat_g"), "");
+
+// 빠진 값이 있으면 기준치 대비는 넘은 게 확실할 때만(" 이상"), 아니면 null(막대·비율을 그리지 않는다)
+assert.equal(dailyValue(7, 2000, true), null);
+assert.deepEqual(dailyValue(1720, 2000, true), { text: "1일 기준치의 86% 이상", percent: 86, warn: true });
+assert.deepEqual(dailyValue(6, 100, false), dailyValue(6, 100));
+assert.equal(sodiumDay(407, true), null);
+assert.deepEqual(sodiumDay(2380, true), sodiumDay(2380));
+assert.equal(sugarDay(5, 1190, true), null);
+assert.deepEqual(sugarDay(40, 1190, true), { text: "총 에너지의 13% 이상 · WHO 10% 미만", percent: 100, warn: true });
+
+// 안내: 보이는 영양소만, 이름 목록이 같으면 한 줄로(탄단지 → 당류 → 나트륨 순), 둘 이상이면 "외 N개", 받침에 맞는 조사
+const ALL = ["carbs_g", "protein_g", "fat_g", "sugars_g", "sodium_mg"];
+assert.deepEqual(incompleteNotes({ sodium_mg: ["된장"] }, ALL), ["된장은 나트륨 값이 없어 빼고 계산했어요"]);
+assert.deepEqual(incompleteNotes({ sodium_mg: ["된장"], sugars_g: ["된장"] }, ALL), ["된장은 당류·나트륨 값이 없어 빼고 계산했어요"]);
+assert.deepEqual(
+  incompleteNotes({ sodium_mg: ["된장", "고추장"], sugars_g: ["된장"], fat_g: ["두부"] }, ALL),
+  ["두부는 지방 값이 없어 빼고 계산했어요", "된장은 당류 값이 없어 빼고 계산했어요", "된장 외 1개는 나트륨 값이 없어 빼고 계산했어요"],
+);
+assert.deepEqual(incompleteNotes({ sodium_mg: ["된장", "고추장", "쌈장"] }, ALL), ["된장 외 2개는 나트륨 값이 없어 빼고 계산했어요"]);
+assert.deepEqual(incompleteNotes({ fat_g: ["두부"], sodium_mg: ["된장"] }, ["sugars_g", "sodium_mg"]), ["된장은 나트륨 값이 없어 빼고 계산했어요"]);
+assert.deepEqual(incompleteNotes({}, ALL), []);
+assert.deepEqual(incompleteNotes({ sodium_mg: [] }, ALL), []);
 
 // ---- day.ts (4b-2 Task 8: 레시피 상세 영양·식품 고르기 시트) ----
 const row = (over) => ({

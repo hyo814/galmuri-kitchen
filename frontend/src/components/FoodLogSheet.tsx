@@ -266,7 +266,7 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log: logPro
     preview = g ? previewText(scaleNutrition(pickedDish, g / 100), true) : "";
   } else if (changing && tab === "recipe" && recipeNutrition?.id === recipeId && recipeNutrition.data.per_serving) {
     const r = recipeNutrition.data;
-    preview = previewText(scaleNutrition(r.per_serving!, servings), r.approx || !r.usable);
+    preview = previewText(scaleNutrition(r.per_serving!, servings), r.approx || !r.usable, r.incomplete);
   }
   // 식단에서·직접은 비운다 — 식단 칸 저장값은 칸 AI 추정이 먼저일 수 있어 레시피 값과 다를 수 있다(개정 1 P10)
 

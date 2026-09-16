@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type BodyProfileResponse, type FoodLog, type FoodLogDay, type FoodLogPlanSlot, type MealKind, type User } from "../api";
 import { withJosa } from "../format.ts";
-import { PLACE_LABEL, dayDescription, dayTotals, logSubText, mealKcalText, starsText } from "../foodlog/log.ts";
+import { PLACE_LABEL, dayDescription, dayLeftOutNotes, dayTotals, logSubText, mealKcalText, starsText } from "../foodlog/log.ts";
 import { MEALS, slotDateText } from "../meals/plan.ts";
 import { dailyTarget } from "../nutrition/body.ts";
 import { MAX_FILL_ATTEMPTS, meterPercent, sodiumDay } from "../nutrition/day.ts";
@@ -136,6 +136,12 @@ export default function FoodLogDaySheet({
         </div>
       )}
       {sodium?.warn && <p className="fl-warn">나트륨 {sodium.text}</p>}
+      {t &&
+        dayLeftOutNotes(t).map((note) => (
+          <p key={note} className="nt-note">
+            {note}
+          </p>
+        ))}
 
       {MEALS.map(([meal, label]) => {
         const mealLogs = logs.filter((l) => l.meal === meal);
