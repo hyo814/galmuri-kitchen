@@ -8,7 +8,7 @@ import ipaddress
 import json
 import secrets
 import zlib
-from datetime import timedelta
+from datetime import datetime, time, timedelta, timezone
 
 import click
 from flask import Blueprint, abort, current_app, jsonify, request
@@ -17,7 +17,7 @@ from sqlalchemy import text
 from . import cooklog, photos, storage
 from .auth import login_user, user_json
 from .defaults import seed_user_defaults
-from .ingredients import seasoning_names, seoul_today
+from .ingredients import SEOUL, seasoning_names, seoul_today
 from .models import (
     CookLog,
     CookLogItem,
@@ -275,10 +275,13 @@ def seed_demo_data(user_id):
     staples = seasoning_names(user_id)
     for days_ago, title, servings, rating, memo, items, extra in COOK_LOGS:
         recipe = next(r for r in recipe_rows if r.title == title)
+        cooked_on = today - timedelta(days=days_ago)
         log = CookLog(
-            user_id=user_id, recipe=recipe, title=title, cooked_on=today - timedelta(days=days_ago),
+            user_id=user_id, recipe=recipe, title=title, cooked_on=cooked_on,
             servings=servings, rating=rating, memo=memo,
             eat_out_price=recipe.eat_out_price, eat_out_source=recipe.eat_out_source,
+            # 요리한 날 저녁(서울 19시)에 남긴 것으로 — 기본값(만든 시각)이면 체험하기 직후 2분 동안 되돌리기가 예시 일기를 지웠다
+            created_at=datetime.combine(cooked_on, time(19), SEOUL).astimezone(timezone.utc),
         )
         for name, used, unit, price, price_quantity, excluded in items:
             log.items.append(CookLogItem(

@@ -172,6 +172,20 @@ def test_demo_login_seeds_cook_diary(demo_app):
         assert a_ids.isdisjoint(b_ids)  # 다른 체험 계정과 섞이지 않음
 
 
+def test_demo_seeded_cook_logs_cannot_be_undone(demo_app):
+    # 예시 요리 일기는 요리한 날 저녁(서울 19시)에 남긴 것으로 — 체험하기 직후 120초 동안 되돌리기가 받아 주지 않게
+    c = new_client(demo_app)
+    c.post("/api/demo-login")
+    logs = c.get("/api/cook-logs").get_json()["items"]
+    assert len(logs) == len(demo.COOK_LOGS)
+    for log in logs:
+        created = datetime.fromisoformat(log["created_at"])
+        assert created.astimezone(SEOUL).replace(tzinfo=None) == datetime.combine(datetime.fromisoformat(log["cooked_on"]).date(), time(19))
+        res = c.post(f"/api/cook-logs/{log['id']}/undo")
+        assert (res.status_code, res.get_json()["error"]) == (400, "되돌릴 수 있는 시간이 지났어요. 재고는 직접 고쳐주세요.")
+    assert len(c.get("/api/cook-logs").get_json()["items"]) == len(demo.COOK_LOGS)
+
+
 def test_demo_login_seeds_shopping_list(demo_app):
     c = new_client(demo_app)
     c.post("/api/demo-login")
