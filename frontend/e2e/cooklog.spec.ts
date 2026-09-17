@@ -34,6 +34,12 @@ test("레시피 상세에서 요리했어요를 저장하면 재고에서 빠지
   await expect(page.getByRole("heading", { name: "김치찌개", level: 1 })).toBeVisible();
   await expect(app(page).getByText("요리 2번")).toBeVisible(); // 예시 일기 2개
 
+  // 재료 줄에 남은 재고 양이 보인다(29절): 두부 1모·대파 1단
+  const ingredients = page.getByRole("region", { name: "재료", exact: true });
+  const row = (name: string) => ingredients.getByRole("listitem").filter({ hasText: name });
+  await expect(row("두부")).toContainText("있어요 1모");
+  await expect(row("대파")).toContainText("있어요 1단");
+
   await page.getByRole("button", { name: "요리했어요", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "김치찌개 요리했어요" });
   await expect(sheet.getByText("2인분", { exact: true })).toBeVisible(); // 레시피 인분으로 시작
@@ -60,6 +66,10 @@ test("레시피 상세에서 요리했어요를 저장하면 재고에서 빠지
   const toast = undoToast(page);
   await expect(toast).toContainText("재고에서 김치·돼지고기 앞다리살·두부 외 1개를 뺐어요");
   await expect(toast).toContainText("약 7,900원 아꼈어요");
+  // 다 쓴 대파는 "다 썼어요"(--warn), 남은 두부는 줄어든 양 그대로 "있어요"(29절)
+  await expect(row("대파")).toContainText("다 썼어요");
+  await expect(row("두부")).not.toContainText("다 썼어요");
+  await expect(row("두부")).toContainText("있어요");
   await toast.hover(); // 알림은 10초 뒤 사라진다 — 마우스를 올려 멈춰 두고(결정 7) 재고를 확인한다
   const cooked = await stock(page);
   expect(cooked.두부).toBe(0.5);
@@ -70,6 +80,9 @@ test("레시피 상세에서 요리했어요를 저장하면 재고에서 빠지
   await expect(toast).toHaveText("재고를 되돌렸어요");
   expect(await stock(page)).toMatchObject({ 두부: 1, 대파: 1 });
   await expect(app(page).getByText("요리 2번")).toBeVisible(); // 일기도 지워진다
+  // 되돌리면 화면을 새로 만들어 "다 썼어요"가 사라지고 재고 양으로 되돌아온다
+  await expect(page.getByRole("region", { name: "재료", exact: true }).getByText("다 썼어요")).toHaveCount(0);
+  await expect(row("대파")).toContainText("있어요 1단");
 });
 
 test("식단 칸 상세에서 요리했어요를 저장하면 칸 상세가 닫히고 알림이 뜨며 칸이 먹었어요로 바뀐다", async ({ page }) => {

@@ -122,10 +122,13 @@ export interface RecipeIngredient {
   amount: string;
 }
 
-/** 상세 화면의 재료: 지금 재고와 매칭한 결과(matched_name은 재고 이름, 물처럼 늘 있는 재료는 null) */
+/** 상세 화면의 재료: 지금 재고와 매칭한 결과(matched_name은 재고 이름, 물처럼 늘 있는 재료는 null).
+ *  stock_quantity·stock_unit은 매칭된 재고의 남은 양(29절, 물처럼 재고 행이 없으면 null) */
 export interface RecipeIngredientStatus extends RecipeIngredient {
   have: boolean;
   matched_name: string | null;
+  stock_quantity: number | null;
+  stock_unit: string | null;
 }
 
 export interface RecipeInput {

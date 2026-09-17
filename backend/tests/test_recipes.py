@@ -71,9 +71,9 @@ def test_create_list_get_update_delete(client, login):
         "servings": 1,
         "category": None,
         "ingredients": [
-            {"name": "대파", "amount": "1대", "have": True, "matched_name": "대파(국산) 1단"},
-            {"name": "계란", "amount": "2개", "have": False, "matched_name": None},
-            {"name": "밥", "amount": "", "have": False, "matched_name": None},
+            {"name": "대파", "amount": "1대", "have": True, "matched_name": "대파(국산) 1단", "stock_quantity": 1.0, "stock_unit": "개"},
+            {"name": "계란", "amount": "2개", "have": False, "matched_name": None, "stock_quantity": None, "stock_unit": None},
+            {"name": "밥", "amount": "", "have": False, "matched_name": None, "stock_quantity": None, "stock_unit": None},
         ],
         "steps": ["대파를 썰어요.", "계란과 밥을 볶아요."],
         "source": "mine",  # source를 보내지 않으면 직접 쓴 레시피
@@ -104,7 +104,7 @@ def test_create_list_get_update_delete(client, login):
     assert (updated["title"], updated["servings"], updated["ingredients"], updated["steps"]) == (
         "볶음밥",
         3,
-        [{"name": "밥", "amount": "1공기", "have": False, "matched_name": None}],
+        [{"name": "밥", "amount": "1공기", "have": False, "matched_name": None, "stock_quantity": None, "stock_unit": None}],
         [],
     )
 
@@ -116,7 +116,39 @@ def test_egg_synonym_marks_have(client, login):
     login()
     add_ingredient(client, "달걀 10구")
     ingredients = create(client).get_json()["ingredients"]
-    assert ingredients[1] == {"name": "계란", "amount": "2개", "have": True, "matched_name": "달걀 10구"}
+    assert ingredients[1] == {
+        "name": "계란", "amount": "2개", "have": True, "matched_name": "달걀 10구", "stock_quantity": 1.0, "stock_unit": "개",
+    }
+
+
+def test_ingredient_shows_matched_stock_amount(client, login):
+    """29절: 레시피 상세 재료 줄에 매칭된 재고의 남은 양(stock_quantity·stock_unit)을 담는다."""
+    login()
+    add_ingredient(client, "대파(국산) 1단", quantity=300, unit="g")
+    ingredients = create(client).get_json()["ingredients"]
+    assert ingredients[0]["stock_quantity"] == 300
+    assert ingredients[0]["stock_unit"] == "g"
+
+
+def test_stock_amount_uses_first_matched_row_when_units_differ(client, login):
+    """같은 이름 재고가 여러 줄이고 단위가 다르면, annotate가 실제로 매칭하는 첫 행(urgent 먼저)의 수량·단위를 쓴다 —
+    뒤 행 값으로 덮이지 않는다(리뷰 지적사항 1)."""
+    login()
+    add_ingredient(client, "대파", quantity=300, unit="g")  # 안 급함 → inventory_rows에서 뒤로
+    add_ingredient(client, "대파", expires_on=seoul_today().isoformat())  # 임박 → 앞으로, 기본 수량 1개
+    ingredients = create(client).get_json()["ingredients"]
+    assert ingredients[0]["name"] == "대파"
+    assert (ingredients[0]["stock_quantity"], ingredients[0]["stock_unit"]) == (1, "개")
+
+
+def test_stock_amount_sums_same_unit_rows(client, login):
+    """같은 이름·같은 단위 재고 여러 줄은 수량을 더해서 보여준다(리뷰 지적사항 1)."""
+    login()
+    add_ingredient(client, "김치", quantity=300, unit="g")
+    add_ingredient(client, "김치", quantity=200, unit="g")
+    res = create(client, ingredients=[{"name": "김치", "amount": "1kg"}])
+    ingredients = res.get_json()["ingredients"]
+    assert (ingredients[0]["stock_quantity"], ingredients[0]["stock_unit"]) == (500, "g")
 
 
 @pytest.mark.parametrize(
@@ -245,9 +277,9 @@ def test_public_detail_marks_have_with_current_inventory(client, login, app):
         "method": "기타",
         "kcal": 180.0,
         "ingredients": [
-            {"name": "두부", "amount": "1모", "have": False, "matched_name": None},
-            {"name": "진간장", "amount": "2큰술", "have": True, "matched_name": "간장 (500ml)"},
-            {"name": "물", "amount": "100ml", "have": True, "matched_name": None},  # 물은 늘 있는 것으로 본다
+            {"name": "두부", "amount": "1모", "have": False, "matched_name": None, "stock_quantity": None, "stock_unit": None},
+            {"name": "진간장", "amount": "2큰술", "have": True, "matched_name": "간장 (500ml)", "stock_quantity": 1.0, "stock_unit": "개"},
+            {"name": "물", "amount": "100ml", "have": True, "matched_name": None, "stock_quantity": None, "stock_unit": None},  # 물은 늘 있는 것으로 본다
         ],
         "steps": ["두부를 썰어요.", "간장에 졸여요."],
         "image_url": "http://www.foodsafetykorea.go.kr/uploadimg/cook/10_00100_2.png",
