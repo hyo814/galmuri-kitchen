@@ -8,7 +8,7 @@ import CookDiary, { resetCookDiaryView } from "./pages/CookDiary";
 import CookReport, { resetCookReportView } from "./pages/CookReport";
 import FoodLogPage, { resetFoodLogView } from "./pages/FoodLog";
 import Fridge from "./pages/Fridge";
-import Login, { dropDemoLink, rememberLoginProvider } from "./pages/Login";
+import Login, { dropDemoLink, rememberLoginProvider, restoreHashAfterLogin } from "./pages/Login";
 import MealAiDraft from "./pages/MealAiDraft";
 import MealShopping from "./pages/MealShopping";
 import Meals, { resetMealsView } from "./pages/Meals";
@@ -29,6 +29,9 @@ import VideoPlayer from "./pages/VideoPlayer";
 import { scrollTops, useHashRoute, type Route, type RoutePattern } from "./useHashRoute";
 import { forgetResources } from "./useResource";
 import { clearShoppingDevice, pauseShopping, rememberUser, savedUser, startShopping } from "./shopping/useShopping";
+
+// useHashRoute가 첫 렌더에서 location.hash를 읽기 전에, 로그인하러 나가기 전 기억해둔 해시 경로를 되살린다
+restoreHashAfterLogin();
 
 interface PageProps {
   route: Route;
