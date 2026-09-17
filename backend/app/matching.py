@@ -4,7 +4,7 @@ import re
 _PARENS = re.compile(r"\([^)]*\)")
 _TOKEN_SPLIT = re.compile(r"[\s,/·\[\]*+&]+")
 # ponytail: 같은 재료의 다른 이름은 앞 표기를 뒤 표기로 바꿔 비교한다(부분 문자열 치환 — 계란말이 → 달걀말이). 늘어나면 여기에 더한다.
-SYNONYMS = {"계란": "달걀"}
+SYNONYMS = {"계란": "달걀", "케첩": "케찹", "고춧가루": "고추가루"}
 
 
 def _canonical(text):

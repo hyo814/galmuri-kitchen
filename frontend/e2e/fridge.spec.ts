@@ -94,18 +94,21 @@ test("재료 삭제 이유를 골라 지울 수 있고 새로고침해도 남지
   await expect(page.getByRole("button", { name: /김치/ })).toHaveCount(0);
 });
 
-test("필수품 배너는 체험 안내 카드를 닫으면 보이고, 채워 넣으면 사라지며 새로고침해도 그대로다", async ({ page }) => {
-  const banner = page.getByRole("button", { name: /필수품 1개가 떨어졌어요/ });
+test("필수품 배너는 체험 안내 카드를 닫으면 보이고, 채워 넣으면 개수가 줄며 새로고침해도 그대로다", async ({ page }) => {
+  // 기본 필수품(2026-09-17)이 72개라 체험 계정도 대부분 떨어진 채 시작한다 — 정확한 개수 대신 줄어드는지로 본다
+  const banner = page.getByRole("button", { name: /필수품 \d+개가 떨어졌어요/ });
+  const bannerCount = async () => Number((await banner.textContent())?.match(/(\d+)개/)?.[1]);
   // 체험 안내 카드(스펙 30절 C)가 떠 있는 동안은 카드 두 장이 겹치지 않게 배너를 숨긴다
   await expect(page.getByRole("region", { name: "체험 안내" })).toBeVisible();
   await expect(banner).toHaveCount(0);
   await page.getByRole("button", { name: "안내 닫기" }).click();
   await expect(banner).toBeVisible();
-  await expect(banner).toContainText("간장");
+  const before = await bannerCount();
   await banner.click();
 
   const staplesDialog = page.getByRole("dialog", { name: "필수품" });
-  await staplesDialog.getByRole("button", { name: "간장 떨어짐, 재고에 추가" }).click();
+  // 진간장·국간장·양조간장도 "...간장 떨어짐, 재고에 추가"라 정확히 맞는 이름만 고른다
+  await staplesDialog.getByRole("button", { name: "간장 떨어짐, 재고에 추가", exact: true }).click();
 
   const addDialog = page.getByRole("dialog", { name: "재료 추가" });
   await expect(addDialog.getByLabel("이름")).toHaveValue("간장");
@@ -114,27 +117,30 @@ test("필수품 배너는 체험 안내 카드를 닫으면 보이고, 채워 �
 
   // 배너 버튼 이름에도 `간장`이 들어 있어, 재고 줄은 이름이 `간장`으로 시작하는 버튼으로 찾는다(배너가 사라지기 전 겹침 방지)
   await expect(page.getByRole("button", { name: /^간장/ })).toBeVisible(); // 재고에 실제로 들어갔다
-  await expect(page.getByRole("button", { name: /필수품.*떨어졌어요/ })).toHaveCount(0);
+  // "간장"은 진간장·국간장·양조간장과도 매칭돼(4절 규칙) 한 번에 여럿이 빠진다 — 정확히 1개가 아니라 줄었는지만 본다
+  await expect.poll(bannerCount).toBeLessThan(before);
+  const afterAdd = await bannerCount();
 
   await page.reload();
   await expect(page.getByRole("navigation", { name: "주요 메뉴" })).toBeVisible();
   await expect(page.getByRole("button", { name: /^간장/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /필수품.*떨어졌어요/ })).toHaveCount(0);
+  await expect.poll(bannerCount).toBe(afterAdd);
 });
 
 test("설정에서 필수품을 추가하고 지울 수 있다", async ({ page }) => {
   await page.getByRole("button", { name: "설정" }).click();
   await page.getByRole("dialog", { name: "재고 설정" }).getByRole("button", { name: "필수품" }).click();
 
+  // 후추는 기본 필수품(2026-09-17)이라 이미 있다 — 추가·삭제 흐름은 기본에 없는 이름으로 본다
   const staplesDialog = page.getByRole("dialog", { name: "필수품" });
-  await staplesDialog.getByLabel("필수품 이름").fill("후추");
+  await staplesDialog.getByLabel("필수품 이름").fill("말린 허브");
   await staplesDialog.getByRole("button", { name: "추가", exact: true }).click();
-  await expect(staplesDialog.getByText("후추")).toBeVisible();
+  await expect(staplesDialog.getByText("말린 허브")).toBeVisible();
 
   await staplesDialog.getByRole("button", { name: "편집" }).click();
-  page.once("dialog", (d) => d.accept()); // "후추를 필수품에서 뺄까요?"
-  await staplesDialog.getByRole("listitem").filter({ hasText: "후추" }).getByRole("button", { name: "삭제" }).click();
-  await expect(staplesDialog.getByText("후추")).toHaveCount(0);
+  page.once("dialog", (d) => d.accept()); // "말린 허브를 필수품에서 뺄까요?"
+  await staplesDialog.getByRole("listitem").filter({ hasText: "말린 허브" }).getByRole("button", { name: "삭제" }).click();
+  await expect(staplesDialog.getByText("말린 허브")).toHaveCount(0);
 });
 
 test("사진으로 재료를 추가하면(예시 결과) 검토한 뒤 재고에 들어간다", async ({ page }) => {

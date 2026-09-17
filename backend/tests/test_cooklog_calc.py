@@ -128,14 +128,21 @@ def test_draft_one_stock_goes_to_first_matching_row(client, login, app):
 
 def test_draft_marks_staple_seasoning(client, login, app):
     login()
-    assert client.post("/api/staples", json={"name": "굴소스", "category": "소스"}).status_code == 201
+    # 굴소스는 기본 필수품(조미료 분류, 2026-09-17)이라 그대로 쓰고, "소스" 분류(사용자가 직접 만든 것)도 양념으로 치는지 따로 확인
+    assert client.post("/api/staples", json={"name": "우리집 소스", "category": "소스"}).status_code == 201
     add_ingredient(client, "굴소스", quantity=500, unit="g")
+    add_ingredient(client, "우리집 소스", quantity=200, unit="g")
     add_ingredient(client, "두부", quantity=1, unit="모")
-    recipe = add_recipe(client, "두부조림", [{"name": "굴소스", "amount": "30g"}, {"name": "두부", "amount": "1모"}])
+    recipe = add_recipe(
+        client,
+        "두부조림",
+        [{"name": "굴소스", "amount": "30g"}, {"name": "우리집 소스", "amount": "20g"}, {"name": "두부", "amount": "1모"}],
+    )
     rows = client.get(f"/api/recipes/{recipe['id']}/cook-draft").get_json()["rows"]
     # 숟가락·약간 양이 아니어도 조미료 분류 필수품이면 양념(기본 안 빼기), 재고에는 붙는다
     assert [(r["name"], r["seasoning"], r["ingredient_id"], r["base_amount"]) for r in rows] == [
         ("굴소스", True, stock_ids(app, "굴소스")[0], 30.0),
+        ("우리집 소스", True, stock_ids(app, "우리집 소스")[0], 20.0),
         ("두부", False, stock_ids(app, "두부")[0], 1.0),
     ]
 

@@ -229,6 +229,11 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - `staples`: id, user_id, name(1~50자), category(최대 10자, 기본 `기타`; 추천값 `조미료`·`야채`·`기타`), created_at. UNIQUE(user_id, name).
 - `in_stock`: 사용자의 재료 중 이름 매칭(4절 규칙)되는 것이 하나라도 있으면 true.
 - 필수품은 재료를 삭제해도 남는다(떨어짐으로 표시).
+- **2026-09-17 결정:** 모든 사용자가 처음부터 갖는 기본 필수품 72개(`app/defaults.py` DEFAULT_STAPLES — 조미료 40·야채 9·기타 23). 신규 가입 시드(`seed_user_defaults`)와
+  기존 사용자 백필(마이그레이션, 빠진 이름만 채우는 멱등 `INSERT ... WHERE NOT EXISTS`)로 모두 받는다. 이름은 4절 매칭 규칙으로 실제 재고 이름과 맞춰 봤고,
+  표기가 갈리는 것만 `matching.SYNONYMS`에 동의어를 더했다(케찹↔케첩, 고추가루↔고춧가루). 실제 상품명으로 거의 매칭되지 않는 범주어 하나("육수용품")는
+  실제 상품명에 쓰이는 "다시팩"으로 이름을 바꿨다. 필수품이 많아 떨어진 개수가 커질 수 있어(사용자 결정) 냉장고 배너 `필수품 N개가 떨어졌어요`의 N이 커질 수 있다 —
+  배너는 앞 몇 개 이름 + 나머지 개수만 보여주므로(아래 화면) 화면은 그대로 둔다.
 
 ### 품목별 경고 규칙
 - `item_rules`: id, user_id, keyword(1~20자, 재료 이름 매칭 4절 규칙), warn_days(int ≥1), danger_days(int > warn_days), source(`mfds`|`user`), created_at. UNIQUE(user_id, keyword).

@@ -8,7 +8,7 @@ from datetime import datetime, time, timedelta, timezone
 
 import pytest
 
-from app import ai, auth, cooklog, demo, meals, outbound, scan, videos
+from app import ai, auth, cooklog, defaults, demo, meals, outbound, scan, videos
 from app.ingredients import SEOUL, seoul_today
 from app.models import (
     AiCall,
@@ -76,7 +76,8 @@ def test_demo_login_creates_seeded_user_and_session(demo_app):
     assert expiring == {"두부": (today + timedelta(days=1)).isoformat(), "대파": (today + timedelta(days=2)).isoformat()}
     assert len(c.get("/api/recipes").get_json()["items"]) == 2
     assert len(c.get("/api/seasonings").get_json()["items"]) == 1
-    assert len(c.get("/api/staples").get_json()) == 3
+    # 기본 필수품(2026-09-17) + 체험 전용 간장 1개(대파·달걀은 기본 필수품과 겹쳐 demo.STAPLES에서 뺐다)
+    assert len(c.get("/api/staples").get_json()) == len(defaults.DEFAULT_STAPLES) + 1
     assert len(c.get("/api/locations").get_json()) == 3
     assert len(c.get("/api/item-rules").get_json()) > 0
     assert c.get("/api/export/summary").status_code == 200

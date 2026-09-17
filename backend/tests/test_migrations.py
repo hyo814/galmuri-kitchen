@@ -641,6 +641,37 @@ def test_cook_log_manual_migration(app):
         assert items() == 1
 
 
+def test_default_staples_migration_backfills_and_is_idempotent(app):
+    """모든 사용자 필수품(사용자 결정 2026-09-17). 기존 사용자는 빠진 것만 채우고, 이미 만든 이름은 그대로 둔다(다시 돌려도 안전)."""
+    with app.app_context():
+        upgrade(directory=MIGRATIONS, revision="h4d4i4a4r4y4")
+        with db.engine.begin() as conn:
+            conn.execute(sa.text("INSERT INTO users (id, provider, provider_id, nickname, created_at) VALUES (1, 'test', '1', 'u', CURRENT_TIMESTAMP)"))
+            # 이미 만들어 둔 필수품 하나(기본값과 이름이 같음 — 백필이 건너뛰어야 함)와, 사용자가 직접 만든 필수품 하나(그대로 남아야 함)
+            conn.execute(sa.text("INSERT INTO staples (user_id, name, category, created_at) VALUES (1, '대파', '야채', CURRENT_TIMESTAMP)"))
+            conn.execute(sa.text("INSERT INTO staples (user_id, name, category, created_at) VALUES (1, '내가 만든 소스', '조미료', CURRENT_TIMESTAMP)"))
+
+        upgrade(directory=MIGRATIONS, revision="h5s5t5a5p5l5e5")
+        with db.engine.connect() as conn:
+            names = {n for (n,) in conn.execute(sa.text("SELECT name FROM staples WHERE user_id = 1")).all()}
+        from app.defaults import DEFAULT_STAPLES
+
+        assert names == {name for name, _ in DEFAULT_STAPLES} | {"내가 만든 소스"}
+        with db.engine.connect() as conn:
+            assert conn.execute(sa.text("SELECT COUNT(*) FROM staples WHERE user_id = 1 AND name = '대파'")).scalar_one() == 1
+
+        downgrade(directory=MIGRATIONS, revision="h4d4i4a4r4y4")
+        with db.engine.connect() as conn:
+            count_after_downgrade = conn.execute(sa.text("SELECT COUNT(*) FROM staples WHERE user_id = 1")).scalar_one()
+        assert count_after_downgrade == len(names)  # downgrade는 아무것도 지우지 않는다(사용자 데이터 보존)
+
+        # 다시 올려도(백필을 두 번 돌려도) 늘지 않는다
+        upgrade(directory=MIGRATIONS, revision="h5s5t5a5p5l5e5")
+        with db.engine.connect() as conn:
+            count_after_rerun = conn.execute(sa.text("SELECT COUNT(*) FROM staples WHERE user_id = 1")).scalar_one()
+        assert count_after_rerun == len(names)
+
+
 def test_upgrade_to_head_and_back_to_base(app):
     with app.app_context():
         upgrade(directory=MIGRATIONS)

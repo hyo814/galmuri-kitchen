@@ -33,6 +33,12 @@ def test_normalize_drops_parentheses_spaces_and_case():
         ("계란", "달걀", True),
         ("달걀", "유정란 계란 (특란) 10구", True),
         ("계란말이", "달걀말이", True),
+        # 기본 필수품 동의어 (2026-09-17): 표기가 갈리는 이름만 SYNONYMS에 더했다
+        ("케찹", "오뚜기 케첩", True),
+        ("케찹", "하인즈 케찹", True),
+        ("고추가루", "태양초 고춧가루", True),
+        ("고추가루", "굵은 고춧가루", True),
+        ("소금", "천일염", False),  # 표기가 아예 달라 동의어를 추가하지 않은 한계(정확한 사용자 결정 없어 보류)
     ],
 )
 def test_names_match(a, b, expected):

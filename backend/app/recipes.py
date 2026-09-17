@@ -9,7 +9,7 @@ from sqlalchemy.orm import joinedload
 
 from . import outbound
 from .auth import get_owned_or_404, login_required
-from .ingredients import seasoning_names, seoul_today, status_of, user_rules
+from .ingredients import seasoning_words, seoul_today, status_of, user_rules
 from .matching import match_prepared, prepare
 from .models import Ingredient, PublicRecipe, Recipe, db
 from .recipe_parse import ingredient_key
@@ -32,7 +32,7 @@ QUERY_MAX = 50  # 칸 채우기 내 레시피·식약처 레시피 제목 검색
 
 def inventory_rows(user_id):
     """[(Ingredient 행, 빨리 먹어야 하는지)] — 빨리 먹어야 할 재료(urgent·danger)가 앞, 그 안은 id 순. 추천(inventory)과 요리했어요 초안이 같이 쓴다."""
-    today, rules, seasonings = seoul_today(), user_rules(user_id), seasoning_names(user_id)
+    today, rules, seasonings = seoul_today(), user_rules(user_id), seasoning_words(user_id)
     items = Ingredient.query.options(joinedload(Ingredient.location)).filter_by(user_id=user_id).order_by(Ingredient.id).all()
     rows = [(i, status_of(i, today, rules, seasonings) in ("urgent", "danger")) for i in items]
     return sorted(rows, key=lambda row: not row[1])
