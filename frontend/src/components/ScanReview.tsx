@@ -453,7 +453,8 @@ export default function ScanReview({ kind, result, locations, samplePhoto, retak
         )}
 
         <div className="scan-foot">
-          <div className="actions">
+          {/* "다시 고르기"(주문 캡처)는 기본 1fr 칸에서 384px 폭에 두 줄로 꺾인다 — actions-even으로 넓힌다 */}
+          <div className={retakeLabel === "다시 고르기" ? "actions actions-even" : "actions"}>
             <button type="button" className="btn secondary" disabled={busy} onClick={onRetake}>
               {retakeLabel}
             </button>
