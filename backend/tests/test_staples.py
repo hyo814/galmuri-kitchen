@@ -101,3 +101,13 @@ def test_matched_name_and_short_name_false_positive(client, login):
     rows = {s["name"]: s for s in client.get("/api/staples").get_json()}
     assert (rows["파"]["in_stock"], rows["파"]["matched_name"]) == (False, None)
     assert (rows["간장"]["in_stock"], rows["간장"]["matched_name"]) == (True, "진간장 (500ml)")
+
+
+def test_gae_sogeum_does_not_satisfy_sogeum(client, login):
+    # 소금·깨소금 둘 다 기본 필수품이다 — 깨소금은 소금의 한 종류가 아니라 다른 조미료라
+    # 깨소금만 재고에 있어도 소금이 "있음"으로 보이면 안 된다(2026-09-18 수정, matching.SUFFIX_NON_MATCHES)
+    login()
+    client.post("/api/ingredients", json={"name": "청정원 깨소금 50g", "purchased_on": "2026-09-10"})
+    rows = {s["name"]: s for s in client.get("/api/staples").get_json()}
+    assert (rows["소금"]["in_stock"], rows["소금"]["status"]) == (False, "unstocked")
+    assert (rows["깨소금"]["in_stock"], rows["깨소금"]["status"]) == (True, "in_stock")

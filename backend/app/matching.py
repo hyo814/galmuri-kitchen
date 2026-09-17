@@ -4,7 +4,11 @@ import re
 _PARENS = re.compile(r"\([^)]*\)")
 _TOKEN_SPLIT = re.compile(r"[\s,/·\[\]*+&]+")
 # ponytail: 같은 재료의 다른 이름은 앞 표기를 뒤 표기로 바꿔 비교한다(부분 문자열 치환 — 계란말이 → 달걀말이). 늘어나면 여기에 더한다.
-SYNONYMS = {"계란": "달걀", "케첩": "케찹", "고춧가루": "고추가루"}
+SYNONYMS = {"계란": "달걀", "케첩": "케찹", "고춧가루": "고추가루", "후춧가루": "후추"}
+# 2글자 이름의 접미 규칙(아래 _match_one_way_prepared)은 우연히 표기가 겹치면 다른 물건도 매칭한다.
+# 깨소금은 소금의 한 종류가 아니라 다른 조미료라 "깨소금이 있으면 소금도 있다"로 보이면 안 된다(둘 다 기본 필수품 이름, 2026-09-18).
+# 진간장·국간장·양조간장은 서로 3글자라 완전히 같은 문자열일 때만 매칭돼(부분 문자열 규칙) 이런 충돌이 없다 — 예외를 더 두지 않는다.
+SUFFIX_NON_MATCHES = {("소금", "깨소금")}
 
 
 def _canonical(text):
@@ -43,7 +47,11 @@ def prepare(name):
 def _match_one_way_prepared(short_norm, short_len, long_norm, long_tokens):
     if short_len >= 3:
         return short_norm in long_norm
-    return short_len > 0 and any(word == short_norm or (short_len == 2 and word.endswith(short_norm)) for word in long_tokens)
+    return short_len > 0 and any(
+        word == short_norm
+        or (short_len == 2 and word.endswith(short_norm) and (short_norm, word) not in SUFFIX_NON_MATCHES)
+        for word in long_tokens
+    )
 
 
 def match_prepared(a, b):
