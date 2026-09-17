@@ -353,7 +353,7 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
       <span class="masthead-name">갈무리부엌</span>
     </span>
     <span class="masthead-meta">
-      케이스 스터디 · 2026-09-15 main 기준
+      케이스 스터디 · 2026-09-17 main 기준
       <a href="product.html">제품 페이지 보기</a>
     </span>
   </div>
@@ -365,8 +365,8 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
       <p class="eyebrow">개인 프로젝트 · 원티드 AI 챔피언십 2026 출품작</p>
       <h1 id="hero-title">갈무리부엌</h1>
       <p class="hero-lede">
-        냉장고 재고를 기록하면 상하기 전에 알려주고, 남은 재료로 레시피를 찾고, 식단과 장보기까지 이어주는 <strong>모바일 우선 웹앱</strong>입니다.
-        설계 문서와 화면 시안은 사용자가 정하고 승인했고, 구현·검토·검증은 <strong>Claude Code 에이전트</strong>가 태스크 단위로 맡았습니다. 첫 커밋부터 식단 짜기(4b-1단계) 병합과 후속 작업까지 약 47시간 걸렸습니다.
+        냉장고 재고를 기록하면 상하기 전에 알려주고, 남은 재료로 레시피를 찾고, 식단·장보기·요리 일기까지 이어주는 <strong>모바일 우선 웹앱</strong>입니다.
+        설계 문서와 화면 시안은 사용자가 정하고 승인했고, 구현·검토·검증은 <strong>Claude Code 에이전트</strong>가 태스크 단위로 맡았습니다. 첫 커밋부터 재고·레시피·장보기·식단·영양 계산·요리 일기·집밥 리포트까지 약 108시간 걸렸습니다.
         이름 "갈무리"는 물건을 잘 간수하고 일을 끝맺는다는 뜻의 순우리말이고, 마스코트는 셰프 다람쥐 <strong>다람이</strong>입니다.
       </p>
       <ul class="badges" aria-label="기술 스택">
@@ -394,10 +394,10 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
       <p class="placeholder-note">바로 체험하기를 누르면 로그인 화면 없이 체험 계정으로 열립니다. 대괄호로 표시한 링크는 공개 후 채웁니다.</p>
 
       <dl class="facts">
-        <div class="fact"><dt>백엔드 테스트(SQLite·PostgreSQL)</dt><dd>1,067 <small>개</small></dd></div>
-        <div class="fact"><dt>커밋(병합 147)</dt><dd>396 <small>개</small></dd></div>
-        <div class="fact"><dt>화면 시안(9묶음)</dt><dd>71 <small>장</small></dd></div>
-        <div class="fact"><dt>구현 단계(식단 짜기)</dt><dd>4b-1 <small>단계까지</small></dd></div>
+        <div class="fact"><dt>백엔드 테스트(SQLite·PostgreSQL, 9/17 기준)</dt><dd>1,608 <small>개</small></dd></div>
+        <div class="fact"><dt>커밋(병합 254)</dt><dd>749 <small>개</small></dd></div>
+        <div class="fact"><dt>화면 시안(16묶음)</dt><dd>85 <small>장</small></dd></div>
+        <div class="fact"><dt>구현 단계</dt><dd>5 <small>단계(요리 일기)까지</small></dd></div>
       </dl>
     </div>
   </section>
@@ -452,20 +452,22 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
       <section class="section" id="work" aria-labelledby="work-title">
         <p class="section-kicker">내가 한 일</p>
         <h2 id="work-title">구현한 핵심 기능</h2>
-        <p class="section-intro">요구사항과 결정은 사용자가, 설계 문서·구현 계획·백엔드 API와 마이그레이션·화면·테스트는 에이전트가 맡았습니다. 아래는 <code>main</code>에 병합된 기능입니다. 배포 주소에는 <code>4d86b25</code>(09-15 02:35 병합)까지 올라가 있고, <span class="status">다음 배포</span> 표시는 그 뒤에 병합해 9/15 저녁 폰 확인 후 올릴 기능입니다.</p>
+        <p class="section-intro">요구사항과 결정은 사용자가, 설계 문서·구현 계획·백엔드 API와 마이그레이션·화면·테스트는 에이전트가 맡았습니다. 아래는 배포 주소(<code>main</code> 최신)에 올라가 있는 기능입니다.</p>
 
         <ul class="feature-list">
           <li><b>재고와 경고</b><span>보관 위치(사용자 정의), 임박 배지(<code>D-2</code>, <code>구입 16일째</code>, <code>섭취 주의</code>), 떨어진 필수품 배너, 식약처 참고값 기반 품목별 경고, 주방 도구 점검. 서버가 상태를 판정하고 임박 순으로 내려줍니다.</span></li>
-          <li><b>사진으로 재고 넣기</b><span>냉장고 사진·영수증·주문 캡처를 Claude가 읽어 이름·수량·단위·보관 위치 종류·결제 금액·구입일을 채우고, 확인 화면을 거쳐 넣습니다. 카메라와 앨범 버튼을 나눴습니다(안드로이드 사진 선택기에는 카메라가 없음). <span class="status">다음 배포</span> 사진 최대 5장을 AI 호출 한 번으로 읽고, 구입일 칩과 <code>기억 안 나요</code>(구입일 비움)를 더했습니다.</span></li>
-          <li><b>레시피 추천·AI 레시피</b><span>내 레시피와 식약처 조리식품 레시피 DB를 재고 일치율 순으로 추천. AI 레시피 3개는 임박 재료를 먼저 쓰고, 사진은 생성하지 않고 이름이 비슷한 공공 레시피 사진을 출처와 함께 씁니다.</span></li>
-          <li><b>레시피 가져오기</b><span>유튜브 설명란·블로그·인스타그램 링크, 붙여 넣은 글, 요리책·캡처 사진을 레시피 초안으로 정리. 블로그 요청은 SSRF 검사를 거칩니다. <span class="status">다음 배포</span> 사진 3장 → 5장, 본문 글에 레시피가 없는 블로그는 본문 사진도 함께 읽기.</span></li>
-          <li><b>영상·양념 비율</b><span>기본 요리 채널 14개(Render에서 <code>flask seed-default-channels</code> 실행 필요)와 사용자 채널의 새 영상, 전체 목록은 채널당 최신 12개. <code>search.list</code>를 쓰지 않아 유튜브 할당량을 아낍니다. 양념 비율은 주재료 무게·인분·완성량 기준으로 늘리고 계량스푼 분수와 밥숟가락 환산으로 보여줍니다.</span></li>
-          <li><b>장보기·오프라인</b><span>날짜 묶음과 제자리 체크, 쇼핑몰 7곳 검색 링크, 손메모·전단지 사진에서 살 것 뽑기(살 것 추가 시트에서도), 생활용품 분리, 체크한 항목 재고에 넣기. 서비스 워커와 IndexedDB 대기열로 인터넷 없이 체크·추가·메모하고, 연결되면 <code>client_id</code>로 한 번만 반영합니다. 빈 메모는 나갈 때와 목록 받을 때 정리합니다.</span></li>
-          <li><b>식단 짜기(4b-1)</b><span>주·월 보기, 칸 채우기(내 레시피 재고 일치·영상은 확인 화면 없이 정리 후 저장·직접 쓰기), 이번 주 복사(빈 칸만, 31일까지 기간 자동 연장), AI 식단 초안(칸마다 후보 2개·1인분 kcal 추정, 체크한 칸만 넣기), 식단으로 장보기 목록(인분 배율 합산·재고 비교·끼니 전날 살 날).</span></li>
-          <li><b>체험 계정</b><span>누를 때마다 예시 재고·필수품·레시피·양념 비율·장보기가 든 새 계정을 만들고 24시간 뒤 사진 파일까지 지웁니다. 같은 IP 1시간 30개·하루 100개, 체험 계정 전체 AI 24시간 80번(배포 설정). <span class="status">다음 배포</span> 예시 식단 1주.</span></li>
-          <li><b>더보기</b><span>화면 테마(시스템·밝게·어둡게), CSV zip 내보내기(하루 5번, 수식 주입 방지), 오늘 AI 사용량, 데이터 출처, 이용약관·개인정보처리방침. <span class="status">다음 배포</span> 내보내기에 <code>meals.csv</code>.</span></li>
+          <li><b>사진으로 재고 넣기</b><span>냉장고 사진·영수증·주문 캡처 최대 5장을 Claude가 한 번(한도 1회)에 읽어 이름·수량·단위·보관 위치 종류·결제 금액·구입일을 채우고, 확인 화면에서 구입일 칩·<code>기억 안 나요</code>(구입일 비움)로 고친 뒤 넣습니다. 카메라와 앨범 버튼을 나눴습니다(안드로이드 사진 선택기에는 카메라가 없음).</span></li>
+          <li><b>레시피 추천·AI 레시피·재고 남은 양</b><span>내 레시피와 식약처 조리식품 레시피 DB를 재고 일치율 순으로 추천. AI 레시피 3개는 임박 재료를 먼저 쓰고, 사진은 생성하지 않고 이름이 비슷한 공공 레시피 사진을 출처와 함께 씁니다. 레시피 상세는 재료 줄마다 재고에 남은 양(<code>있어요 300g</code>)을 보여주고, 요리 직후 다 쓴 재료는 <code>다 썼어요</code>로 바뀝니다. 인분을 바꾸면 밥숟가락 환산 줄도 같이 바뀝니다.</span></li>
+          <li><b>레시피 가져오기</b><span>유튜브 설명란(영상 검색은 제목·설명 둘 다)·블로그·인스타그램 링크, 붙여 넣은 글, 요리책·캡처 사진 최대 5장을 레시피 초안으로 정리. 한 페이지에 요리가 여러 개(레시피 모음 글 등)면 목록으로 모두 찾아 최대 5개까지 골라 가져오고, 링크를 못 읽으면 화면 캡처로 가져오기를 안내합니다. 블로그 요청은 SSRF 검사를 거칩니다.</span></li>
+          <li><b>영상·양념 비율</b><span>기본 요리 채널 14개(Render에서 <code>flask seed-default-channels</code> 실행 필요)와 사용자 채널의 새 영상, 전체 목록은 채널당 최신 12개, 제목·설명으로 검색합니다. <code>search.list</code>를 쓰지 않아 유튜브 할당량을 아낍니다. 양념 비율은 주재료 무게·인분·완성량 기준으로 늘리고 계량스푼 분수와 밥숟가락 환산으로 보여줍니다.</span></li>
+          <li><b>장보기·오프라인</b><span>날짜 묶음과 제자리 체크, 쇼핑몰 6곳(쿠팡·네이버 쇼핑·컬리·이마트몰·롯데마트·G마켓, 모두 낮은 가격순) 검색 링크와 한 번에 쇼핑몰을 골라 품목마다 차례로 여는 <code>한꺼번에 찾기</code>, 손메모·전단지 사진에서 살 것 뽑기(살 것 추가 시트에서도), 생활용품 분리, 체크한 항목 재고에 넣기. 서비스 워커와 IndexedDB 대기열로 인터넷 없이 체크·추가·메모하고, 연결되면 <code>client_id</code>로 한 번만 반영합니다. 빈 메모는 나갈 때와 목록 받을 때 정리합니다.</span></li>
+          <li><b>식단 짜기</b><span>주·월 보기, 칸 채우기(내 레시피 재고 일치·영상은 확인 화면 없이 정리 후 저장·직접 쓰기), 이번 주 복사(빈 칸만, 31일까지 기간 자동 연장), AI 식단 초안(칸마다 후보 2개·1인분 kcal 추정, 체크한 칸만 넣기), 식단으로 장보기 목록(인분 배율 합산·재고 비교·끼니 전날 살 날).</span></li>
+          <li><b>영양 계산·먹은 기록</b><span>내 몸 정보(성별·출생연도·키·몸무게·활동량·목표)로 하루 칼로리 목표를 정하고, 레시피 1인분 영양과 식단 하루 합계를 봅니다. 식품영양성분 DB에서 못 찾은 재료만 AI가 추정하고, 값이 일부만 빠지면 합계를 <code>이상</code>으로 보여줍니다. 먹은 기록은 끼니마다 남기고 한 달 달력으로 봅니다.</span></li>
+          <li><b>요리 일기·집밥 리포트</b><span>레시피 상세·식단 칸의 <code>요리했어요</code>로 쓴 재료를 재고에서 빼고(10초 알림에서 되돌리기), 별점·사진·메모와 아낀 돈(사 먹으면 얼마 × 인분 − 쓴 재료비)을 남깁니다. 레시피 없이 요리 이름·재료비(선택)만 적어 직접 쓸 수도 있습니다. 집밥 리포트는 한 달 아낀 돈·요리 횟수·집밥 비율·버린 재료를 보여줍니다.</span></li>
+          <li><b>체험 계정</b><span>누를 때마다 예시 재고·필수품·레시피·양념 비율·장보기·한 주 식단이 든 새 계정을 만들고 24시간 뒤 사진 파일까지 지웁니다. 같은 IP 1시간 30개·하루 100개, 체험 계정 전체 AI 24시간 80번(배포 설정). <code>/?demo=1</code>로 열면 로그인 화면 없이 바로 체험 계정이 열립니다.</span></li>
+          <li><b>더보기</b><span>화면 테마(시스템·밝게·어둡게), CSV zip 내보내기(재고·레시피·양념 비율·장보기·식단·먹은 기록·요리 일기 등 8개, 하루 5번, 수식 주입 방지), 오늘 AI 사용량, 데이터 출처, 이용약관·개인정보처리방침.</span></li>
           <li><b>인증</b><span>Authlib 기반 카카오·네이버·구글 OAuth, 로그인 버튼 로고와 지난번에 쓴 로그인 방법 표시(계정이 로그인 방법마다 따로라서). 개발용 로그인은 <code>DEV_MODE=1</code>에서만 열고, Render에서 켜진 채 시작하면 거부합니다.</span></li>
-          <li><b>쿠팡 파트너스(키 넣으면 작동)</b><span><span class="status">다음 배포</span> 쿠팡 검색 링크를 서버가 파트너스 딥링크로 바꿔 302로 보냅니다. 키가 없거나 체험 계정·로그인 없음·API 실패·한도 초과면 일반 링크로 가고, 제휴 링크일 때만 <code>광고</code> 표시를 붙입니다.</span></li>
+          <li><b>쿠팡 파트너스(키 넣으면 작동)</b><span>쿠팡 검색 링크를 서버가 파트너스 딥링크로 바꿔 302로 보냅니다. 키가 없거나 체험 계정·로그인 없음·API 실패·한도 초과면 일반 링크로 가고, 제휴 링크일 때만 <code>광고</code> 표시를 붙입니다. 심사·투표 기간 안에는 실적 조건 때문에 키 발급이 어려워 지금은 일반 검색 링크로 동작합니다.</span></li>
         </ul>
 
         <div class="screens">
@@ -524,7 +526,7 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
             <figcaption><b>장보기 목록</b>체크한 항목은 제자리에서 줄을 긋고, 인터넷이 끊겨도 기기 대기열에 쌓였다가 연결되면 보냅니다.</figcaption>
           </figure>
         </div>
-        <p class="screens-note">첫 화면은 앱의 디자인 토큰과 치수로 그린 목업(2026년 9월 13일을 오늘로 둔 예시 데이터), 나머지 둘은 체험 계정 스크린샷(9/14)입니다. 식단 탭 스크린샷은 9/15 저녁 배포 뒤 추가합니다.</p>
+        <p class="screens-note">첫 화면은 앱의 디자인 토큰과 치수로 그린 목업(2026년 9월 13일을 오늘로 둔 예시 데이터), 나머지 둘은 체험 계정 스크린샷입니다. 더 많은 화면은 <code>docs/submission/screenshots/</code>에 있습니다.</p>
       </section>
 
       <section class="section" id="decisions" aria-labelledby="decisions-title">
@@ -656,15 +658,15 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
 
         <div class="quality">
           <div class="q">
-            <p class="num">1,067</p>
+            <p class="num">1,608</p>
             <h3>백엔드 테스트, 경고 0</h3>
-            <p>2026-09-15 <code>f11ed6d</code>에서 SQLite(22초)와 PostgreSQL(58초) 두 엔진 모두 통과. <code>DeprecationWarning</code>을 오류로 올려 실행합니다. 구현 에이전트는 테스트를 먼저 쓰고(TDD) 실패를 확인한 뒤 구현했습니다.</p>
+            <p>2026-09-17 기준 SQLite·PostgreSQL 두 엔진 모두 통과. <code>DeprecationWarning</code>을 오류로 올려 실행합니다. 구현 에이전트는 테스트를 먼저 쓰고(TDD) 실패를 확인한 뒤 구현했습니다.</p>
             <pre>backend/.venv/bin/pytest -q -W error::DeprecationWarning</pre>
           </div>
           <div class="q">
-            <p class="num">7</p>
+            <p class="num">11</p>
             <h3>프론트 순수 로직 검사 스크립트</h3>
-            <p>양념 계산, 쇼핑몰 링크, 오프라인 대기열 동기화, 서비스 워커 캐시 목록, 식단, 구입일 칩, 숫자 형식을 브라우저 없이 검사하고, 타입 검사와 빌드까지 돌립니다.</p>
+            <p>숫자 형식, 양념 계산, 쇼핑몰 링크, 오프라인 대기열 동기화, 서비스 워커 캐시 목록, 식단, 구입일 칩, 영양 계산, 먹은 기록, 요리 일기, 체험 안내를 브라우저 없이 검사하고, 타입 검사와 빌드까지 돌립니다.</p>
             <pre>cd frontend &amp;&amp; npm run check &amp;&amp; npm run build</pre>
           </div>
           <div class="q">
@@ -702,9 +704,9 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
             <p>주부(4인 가족)와 1인 가구 페르소나로 사용성을 점검해 44건을 찾았습니다. 지금 화면에서 고칠 것과 설계에 반영할 것으로 나누고, 사용자가 고른 항목을 스펙 23절과 1d단계 계획으로 옮겼습니다.</p>
           </div>
           <div class="q">
-            <p class="num">28</p>
-            <h3>리뷰 반영 커밋</h3>
-            <p>병합을 뺀 커밋 가운데 제목에 "리뷰"·"검토"가 들어간 수입니다. 단계 끝 최종 리뷰는 <code>fix/phase1b-review</code>부터 <code>fix/meals-final-review</code>까지 별도 브랜치로 반영했습니다.</p>
+            <p class="num">73</p>
+            <h3>리뷰 반영 커밋(9/17 기준)</h3>
+            <p>병합을 뺀 커밋 가운데 제목에 "리뷰"·"검토"가 들어간 수입니다. 단계 끝 최종 리뷰는 <code>fix/phase1b-review</code>부터 <code>fix/meals-final-review</code>까지, 이후 기능도 <code>fix/*-review</code> 브랜치로 반영했습니다.</p>
           </div>
         </div>
       </section>
@@ -772,9 +774,9 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
       <section class="section" id="roadmap" aria-labelledby="roadmap-title">
         <p class="section-kicker">로드맵</p>
         <h2 id="roadmap-title">남은 일</h2>
-        <p class="section-intro">4b-1단계 식단 짜기부터 5단계 요리 일기·집밥 리포트까지 구현을 마쳤습니다. 아래 나머지는 폰에서 확인하거나 운영 전에 처리할 일입니다.</p>
+        <p class="section-intro">1단계 기반부터 5단계 요리 일기·집밥 리포트까지 구현을 마쳤습니다. 아래 나머지는 운영 전에 처리할 일입니다.</p>
         <ol class="roadmap">
-          <li><div><b>쇼핑몰 정렬 링크 확인</b><span class="status">폰 확인 전</span><span>7곳의 <code>낮은 가격순</code> 주소를 실제 폰에서 확인하기 전까지 운영 화면에는 <code>검색 결과</code> 칩만 보입니다.</span></div></li>
+          <li><div><b>회원 탈퇴 버튼</b><span class="status">진행 중</span><span>지금은 개인정보처리방침에 적은 이메일로 요청을 받아 10일 안에 지웁니다.</span></div></li>
           <li><div><b>"갈무리부엌" 상표 조사</b><span class="status">출시 전 확인 필요</span><span>KIPRIS 9류(소프트웨어)·42류(SaaS) 선등록 여부를 출시 전에 확인합니다.</span></div></li>
         </ol>
       </section>
@@ -784,7 +786,7 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
         <h2 id="revenue-title">원가를 먼저 재고, 그 위에 붙인다</h2>
         <p class="section-intro">가장 큰 비용은 AI 호출입니다. 호출마다 토큰을 <code>ai_calls</code>에 남겨 사용자당 원가를 잴 수 있게 해 두었습니다. 추천과 정렬 순서는 수수료와 관계없이 둡니다.</p>
         <ol class="roadmap">
-          <li><div><b>쿠팡 파트너스 제휴 링크</b><span class="status">구현 · 키 넣으면 작동</span><span>장보기에서 쿠팡으로 갈 때 제휴 링크로 보내고 <code>광고</code> 표시를 붙입니다. 체험 계정·로그인 전은 일반 링크입니다.</span></div></li>
+          <li><div><b>쿠팡 파트너스 제휴 링크</b><span class="status">구현 · 키는 보류</span><span>장보기에서 쿠팡으로 갈 때 제휴 링크로 보내고 <code>광고</code> 표시를 붙이도록 코드는 준비돼 있습니다. 체험 계정·로그인 전은 일반 링크입니다. 키 발급은 실적 조건 때문에 심사·투표 기간 안에는 어려워 지금은 일반 검색 링크로 동작합니다.</span></div></li>
           <li><div><b>AI 한도 기준 구독</b><span class="status">기획</span><span>무료와 유료는 사진 인식·AI 레시피·식단 AI 횟수로 나눕니다. 비용이 드는 곳이 경계입니다. 레시피 개수 제한은 원가가 거의 없어 쓰지 않습니다. 웹 결제라 앱스토어 수수료가 없습니다.</span></div></li>
           <li><div><b>식품 브랜드 협찬 레시피</b><span class="status">기획</span><span>사용자가 모이면 추천 목록에 <code>광고</code> 표시를 달고 섞습니다.</span></div></li>
         </ol>
@@ -805,7 +807,7 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
 </main>
 
 <footer>
-  <div class="wrap">수치는 2026-09-15 <code>f11ed6d</code> 기준입니다. 스크린샷은 <code>docs/submission/screenshots/</code>에 있습니다. <a href="product.html">제품 페이지 보기</a> · <a href="../../README.md">저장소 README</a> · <a href="../submission/03-AI-개발-과정.md">AI 개발 과정</a></div>
+  <div class="wrap">수치는 2026-09-17 기준입니다. 스크린샷은 <code>docs/submission/screenshots/</code>에 있습니다. <a href="product.html">제품 페이지 보기</a> · <a href="../../README.md">저장소 README</a> · <a href="../submission/03-AI-개발-과정.md">AI 개발 과정</a></div>
 </footer>
 </body>
 </html>
