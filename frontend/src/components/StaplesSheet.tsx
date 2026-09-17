@@ -132,7 +132,7 @@ export default function StaplesSheet({ staples, initialMissingOnly = false, onCh
                         <span className="staple-name">{staple.name}</span>
                         <span className="stock-ok">
                           <Icon name="check" size={16} />
-                          있음
+                          있어요
                           {staple.matched_name && staple.matched_name !== staple.name && ` · ${staple.matched_name}`}
                         </span>
                       </div>
