@@ -128,7 +128,7 @@ export default function Fridge({ user }: { user: User }) {
   const defaultLocationId =
     activeFilter !== "all" ? activeFilter : (locations.find((l) => l.kind === "fridge") ?? locations[0])?.id;
   const soon = items?.filter((i) => i.status === "urgent" || i.status === "danger").length ?? 0;
-  const missing = staples.filter((s) => !s.in_stock);
+  const missing = staples.filter((s) => s.status === "missing"); // 가졌던 것만 배너에(2026-09-17) — 한 번도 없던 건 안 뜬다
 
   const closeGuide = () => {
     setGuide(false);

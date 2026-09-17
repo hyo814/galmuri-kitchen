@@ -91,6 +91,9 @@ class Staple(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name = db.Column(db.String(50), nullable=False)
     category = db.Column(db.String(10), nullable=False, default="기타")
+    # 재고에서 실제로 본 적 있음("가졌던 것만 배너에" — 사용자 결정 2026-09-17). 직접 추가한 필수품은 만들 때 바로 true.
+    # 기본 필수품 시드는 false로 시작해, 목록 조회 때 재고에서 처음 발견되면 true로 바뀐다(staples.py to_json).
+    had_stock = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
 

@@ -177,7 +177,8 @@ def seed_demo_data(user_id):
             )
         )
     for name, category in STAPLES:
-        db.session.add(Staple(user_id=user_id, name=name, category=category))
+        # 체험 계정이 미리 고른 필수품이라 곧장 "가졌던 것"으로(2026-09-17) — 첫 화면에 "간장 떨어짐"이 그대로 보이게
+        db.session.add(Staple(user_id=user_id, name=name, category=category, had_stock=True))
     samples = {item["rcp_seq"]: item for item in json.loads(SAMPLE_FILE.read_text(encoding="utf-8"))}
     recipes = [samples[seq] for seq in RECIPE_SAMPLES]
     recipe_rows = []  # 식단 칸이 붙일 실제 Recipe 행(recipes는 원본 샘플 dict라 여기 따로 둔다)

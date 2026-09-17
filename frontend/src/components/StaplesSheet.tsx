@@ -27,8 +27,9 @@ export default function StaplesSheet({ staples, initialMissingOnly = false, onCh
 
   // 사용자가 직접 만든 분류(소스, 육류 등)도 칩과 그룹으로 보여 준다 (사용성 점검 C18)
   const categories = [...CATEGORIES, ...new Set(staples.map((s) => s.category).filter((c) => !CATEGORIES.includes(c)))];
-  const missingCount = staples.filter((s) => !s.in_stock).length;
-  const shown = missingOnly ? staples.filter((s) => !s.in_stock) : staples;
+  // 가졌던 것만 배너에(2026-09-17): "떨어진 것만"은 missing만(한 번도 없던 unstocked는 빼고 전체에서만 보인다)
+  const missingCount = staples.filter((s) => s.status === "missing").length;
+  const shown = missingOnly ? staples.filter((s) => s.status === "missing") : staples;
   const groups = categories
     .map((c) => ({ category: c, items: shown.filter((s) => s.category === c) }))
     .filter((g) => g.items.length > 0);
@@ -126,7 +127,7 @@ export default function StaplesSheet({ staples, initialMissingOnly = false, onCh
                           삭제
                         </button>
                       </div>
-                    ) : staple.in_stock ? (
+                    ) : staple.status === "in_stock" ? (
                       <div className="plain-row">
                         <span className="staple-name">{staple.name}</span>
                         <span className="stock-ok">
@@ -134,6 +135,12 @@ export default function StaplesSheet({ staples, initialMissingOnly = false, onCh
                           있음
                           {staple.matched_name && staple.matched_name !== staple.name && ` · ${staple.matched_name}`}
                         </span>
+                      </div>
+                    ) : staple.status === "unstocked" ? (
+                      // 한 번도 재고에 없던 필수품 — 배너·장보기에는 안 뜨고 시트에만 보인다 (2026-09-17)
+                      <div className="plain-row">
+                        <span className="staple-name">{staple.name}</span>
+                        <span className="badge">없어요</span>
                       </div>
                     ) : !onAddIngredient ? (
                       <div className="plain-row">
@@ -165,7 +172,7 @@ export default function StaplesSheet({ staples, initialMissingOnly = false, onCh
       {!editMode && missingCount > 0 && (
         <ShoppingAddButton
           source="staple"
-          items={staples.filter((s) => !s.in_stock).map((s) => ({ name: s.name }))}
+          items={staples.filter((s) => s.status === "missing").map((s) => ({ name: s.name }))}
           label={`떨어진 필수품 ${missingCount}개 장보기에 담기`}
         />
       )}

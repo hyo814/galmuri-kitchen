@@ -94,21 +94,21 @@ test("재료 삭제 이유를 골라 지울 수 있고 새로고침해도 남지
   await expect(page.getByRole("button", { name: /김치/ })).toHaveCount(0);
 });
 
-test("필수품 배너는 체험 안내 카드를 닫으면 보이고, 채워 넣으면 개수가 줄며 새로고침해도 그대로다", async ({ page }) => {
-  // 기본 필수품(2026-09-17)이 72개라 체험 계정도 대부분 떨어진 채 시작한다 — 정확한 개수 대신 줄어드는지로 본다
-  const banner = page.getByRole("button", { name: /필수품 \d+개가 떨어졌어요/ });
-  const bannerCount = async () => Number((await banner.textContent())?.match(/(\d+)개/)?.[1]);
+test("필수품 배너는 체험 안내 카드를 닫으면 보이고, 채워 넣으면 사라지며 새로고침해도 그대로다", async ({ page }) => {
+  // "가졌던 것만 배너에"(2026-09-17): 기본 필수품 72개 중 체험 계정이 재고로 가져 본 적 있는 것만 떨어짐으로 친다.
+  // 체험 재고와 맞는 기본 필수품(대파·양파·감자·달걀·김치·돼지고기·우유)은 있음으로 시작하고, 나머지는 "없어요"(배너에 안 뜸) —
+  // 배너에는 체험 계정이 미리 골라 둔 간장(demo.STAPLES) 하나만 떨어짐으로 보인다, 예전과 같다.
+  const banner = page.getByRole("button", { name: /필수품 1개가 떨어졌어요/ });
   // 체험 안내 카드(스펙 30절 C)가 떠 있는 동안은 카드 두 장이 겹치지 않게 배너를 숨긴다
   await expect(page.getByRole("region", { name: "체험 안내" })).toBeVisible();
   await expect(banner).toHaveCount(0);
   await page.getByRole("button", { name: "안내 닫기" }).click();
   await expect(banner).toBeVisible();
-  const before = await bannerCount();
+  await expect(banner).toContainText("간장");
   await banner.click();
 
   const staplesDialog = page.getByRole("dialog", { name: "필수품" });
-  // 진간장·국간장·양조간장도 "...간장 떨어짐, 재고에 추가"라 정확히 맞는 이름만 고른다
-  await staplesDialog.getByRole("button", { name: "간장 떨어짐, 재고에 추가", exact: true }).click();
+  await staplesDialog.getByRole("button", { name: "간장 떨어짐, 재고에 추가" }).click();
 
   const addDialog = page.getByRole("dialog", { name: "재료 추가" });
   await expect(addDialog.getByLabel("이름")).toHaveValue("간장");
@@ -117,14 +117,12 @@ test("필수품 배너는 체험 안내 카드를 닫으면 보이고, 채워 �
 
   // 배너 버튼 이름에도 `간장`이 들어 있어, 재고 줄은 이름이 `간장`으로 시작하는 버튼으로 찾는다(배너가 사라지기 전 겹침 방지)
   await expect(page.getByRole("button", { name: /^간장/ })).toBeVisible(); // 재고에 실제로 들어갔다
-  // "간장"은 진간장·국간장·양조간장과도 매칭돼(4절 규칙) 한 번에 여럿이 빠진다 — 정확히 1개가 아니라 줄었는지만 본다
-  await expect.poll(bannerCount).toBeLessThan(before);
-  const afterAdd = await bannerCount();
+  await expect(page.getByRole("button", { name: /필수품.*떨어졌어요/ })).toHaveCount(0);
 
   await page.reload();
   await expect(page.getByRole("navigation", { name: "주요 메뉴" })).toBeVisible();
   await expect(page.getByRole("button", { name: /^간장/ })).toBeVisible();
-  await expect.poll(bannerCount).toBe(afterAdd);
+  await expect(page.getByRole("button", { name: /필수품.*떨어졌어요/ })).toHaveCount(0);
 });
 
 test("설정에서 필수품을 추가하고 지울 수 있다", async ({ page }) => {

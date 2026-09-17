@@ -39,20 +39,44 @@ DEFAULT_STAPLES = [
 
 
 def upgrade():
-    # 기존 사용자에게 빠진 기본 필수품만 채운다(이미 같은 이름을 만들어 뒀으면 건너뜀 — 다시 돌려도 안전).
+    # had_stock: 재고에서 실제로 본 적 있음("가졌던 것만 배너에" — 사용자 결정 2026-09-17).
+    with op.batch_alter_table("staples", recreate="never") as b:
+        b.add_column(sa.Column("had_stock", sa.Boolean(), nullable=False, server_default=sa.false()))
+
     conn = op.get_bind()
+    # 이 마이그레이션 전부터 있던 필수품은 모두 사용자가 직접 만든 것이라 "가졌던 적 있음"으로 본다
+    conn.execute(sa.text("UPDATE staples SET had_stock = TRUE"))
+
+    # 이름 매칭은 앱의 실제 규칙(동의어·짧은 이름 규칙 포함)을 그대로 써야 해서, 다른 마이그레이션처럼
+    # 값을 얼려 두는 대신 app.matching을 그대로 불러온다(순수 함수라 부작용 없음).
+    from app.matching import names_match
+
     now = datetime.now(timezone.utc)
+    ingredients_by_user = {}
+    for user_id, name in conn.execute(sa.text("SELECT user_id, name FROM ingredients")).all():
+        ingredients_by_user.setdefault(user_id, []).append(name)
+    existing = {(user_id, name) for user_id, name in conn.execute(sa.text("SELECT user_id, name FROM staples")).all()}
+
+    # 기존 사용자에게 빠진 기본 필수품만 채운다(이미 같은 이름을 만들어 뒀으면 건너뜀 — 다시 돌려도 안전).
+    # had_stock은 지금 재고에 맞는 이름이 있으면 true(있는 걸 곧장 떨어짐으로 잘못 보여주지 않으려는 게 아니라,
+    # 배너가 "가졌던 것"만 보이게 하려면 지금 있는 것도 "가졌던 것"으로 시작해야 하기 때문 — 나중에 재고에서 빠지면 그때 떨어짐).
     insert_missing = sa.text(
-        "INSERT INTO staples (user_id, name, category, created_at) "
-        "SELECT u.id, :name, :category, :created_at FROM users u "
-        "WHERE NOT EXISTS (SELECT 1 FROM staples s WHERE s.user_id = u.id AND s.name = :name)"
-    ).bindparams(
-        sa.bindparam("created_at", type_=sa.DateTime(timezone=True)),
-        sa.bindparam("name", type_=sa.String(50)),  # PostgreSQL: 같은 :name을 두 번 쓰면 타입을 못 정해 명시한다
-    )
-    for name, category in DEFAULT_STAPLES:
-        conn.execute(insert_missing, {"name": name, "category": category, "created_at": now})
+        "INSERT INTO staples (user_id, name, category, had_stock, created_at) "
+        "VALUES (:user_id, :name, :category, :had_stock, :created_at)"
+    ).bindparams(sa.bindparam("created_at", type_=sa.DateTime(timezone=True)))
+    for (user_id,) in conn.execute(sa.text("SELECT id FROM users")).all():
+        stock_names = ingredients_by_user.get(user_id, [])
+        for name, category in DEFAULT_STAPLES:
+            if (user_id, name) in existing:
+                continue
+            had_stock = any(names_match(name, stock_name) for stock_name in stock_names)
+            conn.execute(
+                insert_missing,
+                {"user_id": user_id, "name": name, "category": category, "had_stock": had_stock, "created_at": now},
+            )
 
 
 def downgrade():
-    pass  # 사용자가 만들었는지 이 마이그레이션이 만들었는지 구분할 수 없어 지우지 않는다(사용자 데이터 보존)
+    # 필수품 행은 사용자가 만들었든 이 마이그레이션이 만들었든 지우지 않는다(사용자 데이터 보존) — 칸만 없앤다.
+    with op.batch_alter_table("staples", recreate="never") as b:
+        b.drop_column("had_stock")

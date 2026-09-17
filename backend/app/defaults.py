@@ -57,9 +57,11 @@ DEFAULT_RULES = [
 ]
 
 
-def seed_user_defaults(user_id, existing_staple_names=()):
+def seed_user_defaults(user_id):
     """새 사용자에게 기본 보관 위치·품목 규칙·필수품을 만든다. commit은 호출 측에서.
-    existing_staple_names: 이미 있는 필수품 이름(백필 등 호출 측에서 앞서 만들어 둔 이름과 안 겹치게)."""
+    기존 사용자 백필은 여기가 아니라 마이그레이션(1회, h5s5t5a5p5l5e5)에서만 한다 — 이 함수는 신규 가입 때만 부른다
+    (auth.upsert_user가 user is None일 때만, demo.py가 새 체험 계정을 만들 때만). 로그인·목록 조회 때 다시 불러
+    필수품을 채우지 않는다 — 사용자가 뺀 기본 필수품이 되살아나면 안 된다(사용자 결정 2026-09-17)."""
     for order, (name, kind) in enumerate(DEFAULT_LOCATIONS):
         db.session.add(StorageLocation(user_id=user_id, name=name, kind=kind, sort_order=order))
     for keyword, warn_days, danger_days, source in DEFAULT_RULES:
@@ -67,5 +69,5 @@ def seed_user_defaults(user_id, existing_staple_names=()):
             ItemRule(user_id=user_id, keyword=keyword, warn_days=warn_days, danger_days=danger_days, source=source)
         )
     for name, category in DEFAULT_STAPLES:
-        if name not in existing_staple_names:
-            db.session.add(Staple(user_id=user_id, name=name, category=category))
+        # had_stock=False로 시작 — 재고에서 실제로 본 적 있어야("가졌던 것만 배너에") 떨어짐으로 센다(staples.py to_json)
+        db.session.add(Staple(user_id=user_id, name=name, category=category, had_stock=False))
