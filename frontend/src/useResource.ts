@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { ApiError, api } from "./api";
 
 // ponytail: 탭·상세를 오갈 때 마지막으로 받은 응답을 모듈 Map에 둔다(새로고침하면 비워짐). 먼저 보여 주고 뒤에서 다시 받는다.
@@ -58,4 +58,19 @@ export function useResource<T>(url: string) {
   );
 
   return { data, error, status, reload, set };
+}
+
+/** LoadError 재시도가 성공하면 사라진 재시도 버튼 대신 heading(ref)으로 포커스를 옮긴다.
+ * 처음부터 성공한 경우는 건너뛴다 — 오류를 겪은 뒤 데이터가 생겼을 때만 포커스를 옮긴다. */
+export function useFocusOnRecover(ref: RefObject<HTMLElement | null>, error: string, data: unknown) {
+  const hadError = useRef(false);
+  useEffect(() => {
+    if (error) hadError.current = true;
+  }, [error]);
+  useEffect(() => {
+    if (data !== undefined && hadError.current) {
+      hadError.current = false;
+      ref.current?.focus();
+    }
+  }, [data, ref]);
 }
