@@ -107,6 +107,7 @@ test("쇼핑몰에서 한꺼번에 찾기: 쇼핑몰을 고르면 품목마다 �
   await dialog.getByRole("button", { name: "쿠팡" }).click();
 
   await expect(dialog.getByRole("heading", { name: "쿠팡에서 찾기" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "쿠팡에서 찾기" })).toBeFocused(); // ②→③도 같은 시트라 포커스를 직접 옮겨야 한다
   await expect(dialog.getByText("5개 중 0개 열어봤어요")).toBeVisible();
 
   const firstLink = dialog.getByRole("link", { name: "쿠팡 두부 찾기 (새 창)" });
@@ -122,6 +123,7 @@ test("쇼핑몰에서 한꺼번에 찾기: 쇼핑몰을 고르면 품목마다 �
   // 쇼핑몰 바꾸기로 돌아가면(시트가 열려 있는 동안은 순서를 바꾸지 않는다, StoreLinksSheet와 같은 규칙) 목록 순서는 그대로다
   await dialog.getByRole("button", { name: "쇼핑몰 바꾸기" }).click();
   await expect(dialog.getByRole("heading", { name: "어디서 살까요?" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "어디서 살까요?" })).toBeFocused(); // ③→②도 마찬가지
   await expect(dialog.getByRole("button").first()).toHaveText("쿠팡");
 
   await dialog.getByRole("button", { name: "쿠팡" }).click();
@@ -151,6 +153,34 @@ test("살 것이 하나뿐이면 쇼핑몰에서 한꺼번에 찾기 버튼이 �
   }
   await expect(page.getByRole("button", { name: "두부1모", exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "쇼핑몰에서 한꺼번에 찾기" })).toHaveCount(0);
+});
+
+test("쇼핑몰에서 한꺼번에 찾기: 괄호뿐인 이름은 목록·진행률에서 빠지고 화면이 죽지 않는다", async ({ page }) => {
+  await openTab(page, "장보기");
+  await addItem(page, "(1인분)", "1개"); // storeLinks.ts searchQuery가 괄호 안을 지워 검색어가 빈 문자열이 되는 이름
+  await expect(page.getByText("(1인분)")).toBeVisible();
+
+  await page.getByRole("button", { name: "쇼핑몰에서 한꺼번에 찾기" }).click();
+  const dialog = page.getByRole("dialog");
+  // 체크 안 한 6개 중 검색어를 만들 수 있는 5개만 센다
+  await expect(dialog.getByText("고른 쇼핑몰에서 살 것 5개를 차례로 찾아요")).toBeVisible();
+  await dialog.getByRole("button", { name: "쿠팡" }).click();
+  await expect(dialog.getByText("5개 중 0개 열어봤어요")).toBeVisible();
+  await expect(dialog.getByText("(1인분)")).toHaveCount(0); // 찾기 줄에는 나오지 않는다
+});
+
+test("쇼핑몰 고르기: 지난번+가격 비교가 겹쳐도 버튼이 넘치지 않는다", async ({ page }) => {
+  await openTab(page, "장보기");
+  await page.evaluate(() => localStorage.setItem("shopping-last-store", "naver"));
+  await page.getByRole("button", { name: "쇼핑몰에서 한꺼번에 찾기" }).click();
+
+  const dialog = page.getByRole("dialog");
+  const naverButton = dialog.getByRole("button", { name: "네이버 쇼핑 가격 비교, 지난번" });
+  await expect(naverButton).toBeVisible();
+  await expect(naverButton.locator("small")).toHaveCount(2); // 가격 비교 + 지난번 둘 다 보인다
+
+  const overflowX = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+  expect(overflowX).toBe(false); // 384px 폭에서 가로로 넘치지 않는다
 });
 
 test("장보기 메모를 지우고 새로 쓰면 카드에 나타나고 새로고침해도 남는다", async ({ page }) => {

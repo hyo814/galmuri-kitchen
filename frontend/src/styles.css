@@ -3508,8 +3508,8 @@ button.row-btn > svg {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  height: 52px;
-  padding: 0 14px;
+  min-height: 52px;
+  padding: 10px 14px;
   border: 0;
   border-radius: 14px;
   background: var(--field);
