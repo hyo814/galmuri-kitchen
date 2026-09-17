@@ -91,17 +91,17 @@ export default function Sheet({ title, description, action, className, hideHeade
       <div className="sheet-body">
         <div className="sheet-handle" aria-hidden="true" />
         <div className={hideHeader ? "sheet-header sr-only" : "sheet-header"}>
-          <div>
+          <div className="sheet-header-top">
             <h2 id={titleId} ref={heading}>
               {title}
             </h2>
-            {description && (
-              <p id={descId} className="sheet-desc">
-                {description}
-              </p>
-            )}
+            {action}
           </div>
-          {action}
+          {description && (
+            <p id={descId} className="sheet-desc">
+              {description}
+            </p>
+          )}
         </div>
         {children}
       </div>
