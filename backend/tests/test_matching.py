@@ -90,6 +90,13 @@ def test_names_match(a, b, expected):
         ("소금", "청정원 깨소금 50g", False),
         ("깨소금", "청정원 깨소금 50g", True),
         ("소금", "구운소금", True),
+        # 이름 다듬기(2026-09-18): 기본 치즈→치즈, 뿌리는 치즈→파마산 치즈, 생선 종류→생선, 파스타면→파스타
+        ("치즈", "슬라이스 치즈", True),
+        ("치즈", "모짜렐라치즈", True),
+        ("파마산 치즈", "파마산 치즈 가루", True),
+        ("생선", "생선", True),
+        ("파스타", "파스타면", True),
+        ("파스타", "스파게티 파스타", True),
     ],
 )
 def test_staple_matches(staple, ingredient, expected):
@@ -100,6 +107,13 @@ def test_staple_matches_synonym_is_not_global():
     # 케찹↔케첩은 필수품 전용 별칭이지 전역 SYNONYMS가 아니다 — names_match(레시피·영양 캐시 키 등에 쓰는 일반 매칭)는 그대로 다르다
     assert names_match("케찹", "오뚜기 케첩") is False
     assert staple_matches("케찹", "오뚜기 케첩") is True
+
+
+def test_staple_matches_cheese_does_not_break_on_parmesan_staple():
+    # "치즈"·"파마산 치즈" 둘 다 기본 필수품(2026-09-18) — 재고에 파마산 치즈만 있어도 "치즈"가 정방향(치즈 ⊆ 파마산 치즈)으로
+    # 맞는 건 의도한 동작(치즈는 파마산 치즈의 상위어라 자연스럽다). 역방향(파마산 치즈가 치즈만으로 맞는 것)은 여러 낱말이라 안 된다.
+    assert staple_matches("치즈", "파마산 치즈") is True
+    assert staple_matches("파마산 치즈", "치즈") is False
 
 
 @pytest.mark.parametrize(
