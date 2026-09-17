@@ -200,7 +200,7 @@ def test_export_zip_contents(client, login, app):
     client.post("/api/recipes", json=RECIPE)
     client.post(
         "/api/recipes",
-        json={**RECIPE, "title": "백종원 김치찌개", "source": "youtube", "source_url": "https://www.youtube.com/watch?v=abc"},
+        json={**RECIPE, "title": "백종원 김치찌개", "source": "youtube", "source_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
     )
     with app.app_context():
         db.session.add(PublicRecipe(rcp_seq="1", title="된장찌개", image_url="https://www.foodsafetykorea.go.kr/a.jpg"))
@@ -265,7 +265,7 @@ def test_export_zip_contents(client, login, app):
     assert sorted(files["recipes.csv"][1:]) == sorted(
         [
             ["두부조림", "2", "두부 1모; 대파 1/2대; 물", steps, "직접 입력", "", ""],
-            ["백종원 김치찌개", "2", "두부 1모; 대파 1/2대; 물", steps, "유튜브에서 가져옴", "https://www.youtube.com/watch?v=abc", ""],
+            ["백종원 김치찌개", "2", "두부 1모; 대파 1/2대; 물", steps, "유튜브에서 가져옴", "https://www.youtube.com/watch?v=dQw4w9WgXcQ", ""],
             ["AI 된장찌개", "2", "두부 1모; 대파 1/2대; 물", steps, "AI가 만든 레시피", "", "https://www.foodsafetykorea.go.kr/a.jpg"],
         ]
     )

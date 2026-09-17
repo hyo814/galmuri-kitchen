@@ -657,6 +657,7 @@ def test_import_youtube_with_api_key(client, login, app, monkeypatch):
         "source": "youtube",
         "source_url": YOUTUBE_URL,
         "source_card": {"title": "제육볶음 황금레시피", "author": "집밥 연구소", "thumbnail_url": "https://i.ytimg.com/vi/x/hq.jpg"},
+        "existing_recipe_id": None,
         "sample": False,
     }
     assert seen["video"] == ("dQw4w9WgXcQ", "yt-key")
@@ -813,6 +814,36 @@ def test_import_blog_page(client, login, app, monkeypatch, caplog):
     res = import_(client, url=WEB)
     assert (res.status_code, res.get_json()) == (422, {"error": NEED_WEB, "need_text": True})
     assert [kind for _, kind in ai_calls(app)] == ["link_fetch", "link", "link_fetch", "link", "link_fetch", "link_fetch"]
+
+
+RECIPE_BODY = {"title": "두부조림", "ingredients": [{"name": "두부", "amount": "1모"}], "steps": ["졸여요."]}
+
+
+def test_import_flags_existing_recipe_by_source_url(client, login, app, monkeypatch):
+    """같은 영상·게시물·글을 다시 가져오면(스펙 4절 결정) 이미 저장한 레시피 id를 같이 준다.
+    링크 없이 가져온 것(글 붙여넣기)은 검사하지 않고, 다른 사람이 저장한 같은 링크는 섞이지 않는다."""
+    login()
+    live(app)
+    monkeypatch.setattr(outbound, "video_snippet", lambda video_id, key: SNIPPET)
+    monkeypatch.setattr(ai, "extract_recipe", lambda text, images: found())
+
+    assert import_(client, url=YOUTUBE).get_json()["existing_recipe_id"] is None  # 아직 저장한 적 없다
+    assert import_(client, text=RECIPE_TEXT).get_json()["existing_recipe_id"] is None  # 링크가 없으면 검사하지 않는다
+
+    saved = client.post("/api/recipes", json={**RECIPE_BODY, "source": "youtube", "source_url": YOUTUBE_URL}).get_json()
+    assert import_(client, url=YOUTUBE).get_json()["existing_recipe_id"] == saved["id"]
+
+    login("someone-else")  # 다른 사람이 같은 링크를 저장한 건 내 결과에 안 섞인다
+    live(app)
+    assert import_(client, url=YOUTUBE).get_json()["existing_recipe_id"] is None
+
+
+def test_import_sample_mode_flags_existing_recipe(client, login, app):
+    """체험 모드(mode=="sample", ANTHROPIC_API_KEY 없음)도 표준 주소 기준으로 같이 확인한다 — 네트워크·AI를 부르지 않는다."""
+    login()
+    saved = client.post("/api/recipes", json={**RECIPE_BODY, "source": "youtube", "source_url": YOUTUBE_URL}).get_json()
+    body = import_(client, url=YOUTUBE).get_json()
+    assert (body["sample"], body["existing_recipe_id"]) == (True, saved["id"])
 
 
 PAGE_IMAGES = [f"https://recipe.example.com/upload/{i}.jpg" for i in range(3)]

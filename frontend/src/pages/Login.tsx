@@ -3,7 +3,33 @@ import { api, type AuthOptions, type User } from "../api";
 import ProviderLogo, { type LoginProvider } from "../components/ProviderLogo";
 
 const LAST_LOGIN_KEY = "lastLoginProvider";
+const POST_LOGIN_HASH_KEY = "postLoginHash";
 const LOGIN_PROVIDERS: LoginProvider[] = ["kakao", "naver", "google"];
+
+/** 카카오·네이버·구글 로그인은 페이지를 통째로 떠났다 돌아오므로, 보던 해시 경로(#/recipes/mine/12)를 누르기 전에 기억해둔다 */
+function saveHashForLogin() {
+  const hash = location.hash;
+  if (!hash || hash === "#" || hash === "#/") return;
+  try {
+    sessionStorage.setItem(POST_LOGIN_HASH_KEY, hash);
+  } catch {
+    // 저장소를 못 쓰면(사생활 보호 모드 등) 로그인 뒤 홈으로 돌아간다
+  }
+}
+
+/** 로그인하러 떠나 있는 동안 기억해둔 해시 경로를 되살린다. App.tsx가 모듈을 불러올 때 한 번만 —
+ * useHashRoute가 첫 렌더에서 location.hash를 읽기 전이어야 한다. */
+export function restoreHashAfterLogin() {
+  if (location.hash && location.hash !== "#" && location.hash !== "#/") return; // 이미 주소에 해시가 있으면(딥링크로 바로 열었다) 건드리지 않는다
+  let saved: string | null = null;
+  try {
+    saved = sessionStorage.getItem(POST_LOGIN_HASH_KEY);
+    sessionStorage.removeItem(POST_LOGIN_HASH_KEY);
+  } catch {
+    // 저장소를 못 쓰면 그냥 홈으로
+  }
+  if (saved) location.hash = saved; // matchRoute가 모르는 값이면 useHashRoute가 "/"로 보낸다(useHashRoute.ts currentRoute)
+}
 const PROVIDER_LABELS: Record<LoginProvider, string> = { kakao: "카카오 로그인", naver: "네이버 로그인", google: "Google로 계속하기" };
 
 /** 로그인에 성공한 소셜 로그인을 기기에 기억한다(계정이 로그인 방법마다 따로라 다음에 같은 버튼을 누르게). 로그아웃해도 지우지 않는다 */
@@ -195,7 +221,12 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
           지난번에 이걸로 로그인했어요
         </span>
       )}
-      <a className={`btn ${name}`} href={`/auth/login/${name}`} aria-describedby={last === name ? `login-last-${name}` : undefined}>
+      <a
+        className={`btn ${name}`}
+        href={`/auth/login/${name}`}
+        onClick={saveHashForLogin}
+        aria-describedby={last === name ? `login-last-${name}` : undefined}
+      >
         <ProviderLogo name={name} />
         {PROVIDER_LABELS[name]}
       </a>

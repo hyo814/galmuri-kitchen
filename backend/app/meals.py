@@ -555,7 +555,7 @@ def apply_meal_draft(plan_id):
                 abort(400, RECIPE_CHANGED)
             recipes[index] = recipe
         else:
-            fields = parse_recipe(dish)
+            fields = parse_recipe(dish, "ai")  # 아래에서 항상 source="ai"로 만든다; source_url은 바로 버리므로 검증 결과는 안 쓴다
             fields.pop("source_url", None)
             new_fields[index] = fields
     # 새 요리를 쓰는 칸이 모두 이미 찼으면 그 요리는 만들지 않는다.
