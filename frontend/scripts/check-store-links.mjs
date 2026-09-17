@@ -29,9 +29,9 @@ assert.equal(searchQuery("두부 (부침용) 한 모"), "두부 한 모");
 assert.equal(searchQuery("가".repeat(60)).length, 50);
 
 const ids = STORES.map((s) => s.id);
-assert.deepEqual(ids, ["coupang", "naver", "kurly", "emart", "homeplus", "lottemart", "gmarket"]);
-assert.equal(new Set(ids).size, 7);
-assert.deepEqual(STORES.map((s) => s.name), ["쿠팡", "네이버 쇼핑", "컬리", "이마트몰", "홈플러스", "롯데마트", "G마켓"]);
+assert.deepEqual(ids, ["coupang", "naver", "kurly", "emart", "lottemart", "gmarket"]);
+assert.equal(new Set(ids).size, 6);
+assert.deepEqual(STORES.map((s) => s.name), ["쿠팡", "네이버 쇼핑", "컬리", "이마트몰", "롯데마트", "G마켓"]);
 assert.deepEqual(SORTS.map((s) => s.label), ["낮은 가격순", "많이 산 순", "새 상품순"]);
 for (const s of STORES) {
   assert.ok(s.search.includes("{q}"), s.id);

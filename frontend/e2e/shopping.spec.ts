@@ -91,8 +91,8 @@ test("쇼핑몰에서 찾기를 누르면 쇼핑몰 링크 시트가 열린다",
   await expect(dialog.getByRole("heading", { name: "두부 찾기" })).toBeVisible();
   // 쿠팡은 낮은 가격순이 폰으로 확인돼 있어(storeLinks.ts verified) 정렬 칩으로 열린다
   await expect(dialog.getByRole("link", { name: "쿠팡 낮은 가격순으로 두부 찾기 (새 창)" })).toBeVisible();
-  // 쇼핑몰 7곳마다 링크가 하나 이상(확인된 쇼핑몰은 정렬 칩 여러 개로 바뀌어 총 개수는 고정하지 않는다, storeLinks.ts verified)
-  for (const store of ["쿠팡", "네이버 쇼핑", "컬리", "이마트몰", "홈플러스", "롯데마트", "G마켓"])
+  // 쇼핑몰 6곳마다 링크가 하나 이상(확인된 쇼핑몰은 정렬 칩 여러 개로 바뀌어 총 개수는 고정하지 않는다, storeLinks.ts verified)
+  for (const store of ["쿠팡", "네이버 쇼핑", "컬리", "이마트몰", "롯데마트", "G마켓"])
     await expect(dialog.getByRole("link", { name: new RegExp(`^${store} .*두부 찾기 \\(새 창\\)$`) }).first()).toBeVisible();
 });
 

@@ -4,7 +4,7 @@
 // (칩이 숨겨진다) verified에 확인 날짜를 적는다. 그 전에는 운영 화면(onlyVerified)에서 정렬 칩 없이 `검색 결과` 하나만 보여준다.
 // 쇼핑몰 링크는 이 파일 한 곳에서만 만든다(스펙 16·25절). 순서는 제휴 여부와 무관하다.
 
-export type StoreId = "coupang" | "naver" | "kurly" | "emart" | "homeplus" | "lottemart" | "gmarket";
+export type StoreId = "coupang" | "naver" | "kurly" | "emart" | "lottemart" | "gmarket";
 export type SortId = "price_asc" | "popular" | "newest";
 
 /** 시안 StoreSheet 칩 순서 */
@@ -49,13 +49,13 @@ export const STORES: readonly Store[] = [
     verified: "2026-09-17 사용자 폰 확인(낮은 가격순)",
   },
   {
-    // 2026-09-17 브라우저 확인(낮은 가격순). 많이 산 순·새 상품순은 확인 못 해 칸을 두지 않음
+    // 2026-09-17 사용자 폰 확인(낮은 가격순). 많이 산 순·새 상품순은 확인 못 해 칸을 두지 않음
     id: "kurly", name: "컬리", host: "www.kurly.com",
     search: "https://www.kurly.com/search?sword={q}",
     sorts: {
       price_asc: "https://www.kurly.com/search?sword={q}&sorted_type=2",
     },
-    verified: "2026-09-17 브라우저 확인(낮은 가격순)",
+    verified: "2026-09-17 사용자 폰 확인(낮은 가격순)",
   },
   {
     // 2026-09-17 사용자 폰 확인(낮은 가격순, SSG 이마트몰). 많이 산 순·새 상품순은 확인 못 해 칸을 지웠다
@@ -67,33 +67,22 @@ export const STORES: readonly Store[] = [
     verified: "2026-09-17 사용자 폰 확인(낮은 가격순)",
   },
   {
-    // 2026-09-17 브라우저 확인(낮은 가격순). 많이 산 순·새 상품순은 확인 못 해 칸을 두지 않음
-    id: "homeplus", name: "홈플러스", host: "front.homeplus.co.kr",
-    search: "https://front.homeplus.co.kr/search?entry=direct&keyword={q}",
+    // 2026-09-17 사용자 폰 확인(낮은 가격순, 롯데마트 제타). 많이 산 순·새 상품순은 확인 못 해 칸을 두지 않음
+    id: "lottemart", name: "롯데마트", host: "lottemartzetta.com",
+    search: "https://lottemartzetta.com/products/search?q={q}",
     sorts: {
-      price_asc: "https://front.homeplus.co.kr/search?entry=direct&keyword={q}&sort=PRICE_DOWN",
+      price_asc: "https://lottemartzetta.com/products/search?q={q}&sortBy=pricePerAscending",
     },
-    verified: "2026-09-17 브라우저 확인(낮은 가격순)",
+    verified: "2026-09-17 사용자 폰 확인(낮은 가격순)",
   },
   {
-    // 2026-09-17 브라우저 확인(낮은 가격순, 롯데온 롯데마트몰). 많이 산 순·새 상품순은 확인 못 해 칸을 두지 않음
-    id: "lottemart", name: "롯데마트", host: "www.lotteon.com",
-    search: "https://www.lotteon.com/search/search/search.ecn?render=search&platform=pc&q={q}&mallId=4",
-    sorts: {
-      price_asc: "https://www.lotteon.com/search/search/search.ecn?render=search&platform=pc&q={q}&mallId=4&sort=lprice",
-    },
-    verified: "2026-09-17 브라우저 확인(낮은 가격순)",
-  },
-  {
-    // 검증 전
+    // 2026-09-17 사용자 폰 확인(낮은 가격순). 많이 산 순·새 상품순은 확인 못 해 칸을 두지 않음
     id: "gmarket", name: "G마켓", host: "www.gmarket.co.kr",
     search: "https://www.gmarket.co.kr/n/search?keyword={q}",
     sorts: {
-      price_asc: "https://www.gmarket.co.kr/n/search?keyword={q}&s=1",
-      popular: "https://www.gmarket.co.kr/n/search?keyword={q}&s=8",
-      newest: "https://www.gmarket.co.kr/n/search?keyword={q}&s=3",
+      price_asc: "https://www.gmarket.co.kr/n/search?keyword={q}&f=sp:lp",
     },
-    verified: null,
+    verified: "2026-09-17 사용자 폰 확인(낮은 가격순)",
   },
 ];
 
