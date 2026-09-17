@@ -30,25 +30,23 @@ interface Store {
 /** 순서 = 기본 화면 순서(제휴와 무관). 이름은 시안 그대로 */
 export const STORES: readonly Store[] = [
   {
-    // 검증 전
+    // 2026-09-17 사용자 폰 확인(낮은 가격순). 많이 산 순·새 상품순은 확인 못 해 칸을 지웠다
     id: "coupang", name: "쿠팡", host: "www.coupang.com",
     search: "https://www.coupang.com/np/search?q={q}",
     sorts: {
       price_asc: "https://www.coupang.com/np/search?q={q}&sorter=salePriceAsc",
-      popular: "https://www.coupang.com/np/search?q={q}&sorter=saleCountDesc",
-      newest: "https://www.coupang.com/np/search?q={q}&sorter=latestAsc", // Asc가 오래된 순일 수 있음 — 폰 확인
     },
-    verified: null,
+    verified: "2026-09-17 사용자 폰 확인(낮은 가격순)",
   },
   {
-    // 검증 전. 많이 산 순: 판매량 정렬 후보가 없어 칸을 두지 않음(리뷰 많은순 `&sort=review`만 후보 — 폰 확인 뒤 결정)
+    // 2026-09-17 사용자 폰 확인(낮은 가격순). 많이 산 순은 판매량 정렬 후보가 없어 칸을 두지 않음.
+    // 새 상품순은 확인 못 해 칸을 지웠다(리뷰 많은순 `&sort=review`만 후보 — 폰 확인 뒤 결정)
     id: "naver", name: "네이버 쇼핑", host: "search.shopping.naver.com",
     search: "https://search.shopping.naver.com/search/all?query={q}",
     sorts: {
       price_asc: "https://search.shopping.naver.com/search/all?query={q}&sort=price_asc",
-      newest: "https://search.shopping.naver.com/search/all?query={q}&sort=date",
     },
-    verified: null,
+    verified: "2026-09-17 사용자 폰 확인(낮은 가격순)",
   },
   {
     // 검증 전. 정렬 후보 없음 — 폰에서 정렬을 바꾼 주소창 값을 받아 채운다
@@ -58,15 +56,13 @@ export const STORES: readonly Store[] = [
     verified: null,
   },
   {
-    // 검증 전 (SSG 이마트몰)
+    // 2026-09-17 사용자 폰 확인(낮은 가격순, SSG 이마트몰). 많이 산 순·새 상품순은 확인 못 해 칸을 지웠다
     id: "emart", name: "이마트몰", host: "emart.ssg.com",
     search: "https://emart.ssg.com/search.ssg?query={q}",
     sorts: {
       price_asc: "https://emart.ssg.com/search.ssg?query={q}&sort=prcasc",
-      popular: "https://emart.ssg.com/search.ssg?query={q}&sort=sale",
-      newest: "https://emart.ssg.com/search.ssg?query={q}&sort=regdt",
     },
-    verified: null,
+    verified: "2026-09-17 사용자 폰 확인(낮은 가격순)",
   },
   {
     // 검증 전. 정렬 후보 없음
