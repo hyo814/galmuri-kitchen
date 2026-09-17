@@ -183,6 +183,7 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
 }
 
 .text-btn {
+  flex-shrink: 0;
   min-height: 44px;
   min-width: 44px;
   padding: 0 4px;
@@ -190,6 +191,7 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
   background: none;
   color: var(--text-3);
   font-size: 15px;
+  white-space: nowrap;
 }
 
 .center {
@@ -510,6 +512,11 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
 }
 
 .sheet-header {
+  display: flex;
+  flex-direction: column;
+}
+
+.sheet-header-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -3568,6 +3575,9 @@ button.row-btn > svg {
 
 .sh-find-list {
   display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .sh-find-row {
