@@ -75,6 +75,7 @@ interface MultiSession {
   source: RecipeDraft["source"];
   source_url: string | null;
   source_card?: SourceCard | null;
+  existing_recipe_id?: number | null;
   fromImage: boolean;
   items: PickSlot[]; // 지금 폼에 열려 있는 것 말고 나머지 전부(저장하지 않은 것만)
   saved: SavedSlot[]; // 이 세션에서 이미 저장한 것들(찾은 순서, ⑤ 화면의 `저장함` 줄)
@@ -116,7 +117,10 @@ export function openDraft(draft: RecipeDraft, { replace = false } = {}) {
   history.replaceState({ ...(history.state as object | null), draft: true }, ""); // 이 칸으로 돌아오면 되살린다
 }
 
-function draftFromSlot(slot: PickSlot, session: Pick<MultiSession, "source" | "source_url" | "source_card">): RecipeDraft {
+function draftFromSlot(
+  slot: PickSlot,
+  session: Pick<MultiSession, "source" | "source_url" | "source_card" | "existing_recipe_id">,
+): RecipeDraft {
   return {
     title: slot.draft.title,
     servings: slot.draft.servings,
@@ -125,6 +129,7 @@ function draftFromSlot(slot: PickSlot, session: Pick<MultiSession, "source" | "s
     source: session.source,
     source_url: session.source_url,
     source_card: session.source_card ?? null,
+    existing_recipe_id: session.existing_recipe_id ?? null,
     sample: false,
   };
 }
@@ -139,6 +144,7 @@ export function openMultiPick(result: MultiRecipeDraft, order: number, captureLi
     source: captureLink?.source ?? result.source,
     source_url: captureLink?.source_url ?? result.source_url,
     source_card: result.source_card ?? null,
+    existing_recipe_id: captureLink ? null : (result.existing_recipe_id ?? null), // captureLink는 화면 캡처로 얻은 새 링크라 중복 검사를 하지 않았다
     fromImage: result.from_image,
     items: slots.filter((s) => s.order !== order),
     saved: [],
@@ -424,6 +430,21 @@ function RecipeEditor({ initial, draft = null, multi = null, onSwitch }: RecipeE
         </div>
       )}
       {draft && <SourceCardView draft={draft} />}
+      {draft?.existing_recipe_id != null && (
+        <p className="notice" role="status">
+          이미 저장한 레시피예요.{" "}
+          <a
+            className="r3-link"
+            href={`#/recipes/mine/${draft.existing_recipe_id}`}
+            onClick={(e) => {
+              e.preventDefault();
+              navigate(`/recipes/mine/${draft.existing_recipe_id}`);
+            }}
+          >
+            레시피 보기
+          </a>
+        </p>
+      )}
 
       <form className="rc-page-form" onSubmit={submit}>
         <section className="rc-sec rc-form">

@@ -236,6 +236,14 @@ def import_photos():
     return jsonify(recipes=drafts, from_image=True, source="photo", source_url=None, source_card=None, images_truncated=False, sample=False)
 
 
+def _existing_recipe_id(source_url):
+    """같은 링크로 이미 저장한 레시피가 있으면 그 id(화면이 `이미 저장한 레시피예요` 안내와 링크에 쓴다)."""
+    if source_url is None:
+        return None
+    row = Recipe.query.filter_by(user_id=g.user.id, source_url=source_url).with_entities(Recipe.id).first()
+    return row[0] if row else None
+
+
 @bp.post("/recipes/import")
 @login_required
 def import_recipe():
@@ -270,7 +278,14 @@ def import_recipe():
         abort(503, "레시피 가져오기를 지금은 쓸 수 없어요.")
     if mode == "sample":
         card = ai.SAMPLE_SOURCE_CARD if link else None
-        return jsonify(**clean_draft(ai.SAMPLE_IMPORT), source=source, source_url=source_url, source_card=card, sample=True)
+        return jsonify(
+            **clean_draft(ai.SAMPLE_IMPORT),
+            source=source,
+            source_url=source_url,
+            source_card=card,
+            existing_recipe_id=_existing_recipe_id(source_url),
+            sample=True,
+        )
 
     user_id, limit = g.user.id, ai_daily_limit(g.user, "AI_DAILY_RECIPE_LIMIT")
     youtube_key = current_app.config["YOUTUBE_API_KEY"]
@@ -339,8 +354,16 @@ def import_recipe():
     if not drafts:
         scan.miss_ai_call(call)
         return need_text(source, source_url)
+    existing_recipe_id = _existing_recipe_id(source_url)
     if len(drafts) == 1:
-        return jsonify(**drafts[0], source=source, source_url=source_url, source_card=source_card, sample=False)
+        return jsonify(
+            **drafts[0],
+            source=source,
+            source_url=source_url,
+            source_card=source_card,
+            existing_recipe_id=existing_recipe_id,
+            sample=False,
+        )
     return jsonify(
         recipes=drafts,
         from_image=bool(images),
@@ -348,6 +371,7 @@ def import_recipe():
         source_url=source_url,
         source_card=source_card,
         images_truncated=images_truncated,
+        existing_recipe_id=existing_recipe_id,
         sample=False,
     )
 

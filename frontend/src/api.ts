@@ -169,6 +169,8 @@ export interface RecipeDraft extends RecipeInput {
   source: "youtube" | "instagram" | "blog" | "text" | "photo";
   source_url: string | null;
   source_card?: SourceCard | null;
+  /** 같은 링크로 이미 저장한 내 레시피가 있으면 그 id — `이미 저장한 레시피예요` 안내에 쓴다 */
+  existing_recipe_id?: number | null;
   sample?: boolean;
 }
 
@@ -182,6 +184,7 @@ export interface MultiRecipeDraft {
   source_card?: SourceCard | null;
   /** 본문 사진 후보가 5장보다 많아 앞쪽만 읽었을 때 */
   images_truncated: boolean;
+  existing_recipe_id?: number | null;
   sample?: boolean;
 }
 
