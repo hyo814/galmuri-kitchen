@@ -120,7 +120,7 @@ export function RecipeBody({
                     {item.matched_name && item.matched_name !== item.name && ` · ${item.matched_name}`}
                   </span>
                 ) : (
-                  <span className="badge">없음</span>
+                  <span className="badge">없어요</span>
                 )}
               </li>
             );

@@ -130,6 +130,27 @@ def test_ingredient_shows_matched_stock_amount(client, login):
     assert ingredients[0]["stock_unit"] == "g"
 
 
+def test_stock_amount_uses_first_matched_row_when_units_differ(client, login):
+    """같은 이름 재고가 여러 줄이고 단위가 다르면, annotate가 실제로 매칭하는 첫 행(urgent 먼저)의 수량·단위를 쓴다 —
+    뒤 행 값으로 덮이지 않는다(리뷰 지적사항 1)."""
+    login()
+    add_ingredient(client, "대파", quantity=300, unit="g")  # 안 급함 → inventory_rows에서 뒤로
+    add_ingredient(client, "대파", expires_on=seoul_today().isoformat())  # 임박 → 앞으로, 기본 수량 1개
+    ingredients = create(client).get_json()["ingredients"]
+    assert ingredients[0]["name"] == "대파"
+    assert (ingredients[0]["stock_quantity"], ingredients[0]["stock_unit"]) == (1, "개")
+
+
+def test_stock_amount_sums_same_unit_rows(client, login):
+    """같은 이름·같은 단위 재고 여러 줄은 수량을 더해서 보여준다(리뷰 지적사항 1)."""
+    login()
+    add_ingredient(client, "김치", quantity=300, unit="g")
+    add_ingredient(client, "김치", quantity=200, unit="g")
+    res = create(client, ingredients=[{"name": "김치", "amount": "1kg"}])
+    ingredients = res.get_json()["ingredients"]
+    assert (ingredients[0]["stock_quantity"], ingredients[0]["stock_unit"]) == (500, "g")
+
+
 @pytest.mark.parametrize(
     "fields, error",
     [
