@@ -3468,6 +3468,164 @@ button.row-btn > svg {
   color: var(--text-2);
 }
 
+/* 쇼핑몰에서 한꺼번에 찾기(시안 docs/design/store-multi 옵션 A) */
+.sh-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 4px 20px 0;
+}
+
+.sh-summary-row .sh-summary {
+  margin: 0;
+}
+
+.sh-findall {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sh-storepick {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.sh-storepick-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 52px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--field);
+  color: var(--chip-text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.sh-storepick-btn.last {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+}
+
+.sh-storepick-name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.sh-storepick-name small {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+
+.sh-changestore {
+  color: var(--accent-strong);
+}
+
+.sh-find-progress {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.sh-find-progress b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.sh-find-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.sh-find-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.sh-find-list {
+  display: grid;
+}
+
+.sh-find-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 60px;
+  border-top: 1px solid var(--line);
+}
+
+.sh-find-row:first-child {
+  border-top: 0;
+}
+
+.sh-find-row b {
+  display: block;
+  font-size: 16px;
+}
+
+.sh-find-row small {
+  display: block;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.sh-find-go {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.sh-find-go.next {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.sh-find-go.done {
+  background: none;
+  padding: 0 4px;
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.sh-find-go[aria-disabled] {
+  opacity: 0.5;
+}
+
 /* ---- 4단계 재고에 넣기 (시안 docs/design/shopping-4/StockIn.dc.html) ---- */
 .sh-name {
   font-size: 16px;

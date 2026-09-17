@@ -89,10 +89,68 @@ test("쇼핑몰에서 찾기를 누르면 쇼핑몰 링크 시트가 열린다",
   await page.getByRole("button", { name: "두부 쇼핑몰에서 찾기" }).click();
   const dialog = page.getByRole("dialog"); // 시트 안 링크만(탭 막대에도 "장보기" 등 링크가 있어 페이지 전체에서 찾으면 안 된다)
   await expect(dialog.getByRole("heading", { name: "두부 찾기" })).toBeVisible();
-  await expect(dialog.getByRole("link", { name: "쿠팡 검색 결과로 두부 찾기 (새 창)" })).toBeVisible();
+  // 쿠팡은 낮은 가격순이 폰으로 확인돼 있어(storeLinks.ts verified) 정렬 칩으로 열린다
+  await expect(dialog.getByRole("link", { name: "쿠팡 낮은 가격순으로 두부 찾기 (새 창)" })).toBeVisible();
   // 쇼핑몰 7곳마다 링크가 하나 이상(확인된 쇼핑몰은 정렬 칩 여러 개로 바뀌어 총 개수는 고정하지 않는다, storeLinks.ts verified)
   for (const store of ["쿠팡", "네이버 쇼핑", "컬리", "이마트몰", "홈플러스", "롯데마트", "G마켓"])
     await expect(dialog.getByRole("link", { name: new RegExp(`^${store} .*두부 찾기 \\(새 창\\)$`) }).first()).toBeVisible();
+});
+
+test("쇼핑몰에서 한꺼번에 찾기: 쇼핑몰을 고르면 품목마다 차례로 새 창이 열리고 지난번 쇼핑몰이 기억된다", async ({ page }) => {
+  await openTab(page, "장보기");
+  // 예시 재고: 체크 안 한 게 두부·청양고추·계란·수세미·간장 5개(대파·우유는 이미 체크됨)
+  await page.getByRole("button", { name: "쇼핑몰에서 한꺼번에 찾기" }).click();
+
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("heading", { name: "어디서 살까요?" })).toBeVisible();
+  await expect(dialog.getByText("고른 쇼핑몰에서 살 것 5개를 차례로 찾아요")).toBeVisible();
+  await dialog.getByRole("button", { name: "쿠팡" }).click();
+
+  await expect(dialog.getByRole("heading", { name: "쿠팡에서 찾기" })).toBeVisible();
+  await expect(dialog.getByText("5개 중 0개 열어봤어요")).toBeVisible();
+
+  const firstLink = dialog.getByRole("link", { name: "쿠팡 두부 찾기 (새 창)" });
+  const popup = page.waitForEvent("popup");
+  await firstLink.click();
+  (await popup).close();
+
+  await expect(dialog.getByText("5개 중 1개 열어봤어요")).toBeVisible();
+  await expect(dialog.getByText("열어봤어요", { exact: true })).toBeVisible();
+  const lastStore = await page.evaluate(() => localStorage.getItem("shopping-last-store"));
+  expect(lastStore).toBe("coupang");
+
+  // 쇼핑몰 바꾸기로 돌아가면(시트가 열려 있는 동안은 순서를 바꾸지 않는다, StoreLinksSheet와 같은 규칙) 목록 순서는 그대로다
+  await dialog.getByRole("button", { name: "쇼핑몰 바꾸기" }).click();
+  await expect(dialog.getByRole("heading", { name: "어디서 살까요?" })).toBeVisible();
+  await expect(dialog.getByRole("button").first()).toHaveText("쿠팡");
+
+  await dialog.getByRole("button", { name: "쿠팡" }).click();
+  await expect(dialog.getByText("5개 중 0개 열어봤어요")).toBeVisible(); // 다시 열면(쇼핑몰을 다시 고르면) 열어봤어요는 처음부터
+  await dialog.getByRole("button", { name: "닫기" }).click();
+  await expect(dialog).toHaveCount(0);
+
+  // 시트를 새로 열면 방금 쓴 쿠팡이 맨 앞에 '지난번'으로 보인다
+  await page.getByRole("button", { name: "쇼핑몰에서 한꺼번에 찾기" }).click();
+  await expect(dialog.getByRole("heading", { name: "어디서 살까요?" })).toBeVisible();
+  await expect(dialog.getByRole("button").first()).toHaveText(/쿠팡.*지난번/s);
+});
+
+test("살 것이 하나뿐이면 쇼핑몰에서 한꺼번에 찾기 버튼이 보이지 않는다", async ({ page }) => {
+  await openTab(page, "장보기");
+  const del = async (name: string, amount: string) => {
+    await page.getByRole("button", { name: `${name}${amount}` }).click();
+    page.once("dialog", (d) => d.accept()); // "목록에서 뺄까요?"
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/api/shopping/items/") && r.request().method() === "DELETE" && r.ok()),
+      page.getByRole("button", { name: "목록에서 빼기" }).click(),
+    ]);
+  };
+  // 살 것을 하나만 남기고 다 뺀다(체크된 대파·우유 빼고 체크 안 한 것 중 두부만 남긴다)
+  for (const [name, amount] of [["청양고추", "1봉"], ["계란", "30구"], ["수세미", "1개"], ["간장", "1병"]] as const) {
+    await del(name, amount);
+  }
+  await expect(page.getByRole("button", { name: "두부1모", exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "쇼핑몰에서 한꺼번에 찾기" })).toHaveCount(0);
 });
 
 test("장보기 메모를 지우고 새로 쓰면 카드에 나타나고 새로고침해도 남는다", async ({ page }) => {

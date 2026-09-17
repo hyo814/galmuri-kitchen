@@ -6,6 +6,7 @@ import MemoPhotoScan, { type ScanState } from "../components/MemoPhotoScan";
 import Sheet from "../components/Sheet";
 import ShoppingMemoCard from "../components/ShoppingMemoCard";
 import ShoppingItemSheet, { type ItemInput } from "../components/ShoppingItemSheet";
+import StoreFindAllSheet from "../components/StoreFindAllSheet";
 import StoreLinksSheet from "../components/StoreLinksSheet";
 import { formatDate, withJosa } from "../format";
 import { groupItems, nameKey, newClientId, quantityText, sourceTag, type EditFields, type Op, type Ref, type ViewItem } from "../shopping/sync";
@@ -47,6 +48,7 @@ export default function Shopping({ user }: { user: User }) {
   /** 살 것 추가 시트의 "사진에서 뽑기": 메모 없이 바로 카메라·앨범 → MemoScanReview */
   const [scan, setScan] = useState<ScanState>(null);
   const [store, setStore] = useState<string | null>(null);
+  const [findAll, setFindAll] = useState(false);
   const [showFailed, setShowFailed] = useState(false);
   const [stockedOpen, setStockedOpen] = useState(false);
   const [notice, setNotice] = useState<{ text: string; near: "stock" | "bought" } | null>(() =>
@@ -92,6 +94,7 @@ export default function Shopping({ user }: { user: User }) {
   const checked = items.filter((i) => i.done_at).length;
   const band = offline || (draining && pending > 0);
   const groups = groupItems(items, today);
+  const unchecked = groups.flatMap((g) => g.items).filter((i) => !i.done_at);
 
   const save = (fields: ItemInput | EditFields, keepOpen: boolean) => {
     if (editing === "new") {
@@ -139,9 +142,17 @@ export default function Shopping({ user }: { user: User }) {
         </button>
       </header>
       {items.length > 0 && (
-        <p className="sh-summary">
-          살 것 {items.length}개{checked > 0 && ` · 체크한 ${checked}개`}
-        </p>
+        <div className="sh-summary-row">
+          <p className="sh-summary">
+            살 것 {items.length}개{checked > 0 && ` · 체크한 ${checked}개`}
+          </p>
+          {unchecked.length >= 2 && (
+            <button type="button" className="sh-findall" onClick={() => setFindAll(true)}>
+              <Icon name="search" size={16} />
+              쇼핑몰에서 한꺼번에 찾기
+            </button>
+          )}
+        </div>
       )}
 
       {/* 띠가 나타날 때 문장만 한 번 읽는다(건수는 바뀔 때마다 읽지 않게 aria-hidden) */}
@@ -303,6 +314,13 @@ export default function Shopping({ user }: { user: User }) {
         }}
       />
       {store !== null && <StoreLinksSheet name={store} affiliates={user.shop_affiliates} onClose={() => setStore(null)} />}
+      {findAll && unchecked.length > 0 && (
+        <StoreFindAllSheet
+          items={unchecked.map((i) => ({ key: keyOf(i), name: i.name, quantity: i.quantity, unit: i.unit }))}
+          affiliates={user.shop_affiliates}
+          onClose={() => setFindAll(false)}
+        />
+      )}
       {showFailed && (
         <Sheet title="저장하지 못한 변경" description="이 변경은 저장하지 못했어요. 확인했으면 지워주세요." onClose={() => setShowFailed(false)}>
           <ul className="sh-failed">
