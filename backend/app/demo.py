@@ -60,7 +60,9 @@ INGREDIENTS = [
     ("양파", 3, "개", "room", 6, None),
     ("감자", 4, "개", "room", 7, None),
 ]
-STAPLES = [("간장", "조미료"), ("대파", "야채"), ("달걀", "기타")]  # 간장은 재고에 없어 '떨어졌어요'로 보인다
+# 기본 필수품(defaults.DEFAULT_STAPLES, 2026-09-17)에 없는 것만 더한다 — 대파·달걀은 이미 기본 필수품이라 여기 없다.
+# 간장은 기본 필수품에 없어(진간장·국간장·양조간장만 있음) 재고에도 없는 채 남아 '떨어졌어요' 예시로 보인다.
+STAPLES = [("간장", "조미료")]
 RECIPE_SAMPLES = ("SAMPLE-01", "SAMPLE-02")  # 된장찌개, 김치찌개
 SEASONING = {
     "name": "우리집 제육볶음 양념",
@@ -175,7 +177,8 @@ def seed_demo_data(user_id):
             )
         )
     for name, category in STAPLES:
-        db.session.add(Staple(user_id=user_id, name=name, category=category))
+        # 체험 계정이 미리 고른 필수품이라 곧장 "가졌던 것"으로(2026-09-17) — 첫 화면에 "간장 떨어짐"이 그대로 보이게
+        db.session.add(Staple(user_id=user_id, name=name, category=category, had_stock=True))
     samples = {item["rcp_seq"]: item for item in json.loads(SAMPLE_FILE.read_text(encoding="utf-8"))}
     recipes = [samples[seq] for seq in RECIPE_SAMPLES]
     recipe_rows = []  # 식단 칸이 붙일 실제 Recipe 행(recipes는 원본 샘플 dict라 여기 따로 둔다)

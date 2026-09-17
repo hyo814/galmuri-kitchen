@@ -1084,6 +1084,8 @@ button.row-btn > svg {
 
 .row-press {
   width: 100%;
+  padding: 0; /* 네이티브 <button> 기본 padding을 지운다 — 없으면 .plain-row인 다른 줄보다 살짝 들여써 보인다 */
+  margin: 0;
   border: 0;
   background: none;
   color: inherit;

@@ -11,12 +11,17 @@ export interface StorageLocation {
   item_count: number;
 }
 
+// "가졌던 것만 배너에"(사용자 결정 2026-09-17): missing은 한 번이라도 재고에 있었다가 지금 없는 것만.
+// unstocked는 한 번도 없었던 것 — 필수품 시트에만 보이고 배너·장보기 '떨어진 필수품 담기'에는 안 나온다.
+export type StapleStatus = "in_stock" | "missing" | "unstocked";
+
 export interface Staple {
   id: number;
   name: string;
   category: string;
   in_stock: boolean;
   matched_name: string | null;
+  status: StapleStatus;
 }
 
 export interface ItemRule {

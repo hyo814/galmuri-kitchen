@@ -8,7 +8,7 @@ from datetime import datetime, time, timedelta, timezone
 
 import pytest
 
-from app import ai, auth, cooklog, demo, meals, outbound, scan, videos
+from app import ai, auth, cooklog, defaults, demo, meals, outbound, scan, videos
 from app.ingredients import SEOUL, seoul_today
 from app.models import (
     AiCall,
@@ -76,7 +76,13 @@ def test_demo_login_creates_seeded_user_and_session(demo_app):
     assert expiring == {"두부": (today + timedelta(days=1)).isoformat(), "대파": (today + timedelta(days=2)).isoformat()}
     assert len(c.get("/api/recipes").get_json()["items"]) == 2
     assert len(c.get("/api/seasonings").get_json()["items"]) == 1
-    assert len(c.get("/api/staples").get_json()) == 3
+    # 기본 필수품(2026-09-17) + 체험 전용 간장 1개(대파·달걀은 기본 필수품과 겹쳐 demo.STAPLES에서 뺐다)
+    staples = c.get("/api/staples").get_json()
+    assert len(staples) == len(defaults.DEFAULT_STAPLES) + 1
+    # "가졌던 것만 배너에": 재고와 맞는 기본 필수품(대파·양파·감자·달걀·김치·돼지고기·우유)은 in_stock이라 안 뜨고,
+    # 나머지 기본 필수품은 한 번도 없던 것(unstocked)이라 배너에서 빠진다 — 체험 첫 화면은 지금처럼 간장 하나만 떨어짐
+    missing = [s["name"] for s in staples if s["status"] == "missing"]
+    assert missing == ["간장"]
     assert len(c.get("/api/locations").get_json()) == 3
     assert len(c.get("/api/item-rules").get_json()) > 0
     assert c.get("/api/export/summary").status_code == 200

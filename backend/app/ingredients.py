@@ -9,7 +9,7 @@ from werkzeug.exceptions import BadRequest
 
 from .auth import get_owned_or_404, login_required
 from .locations import choose_location, default_location, owned_location, user_locations
-from .matching import head_is, keyword_in
+from .matching import keyword_in, normalize, tokens
 from .models import Ingredient, IngredientRemoval, ItemRule, Staple, db
 from .validation import iso_date, text
 
@@ -72,10 +72,19 @@ def seasoning_names(user_id):
     return [name for (name,) in rows.all()]
 
 
+def seasoning_words(user_id):
+    """seasoning_names를 head_is 비교용으로 미리 normalize해 둔다(status_of가 재료마다 다시 normalize하지 않게).
+    fix round 2 (재고 목록 성능, 기본 필수품 시드로 조미료 필수품이 0~수개에서 40개로 늘어난 뒤, 2026-09-17)."""
+    return [normalize(s) for s in seasoning_names(user_id)]
+
+
 def status_of(item, today, rules, seasonings=()):
+    """seasonings는 seasoning_words(미리 normalize된 조미료 필수품 이름)."""
     kind = item.location.kind
-    if kind == "fridge" and any(head_is(item.name, s) for s in seasonings):
-        kind = "room"  # 위치 기준 '오래됨'만 건너뛴다. 유통기한·품목 규칙 판정은 그대로
+    if kind == "fridge" and seasonings:
+        words = [t for t in tokens(item.name) if not t[0].isdigit()]
+        if words and any(word and words[-1].endswith(word) for word in seasonings):
+            kind = "room"  # 위치 기준 '오래됨'만 건너뛴다. 유통기한·품목 규칙 판정은 그대로
     return ingredient_status(item.purchased_on, item.expires_on, today, kind, matching_rule(item.name, rules))
 
 
@@ -170,7 +179,7 @@ def parse_fields(data, creating, locations=None):
 def list_ingredients():
     today = seoul_today()
     rules = user_rules(g.user.id)
-    seasonings = seasoning_names(g.user.id)
+    seasonings = seasoning_words(g.user.id)
     items = Ingredient.query.options(joinedload(Ingredient.location)).filter_by(user_id=g.user.id).all()
     items.sort(
         key=lambda i: (
@@ -204,7 +213,7 @@ def create_ingredient():
     sync_price_quantity(item)
     db.session.add(item)
     db.session.commit()
-    return jsonify(to_json(item, seoul_today(), user_rules(g.user.id), seasoning_names(g.user.id))), 201
+    return jsonify(to_json(item, seoul_today(), user_rules(g.user.id), seasoning_words(g.user.id))), 201
 
 
 @bp.post("/bulk")
@@ -231,7 +240,7 @@ def create_ingredients_bulk():
         sync_price_quantity(item)
     db.session.add_all(created)
     db.session.flush()  # PK를 받되 커밋 전에 응답을 만들어 커밋 후 만료로 인한 N+1 조회를 피한다
-    today, rules, seasonings = seoul_today(), user_rules(g.user.id), seasoning_names(g.user.id)
+    today, rules, seasonings = seoul_today(), user_rules(g.user.id), seasoning_words(g.user.id)
     result = [to_json(i, today, rules, seasonings) for i in created]
     try:
         db.session.commit()
@@ -252,7 +261,7 @@ def update_ingredient(item_id):
     if reset:
         sync_price_quantity(item)
     db.session.commit()
-    return jsonify(to_json(item, seoul_today(), user_rules(g.user.id), seasoning_names(g.user.id)))
+    return jsonify(to_json(item, seoul_today(), user_rules(g.user.id), seasoning_words(g.user.id)))
 
 
 @bp.delete("/<int:item_id>")
