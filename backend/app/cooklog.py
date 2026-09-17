@@ -18,7 +18,7 @@ from .amounts import in_unit, is_seasoning_amount
 from .auth import get_owned_or_404, login_required
 from .ingredients import seasoning_names
 from .locations import default_location
-from .matching import match_prepared, names_match, normalize, prepare
+from .matching import match_prepared, normalize, prepare, staple_matches
 from .models import CookLog, CookLogItem, Ingredient, IngredientRemoval, Recipe, StorageLocation, db, utcnow
 from .recipe_parse import ingredient_key
 from .recipes import ALWAYS_HAVE, inventory_rows
@@ -52,8 +52,9 @@ MANUAL_FIELDS = MANUAL_PATCH_FIELDS | {"manual", "servings", "food_log", "meal"}
 
 
 def is_seasoning(key, amount, staples):
-    """결정 5. key는 ingredient_key(재료 이름), staples는 seasoning_names(user_id). 양 규칙은 식단 장보기 양념 묶음과 같다."""
-    return any(names_match(key, s) for s in staples) or is_seasoning_amount(amount)
+    """결정 5. key는 ingredient_key(재료 이름), staples는 seasoning_names(user_id). 양 규칙은 식단 장보기 양념 묶음과 같다.
+    필수품↔재료 매칭은 staple_matches(여러 낱말 필수품 오탐 방지, 2026-09-18)."""
+    return any(staple_matches(s, key) for s in staples) or is_seasoning_amount(amount)
 
 
 def round_won(value, step=10):

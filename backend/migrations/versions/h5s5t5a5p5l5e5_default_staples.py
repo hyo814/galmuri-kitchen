@@ -47,9 +47,9 @@ def upgrade():
     # 이 마이그레이션 전부터 있던 필수품은 모두 사용자가 직접 만든 것이라 "가졌던 적 있음"으로 본다
     conn.execute(sa.text("UPDATE staples SET had_stock = TRUE"))
 
-    # 이름 매칭은 앱의 실제 규칙(동의어·짧은 이름 규칙 포함)을 그대로 써야 해서, 다른 마이그레이션처럼
+    # 이름 매칭은 앱의 실제 규칙(필수품 전용 방향 규칙 포함)을 그대로 써야 해서, 다른 마이그레이션처럼
     # 값을 얼려 두는 대신 app.matching을 그대로 불러온다(순수 함수라 부작용 없음).
-    from app.matching import names_match
+    from app.matching import staple_matches
 
     now = datetime.now(timezone.utc)
     ingredients_by_user = {}
@@ -60,20 +60,24 @@ def upgrade():
     # 기존 사용자에게 빠진 기본 필수품만 채운다(이미 같은 이름을 만들어 뒀으면 건너뜀 — 다시 돌려도 안전).
     # had_stock은 지금 재고에 맞는 이름이 있으면 true(있는 걸 곧장 떨어짐으로 잘못 보여주지 않으려는 게 아니라,
     # 배너가 "가졌던 것"만 보이게 하려면 지금 있는 것도 "가졌던 것"으로 시작해야 하기 때문 — 나중에 재고에서 빠지면 그때 떨어짐).
-    insert_missing = sa.text(
-        "INSERT INTO staples (user_id, name, category, had_stock, created_at) "
-        "VALUES (:user_id, :name, :category, :had_stock, :created_at)"
-    ).bindparams(sa.bindparam("created_at", type_=sa.DateTime(timezone=True)))
-    for (user_id,) in conn.execute(sa.text("SELECT id FROM users")).all():
-        stock_names = ingredients_by_user.get(user_id, [])
-        for name, category in DEFAULT_STAPLES:
-            if (user_id, name) in existing:
-                continue
-            had_stock = any(names_match(name, stock_name) for stock_name in stock_names)
-            conn.execute(
-                insert_missing,
-                {"user_id": user_id, "name": name, "category": category, "had_stock": had_stock, "created_at": now},
-            )
+    rows = [
+        {
+            "user_id": user_id,
+            "name": name,
+            "category": category,
+            "had_stock": any(staple_matches(name, stock_name) for stock_name in ingredients_by_user.get(user_id, [])),
+            "created_at": now,
+        }
+        for (user_id,) in conn.execute(sa.text("SELECT id FROM users")).all()
+        for name, category in DEFAULT_STAPLES
+        if (user_id, name) not in existing
+    ]
+    if rows:
+        insert_missing = sa.text(
+            "INSERT INTO staples (user_id, name, category, had_stock, created_at) "
+            "VALUES (:user_id, :name, :category, :had_stock, :created_at)"
+        ).bindparams(sa.bindparam("created_at", type_=sa.DateTime(timezone=True)))
+        conn.execute(insert_missing, rows)  # 한 번에 묶어 보낸다(리뷰, 2026-09-18) — executemany
 
 
 def downgrade():

@@ -1,7 +1,7 @@
 from flask import Blueprint, abort, g, jsonify, request
 
 from .auth import get_owned_or_404, login_required
-from .matching import names_match
+from .matching import staple_matches
 from .models import Ingredient, Staple, db
 from .validation import commit_or_duplicate, text
 
@@ -24,7 +24,7 @@ def ingredient_names(user_id):
 
 
 def to_json(staple, names):
-    matched = next((n for n in names if names_match(staple.name, n)), None)
+    matched = next((n for n in names if staple_matches(staple.name, n)), None)
     in_stock = matched is not None
     status = "in_stock" if in_stock else "missing" if staple.had_stock else "unstocked"
     return {
@@ -44,7 +44,7 @@ def list_staples():
     staples = Staple.query.filter_by(user_id=g.user.id).all()
     for staple in staples:
         # 재고에서 처음 발견되면 "가졌던 적 있음"으로 확정한다 — 한 번 켜지면 꺼지지 않는다(배너에서 완전히 빠지지 않게)
-        if not staple.had_stock and any(names_match(staple.name, n) for n in names):
+        if not staple.had_stock and any(staple_matches(staple.name, n) for n in names):
             staple.had_stock = True
     if db.session.dirty:
         db.session.commit()
