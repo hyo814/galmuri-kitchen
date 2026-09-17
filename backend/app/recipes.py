@@ -7,6 +7,7 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
+from . import outbound
 from .auth import get_owned_or_404, login_required
 from .ingredients import seasoning_names, seoul_today, status_of, user_rules
 from .matching import match_prepared, prepare
@@ -155,15 +156,27 @@ def _steps(value):
     return steps
 
 
-def _source_url(value):
+CANONICAL_LINK = {  # outbound.parse_link의 (kind, id) → import_recipe(recipe_ai.py)가 저장하는 것과 같은 주소 모양
+    "youtube": "https://www.youtube.com/watch?v={}",
+    "instagram": "https://www.instagram.com/p/{}/",
+}
+
+
+def _source_url(value, source):
     if value in (None, ""):
         return None
     if not isinstance(value, str) or len(value.strip()) > 500:
         abort(400, URL_ERROR)
-    parsed = urlparse(value.strip())
+    value = value.strip()
+    if source in CANONICAL_LINK:  # source: "youtube"인데 실제로는 다른 링크를 넣는 식으로 속이지 못하게 다시 확인한다
+        link = outbound.parse_link(value)
+        if link is None or link[0] != source:
+            abort(400, URL_ERROR)
+        return CANONICAL_LINK[source].format(link[1])
+    parsed = urlparse(value)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         abort(400, URL_ERROR)
-    return value.strip()
+    return value
 
 
 def _image_url(value, source):
@@ -182,8 +195,10 @@ def _image_url(value, source):
     return value
 
 
-def parse_recipe(data):
-    """생성·수정(PUT) 공통. source·image_url은 만들 때만 받는다(create_recipe). source_url은 보냈을 때만 바꾼다."""
+def parse_recipe(data, source):
+    """생성·수정(PUT) 공통. source·image_url은 만들 때만 받는다(create_recipe). source_url은 보냈을 때만 바꾼다.
+    source는 만들 때는 방금 고른 값, 수정할 때는 이미 저장된 값(recipe.source, PUT으로 못 바꾼다) — source_url이 그 출처와
+    맞는 링크인지 _source_url이 다시 확인한다."""
     if not isinstance(data, dict):
         abort(400, "잘못된 요청이에요.")
     fields = {
@@ -193,7 +208,7 @@ def parse_recipe(data):
         "steps": _steps(data.get("steps", [])),
     }
     if "source_url" in data:
-        fields["source_url"] = _source_url(data["source_url"])
+        fields["source_url"] = _source_url(data["source_url"], source)
     return fields
 
 
@@ -459,10 +474,10 @@ def list_recipes():
 @login_required
 def create_recipe():
     data = request.get_json(silent=True)
-    fields = parse_recipe(data)
-    source = data.get("source", "mine")
+    source = data.get("source", "mine") if isinstance(data, dict) else "mine"
     if source not in SOURCES:
         abort(400, "잘못된 요청이에요.")
+    fields = parse_recipe(data, source)
     fields.update(source=source, image_url=_image_url(data.get("image_url"), source))
     check_recipe_cap()
     recipe = Recipe(user_id=g.user.id, **fields)
@@ -488,7 +503,7 @@ def get_recipe(recipe_id):
 @login_required
 def update_recipe(recipe_id):
     recipe = get_owned_or_404(Recipe, recipe_id)
-    for key, value in parse_recipe(request.get_json(silent=True)).items():
+    for key, value in parse_recipe(request.get_json(silent=True), recipe.source).items():
         setattr(recipe, key, value)
     db.session.commit()
     stock, amounts = stock_for_recipe(g.user.id)

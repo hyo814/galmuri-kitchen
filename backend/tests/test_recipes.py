@@ -243,6 +243,36 @@ def test_put_keeps_source_url_when_not_sent(client, login):
     assert res.get_json()["source_url"] == "https://example.com/r/1"
 
 
+def test_source_url_must_match_declared_source(client, login):
+    """source: "youtube"인데 다른 링크(또는 아예 링크가 아닌 것)를 넣어 출처를 속이지 못한다(recipes.py _source_url).
+    유튜브·인스타그램은 outbound.parse_link로 다시 확인하고, import_recipe(recipe_ai.py)가 저장하는 것과 같은 표준 주소로 맞춘다."""
+    login()
+    for source, url in [
+        ("youtube", "https://example.com/not-youtube"),
+        ("youtube", "https://www.instagram.com/p/C1a2B3c4D5e/"),
+        ("instagram", "https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
+        ("instagram", "https://example.com/not-instagram"),
+    ]:
+        res = create(client, source=source, source_url=url)
+        assert (res.status_code, res.get_json()) == (400, {"error": recipes_module.URL_ERROR}), (source, url)
+
+    # 표준 모양이 아니어도(짧은 링크·부가 파라미터) 실제로 그 출처 링크면 받아 표준 주소로 저장한다(가져오기와 같은 주소)
+    yt = create(client, source="youtube", source_url="https://youtu.be/dQw4w9WgXcQ?si=x").get_json()
+    assert yt["source_url"] == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    ig = create(client, source="instagram", source_url="https://www.instagram.com/reel/C1a2B3c4D5e/?igsh=1").get_json()
+    assert ig["source_url"] == "https://www.instagram.com/p/C1a2B3c4D5e/"
+
+    # 수정(PUT)도 저장된 source(바뀌지 않는다) 기준으로 같이 확인한다
+    res = client.put(f"/api/recipes/{yt['id']}", json={**BODY, "source_url": "https://example.com/not-youtube"})
+    assert (res.status_code, res.get_json()) == (400, {"error": recipes_module.URL_ERROR})
+    res = client.put(f"/api/recipes/{yt['id']}", json={**BODY, "source_url": "https://youtu.be/dQw4w9WgXcQ"})
+    assert res.get_json()["source_url"] == "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+
+    # source가 "mine"이면(링크 출처가 아니면) 그대로 아무 http(s) 주소나 받는다 — 기존 동작 그대로
+    mine = create(client, source_url="https://www.youtube.com/watch?v=not-a-real-id").get_json()
+    assert mine["source_url"] == "https://www.youtube.com/watch?v=not-a-real-id"
+
+
 def test_other_users_recipe_is_404(client, login):
     login("owner")
     recipe = create(client).get_json()
