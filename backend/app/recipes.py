@@ -42,25 +42,37 @@ def inventory(user_id):
     return [(item.name, urgent) for item, urgent in inventory_rows(user_id)]
 
 
-def annotate(ingredients, keys, stock):
+def stock_amounts(user_id):
+    """{재고 이름: (수량, 단위)} — 레시피 상세 재료 줄에 남은 양을 보여줄 때 annotate가 쓴다(29절).
+    이름이 겹치면 나중 값으로 덮인다(annotate도 첫 매칭만 쓰므로 흔치 않은 겹침은 무시해도 된다)."""
+    return {item.name: (item.quantity, item.unit) for item, _ in inventory_rows(user_id)}
+
+
+def annotate(ingredients, keys, stock, amounts=None):
     """M7: 추천과 같은 준비된 재고 + 빠른 매칭(_prepared_stock/_match_key_fast)을 써서
-    상세 화면 하나 열 때마다 정규식을 다시 돌리지 않게 한다(재고가 커도 빠르게)."""
+    상세 화면 하나 열 때마다 정규식을 다시 돌리지 않게 한다(재고가 커도 빠르게).
+    amounts(stock_amounts)가 있으면 매칭된 줄에 stock_quantity·stock_unit을 붙인다(29절, 레시피 상세만)."""
     prepared_stock = _prepared_stock(stock)
     rows = []
     for item, key in zip(ingredients, keys):
         matched, have = _match_key_fast(prepare(key), prepared_stock)
-        rows.append({"name": item["name"], "amount": item["amount"], "have": have, "matched_name": matched})
+        row = {"name": item["name"], "amount": item["amount"], "have": have, "matched_name": matched}
+        if amounts and matched in amounts:
+            row["stock_quantity"], row["stock_unit"] = amounts[matched]
+        else:
+            row["stock_quantity"], row["stock_unit"] = None, None
+        rows.append(row)
     return rows
 
 
-def recipe_json(recipe, stock):
+def recipe_json(recipe, stock, amounts=None):
     return {
         "kind": "mine",
         "id": recipe.id,
         "title": recipe.title,
         "servings": recipe.servings,
         "category": None,
-        "ingredients": annotate(recipe.ingredients, [ingredient_key(i["name"]) for i in recipe.ingredients], stock),
+        "ingredients": annotate(recipe.ingredients, [ingredient_key(i["name"]) for i in recipe.ingredients], stock, amounts),
         "steps": recipe.steps,
         "source": recipe.source,
         "source_url": recipe.source_url,
@@ -71,7 +83,7 @@ def recipe_json(recipe, stock):
     }
 
 
-def public_json(recipe, stock):
+def public_json(recipe, stock, amounts=None):
     return {
         "kind": "public",
         "id": recipe.id,
@@ -80,7 +92,7 @@ def public_json(recipe, stock):
         "category": recipe.category,
         "method": recipe.method,
         "kcal": recipe.kcal,
-        "ingredients": annotate(recipe.ingredients, recipe.ingredient_keys, stock),
+        "ingredients": annotate(recipe.ingredients, recipe.ingredient_keys, stock, amounts),
         "steps": recipe.steps,
         "image_url": recipe.image_url,
         "is_sample": recipe.is_sample,
@@ -444,7 +456,7 @@ def create_recipe():
     recipe = Recipe(user_id=g.user.id, **fields)
     db.session.add(recipe)
     db.session.commit()
-    return jsonify(recipe_json(recipe, inventory(g.user.id))), 201
+    return jsonify(recipe_json(recipe, inventory(g.user.id), stock_amounts(g.user.id))), 201
 
 
 @bp.get("/recipes/<int:recipe_id>")
@@ -453,7 +465,7 @@ def get_recipe(recipe_id):
     from .cooklog import recipe_cooked  # cooklog가 recipes를 import하므로 여기서만(순환 import 방지)
 
     recipe = get_owned_or_404(Recipe, recipe_id)
-    res = jsonify({**recipe_json(recipe, inventory(g.user.id)), "cooked": recipe_cooked(recipe.id, g.user.id)})
+    res = jsonify({**recipe_json(recipe, inventory(g.user.id), stock_amounts(g.user.id)), "cooked": recipe_cooked(recipe.id, g.user.id)})
     res.headers["Cache-Control"] = "no-store"  # cooked가 일기(식습관·지출) 정보를 담는다(리뷰 minor)
     return res
 
@@ -465,7 +477,7 @@ def update_recipe(recipe_id):
     for key, value in parse_recipe(request.get_json(silent=True)).items():
         setattr(recipe, key, value)
     db.session.commit()
-    return jsonify(recipe_json(recipe, inventory(g.user.id)))
+    return jsonify(recipe_json(recipe, inventory(g.user.id), stock_amounts(g.user.id)))
 
 
 @bp.delete("/recipes/<int:recipe_id>")
@@ -479,7 +491,7 @@ def delete_recipe(recipe_id):
 @bp.get("/public-recipes/<int:recipe_id>")
 @login_required
 def get_public_recipe(recipe_id):
-    return jsonify(public_json(_public_or_404(recipe_id), inventory(g.user.id)))
+    return jsonify(public_json(_public_or_404(recipe_id), inventory(g.user.id), stock_amounts(g.user.id)))
 
 
 @bp.post("/public-recipes/<int:recipe_id>/save")
@@ -489,7 +501,7 @@ def save_public_recipe(recipe_id):
     public = _public_or_404(recipe_id)
     existing = Recipe.query.filter_by(user_id=g.user.id, public_recipe_id=public.id).first()
     if existing:
-        return jsonify(recipe_json(existing, inventory(g.user.id)))
+        return jsonify(recipe_json(existing, inventory(g.user.id), stock_amounts(g.user.id)))
     check_recipe_cap()
     recipe = Recipe(
         user_id=g.user.id,
@@ -510,5 +522,5 @@ def save_public_recipe(recipe_id):
         winner = Recipe.query.filter_by(user_id=g.user.id, public_recipe_id=public.id).first()
         if winner is None:
             abort(400, "이미 저장한 레시피예요.")
-        return jsonify(recipe_json(winner, inventory(g.user.id)))
-    return jsonify(recipe_json(recipe, inventory(g.user.id))), 201
+        return jsonify(recipe_json(winner, inventory(g.user.id), stock_amounts(g.user.id)))
+    return jsonify(recipe_json(recipe, inventory(g.user.id), stock_amounts(g.user.id))), 201

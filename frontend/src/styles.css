@@ -853,6 +853,14 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
   overflow-wrap: anywhere;
 }
 
+/* 요리했어요로 방금 재고에서 다 빠진 재료(29절) */
+.stock-warn {
+  flex-shrink: 0;
+  color: var(--warn);
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .text-btn.strong {
   color: var(--text-2);
   font-weight: 600;

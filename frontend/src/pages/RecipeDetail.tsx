@@ -8,7 +8,7 @@ import ShoppingAddButton from "../components/ShoppingAddButton";
 import { starsText } from "../foodlog/log.ts";
 import { SOURCE_LABEL, imageSrc, scaleAmount, withJosa } from "../format";
 import { spoonHint } from "../seasoning";
-import { recipeQuantity } from "../shopping/sync";
+import { quantityText, recipeQuantity } from "../shopping/sync";
 import { useAsyncAction } from "../useAsyncAction";
 import { goBack, navigate } from "../useHashRoute";
 import { forgetRecipeCaches, useResource } from "../useResource";
@@ -30,13 +30,14 @@ export function BackLink({ to = "/recipes", label = "레시피" }: { to?: string
   );
 }
 
-/** 재료(인분 조절·있음 표시)와 만드는 법. 내 레시피·공공 레시피·AI 레시피 상세가 같이 쓴다 */
+/** 재료(인분 조절·있어요 표시)와 만드는 법. 내 레시피·공공 레시피·AI 레시피 상세가 같이 쓴다 */
 export function RecipeBody({
   title,
   servings: rawBase,
   ingredients,
   steps,
   afterIngredients,
+  justCooked,
 }: {
   title: string;
   servings: number;
@@ -44,6 +45,8 @@ export function RecipeBody({
   steps: string[];
   /** 재료 아래, 만드는 법 위에 그릴 내용(레시피 상세 영양 칸) */
   afterIngredients?: ReactNode;
+  /** 방금 요리했어요로 재고에서 다 빠진 재료 줄 이름(item.name) — 그 줄만 "다 썼어요"(29절, 되돌리기·화면을 나가면 사라짐) */
+  justCooked?: Set<string>;
 }) {
   const base = Math.max(1, rawBase || 1); // 인분이 0·빈 값이면 비율이 NaN이 되지 않게
   const [servings, setServings] = useState<number | null>(null); // null이면 레시피 기준 인분
@@ -107,10 +110,14 @@ export function RecipeBody({
                     </span>
                   )}
                 </span>
-                {item.have ? (
+                {justCooked?.has(item.name) ? (
+                  <span className="stock-warn">다 썼어요</span>
+                ) : item.have ? (
                   <span className="stock-ok">
                     <Icon name="check" size={16} />
-                    {item.matched_name ? `있음 · ${item.matched_name}` : "있음"}
+                    있어요
+                    {item.stock_quantity != null && item.stock_unit && ` ${quantityText(item.stock_quantity, item.stock_unit)}`}
+                    {item.matched_name && item.matched_name !== item.name && ` · ${item.matched_name}`}
                   </span>
                 ) : (
                   <span className="badge">없음</span>
@@ -163,6 +170,8 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
   const [opening, setOpening] = useState(false);
   // 요리했어요 시트: 내 레시피 id(추천 레시피는 저장한 복사본)와 맨 위 한 줄
   const [cooking, setCooking] = useState<{ recipeId: number; note?: string } | null>(null);
+  // 방금 요리했어요로 다 쓴 재고 이름(matched_name) — 되돌리거나 화면을 나가면 App이 새로 만들어 사라진다(29절)
+  const [justCooked, setJustCooked] = useState<Set<string>>(() => new Set());
 
   if (!recipe)
     return (
@@ -271,6 +280,7 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
         afterIngredients={
           recipe.kind === "mine" && user.nutrition !== "off" && <RecipeNutrition recipeId={recipe.id} user={user} />
         }
+        justCooked={justCooked}
       />
 
       {recipe.kind === "public" && !recipe.is_sample && (
@@ -329,7 +339,10 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
           user={user}
           note={cooking.note}
           onSaved={(result) => {
-            toastSaved(result); // 되돌리면 App이 지금 화면을 새로 만든다
+            toastSaved(result); // 되돌리면 App이 지금 화면을 새로 만든다(justCooked도 이때 사라진다)
+            // 다 쓴 재고 이름(log.items[].name)을 지금 화면의 재료 줄 이름으로 바꿔 둔다 — reload 뒤엔 매칭이 끊겨 matched_name이 없어진다
+            const usedUpStock = new Set(result.log.items.filter((item) => item.removed).map((item) => item.name));
+            setJustCooked(new Set(recipe.ingredients.filter((item) => item.matched_name && usedUpStock.has(item.matched_name)).map((item) => item.name)));
             void reload(); // 재고 표시·요리 표시를 새로
           }}
           onClose={() => setCooking(null)}
