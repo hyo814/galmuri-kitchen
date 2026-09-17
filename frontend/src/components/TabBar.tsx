@@ -1,4 +1,4 @@
-import { confirmLeave } from "../useHashRoute";
+import { confirmLeave, isPlainClick } from "../useHashRoute";
 import Icon, { type IconName } from "./Icon";
 
 interface Tab {
@@ -27,6 +27,7 @@ export default function TabBar({ path }: { path: string }) {
           href={`#${tab.path}`}
           aria-current={tab.match(path) ? "page" : undefined}
           onClick={(e) => {
+            if (!isPlainClick(e)) return; // cmd·ctrl·가운데 클릭은 새 탭 열기 기본 동작대로
             e.preventDefault();
             if (!confirmLeave()) return; // 작성 중인 폼이면 나가기 확인
             location.replace("#" + tab.path); // 탭 전환은 히스토리를 쌓지 않는다

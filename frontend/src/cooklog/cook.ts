@@ -105,8 +105,8 @@ export const eatOutLine = (price: number, servings: number) => `사 먹으면 ${
 export const costLine = (i: Pick<CookLogItem, "name" | "used" | "unit" | "price" | "price_quantity">) =>
   `${i.name} ${formatQuantity(i.used ?? 0)}${i.unit ?? ""} / ${formatQuantity(i.price_quantity ?? 0)}${i.unit ?? ""} ${formatWon(i.price ?? 0)}`;
 /** 은/는(개정 1 T10②): withJosa는 한글로 안 끝나면 "은(는)"을 돌려주므로 영문 단위·숫자 끝은 읽는 소리로 고른다.
- *  g·kg·mg(그램)→은, ml·l(리터)→는, 숫자는 끝자리(영·일·삼·육·칠·팔→은, 이·사·오·구→는), 그 밖은 withJosa */
-const UNIT_BATCHIM: Record<string, boolean> = { g: true, kg: true, mg: true, ml: false, l: false };
+ *  g·kg·mg(그램)→은, ml·l(리터)·cc(씨씨)→는, 숫자는 끝자리(영·일·삼·육·칠·팔→은, 이·사·오·구→는), 그 밖은 withJosa */
+const UNIT_BATCHIM: Record<string, boolean> = { g: true, kg: true, mg: true, ml: false, l: false, cc: false };
 const DIGIT_BATCHIM = [true, true, false, true, false, false, true, true, true, false];
 export function withEunNeun(word: string): string {
   const unit = /([a-z]+)$/i.exec(word)?.[1].toLowerCase();
@@ -169,3 +169,5 @@ export function compareLine(r: Pick<CookReport, "cooked" | "discarded" | "previo
 }
 /** 막대 폭 %(1등 대비, 최소 4) */
 export const barWidths = (rows: { saved: number }[]) => rows.map((r) => Math.max(4, Math.round((r.saved * 100) / Math.max(rows[0]?.saved ?? 1, 1))));
+/** 막대 옆 금액: aboutWon과 같이 100원 단위로 반올림하되, 0보다 큰 값이 반올림으로 0원이 되어 막대와 어긋나 보이지 않게 */
+export const barSavedText = (saved: number) => (saved > 0 && saved < 50 ? "50원 미만" : formatWon(Math.round(saved / 100) * 100));

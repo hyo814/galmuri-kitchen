@@ -185,7 +185,7 @@ test("쇼핑몰 고르기: 지난번+가격 비교가 겹쳐도 버튼이 넘치
 
 test("장보기 메모를 지우고 새로 쓰면 카드에 나타나고 새로고침해도 남는다", async ({ page }) => {
   await openTab(page, "장보기");
-  // 예시 메모가 이미 하나 있어(메모 카드는 1개일 땐 "더 보기"가 없다) 지운 뒤 "메모 쓰기"로 새로 만든다
+  // 예시 메모가 이미 하나 있어 지운 뒤 "메모 쓰기"로 새로 만든다
   await page.getByRole("button", { name: /이마트 성수점/ }).click();
   await expect(page.getByRole("heading", { name: "장보기 메모" })).toBeVisible();
   page.once("dialog", (d) => d.accept()); // "메모와 사진을 삭제할까요?"
@@ -205,6 +205,13 @@ test("장보기 메모를 지우고 새로 쓰면 카드에 나타나고 새로�
   await page.reload();
   await expect(page.getByText("코스트코")).toBeVisible();
   await expect(page.getByText("우유 사기")).toBeVisible();
+});
+
+test("장보기 메모가 1개뿐이어도 목록으로 가서 새 메모를 쓸 수 있다", async ({ page }) => {
+  await openTab(page, "장보기"); // 예시 메모 1개(메모 카드가 그 메모 하나만 보여줄 때도 새 메모로 가는 길이 있어야 한다)
+  await page.getByRole("button", { name: "메모 목록 보기" }).click();
+  await expect(page).toHaveURL(/#\/shopping\/memos$/);
+  await expect(page.getByRole("button", { name: "새 메모" })).toBeEnabled();
 });
 
 test("사진에서 살 것을 뽑으면(예시 결과) 체크한 것만 장보기 목록에 들어가고 새로고침해도 남는다", async ({ page }) => {

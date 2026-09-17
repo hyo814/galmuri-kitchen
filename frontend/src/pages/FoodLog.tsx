@@ -240,6 +240,7 @@ export default function FoodLogPage({ user }: { user: User }) {
     try {
       const created = await uploadFoodPhoto<FoodLog>("/api/food-logs/photo", file);
       forgetResources("/api/food-logs");
+      forgetResources("/api/cook-report"); // 기록한 날·집밥 비율(FoodLogSheet와 같게)
       // 같은 달이면 setMonth가 같은 값이라 다시 그리지 않으니 reload를 직접 부른다(리뷰 fix round 1 I2)
       const m = monthOf(created.eaten_on);
       if (m === month) void monthReload.current();

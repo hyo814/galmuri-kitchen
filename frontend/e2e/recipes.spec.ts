@@ -42,6 +42,22 @@ test("추천 탭의 예시 레시피를 내 레시피로 저장하면 내 레시
   await expect(page.getByRole("link", { name: "계란말이" })).toBeVisible();
 });
 
+test("추천 레시피 카드를 cmd·ctrl 클릭하면 preventDefault하지 않아 브라우저 기본 동작(새 탭 열기)에 맡긴다", async ({ page }) => {
+  // 리뷰 발견: RecipeLink도 모든 클릭에서 preventDefault를 해서 새 탭 열기가 막혀 있었다.
+  // 헤드리스에서는 새 탭이 실제로 열리는지가 안정적으로 안 잡혀, 이벤트가 막히지 않는지 직접 본다.
+  await openRecipes(page);
+  const link = page.getByRole("region", { name: "예시 레시피" }).getByRole("link", { name: "계란말이" });
+  const result = await link.evaluate((el) => {
+    const before = location.hash;
+    const ev = new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true, metaKey: true, button: 0 });
+    el.dispatchEvent(ev);
+    return { defaultPrevented: ev.defaultPrevented, hashChanged: location.hash !== before };
+  });
+  expect(result.defaultPrevented).toBe(false); // 새 탭 열기를 브라우저 기본 동작에 맡긴다
+  expect(result.hashChanged).toBe(false); // 지금 화면은 SPA 이동을 하지 않는다
+  await expect(page.getByRole("heading", { name: "레시피", level: 1 })).toBeVisible();
+});
+
 test("레시피를 직접 추가한 뒤 수정하면 내용이 바뀌고 새로고침해도 남는다", async ({ page }) => {
   await addManualRecipe(page, "테스트 요리");
 

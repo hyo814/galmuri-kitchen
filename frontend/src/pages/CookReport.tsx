@@ -2,9 +2,8 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { localToday, type CookReport as CookReportData } from "../api";
 import Icon from "../components/Icon";
 import LoadError from "../components/LoadError";
-import { aboutWon, barWidths, compareLine, overSpent, reportLead, reportNote, reportTitle } from "../cooklog/cook.ts";
+import { aboutWon, barSavedText, barWidths, compareLine, overSpent, reportLead, reportNote, reportTitle } from "../cooklog/cook.ts";
 import { monthOf, shiftMonth } from "../foodlog/log";
-import { formatWon } from "../format";
 import { goBack } from "../useHashRoute";
 import { useFocusOnRecover, useResource } from "../useResource";
 
@@ -106,7 +105,7 @@ function ReportBody({
                 <div className="nt-meter" aria-hidden="true">
                   <i style={{ width: `${widths[i]}%` }} />
                 </div>
-                <span>{formatWon(Math.round(row.saved / 100) * 100)}</span>
+                <span>{barSavedText(row.saved)}</span>
               </li>
             ))}
           </ul>

@@ -49,6 +49,10 @@ export default function CookEditSheet({ log: logProp, today, photos, onSaved, on
     />
   );
 
+  // 메모를 쓰다 배경 탭·뒤로가기로 닫으면 말없이 사라지던 것을 묻고 닫게(FoodLogSheet와 같은 문구, 리뷰 발견).
+  // Sheet의 confirmClose(cancel 이벤트, 닫히기 전)로 배경 탭·Esc·뒤로가기를 묻는다 — close 이벤트는 이미 닫힌 뒤라 늦다.
+  const confirmDiscard = () => memo.trim() === (log.memo ?? "") || confirm("작성 중인 내용이 사라져요. 나갈까요?");
+
   function closeSheet() {
     if (savedLog) onSaved(savedLog);
     else onClose();
@@ -115,6 +119,7 @@ export default function CookEditSheet({ log: logProp, today, photos, onSaved, on
       description={logProp.manual ? "인분은 고칠 수 없어요" : "인분과 쓴 재료는 고칠 수 없어요"}
       focusTitle
       locked={save.busy}
+      confirmClose={confirmDiscard}
       onClose={closeSheet}
     >
       {logProp.manual && <DishNameField value={titleText} invalid={titleMissing} onChange={setTitleText} />}
@@ -161,7 +166,7 @@ export default function CookEditSheet({ log: logProp, today, photos, onSaved, on
         </p>
       )}
       <div className="actions">
-        <button type="button" className="btn secondary" disabled={save.busy} onClick={closeSheet}>
+        <button type="button" className="btn secondary" disabled={save.busy} onClick={() => confirmDiscard() && closeSheet()}>
           취소
         </button>
         <button type="button" className="btn primary" disabled={save.busy} aria-disabled={invalid || undefined} onClick={submit}>

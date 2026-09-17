@@ -74,6 +74,7 @@ export default function MealSlotSheet({ slot: initial, today, user, onChanged, o
       const log = await api<FoodLog>(`/api/meal-slots/${slot.id}/eaten`, { method: "POST" });
       setSlot({ ...slot, eaten_log_id: log.id });
       forgetResources("/api/food-logs");
+      forgetResources("/api/cook-report"); // 기록한 날·집밥 비율(FoodLogSheet와 같게)
       onChanged();
       setAteHint(true);
     });
@@ -191,7 +192,8 @@ export default function MealSlotSheet({ slot: initial, today, user, onChanged, o
           user={user}
           start={{ servings, date: slot.date, meal: slot.meal, slotId: slot.id, slotEaten: slot.eaten_log_id !== null }}
           onSaved={(r) => {
-            toastSaved(r, onChanged);
+            // 되돌리면 App이 undone 카운트로 화면 전체를 새로 만든다(RecipeDetail·CookDiary와 같게) — onUndone 콜백은 필요 없다
+            toastSaved(r);
             onChanged();
             onClose();
           }}

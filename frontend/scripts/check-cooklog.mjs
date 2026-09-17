@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   aboutWon,
   amountHint,
+  barSavedText,
   barWidths,
   compareLine,
   cookMeal,
@@ -194,6 +195,7 @@ assert.equal(withEunNeun("계란 2개"), "계란 2개는");
 assert.equal(withEunNeun("두부 3"), "두부 3은");
 assert.equal(withEunNeun("계란 2"), "계란 2는");
 assert.equal(withEunNeun("김치 0.3kg"), "김치 0.3kg은");
+assert.equal(withEunNeun("우유 200cc"), "우유 200cc는");
 assert.equal(withEunNeun("양파"), "양파는");
 
 // ---- Task 11: 집밥 리포트(시안 5) ----
@@ -218,6 +220,12 @@ assert.equal(compareLine({ cooked: 3, discarded: 0, previous: { cooked: 0, disca
 assert.deepEqual(barWidths([{ saved: 23100 }, { saved: 12400 }, { saved: 9800 }]), [100, 54, 42]);
 assert.deepEqual(barWidths([{ saved: 23100 }, { saved: 500 }]), [100, 4]);
 assert.deepEqual(barWidths([]), []);
+// 100원 반올림하면 0원이 되는 1~49원은 "50원 미만"으로(막대는 그려지는데 0원이 보이지 않게)
+assert.equal(barSavedText(30), "50원 미만");
+assert.equal(barSavedText(49), "50원 미만");
+assert.equal(barSavedText(50), "100원");
+assert.equal(barSavedText(0), "0원");
+assert.equal(barSavedText(23100), "23,100원");
 
 // ---- 요리 일기 쓰기·추천 레시피 요리했어요(29절 추가 2026-09-16, 시안 docs/design/diary-write) ----
 // 무엇을 요리했나요 줄 설명

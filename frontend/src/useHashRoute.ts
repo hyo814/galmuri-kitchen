@@ -76,6 +76,12 @@ export function forgetScroll(path: string) {
   scrollTops.delete(path);
 }
 
+/** 꾸밈(cmd·ctrl·shift·alt) 없는 왼쪽 클릭인가 — 이때만 해시 링크를 가로채 SPA로 이동한다.
+ *  cmd·ctrl 클릭·가운데 클릭(새 탭 열기)은 그대로 브라우저 기본 동작에 맡긴다(TabBar·RecipeLink 공통, 리뷰 발견) */
+export function isPlainClick(e: { button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }): boolean {
+  return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+}
+
 /**
  * 화면 이동. 기본은 히스토리에 쌓아 폰 뒤로가기로 돌아올 수 있게 한다(상세·폼).
  * replace는 지금 칸을 바꾼다(저장 후 상세로 넘어갈 때). 탭 전환은 TabBar가 location.replace를 쓴다.

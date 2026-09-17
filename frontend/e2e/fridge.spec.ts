@@ -18,6 +18,21 @@ test("예시 재고와 유통기한 배지가 보인다", async ({ page }) => {
   await expect(page.getByText("재료 10개")).toBeVisible();
 });
 
+test("탭 막대를 cmd·ctrl 클릭하면 preventDefault하지 않아 브라우저 기본 동작(새 탭 열기)에 맡긴다", async ({ page }) => {
+  // 리뷰 발견: 모든 클릭에서 preventDefault를 해서 cmd·ctrl·가운데 클릭으로 새 탭 열기가 막혀 있었다.
+  // 헤드리스에서는 새 탭이 실제로 열리는지가 안정적으로 안 잡혀, 이벤트가 막히지 않는지 직접 본다.
+  const result = await page.evaluate(() => {
+    const link = document.querySelector('nav[aria-label="주요 메뉴"] a[href="#/recipes"]') as HTMLAnchorElement;
+    const before = location.hash;
+    const ev = new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true, metaKey: true, button: 0 });
+    link.dispatchEvent(ev);
+    return { defaultPrevented: ev.defaultPrevented, hashChanged: location.hash !== before };
+  });
+  expect(result.defaultPrevented).toBe(false); // 새 탭 열기를 브라우저 기본 동작에 맡긴다
+  expect(result.hashChanged).toBe(false); // 지금 화면은 SPA 이동을 하지 않는다
+  await expect(page.getByRole("heading", { name: "내 재고", level: 1 })).toBeVisible();
+});
+
 test("재료를 직접 추가하면 목록에 생기고 새로고침해도 남는다", async ({ page }) => {
   await page.getByRole("button", { name: "재료 추가" }).click();
   const dialog = page.getByRole("dialog", { name: "재료 추가" });
