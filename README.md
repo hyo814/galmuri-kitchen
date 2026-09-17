@@ -70,9 +70,9 @@
 
 ### 장보기
 
-| 목록 | 쇼핑몰에서 찾기 | 재고에 넣기 |
-|---|---|---|
-| <img src="docs/submission/screenshots/10-shopping-list.png" width="200" alt="장보기 목록: 날짜 묶음과 제자리 체크"> | <img src="docs/submission/screenshots/11-store-sheet.png" width="200" alt="쇼핑몰 검색 링크 시트"> | <img src="docs/submission/screenshots/12-stock-in.png" width="200" alt="체크한 항목을 재고로 옮기는 화면"> |
+| 목록 | 쇼핑몰에서 찾기 | 한꺼번에 찾기 | 재고에 넣기 |
+|---|---|---|---|
+| <img src="docs/submission/screenshots/10-shopping-list.png" width="200" alt="장보기 목록: 날짜 묶음과 제자리 체크"> | <img src="docs/submission/screenshots/11-store-sheet.png" width="200" alt="쇼핑몰 검색 링크 시트"> | <img src="docs/submission/screenshots/39-store-find-all.png" width="200" alt="쇼핑몰에서 한꺼번에 찾기: 쿠팡을 고르면 살 것마다 찾기 링크가 줄줄이 보임"> | <img src="docs/submission/screenshots/12-stock-in.png" width="200" alt="체크한 항목을 재고로 옮기는 화면"> |
 
 | 장보기 메모 | 메모 사진 인식 | 오프라인 |
 |---|---|---|
