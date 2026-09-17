@@ -49,11 +49,13 @@ export const STORES: readonly Store[] = [
     verified: "2026-09-17 사용자 폰 확인(낮은 가격순)",
   },
   {
-    // 검증 전. 정렬 후보 없음 — 폰에서 정렬을 바꾼 주소창 값을 받아 채운다
+    // 2026-09-17 브라우저 확인(낮은 가격순). 많이 산 순·새 상품순은 확인 못 해 칸을 두지 않음
     id: "kurly", name: "컬리", host: "www.kurly.com",
     search: "https://www.kurly.com/search?sword={q}",
-    sorts: {},
-    verified: null,
+    sorts: {
+      price_asc: "https://www.kurly.com/search?sword={q}&sorted_type=2",
+    },
+    verified: "2026-09-17 브라우저 확인(낮은 가격순)",
   },
   {
     // 2026-09-17 사용자 폰 확인(낮은 가격순, SSG 이마트몰). 많이 산 순·새 상품순은 확인 못 해 칸을 지웠다
@@ -65,18 +67,22 @@ export const STORES: readonly Store[] = [
     verified: "2026-09-17 사용자 폰 확인(낮은 가격순)",
   },
   {
-    // 검증 전. 정렬 후보 없음
+    // 2026-09-17 브라우저 확인(낮은 가격순). 많이 산 순·새 상품순은 확인 못 해 칸을 두지 않음
     id: "homeplus", name: "홈플러스", host: "front.homeplus.co.kr",
     search: "https://front.homeplus.co.kr/search?entry=direct&keyword={q}",
-    sorts: {},
-    verified: null,
+    sorts: {
+      price_asc: "https://front.homeplus.co.kr/search?entry=direct&keyword={q}&sort=PRICE_DOWN",
+    },
+    verified: "2026-09-17 브라우저 확인(낮은 가격순)",
   },
   {
-    // 검증 전 (롯데온 롯데마트몰). 정렬 후보 없음
+    // 2026-09-17 브라우저 확인(낮은 가격순, 롯데온 롯데마트몰). 많이 산 순·새 상품순은 확인 못 해 칸을 두지 않음
     id: "lottemart", name: "롯데마트", host: "www.lotteon.com",
     search: "https://www.lotteon.com/search/search/search.ecn?render=search&platform=pc&q={q}&mallId=4",
-    sorts: {},
-    verified: null,
+    sorts: {
+      price_asc: "https://www.lotteon.com/search/search/search.ecn?render=search&platform=pc&q={q}&mallId=4&sort=lprice",
+    },
+    verified: "2026-09-17 브라우저 확인(낮은 가격순)",
   },
   {
     // 검증 전
