@@ -1,0 +1,278 @@
+<title>쇼핑몰 한꺼번에 찾기 시안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+  :root {
+    --board: #e6e8eb;
+    --bg: #f3f4f6;
+    --surface: #ffffff;
+    --field: #f3f4f6;
+    --text: #17191c;
+    --text-2: #5b616b;
+    --text-3: #63697a;
+    --line: #eef0f2;
+    --chip-line: #d3d7dd;
+    --scrim: rgb(15 17 20 / 0.48);
+    --accent: #0b7a4c;
+    --accent-strong: #086a41;
+    --accent-tint: #e7f6ef;
+    --on-accent: #ffffff;
+    --warn: #8f5500;
+    --warn-tint: #fff3dc;
+    --photo-a: #d9c3a1;
+    --photo-b: #b9cfa8;
+    --photo-c: #c7b3c9;
+    --note: #3a3f46;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --scrim: rgb(0 0 0 / 0.6); --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --photo-a: #5a4a33; --photo-b: #3f5436; --photo-c: #4d3f50; --note: #d3d7dc;
+    }
+  }
+  :root[data-theme="dark"] {
+    --board: #070809; --bg: #0e0f11; --surface: #1a1c20; --field: #24272c; --text: #f1f2f4; --text-2: #a6acb5; --text-3: #8a9099; --line: #2a2d32; --chip-line: #3e4249; --scrim: rgb(0 0 0 / 0.6); --accent: #2fc07f; --accent-strong: #5bd39c; --accent-tint: #173a2a; --on-accent: #07140d; --warn: #f2b04a; --warn-tint: #3a2c12; --photo-a: #5a4a33; --photo-b: #3f5436; --photo-c: #4d3f50; --note: #d3d7dc;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 16px 56px; background: var(--board); color: var(--text); font-family: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  .intro { max-width: 1700px; margin: 0 auto 28px; }
+  .intro h1 { margin: 0 0 8px; font-size: 26px; line-height: 34px; font-weight: 700; text-wrap: balance; }
+  .intro p { margin: 0 0 6px; max-width: 66ch; font-size: 15px; line-height: 24px; color: var(--text-2); word-break: keep-all; }
+  .intro b { color: var(--note); }
+  .asks { max-width: 1700px; margin: 0 auto 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; }
+  .ask { padding: 14px 16px; border-radius: 16px; background: var(--surface); }
+  .ask h3 { margin: 0 0 4px; font-size: 15px; }
+  .ask p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+  .ask .rec { color: var(--accent-strong); font-weight: 600; }
+
+  .board { max-width: 1700px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(384px, 100%), 1fr)); gap: 32px 24px; align-items: start; }
+  .option { display: grid; gap: 12px; justify-items: center; }
+  .cap { width: min(384px, 100%); display: grid; gap: 4px; }
+  .tag { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: 0.06em; color: var(--text-3); }
+  .cap h2 { margin: 0; font-size: 18px; line-height: 26px; }
+  .cap p { margin: 0; font-size: 14px; line-height: 22px; color: var(--text-2); word-break: keep-all; }
+
+  /* 폰 */
+  .phone { position: relative; width: min(384px, 100%); height: 800px; overflow: hidden; border-radius: 28px; background: var(--bg); }
+  .under { padding: 24px 20px; }
+  .under h3 { margin: 0 0 4px; font-size: 26px; font-weight: 700; }
+  .under p { margin: 0; color: var(--text-3); font-size: 15px; }
+  .scrim { position: absolute; inset: 0; background: var(--scrim); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 92%; overflow: hidden; padding: 12px 20px 24px; border-radius: 24px 24px 0 0; background: var(--surface); display: grid; gap: 14px; }
+  .sheet.tall { top: 7%; }
+  .handle { justify-self: center; width: 40px; height: 4px; border-radius: 2px; background: var(--chip-line); }
+  .sh-title { margin: 0; font-size: 21px; line-height: 28px; font-weight: 700; }
+  .sh-desc { margin: 2px 0 0; font-size: 14px; line-height: 20px; color: var(--text-2); word-break: keep-all; }
+  .hint { display: flex; gap: 6px; align-items: flex-start; font-size: 13px; line-height: 19px; color: var(--text-3); word-break: keep-all; }
+  .hint svg { flex: none; margin-top: 2px; }
+
+  .btn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 56px; border-radius: 16px; font-size: 17px; font-weight: 600; white-space: nowrap; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); }
+  .btn.secondary { background: var(--field); color: var(--text); }
+  .actions { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; }
+
+  /* 사진 모으기 */
+  .kindline { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--field); font-size: 15px; font-weight: 600; }
+  .kindline .ic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--surface); color: var(--accent-strong); }
+  .kindline span.chg { margin-left: auto; font-size: 14px; color: var(--accent-strong); }
+  .tray { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .thumb { position: relative; aspect-ratio: 1; max-width: 100%; border-radius: 14px; overflow: hidden; }
+  .thumb .img { position: absolute; inset: 0; }
+  .thumb .n { position: absolute; left: 6px; bottom: 6px; padding: 1px 7px; border-radius: 10px; background: rgb(0 0 0 / 0.55); color: #fff; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .thumb .x { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 14px; background: rgb(0 0 0 / 0.55); color: #fff; }
+  .add { display: grid; place-items: center; align-content: center; gap: 4px; aspect-ratio: 1; border-radius: 14px; box-shadow: inset 0 0 0 1.5px var(--chip-line); color: var(--text-2); font-size: 13px; font-weight: 600; }
+  .add svg { color: var(--accent-strong); }
+  .count { display: flex; justify-content: space-between; font-size: 14px; color: var(--text-2); }
+  .count b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+  /* 기다리기 */
+  .wait { display: grid; justify-items: center; gap: 14px; padding: 20px 0 8px; text-align: center; }
+  .stack { position: relative; width: 132px; height: 110px; }
+  .stack i { position: absolute; width: 84px; height: 96px; border-radius: 12px; box-shadow: 0 2px 8px rgb(0 0 0 / 0.12); }
+  .stack i:nth-child(1) { left: 0; top: 8px; transform: rotate(-9deg); background: var(--photo-b); }
+  .stack i:nth-child(2) { left: 24px; top: 2px; transform: rotate(-2deg); background: var(--photo-c); }
+  .stack i:nth-child(3) { left: 48px; top: 10px; transform: rotate(7deg); background: var(--photo-a); }
+  .bar { width: 100%; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .bar i { display: block; width: 46%; height: 100%; border-radius: 2px; background: var(--accent); }
+  .wait h4 { margin: 0; font-size: 19px; line-height: 26px; }
+  .wait p { margin: 0; font-size: 14px; color: var(--text-2); }
+
+  /* 확인 */
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 8px; background: var(--accent-tint); color: var(--accent-strong); font-size: 12px; font-weight: 600; }
+  .label { font-size: 14px; font-weight: 600; color: var(--text-2); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; height: 36px; padding: 0 12px; border-radius: 18px; background: var(--field); color: var(--text-2); font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .chip.on { background: var(--accent-tint); color: var(--accent-strong); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .chip.small { height: 32px; padding: 0 10px; font-size: 13px; }
+  .picked { font-size: 13px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .items { display: grid; }
+  .item { display: grid; grid-template-columns: 28px minmax(0, 1fr) 24px; align-items: center; gap: 10px; min-height: 60px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .cb { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; background: var(--accent); color: var(--on-accent); }
+  .cb.off { background: none; box-shadow: inset 0 0 0 2px var(--chip-line); }
+  .it-name { font-size: 16px; font-weight: 600; }
+  .it-sub { font-size: 13px; line-height: 18px; color: var(--text-3); }
+  .it-sub .own { color: var(--warn); font-weight: 600; }
+  .chev { color: var(--text-3); }
+  .edit { grid-column: 1 / -1; display: grid; gap: 10px; padding: 4px 0 10px 38px; }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .fld { display: grid; gap: 4px; }
+  .fld span { font-size: 12px; color: var(--text-3); }
+  .fld div { height: 44px; display: flex; align-items: center; padding: 0 12px; border-radius: 12px; background: var(--field); font-size: 15px; }
+  .foot { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px 20px 20px; background: var(--surface); box-shadow: 0 -1px 0 var(--line); }
+
+  /* 재고 목록 */
+  .list { margin: 0 16px; border-radius: 20px; background: var(--surface); }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 14px 16px; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .row b { font-size: 16px; }
+  .row small { display: block; margin-top: 2px; font-size: 13px; color: var(--text-3); }
+  .pill { font-size: 12px; font-weight: 600; color: var(--warn); background: var(--warn-tint); padding: 3px 8px; border-radius: 8px; }
+
+  svg { flex: none; }
+  .foot-note { width: min(384px, 100%); font-size: 13px; line-height: 20px; color: var(--text-3); word-break: keep-all; }
+</style>
+<style>
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 6px; }
+  .topbar h3 { margin: 0; font-size: 26px; font-weight: 700; }
+  .sumrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 20px 14px; font-size: 14px; color: var(--text-2); }
+  .findall { display: inline-flex; align-items: center; gap: 4px; height: 36px; padding: 0 12px; border-radius: 18px; background: var(--accent-tint); color: var(--accent-strong); font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .grp { margin: 14px 20px 6px; font-size: 14px; font-weight: 600; color: var(--text-2); }
+  .srow { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--line); }
+  .srow:first-child { border-top: 0; }
+  .srow b { font-size: 16px; }
+  .srow small { display: block; font-size: 13px; color: var(--text-3); }
+  .ib { display: grid; place-items: center; width: 40px; height: 40px; color: var(--text-2); }
+  .ib.on { color: var(--accent-strong); }
+  .stores { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .store { display: flex; align-items: center; justify-content: space-between; height: 52px; padding: 0 14px; border-radius: 14px; background: var(--field); font-size: 16px; font-weight: 600; }
+  .store small { font-size: 12px; font-weight: 500; color: var(--text-3); }
+  .store.last { box-shadow: inset 0 0 0 1.5px var(--accent); background: var(--accent-tint); }
+  .sh-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .sh-head span { font-size: 14px; font-weight: 600; color: var(--accent-strong); white-space: nowrap; }
+  .prog { display: grid; gap: 6px; font-size: 14px; color: var(--text-2); }
+  .prog b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .frow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 60px; border-top: 1px solid var(--line); }
+  .frow b { font-size: 16px; }
+  .frow small { display: block; font-size: 13px; color: var(--text-3); }
+  .frow.done b { color: var(--text-3); font-weight: 500; }
+  .go { display: inline-flex; align-items: center; gap: 4px; height: 40px; padding: 0 14px; border-radius: 12px; background: var(--field); color: var(--text); font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .go.next { background: var(--accent); color: var(--on-accent); }
+  .go.done { background: none; color: var(--text-3); font-weight: 500; padding: 0 4px; }
+  .modebar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 16px 4px; padding: 10px 14px; border-radius: 14px; background: var(--accent-tint); color: var(--accent-strong); font-size: 14px; font-weight: 600; }
+  .slink { display: inline-flex; align-items: center; gap: 3px; height: 32px; padding: 0 10px; border-radius: 16px; background: var(--field); font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; }
+  .slink.seen { background: none; color: var(--text-3); font-weight: 500; }
+</style>
+</head>
+<body>
+<header class="intro">
+  <h1>쇼핑몰에서 한꺼번에 찾기</h1>
+  <p>지금은 품목마다 돋보기를 눌러 시트를 열고 쇼핑몰을 골라야 해요. 살 것이 5개면 같은 일을 5번 해요.</p>
+  <p>쇼핑몰들은 여러 품목을 한 번에 검색하거나 장바구니에 바로 담는 주소를 열어 두지 않았어요. 그래서 <b>쇼핑몰은 한 번만 고르고, 품목마다 한 번씩 눌러 여는</b> 흐름으로 줄였어요.</p>
+</header>
+
+<section class="asks">
+  <div class="ask"><h3>① A와 B 중 어느 쪽?</h3><p><span class="rec">A 추천</span> · A는 시트 안에서 차례로 열어요(②③). B는 목록 화면 자체가 쇼핑몰 모드로 바뀌어요(④).</p></div>
+  <div class="ask"><h3>② 어떤 품목을 넣을까?</h3><p><span class="rec">체크 안 한 것만 추천</span> · 체크한 건 이미 산 걸로 보고 빼요. 순서는 장보기 목록 순서 그대로예요.</p></div>
+  <div class="ask"><h3>③ 열어봤어요 표시</h3><p><span class="rec">시트가 열려 있는 동안만 추천</span> · 다시 열면 처음부터예요. 산 건 장보기에서 체크하는 지금 방식을 그대로 써요.</p></div>
+</section>
+
+<div class="board">
+
+  <div class="option">
+    <div class="cap"><span class="tag">① 장보기</span><h2>요약 줄 옆에 버튼 하나</h2><p>살 것이 2개 이상일 때만 보여요. 품목별 돋보기는 그대로 둬요.</p></div>
+    <div class="phone">
+      <div class="topbar"><h3>장보기</h3><span class="ib"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span></div>
+      <div class="sumrow"><span>살 것 5개</span><span class="findall"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>쇼핑몰에서 한꺼번에 찾기</span></div>
+      <div class="grp">채소</div>
+      <div class="list">
+        <div class="srow"><span class="cb off"></span><span><b>대파</b><small>1단</small></span><span class="ib"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></span></div>
+        <div class="srow"><span class="cb off"></span><span><b>양파</b><small>3개</small></span><span class="ib"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></span></div>
+      </div>
+      <div class="grp">달걀 · 유제품</div>
+      <div class="list">
+        <div class="srow"><span class="cb off"></span><span><b>계란</b><small>10개</small></span><span class="ib"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></span></div>
+        <div class="srow"><span class="cb off"></span><span><b>우유</b><small>1개</small></span><span class="ib"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></span></div>
+      </div>
+      <div class="grp">양념</div>
+      <div class="list">
+        <div class="srow"><span class="cb off"></span><span><b>간장</b><small>1병</small></span><span class="ib"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option">
+    <div class="cap"><span class="tag">② A · 쇼핑몰 고르기</span><h2>어디서 살까요?</h2><p>지난번에 연 쇼핑몰이 맨 앞이에요. 고르면 바로 ③으로 넘어가요.</p></div>
+    <div class="phone">
+      <div class="topbar"><h3>장보기</h3></div>
+      <div class="scrim"></div>
+      <div class="sheet">
+        <span class="handle"></span>
+        <div><p class="sh-title">어디서 살까요?</p><p class="sh-desc">고른 쇼핑몰에서 살 것 5개를 차례로 찾아요</p></div>
+        <div class="stores">
+          <div class="store last">쿠팡<small>지난번</small></div>
+          <div class="store">네이버 쇼핑</div>
+          <div class="store">컬리</div>
+          <div class="store">이마트몰</div>
+          <div class="store">홈플러스</div>
+          <div class="store">롯데마트</div>
+          <div class="store">G마켓</div>
+        </div>
+        <p class="hint">결제는 쇼핑몰에서 해요.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="option">
+    <div class="cap"><span class="tag">③ A · 차례로 찾기</span><h2>품목마다 한 번씩 누르기</h2><p>다음에 열 품목 버튼이 초록색이에요. 쇼핑몰에서 돌아오면 연 품목은 흐리게 바뀌어 있어요.</p></div>
+    <div class="phone">
+      <div class="topbar"><h3>장보기</h3></div>
+      <div class="scrim"></div>
+      <div class="sheet tall" style="align-content:start">
+        <span class="handle"></span>
+        <div>
+          <div class="sh-head"><p class="sh-title">쿠팡에서 찾기</p><span>쇼핑몰 바꾸기</span></div>
+          <p class="sh-desc">누르면 쿠팡 검색 결과가 새 창으로 열려요</p>
+        </div>
+        <div class="prog"><span>5개 중 <b>2개</b> 열어봤어요</span><div class="bar"><i style="width:40%"></i></div></div>
+        <div>
+          <div class="frow done"><span><b>대파</b><small>1단</small></span><span class="go done"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>열어봤어요</span></div>
+          <div class="frow done"><span><b>양파</b><small>3개</small></span><span class="go done"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>열어봤어요</span></div>
+          <div class="frow"><span><b>계란</b><small>10개</small></span><span class="go next">찾기<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M18 14v5H5V6h5"/></svg></span></div>
+          <div class="frow"><span><b>우유</b><small>1개</small></span><span class="go">찾기<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M18 14v5H5V6h5"/></svg></span></div>
+          <div class="frow"><span><b>간장</b><small>1병</small></span><span class="go">찾기<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M18 14v5H5V6h5"/></svg></span></div>
+        </div>
+        <p class="hint">산 건 장보기에서 체크하면 재고에 넣을 수 있어요.</p>
+        <div class="btn secondary">닫기</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option">
+    <div class="cap"><span class="tag">④ B · 목록이 쇼핑몰 모드로</span><h2>시트 없이 목록에서 바로</h2><p>①의 버튼 → ②에서 쇼핑몰을 고르면 시트가 닫히고, 돋보기 자리가 쇼핑몰 링크로 바뀌어요. 체크도 같은 화면에서 해요.</p></div>
+    <div class="phone">
+      <div class="topbar"><h3>장보기</h3></div>
+      <div class="sumrow"><span>살 것 5개</span></div>
+      <div class="modebar"><span>쿠팡에서 찾는 중 · 2/5</span><span>그만 찾기</span></div>
+      <div class="grp">채소</div>
+      <div class="list">
+        <div class="srow"><span class="cb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg></span><span><b>대파</b><small>1단</small></span><span class="slink seen">열어봤어요</span></div>
+        <div class="srow"><span class="cb off"></span><span><b>양파</b><small>3개</small></span><span class="slink seen">열어봤어요</span></div>
+      </div>
+      <div class="grp">달걀 · 유제품</div>
+      <div class="list">
+        <div class="srow"><span class="cb off"></span><span><b>계란</b><small>10개</small></span><span class="slink">쿠팡<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M18 14v5H5V6h5"/></svg></span></div>
+        <div class="srow"><span class="cb off"></span><span><b>우유</b><small>1개</small></span><span class="slink">쿠팡<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M18 14v5H5V6h5"/></svg></span></div>
+      </div>
+      <div class="grp">양념</div>
+      <div class="list">
+        <div class="srow"><span class="cb off"></span><span><b>간장</b><small>1병</small></span><span class="slink">쿠팡<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M18 14v5H5V6h5"/></svg></span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="intro" style="margin-top:28px"><small style="color:var(--text-3);font-size:13px;line-height:20px;display:block;max-width:66ch">만들 때: 링크는 storeLinks.ts의 검색 주소를 그대로 써요(정렬 칩은 폰 확인 전이라 넣지 않아요). 쿠팡 파트너스 키가 생기면 쿠팡 줄에 광고 표시가 붙어요. 서버 변경은 없어요. 품목과 수량은 화면 설명용 예시예요.</small></p>
+</body>
+</html>
