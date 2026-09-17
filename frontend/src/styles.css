@@ -7124,8 +7124,9 @@ body:has(.ck-toast:not(:empty)) .page::after {
   word-break: keep-all;
 }
 
-/* 카드 제목(많이 아낀 요리·버린 재료) */
-.ck-report .nt-card > b:first-child {
+/* 카드 제목(많이 아낀 요리·버린 재료) — 접근성 트리에서 heading이 되도록 <h2>를 쓰고 시안 글자 크기만 맞춘다 */
+.ck-report .nt-card > h2:first-child {
+  margin: 0;
   font-size: 15px;
 }
 

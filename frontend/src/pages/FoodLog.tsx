@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { api, localToday, type FoodLog, type FoodLogDay, type FoodLogMonth, type MealKind, type User } from "../api";
 import FoodLogDaySheet, { fillAttempted } from "../components/FoodLogDaySheet";
 import FoodLogSheet, { uploadFoodPhoto } from "../components/FoodLogSheet";
@@ -8,7 +8,7 @@ import Sheet from "../components/Sheet";
 import { monthGrid } from "../meals/plan";
 import { cellKcalText, cellLabel, monthLabel, monthOf, shiftMonth, summaryView } from "../foodlog/log";
 import { goBack } from "../useHashRoute";
-import { forgetResources, useResource } from "../useResource";
+import { forgetResources, useFocusOnRecover, useResource } from "../useResource";
 
 const DOW = ["월", "화", "수", "목", "금", "토", "일"];
 
@@ -41,6 +41,7 @@ function MonthBody({
   onToday,
   onReload,
   nav,
+  titleRef,
 }: {
   month: string;
   selected: string | null;
@@ -49,8 +50,11 @@ function MonthBody({
   /** 날짜 상세 시트가 기록을 바꾼 뒤 이 달을 다시 불러오도록 부모에 reload를 건네준다 */
   onReload: (reload: () => Promise<void>) => void;
   nav: ReactNode;
+  /** 다시 불러오기 성공 시 사라진 버튼 대신 달 제목으로 포커스를 옮긴다 */
+  titleRef: RefObject<HTMLHeadingElement | null>;
 }) {
   const { data, error, reload } = useResource<FoodLogMonth>(`/api/food-logs/month?month=${month}`);
+  useFocusOnRecover(titleRef, error, data);
 
   useEffect(() => {
     if (data) onToday(data.today);
@@ -178,6 +182,7 @@ export default function FoodLogPage({ user }: { user: User }) {
   // 서버 today(개정 1 P14) — 받기 전엔 기기 시계로 `다음 달` 막기를 어림하고, 어느 달이든 한 번 받으면 그 값으로 굳힌다
   const [today, setToday] = useState(() => localToday());
   const monthReload = useRef<() => Promise<void>>(async () => {});
+  const monthTitleRef = useRef<HTMLHeadingElement>(null);
   // 고치기·추가 시트가 저장·삭제하면 날짜 상세가 이 값을 보고 다시 받는다(다시 마운트하지 않아 스크롤·포커스 유지)
   const [reloadTick, setReloadTick] = useState(0);
 
@@ -254,7 +259,9 @@ export default function FoodLogPage({ user }: { user: User }) {
       <button type="button" className="icon-btn" aria-label="지난달" onClick={() => setMonth((m) => shiftMonth(m, -1))}>
         <Icon name="back" />
       </button>
-      <h2 aria-live="polite">{monthLabel(month)}</h2>
+      <h2 ref={monthTitleRef} tabIndex={-1} aria-live="polite">
+        {monthLabel(month)}
+      </h2>
       <button
         type="button"
         className="icon-btn"
@@ -297,7 +304,16 @@ export default function FoodLogPage({ user }: { user: User }) {
         </p>
       )}
 
-      <MonthBody key={month} month={month} selected={selected} onSelect={onSelect} onToday={onToday} onReload={onReload} nav={nav} />
+      <MonthBody
+        key={month}
+        month={month}
+        selected={selected}
+        onSelect={onSelect}
+        onToday={onToday}
+        onReload={onReload}
+        nav={nav}
+        titleRef={monthTitleRef}
+      />
 
       {quickOpen && (
         <Sheet

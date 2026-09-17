@@ -130,7 +130,7 @@ function SaveButton({ recipe }: { recipe: AiRecipe }) {
         type="button"
         className={done ? "btn saved" : "btn primary"}
         aria-disabled={done || busy || undefined}
-        aria-label={`${recipe.title} ${done ? "저장했어요" : "저장"}`}
+        aria-label={`${recipe.title} ${done ? "저장했어요" : busy ? "저장 중" : "저장"}`}
         onClick={save}
       >
         <Icon name={done ? "check" : "bookmark"} size={18} />

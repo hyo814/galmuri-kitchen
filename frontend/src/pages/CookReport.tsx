@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { localToday, type CookReport as CookReportData } from "../api";
 import Icon from "../components/Icon";
 import LoadError from "../components/LoadError";
@@ -6,7 +6,7 @@ import { aboutWon, barWidths, compareLine, overSpent, reportLead, reportNote, re
 import { monthOf, shiftMonth } from "../foodlog/log";
 import { formatWon } from "../format";
 import { goBack } from "../useHashRoute";
-import { useResource } from "../useResource";
+import { useFocusOnRecover, useResource } from "../useResource";
 
 // 뒤로 가기로 돌아오면 보던 달을 연다. 이번 달을 말하는 입구(더보기 줄·요리 일기 카드)는 resetCookReportView 뒤에 연다(R11-9)
 let viewMonth: string | null = null;
@@ -17,8 +17,18 @@ export function resetCookReportView(): void {
 }
 
 /** 한 달 카드 넷. `key={month}`로 달마다 새로 마운트해 늦게 온 옛 달 응답이 지금 달을 덮지 않는다(FoodLog.tsx MonthBody와 같게, R11-3) */
-function ReportBody({ month, onToday }: { month: string; onToday: (today: string) => void }) {
+function ReportBody({
+  month,
+  onToday,
+  titleRef,
+}: {
+  month: string;
+  onToday: (today: string) => void;
+  /** 다시 불러오기 성공 시 사라진 버튼 대신 이 heading으로 포커스를 옮긴다 */
+  titleRef: RefObject<HTMLHeadingElement | null>;
+}) {
   const { data, error, reload } = useResource<CookReportData>(`/api/cook-report?month=${month}`);
+  useFocusOnRecover(titleRef, error, data);
 
   useEffect(() => {
     if (data) onToday(data.today);
@@ -39,7 +49,7 @@ function ReportBody({ month, onToday }: { month: string; onToday: (today: string
         {data.cooked === 0 ? (
           <>
             <b className="ck-hero-empty">요리 일기가 없어요</b>
-            <p className="nt-src">레시피나 식단 칸에서 요리했어요를 누르면 아낀 돈을 계산해요</p>
+            <p className="nt-src">레시피나 식단 칸에서 ‘요리했어요’를 누르면 아낀 돈을 계산해요</p>
           </>
         ) : data.counted === 0 ? (
           <>
@@ -66,7 +76,7 @@ function ReportBody({ month, onToday }: { month: string; onToday: (today: string
             <span>기록한 날</span>
           </div>
           <div>
-            <b>{home === null ? "—" : `${home}%`}</b>
+            <b>{home === null ? <span aria-label="계산할 수 없어요">—</span> : `${home}%`}</b>
             <span>집밥</span>
           </div>
           <div>
@@ -87,7 +97,7 @@ function ReportBody({ month, onToday }: { month: string; onToday: (today: string
 
       {data.top_saved.length > 0 && (
         <section className="nt-card">
-          <b>많이 아낀 요리</b>
+          <h2>많이 아낀 요리</h2>
           <ul className="ck-bars">
             {data.top_saved.map((row, i) => (
               <li key={row.title} className="ck-bar">
@@ -105,7 +115,7 @@ function ReportBody({ month, onToday }: { month: string; onToday: (today: string
 
       {data.discarded > 0 && (
         <section className="nt-card">
-          <b>버린 재료</b>
+          <h2>버린 재료</h2>
           <ul className="ck-chips">
             {data.discarded_names.map((name) => (
               <li key={name} className="badge old">
@@ -169,7 +179,7 @@ export default function CookReport() {
           <Icon name="chevron" />
         </button>
       </div>
-      <ReportBody key={month} month={month} onToday={setToday} />
+      <ReportBody key={month} month={month} onToday={setToday} titleRef={title} />
     </main>
   );
 }

@@ -171,7 +171,7 @@ export default function CookDiary({ user }: { user: User }) {
       {!loading && !hasMore && items.length === 0 ? (
         <div className="empty">
           <p>아직 요리 일기가 없어요</p>
-          <p className="hint">일기 쓰기나 레시피 상세의 요리했어요로 남겨요</p>
+          <p className="hint">‘일기 쓰기’나 레시피 상세의 ‘요리했어요’로 남겨요</p>
         </div>
       ) : (
         <InfiniteSentinel onVisible={loadMore} hasMore={hasMore} multiPage={multiPage} loading={loading} error={error} onRetry={loadMore} />

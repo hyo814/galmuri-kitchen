@@ -244,20 +244,10 @@ export default function ScanSheet({ mode, limit, samples = [], locations, onAdde
     : mode === "sample"
       ? "읽어둔 결과를 불러오고 있어요"
       : `${sample.label}에서 재료를 찾고 있어요`;
-  // ScanSheet가 떠 있는 동안 계속 마운트된 알림 영역. 단계별 시각적 문구를 중복해서 role=status/alert로
-  // 두 번 읽지 않도록, 여기 하나로 모으고 본문 쪽 role은 뺀다.
-  const liveText =
-    step.name === "collect"
-      ? capped
-        ? PHOTO_CAP
-        : ""
-      : step.name === "loading"
-        ? loadingTitle
-        : step.name === "review"
-          ? `재료 ${step.result.items.length}개를 찾았어요`
-          : step.name === "error"
-            ? step.message
-            : "";
+  // ScanSheet가 떠 있는 동안 계속 마운트된 알림 영역. loading·review·error는 useStepFocus가 그 단계의
+  // h2(또는 대체로 sheet 제목)로 포커스를 옮기며 이미 그 글자를 읽으므로 여기서 또 넣지 않는다(TalkBack 중복 낭독 방지).
+  // collect의 5장 초과 안내만 포커스 이동 없이 알려야 해서 여기 남는다.
+  const liveText = step.name === "collect" && capped ? PHOTO_CAP : "";
 
   const chooseKind = (next: ScanKind) => {
     setKind(next);
@@ -621,7 +611,8 @@ export default function ScanSheet({ mode, limit, samples = [], locations, onAdde
         {step.name === "error" && (
           <>
             <ScanFail message={step.message} status={step.status} reason={step.reason} photoTips={!sample} />
-            <div className="actions">
+            {/* "다시 고르기"(주문 캡처)는 기본 1fr 칸에서 384px 폭에 두 줄로 꺾인다 — actions-even으로 넓힌다 */}
+            <div className={retakeLabel === "다시 고르기" ? "actions actions-even" : "actions"}>
               {canRetake ? (
                 <button type="button" className="btn secondary" onClick={backToPhotos}>
                   {retakeLabel}
