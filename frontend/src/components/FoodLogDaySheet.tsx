@@ -79,6 +79,7 @@ export default function FoodLogDaySheet({
       await api(`/api/meal-slots/${slot.id}/eaten`, { method: "POST" });
       forgetResources("/api/meal-plans");
       forgetResources("/api/food-logs");
+      forgetResources("/api/cook-report"); // 기록한 날·집밥 비율(FoodLogSheet와 같게)
       await day.reload();
       onChanged();
     });

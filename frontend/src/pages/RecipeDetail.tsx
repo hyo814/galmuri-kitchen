@@ -222,16 +222,22 @@ export default function RecipeDetail({ kind, id, user }: { kind: "mine" | "publi
   // 이 화면에 남는다 — 되돌려도 저장한 레시피는 그대로(되돌리기는 요리 일기만)
   const cookPublic = () => {
     if (busy) return;
-    setOpening(true);
+    // opening은 run이 실제로 시작할 때만 켜고 끈다(run의 inFlight 가드가 두 번째 탭에서 action을 아예 안 부르므로,
+    // 여기 안에 두면 먼저 시작한 요청이 남아있는데 두 번째 탭 때문에 opening이 꺼지지 않는다 — 리뷰 발견)
     void run(async () => {
-      const res = await api<Response>(`/api/public-recipes/${recipe.id}/save`, { method: "POST", raw: true });
-      // 응답 본문을 못 읽으면 영어 SyntaxError 대신 공통 문구(api의 기본 오류와 같게, 리뷰 FYI3)
-      const saved: MyRecipe = await res.json().catch(() => {
-        throw new Error("문제가 생겼어요. 잠시 후 다시 시도해주세요.");
-      });
-      forgetRecipeCaches();
-      setCooking({ recipeId: saved.id, note: savedRecipeNote(saved.title, res.status === 201) });
-    }).finally(() => setOpening(false));
+      setOpening(true);
+      try {
+        const res = await api<Response>(`/api/public-recipes/${recipe.id}/save`, { method: "POST", raw: true });
+        // 응답 본문을 못 읽으면 영어 SyntaxError 대신 공통 문구(api의 기본 오류와 같게, 리뷰 FYI3)
+        const saved: MyRecipe = await res.json().catch(() => {
+          throw new Error("문제가 생겼어요. 잠시 후 다시 시도해주세요.");
+        });
+        forgetRecipeCaches();
+        setCooking({ recipeId: saved.id, note: savedRecipeNote(saved.title, res.status === 201) });
+      } finally {
+        setOpening(false);
+      }
+    });
   };
 
   const remove = () => {

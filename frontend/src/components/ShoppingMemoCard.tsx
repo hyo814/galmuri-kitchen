@@ -189,9 +189,10 @@ export default function ShoppingMemoCard({ shopping }: { shopping: Shopping }) {
         </button>
       )}
       <MemoBackupNotice shopping={shopping} />
-      {notes.length > 1 && (
+      {/* 메모가 1개뿐이면 카드에는 그 메모 하나만 보여 새 메모를 쓸 길이 없었다 — 목록(거기 `새 메모` 버튼이 있다)으로 보낸다(리뷰 발견) */}
+      {notes.length > 0 && (
         <button type="button" className="sh-memo-more" onClick={() => navigate("/shopping/memos")}>
-          메모 {notes.length - 1}개 더 보기
+          {notes.length > 1 ? `메모 ${notes.length - 1}개 더 보기` : "메모 목록 보기"}
           <Icon name="chevron" size={16} />
         </button>
       )}

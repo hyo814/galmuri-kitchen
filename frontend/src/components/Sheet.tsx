@@ -13,6 +13,9 @@ interface Props {
   /** 저장 중처럼 지금 닫히면 안 될 때 Esc·뒤로가기·배경 탭으로 닫지 않는다.
    * ponytail: 브라우저(CloseWatcher)가 다른 동작 없이 연달아 누른 Esc·뒤로가기는 두 번째부터 취소를 막지 못하게 해서 그때는 닫힌다 */
   locked?: boolean;
+  /** Esc·뒤로가기·배경 탭으로 닫기 전에 묻는다(폼 버튼으로 닫을 때는 부르지 않는다 — 그건 호출 쪽이 직접 처리).
+   * false를 돌려주면 닫지 않는다. dialog가 close 이벤트를 이미 쏜 뒤에는 열린 채로 되돌릴 수 없어 cancel·배경 탭에서 미리 묻는다 */
+  confirmClose?: () => boolean;
   onClose: () => void;
   children: ReactNode;
 }
@@ -22,7 +25,7 @@ interface Props {
 let lastClosed: { el: HTMLElement; claimed: boolean } | null = null;
 
 /** 네이티브 <dialog> 바텀시트. Esc·안드로이드 뒤로가기·배경 탭으로 닫힌다. */
-export default function Sheet({ title, description, action, className, hideHeader, focusTitle, locked, onClose, children }: Props) {
+export default function Sheet({ title, description, action, className, hideHeader, focusTitle, locked, confirmClose, onClose, children }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const pointerDownOnDialog = useRef(false);
   const titleId = useId();
@@ -77,7 +80,9 @@ export default function Sheet({ title, description, action, className, hideHeade
       aria-describedby={description ? descId : undefined}
       onClose={onClose}
       onCancel={(e) => {
-        if (locked) e.preventDefault();
+        // close 이벤트(→ onClose)는 dialog가 이미 닫힌 뒤에 오므로 여기(cancel, close 전)서 물어야
+        // 취소했을 때 시트가 열린 채로 남는다. confirmClose가 false를 돌려주면 닫지 않는다.
+        if (locked || (confirmClose && !confirmClose())) e.preventDefault();
       }}
       onPointerDown={(e) => {
         pointerDownOnDialog.current = e.target === e.currentTarget;
@@ -85,7 +90,8 @@ export default function Sheet({ title, description, action, className, hideHeade
       onClick={(e) => {
         // 배경(::backdrop) 탭: 누르기 시작도 배경(다이얼로그 자신)이었을 때만 —
         // 입력창에서 배경으로 드래그해 놓는 동작은 닫지 않는다.
-        if (!locked && e.target === e.currentTarget && pointerDownOnDialog.current) ref.current?.close();
+        if (locked || !(e.target === e.currentTarget && pointerDownOnDialog.current)) return;
+        if (!confirmClose || confirmClose()) ref.current?.close();
       }}
     >
       <div className="sheet-body">

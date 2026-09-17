@@ -148,6 +148,31 @@ test("요리 일기에서 예시 일기의 계산표를 보고, 고치고 지우
   await expect(rows.filter({ hasText: "순두부" })).toHaveCount(0);
 });
 
+test("요리 일기 고치기에서 메모를 쓰고 그냥 닫으면 버릴지 물어보고, 취소하면 시트가 그대로 남는다", async ({ page }) => {
+  // 리뷰 발견: 배경 탭·뒤로가기(Esc)로 닫으면 타이핑한 메모가 묻지도 않고 사라졌다
+  await openCookDiary(page);
+  await diaryRows(page).filter({ hasText: "된장찌개" }).click();
+  const detail = page.getByRole("dialog", { name: "된장찌개", exact: true });
+  await detail.getByRole("button", { name: "고치기" }).click();
+  const edit = page.getByRole("dialog", { name: "된장찌개 고치기" });
+  await edit.getByLabel("메모").fill("이번엔 좀 짰다");
+
+  let confirmMsg = "";
+  page.once("dialog", (d) => {
+    confirmMsg = d.message();
+    void d.dismiss(); // 먼저 취소해 본다
+  });
+  await page.keyboard.press("Escape");
+  expect(confirmMsg).toContain("작성 중인 내용이 사라져요");
+  await expect(edit).toBeVisible(); // 취소했으니 시트가 그대로 남는다
+  await expect(edit.getByLabel("메모")).toHaveValue("이번엔 좀 짰다");
+
+  page.once("dialog", (d) => void d.accept()); // 이번엔 그냥 닫기를 받아들인다
+  await page.keyboard.press("Escape");
+  await expect(edit).toHaveCount(0);
+  await expect(detail.getByText("이번엔 좀 짰다")).toHaveCount(0); // 메모는 저장되지 않았다
+});
+
 test("요리 일기 이번 달 카드로 집밥 리포트를 열고 달을 오가며, 뒤로 링크로 요리 일기에 돌아온다", async ({ page }) => {
   const today = seoulToday();
   const [y, m] = today.split("-").map(Number);
@@ -370,4 +395,27 @@ test("추천 레시피의 요리했어요는 내 레시피에 저장한 뒤 같�
   await app(page).getByRole("link", { name: /^두부조림/ }).click();
   await expect(page.getByRole("heading", { name: "두부조림", level: 1 })).toBeVisible();
   await expect(app(page).getByText("요리 1번")).toBeVisible();
+});
+
+test("추천 레시피 요리했어요를 연달아 두 번 눌러도 버튼이 저장 중으로 남아있다가 시트가 한 번만 뜬다", async ({ page }) => {
+  // 리뷰 발견: opening을 run 시작 전에 켰더니, 두 번째 탭이 useAsyncAction의 inFlight 가드로 막혀도
+  // 그 가드가 바로 돌려주는 실패한 run의 finally가 첫 요청이 끝나기 전에 opening을 꺼 버튼 문구가 잠깐 되돌아갔다
+  await openTab(page, "레시피");
+  await page.getByRole("region", { name: "예시 레시피" }).getByRole("link", { name: "된장찌개" }).click();
+  await expect(page.getByRole("heading", { name: "된장찌개", level: 1 })).toBeVisible();
+
+  await page.route("**/api/public-recipes/*/save", async (route) => {
+    await new Promise((r) => setTimeout(r, 500));
+    await route.continue();
+  });
+
+  // 같은 자바스크립트 틱 안에서 두 번 눌러 진짜 연타(리액트가 busy를 다시 그리기 전)를 흉내 낸다
+  await page.evaluate(() => {
+    const btn = [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "요리했어요");
+    btn?.click();
+    btn?.click();
+  });
+  await expect(page.getByRole("button", { name: "저장 중…" })).toBeVisible(); // 요청이 끝나기 전엔 문구가 되돌아가지 않는다
+  await expect(page.getByRole("dialog", { name: "된장찌개 요리했어요" })).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(1); // 시트가 두 번 뜨지 않는다
 });

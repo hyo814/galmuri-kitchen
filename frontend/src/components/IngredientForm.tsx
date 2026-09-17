@@ -134,7 +134,9 @@ export default function IngredientForm({
 
   return (
     <>
-      <Sheet title={initial ? "재료 수정" : "재료 추가"} onClose={onClose}>
+      {/* 고치기(initial 있음)는 이름 칸이 첫 칸이라도 제목에 포커스한다 — 안 그러면 <dialog>가 autoFocus 없이도
+          첫 포커스 가능 요소(이름 칸)로 포커스를 보내 열자마자 키보드가 올라온다(CookEditSheet와 같은 가드, 리뷰 발견) */}
+      <Sheet title={initial ? "재료 수정" : "재료 추가"} focusTitle={!!initial} onClose={onClose}>
         <form className="form" onSubmit={submit}>
           {lastAdded && (
             <p className="notice" role="status">

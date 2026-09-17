@@ -5,7 +5,7 @@ import Icon from "../components/Icon";
 import InfiniteSentinel from "../components/InfiniteSentinel";
 import { spotlightTip } from "../demoGuide";
 import { SOURCE_LABEL, imageSrc, namesLabel, remainingText, withJosa } from "../format";
-import { navigate } from "../useHashRoute";
+import { isPlainClick, navigate } from "../useHashRoute";
 import { useInfiniteList, type Page } from "../useInfiniteList";
 import { cache, useResource } from "../useResource";
 import { hasAiState, startAiRecipes, useAiStatus } from "./RecipeAi";
@@ -80,6 +80,7 @@ function RecipeLink({ path, className, children }: { path: string; className: st
       className={className}
       href={`#${path}`}
       onClick={(e) => {
+        if (!isPlainClick(e)) return; // cmd·ctrl·가운데 클릭은 새 탭 열기 기본 동작대로
         e.preventDefault();
         navigate(path);
       }}

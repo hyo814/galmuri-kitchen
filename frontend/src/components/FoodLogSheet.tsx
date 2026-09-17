@@ -358,6 +358,10 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log: logPro
     else onClose();
   }
 
+  // 메모를 쓰다 배경 탭·뒤로가기로 닫으면 말없이 사라지던 것을 묻고 닫게(IngredientForm과 같은 문구, 리뷰 발견).
+  // Sheet의 confirmClose(cancel 이벤트, 닫히기 전)로 배경 탭·Esc·뒤로가기를 묻는다 — close 이벤트는 이미 닫힌 뒤라 늦다.
+  const confirmDiscard = () => memo.trim() === (log?.memo ?? "") || confirm("작성 중인 내용이 사라져요. 나갈까요?");
+
   function deleteLog() {
     if (!log || !confirm("이 기록을 지울까요? 사진도 함께 지워져요.")) return;
     void remove.run(async () => {
@@ -374,7 +378,14 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log: logPro
   const q = dishQ.trim();
 
   return (
-    <Sheet title={`${mealLabel(meal)} · 먹은 것 ${log ? "고치기" : "추가"}`} description={slotDateText(date, "")} className="fl-add" focusTitle onClose={closeSheet}>
+    <Sheet
+      title={`${mealLabel(meal)} · 먹은 것 ${log ? "고치기" : "추가"}`}
+      description={slotDateText(date, "")}
+      className="fl-add"
+      focusTitle
+      confirmClose={confirmDiscard}
+      onClose={closeSheet}
+    >
       {log && (
         <div className="field" role="group" aria-labelledby={ids.meal}>
           <span className="field-label" id={ids.meal}>
@@ -810,7 +821,7 @@ export default function FoodLogSheet({ date, meal: initialMeal, day, log: logPro
       )}
       <div className="scan-foot">
         <div className="nt-pick-actions">
-          <button type="button" className="btn secondary" onClick={closeSheet}>
+          <button type="button" className="btn secondary" onClick={() => confirmDiscard() && closeSheet()}>
             취소
           </button>
           <button type="button" className="btn primary" disabled={busy} aria-disabled={needWhat || gramsInvalid || undefined} onClick={submit}>
