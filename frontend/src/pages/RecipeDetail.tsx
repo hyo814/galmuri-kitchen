@@ -113,11 +113,14 @@ export function RecipeBody({
                 {justCooked?.has(item.name) ? (
                   <span className="stock-warn">다 썼어요</span>
                 ) : item.have ? (
-                  <span className="stock-ok">
-                    <Icon name="check" size={16} />
-                    있어요
-                    {item.stock_quantity != null && item.stock_unit && ` ${quantityText(item.stock_quantity, item.stock_unit)}`}
-                    {item.matched_name && item.matched_name !== item.name && ` · ${item.matched_name}`}
+                  <span className="stock-col">
+                    <span className="stock-ok">
+                      <Icon name="check" size={16} />
+                      있어요
+                      {item.stock_quantity != null && item.stock_unit && ` ${quantityText(item.stock_quantity, item.stock_unit)}`}
+                    </span>
+                    {/* 매칭된 재고 이름이 다르면 둘째 줄에 작게(길면 말줄임) — 첫 줄과 합치면 재료 이름 칸이 꺾인다(리뷰) */}
+                    {item.matched_name && item.matched_name !== item.name && <small className="stock-alt">{item.matched_name}</small>}
                   </span>
                 ) : (
                   <span className="badge">없어요</span>

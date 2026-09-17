@@ -853,6 +853,25 @@ h1[tabindex="-1"]:focus:not(:focus-visible) {
   overflow-wrap: anywhere;
 }
 
+/* 레시피 상세 재료 줄: 매칭된 재고 이름이 다르면 .stock-ok(첫 줄) 아래 작은 둘째 줄로(리뷰 — 합치면 왼쪽 이름 칸이 꺾인다) */
+.stock-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stock-alt {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: keep-all;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
 /* 요리했어요로 방금 재고에서 다 빠진 재료(29절) */
 .stock-warn {
   flex-shrink: 0;
@@ -1856,6 +1875,11 @@ button.row-btn > svg {
 
 .rc-ings li:first-child {
   border-top: 0;
+}
+
+/* 왼쪽 이름+양은 늘 한 줄로 — 오른쪽 재고 표시가 길어도 여기가 꺾이지 않는다(리뷰) */
+.rc-ings .staple-name {
+  flex-shrink: 0;
 }
 
 .rc-amt {
