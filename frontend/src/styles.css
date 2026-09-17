@@ -4420,8 +4420,10 @@ button.sh-offline svg:last-child {
   z-index: 1;
   padding: 3px 10px;
   border-radius: 999px;
-  background: var(--inverse-bg);
-  color: var(--inverse-text);
+  /* 테마와 상관없이 짙은 말풍선 + 바탕색 테두리 — 다크에서 흰 Google 버튼과 섞이지 않게 */
+  background: #17191c;
+  color: #ffffff;
+  box-shadow: 0 0 0 2px var(--bg);
   font-size: 12px;
   font-weight: 700;
   line-height: 18px;
