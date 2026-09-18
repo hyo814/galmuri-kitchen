@@ -44,7 +44,7 @@ export default function RecipeNutrition({ recipeId, user }: { recipeId: number; 
 
   if (!data) {
     if (error) return <LoadError error={error} onRetry={reload} />;
-    return <p className="muted">영양을 계산하고 있어요</p>;
+    return <p className="nt-card muted">영양을 계산하고 있어요</p>;
   }
 
   const { per_serving, incomplete } = data;

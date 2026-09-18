@@ -147,7 +147,13 @@ export default function Fridge({ user }: { user: User }) {
           <h1>내 재고</h1>
           {items && items.length > 0 && (
             <p className="summary">
-              재료 {items.length}개{soon > 0 && ` · 빨리 먹어야 할 재료 ${soon}개`}
+              재료 {items.length}개
+              {soon > 0 && (
+                <>
+                  {" · "}
+                  <b>빨리 먹어야 할 재료 {soon}개</b>
+                </>
+              )}
             </p>
           )}
         </div>
