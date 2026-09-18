@@ -39,7 +39,16 @@ for (const p of SEASONING_PRESETS) {
   assert.ok(p.items.length > 0 && p.basis_amount > 0 && p.source_note, p.name);
   for (const i of p.items) assert.ok(i.amount > 0 && i.name, `${p.name} ${i.name}`);
 }
-for (const p of SEASONING_PRESETS) assert.ok(p.source_note.includes("출처 확인 전 임시값"), p.name);
+// 기본 양념은 서버 검사(seasonings.py)와 같은 범위 안에 있어야 "이 비율 고쳐서 내 비율로"가 400으로 튕기지 않는다
+const UNITS = ["큰술", "작은술", "컵", "ml", "g", "개", "꼬집"];
+const BASIS_UNITS = { main_weight: ["g"], servings: ["인분"], yield: ["컵", "ml"] };
+for (const p of SEASONING_PRESETS) {
+  assert.ok(p.source_note.includes("2026-09-18"), `${p.name} 출처 메모`);
+  assert.ok(p.name.length <= 30 && p.items.length <= 30, p.name);
+  assert.ok(BASIS_UNITS[p.basis].includes(p.basis_unit), `${p.name} 기준 단위`);
+  assert.ok(p.basis !== "servings" || (p.basis_amount <= 20 && p.basis_amount % 1 === 0), `${p.name} 인분`);
+  for (const i of p.items) assert.ok(UNITS.includes(i.unit) && i.amount >= 0.01 && i.amount <= 10000, `${p.name} ${i.name}`);
+}
 
 // 단위 경계
 assert.equal(item("간장", 1, "작은술", 3).text, "1큰술");              // 15ml
