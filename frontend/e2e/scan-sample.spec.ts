@@ -60,7 +60,7 @@ test("체험 AI가 남았으면 예시 사진(모바일 영수증)을 내 사진
 
   await app(page).getByRole("button", { name: "사진으로 추가" }).click();
   const scanDialog = app(page).getByRole("dialog");
-  await expect(scanDialog.getByText(/체험 계정은 하루 \d+번까지 · 예시 사진도 1번으로 세요/)).toBeVisible();
+  await expect(scanDialog.getByText(/체험 계정은 하루 \d+번까지 · 예시 사진도 1번으로 세어요/)).toBeVisible();
   await scanDialog.getByRole("button", { name: "모바일 영수증 예시 사진" }).click();
   await expect(scanDialog.getByText(/이 사진을 AI가 지금 읽어요 · 오늘 \d+번 남음/)).toBeVisible();
 

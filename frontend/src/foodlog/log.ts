@@ -73,7 +73,8 @@ export function dayDescription(logs: Pick<FoodLog, "nutrition" | "approx" | "tit
   if (!logs.length) return "아직 남긴 기록이 없어요";
   const t = dayTotals(logs);
   const hint = logs.some((l) => l.title === null) ? "이름을 넣으면 kcal을 계산해요" : "";
-  if (!t) return hint || "kcal을 계산할 수 있는 기록이 없어요";
+  // 기록은 있는데 kcal을 낼 수 없는 자리다. "기록이 없어요"라고 하면 바로 아래 줄에 기록이 보이는 화면과 어긋나 읽힌다(2026-09-19 운영 화면 확인)
+  if (!t) return hint || "남긴 기록에 kcal 정보가 없어요";
   return [
     `${t.approx ? "약 " : ""}${kcalNumber(t.kcal)}${goal ? ` / 목표 ${kcalNumber(goal)}` : ""}kcal`,
     // 합이 0이면 숨기되(값이 다 있는 0), 빼고 더한 값이 있으면 "알 수 없어요"까지 보여준다(결정 14 개정 2)

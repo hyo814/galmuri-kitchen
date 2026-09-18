@@ -450,7 +450,7 @@ export default function ScanSheet({ mode, limit, samples = [], locations, onAdde
               {mode === "sample"
                 ? SAMPLE_MODE_HINT
                 : sampleList.length > 0
-                  ? `체험 계정은 하루 ${limit}번까지 · 예시 사진도 1번으로 세요`
+                  ? `체험 계정은 하루 ${limit}번까지 · 예시 사진도 1번으로 세어요`
                   : `하루 ${limit}번까지 쓸 수 있어요 · 못 찾거나 실패하면 하루\u00a03번까지는 세지 않아요`}
             </p>
           </>
