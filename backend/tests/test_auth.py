@@ -2,7 +2,8 @@ import pytest
 
 from app import create_app, database_url
 from app.auth import upsert_user
-from app.models import User, db
+from app.ingredients import seoul_today
+from app.models import Ingredient, StorageLocation, User, db
 from tests.conftest import TEST_DATABASE_URL
 
 
@@ -159,3 +160,22 @@ def test_coupang_partners_id_from_env(make_app, monkeypatch):
     assert make_app().config["COUPANG_PARTNERS_ID"] is None
     monkeypatch.setenv("COUPANG_PARTNERS_ID", "AF123")
     assert make_app().config["COUPANG_PARTNERS_ID"] == "AF123"
+
+
+def test_delete_account_removes_user_and_data(client, app):
+    user_id = client.post("/api/dev-login").get_json()["id"]
+    with app.app_context():
+        location = StorageLocation.query.filter_by(user_id=user_id).first()  # 로그인 때 만들어진 기본 보관 위치
+        db.session.add(Ingredient(user_id=user_id, location_id=location.id, name="두부", purchased_on=seoul_today()))
+        db.session.commit()
+
+    assert client.delete("/api/account").status_code == 200
+
+    assert client.get("/api/me").status_code == 401  # 세션도 끊긴다
+    with app.app_context():
+        assert db.session.get(User, user_id) is None
+        assert Ingredient.query.filter_by(user_id=user_id).count() == 0  # CASCADE
+
+
+def test_delete_account_requires_login(client):
+    assert client.delete("/api/account").status_code == 401

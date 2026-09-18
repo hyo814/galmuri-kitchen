@@ -172,6 +172,21 @@ def logout():
     return jsonify(ok=True)
 
 
+@bp.delete("/api/account")
+@login_required
+def delete_account():
+    """회원 탈퇴(스펙 27절). 내 데이터는 users 행만 지우면 CASCADE로 함께 지워지고, 사진 파일만 커밋 뒤 따로 지운다
+    (체험 계정 정리 demo.delete_demo_users와 같은 방식). AI 호출 기록(ai_calls)은 한도 계산용이라 남는다."""
+    from . import photos, storage  # photos가 auth를 불러서 위에서 import하면 순환이 된다
+
+    keys = photos.user_photo_keys([g.user.id])
+    User.query.filter(User.id == g.user.id).delete(synchronize_session=False)
+    db.session.commit()
+    session.clear()  # 사진 파일 삭제(R2가 느리면 수십 초)보다 먼저 — 계정만 지워지고 세션이 남는 일이 없게
+    storage.delete(keys)
+    return jsonify(ok=True)
+
+
 @bp.get("/auth/login/<provider>")
 def oauth_login(provider):
     client = oauth_client(provider)

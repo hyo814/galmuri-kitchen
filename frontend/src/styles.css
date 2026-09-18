@@ -3174,6 +3174,54 @@ button.row-btn > svg {
   color: var(--danger);
 }
 
+/* 몸 정보 동의 체크(건강 관련 정보라 처음 저장할 때만) */
+.nt-agree {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  line-height: 1.5;
+}
+
+.nt-agree input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+/* 회원 탈퇴: 로그아웃과 같은 위험 색 줄 + 확인 시트 */
+.mo-leave .row-title {
+  color: var(--danger);
+}
+
+.mo-leave .mo-ico {
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+.mo-leave-list {
+  margin: 8px 0 16px;
+  padding-left: 20px;
+  color: var(--text-2);
+  line-height: 1.7;
+}
+
+.mo-leave-agree {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  margin-bottom: 8px;
+}
+
+.mo-leave-agree input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--danger);
+}
+
 /* 로그인 방법 표시: 로그인 버튼과 같은 브랜드 색 */
 .mo-provider {
   font-size: 14px;
