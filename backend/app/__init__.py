@@ -146,6 +146,22 @@ def create_app(test_config=None):
         ):
             return jsonify(error=DEFAULT_MESSAGES[400]), 400
 
+    @app.after_request
+    def security_headers(res):
+        """모든 응답에 공통 보안 헤더. 이미 그 헤더를 정한 응답(사진 CSP storage.py, 내보내기 nosniff export.py,
+        쿠팡 이동 Referrer-Policy coupang.py)은 setdefault라 그대로 둔다.
+        ponytail: CSP는 `frame-ancestors`만 둔다 — 소스 제한(default-src 등)은 R2 사진·유튜브 섬네일·공공 레시피 사진처럼
+        바깥에서 오는 것들을 하나라도 빠뜨리면 화면이 깨지고, 그 위험이 지금 얻는 것보다 크다(심사 기간). 소스 제한은 투표 뒤에."""
+        res.headers.setdefault("X-Content-Type-Options", "nosniff")
+        res.headers.setdefault("X-Frame-Options", "DENY")  # 다른 사이트에 끼워 넣어 클릭을 가로채지 못하게
+        res.headers.setdefault("Content-Security-Policy", "frame-ancestors 'none'")  # X-Frame-Options의 표준 대체
+        res.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        # 쓰지 않는 기능은 잠근다. 사진은 <input type=file capture>로 열어 camera 권한이 필요 없다(있어도 self면 충분)
+        res.headers.setdefault("Permissions-Policy", "camera=(self), geolocation=(), microphone=(), payment=(), usb=(), interest-cohort=()")
+        if not app.config["DEV_MODE"]:  # 개발은 http라 HSTS를 걸면 브라우저가 기억해 버린다
+            res.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        return res
+
     @app.errorhandler(HTTPException)
     def http_error(e):
         if not request.path.startswith("/api/"):
