@@ -229,7 +229,7 @@ export default function ShoppingStock() {
           <h1>재고에 넣기</h1>
         </header>
         <div className="center">
-          <p className="muted">체크한 항목이 없어요. 장보기에서 산 것을 체크해주세요.</p>
+          <p className="muted">체크한 게 없어요. 장보기에서 산 것을 체크해주세요.</p>
           <button type="button" className="btn primary inline" onClick={() => goBack("/shopping")}>
             장보기로
           </button>
