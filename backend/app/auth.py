@@ -182,8 +182,8 @@ def delete_account():
     keys = photos.user_photo_keys([g.user.id])
     User.query.filter(User.id == g.user.id).delete(synchronize_session=False)
     db.session.commit()
+    session.clear()  # 사진 파일 삭제(R2가 느리면 수십 초)보다 먼저 — 계정만 지워지고 세션이 남는 일이 없게
     storage.delete(keys)
-    session.clear()
     return jsonify(ok=True)
 
 

@@ -596,7 +596,8 @@ function LeaveSheet({ onClose, onLeft }: { onClose: () => void; onLeft: () => vo
       await api("/api/account", { method: "DELETE" });
     } catch (e) {
       setBusy(false);
-      return setError(e instanceof ApiError && e.status === 0 ? "인터넷이 연결되면 탈퇴할 수 있어요" : (e as Error).message);
+      // 서버가 지우는 중에 끊기면 지워졌는지 알 수 없다 — "탈퇴 못 했다"고 단정하지 않는다
+      return setError(e instanceof ApiError && e.status === 0 ? "지워졌는지 확인이 안 됐어요. 화면을 새로 고쳐 주세요" : (e as Error).message);
     }
     onLeft(); // 로그아웃과 같은 마무리(기기에 남은 것까지 지우고 로그인 화면으로)
   };
