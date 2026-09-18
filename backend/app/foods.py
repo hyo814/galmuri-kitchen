@@ -79,6 +79,22 @@ def missing_count(row):
     return sum(getattr(row, n) is None for n in NUTRIENTS)
 
 
+def unique_by_name(rows):
+    """이름이 글자까지 똑같은 행은 맨 앞 하나만 남긴다. **정렬한 뒤, 20개로 자르기 전에** 부른다.
+    식약처 자료에는 같은 이름이 여러 벌 들어 있다(운영 캐시 실측 2026-09-19: 콩기름 18개, 엑스트라버진올리브유 15개,
+    김치제육덮밥 12개, 비빔밥 6개). 그대로 두면 화면에 똑같은 이름이 줄줄이 서서 무엇을 고를지 알 수 없다.
+    앞선 정렬이 값이 더 찬 행(missing_count)을 먼저 두므로, 남는 하나가 같은 이름 중 가장 쓸 만한 행이다.
+    양(g)은 화면에서 사용자가 고치므로 행마다 다른 1인분 무게는 골라야 할 정보가 아니다."""
+    seen = set()
+    rows_left = []
+    for row in rows:
+        if row.name in seen:
+            continue
+        seen.add(row.name)
+        rows_left.append(row)
+    return rows_left
+
+
 def _number(value):
     """0 이상 유한수만. bool·숫자 아님·음수·무한대는 None."""
     if isinstance(value, bool):
@@ -352,7 +368,7 @@ def search_items(q):
         .all()
     )
     rows.sort(key=lambda row: (key not in name_parts(row.name), GROUP_ORDER.get(row.group_name, 3), len(row.name), missing_count(row), row.name))
-    return [{"food_code": r.food_code, "name": r.name, "group": r.group_name, "kcal": round(r.kcal)} for r in rows[:SEARCH_LIMIT]]
+    return [{"food_code": r.food_code, "name": r.name, "group": r.group_name, "kcal": round(r.kcal)} for r in unique_by_name(rows)[:SEARCH_LIMIT]]
 
 
 def dish_items(q):
@@ -378,7 +394,7 @@ def dish_items(q):
             "food_code": r.food_code, "name": r.name, "group": r.group_name, "serving_g": r.serving_g, "kcal": r.kcal,
             "carbs_g": r.carbs_g, "protein_g": r.protein_g, "fat_g": r.fat_g, "sugars_g": r.sugars_g, "sodium_mg": r.sodium_mg,
         }
-        for r in rows[:SEARCH_LIMIT]
+        for r in unique_by_name(rows)[:SEARCH_LIMIT]
     ]
 
 

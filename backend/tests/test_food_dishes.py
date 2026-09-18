@@ -65,7 +65,8 @@ def test_dish_items_dishes_then_packaged_in_order(app):
 
 
 def test_dish_items_puts_rows_with_fewer_missing_values_first(app):
-    """식약처 음식은 같은 이름 행이 여럿이다(된장국_감자 D105·D305) — 이름까지 같으면 빠진 영양소가 적은 행 먼저(결정 10 개정 2)."""
+    """식약처 음식은 같은 이름 행이 여럿이다(된장국_감자 D105·D305) — 이름까지 같으면 빠진 영양소가 적은 행 먼저(결정 10 개정 2).
+    이름이 같으면 그 첫 행만 남으므로(unique_by_name), 살아남은 행이 곧 순서 규칙이 고른 행이다."""
     full = dict.fromkeys(foods.NUTRIENTS[1:], 1.0)
     add_foods(
         app,
@@ -73,7 +74,21 @@ def test_dish_items_puts_rows_with_fewer_missing_values_first(app):
         cached("D2", "된장국_감자", 40, group="음식", source="api", **full),
     )
     with app.app_context():
-        assert [r["food_code"] for r in foods.dish_items("된장국")] == ["D2", "D1"]
+        assert [r["food_code"] for r in foods.dish_items("된장국")] == ["D2"]
+
+
+def test_dish_items_keeps_one_row_per_name(app):
+    """같은 이름 행을 그대로 두면 화면에 똑같은 줄이 벽처럼 선다(운영 실측 2026-09-19: `비빔밥` 6줄, 무게·kcal만 다름).
+    이름이 다르면 남기고, 글자까지 같으면 하나만 남긴다. 양은 화면에서 사용자가 고치므로 1인분 무게는 골라야 할 정보가 아니다."""
+    add_foods(
+        app,
+        cached("B1", "비빔밥", 142, group="음식", source="api", serving_g=100),
+        cached("B2", "비빔밥", 705, group="음식", source="api", serving_g=530),
+        cached("B3", "비빔밥", 454, group="음식", source="api", serving_g=222),
+        cached("B4", "비빔밥_돌솥", 550, group="음식", source="api", serving_g=400),
+    )
+    with app.app_context():
+        assert [r["name"] for r in foods.dish_items("비빔밥")] == ["비빔밥", "비빔밥_돌솥"]
 
 
 # --- food_by_code ---

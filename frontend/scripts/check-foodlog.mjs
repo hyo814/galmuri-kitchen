@@ -136,7 +136,8 @@ assert.equal(
   "310kcal · 이름을 넣으면 kcal을 계산해요",
 );
 assert.equal(dayDescription([], null), "아직 남긴 기록이 없어요");
-assert.equal(dayDescription([{ title: "샐러드", nutrition: null, approx: false }], null), "kcal을 계산할 수 있는 기록이 없어요");
+// 기록은 있고 kcal만 못 내는 자리 — "기록이 없어요"가 아니라 "기록에 kcal 정보가 없어요"여야 화면과 맞는다
+assert.equal(dayDescription([{ title: "샐러드", nutrition: null, approx: false }], null), "남긴 기록에 kcal 정보가 없어요");
 
 assert.equal(mealKcalText([]), "");
 assert.equal(mealKcalText([{ nutrition: { kcal: 400, carbs_g: 30, protein_g: 20, fat_g: 15, sugars_g: 11, sodium_mg: 820 }, approx: true, title: "제육덮밥", incomplete: {} }]), "약 400kcal");
