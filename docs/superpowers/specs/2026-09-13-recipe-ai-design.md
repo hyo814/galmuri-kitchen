@@ -78,7 +78,7 @@ recipe-ai/
 | GET | `/auth/login/<provider>` | OAuth 시작 |
 | GET | `/auth/callback/<provider>` | OAuth 콜백 → 세션 발급 → `/`로 리다이렉트 |
 | POST | `/api/logout` | 세션 삭제 |
-| DELETE | `/api/account` | 회원 탈퇴 — users 행 삭제(내 데이터는 CASCADE), 커밋 뒤 `photos.user_photo_keys`로 사진 파일 삭제, 세션 삭제 |
+| DELETE | `/api/account` | 회원 탈퇴 — `photos.user_photo_keys`로 사진 키를 먼저 모으고 users 행 삭제(내 데이터는 CASCADE) → 커밋 → 세션 삭제 → 사진 파일 삭제(R2가 느려도 세션이 남지 않게 파일 삭제보다 먼저 끊는다) |
 | GET | `/api/me` | 현재 사용자 `{id, nickname, scan: "on"\|"sample"\|"off", scan_limit, recipe_limit, videos: "on"\|"sample"\|"off", nutrition: "on"\|"sample"\|"off"}` (비로그인 401). `scan`은 사진으로 추가·AI 레시피 입구 표시에 함께 쓴다. `videos`는 영상 칸 표시용(17절). `nutrition`은 영양 계산 칸 표시용(21절, `FOOD_NUTRITION_API_KEY` 유무). `recipe_limit`은 호환용으로 남겨 두고, 화면의 남은 횟수는 `/api/ai-usage`를 읽는다. 개발용 로그인 응답도 같은 모양 |
 | GET/POST | `/api/ingredients` | 목록(임박 순, status 포함) / 생성 |
 | POST | `/api/ingredients/bulk` | 스캔 확인 후 일괄 생성 `{items:[{name, quantity, unit, purchased_on(YYYY-MM-DD 또는 null=모름), expires_on?, price?, location_id?}]}` 1~50개. 하나라도 틀리면 아무것도 만들지 않고 400 `{error: "N번째 재료: …", errors:[{index, error}]}` |
@@ -764,7 +764,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - **친구 초대:** 공유 시트(Web Share API, 안 되면 링크 복사)로 앱 주소를 보낸다. 보상·추적은 하지 않는다.
 - **의견 보내기:** 짧은 글(≤1000자)과 선택 사진 1장, 앱 버전·기기 정보(브라우저 UA)를 함께 보낸다. 서버 `feedback` 테이블에 저장하고 하루 5회 제한.
 - **데이터 출처:** 식약처 조리식품 레시피 DB·식품영양성분 DB, 유튜브 등 사용하는 공공·외부 데이터의 이름과 이용 조건 링크를 표시한다(25절 유료화 전 확인 사항과 연결). (2026-09-15, 4b-2 Task 8 구현) `식품의약품안전처 식품영양성분 DB(공공데이터포털)` 줄(레시피·식단 영양 계산에 100g당 값을 씀)을 추가하고, `Anthropic Claude` 줄을 `사진 인식·AI 레시피 만들기·재료 무게 추정에 써요`로 갱신했다.
-- **회원 탈퇴:** 확인 문구 입력 후 계정과 모든 사용자 데이터(재고·레시피·기록·사진·AI 호출 기록)를 삭제한다. 소셜 로그인 연결 해제(카카오·네이버·구글 API)도 시도하고, 실패해도 우리 쪽 데이터는 지운다. 사진 파일(R2·로컬 `uploads/`의 `shopping/<user_id>/`·`foodlog/<user_id>/`·`cooklog/<user_id>/`(`photos.user_photo_keys`) 등)은 DB CASCADE로 지워지지 않으므로 탈퇴 처리에서 접두사로 따로 지운다(2026-09-14, 4단계에서 사진 저장 시작). 삭제는 되돌릴 수 없다고 명확히 안내한다(삭제 버튼 규칙: 연빨강 배경·테두리).
+- **회원 탈퇴 (구현 2026-09-18):** 확인 시트에서 지워지는 것을 보여주고 확인 체크를 받은 뒤 계정과 모든 사용자 데이터(재고·레시피·기록·사진)를 삭제한다. AI 호출 기록(`ai_calls`)은 한도 계산용이라 `user_id`만 비우고 남긴다. **소셜 로그인 연결 해제(카카오·네이버·구글 API)는 하지 않는다**(2026-09-18 결정 — 계획 단계의 '연결 해제도 시도한다'에서 바뀜): 다시 로그인하면 빈 새 계정이고, 각 플랫폼에서 연결을 끊는 방법은 방침 7번에 적어 둔다. 사진 파일(R2·로컬 `uploads/`의 `shopping/<user_id>/`·`foodlog/<user_id>/`·`cooklog/<user_id>/`(`photos.user_photo_keys`) 등)은 DB CASCADE로 지워지지 않으므로 탈퇴 처리에서 접두사로 따로 지운다(2026-09-14, 4단계에서 사진 저장 시작). 삭제는 되돌릴 수 없다고 명확히 안내한다(삭제 버튼 규칙: 연빨강 배경·테두리).
 
 ### 정리 작업 결정 (추가: 2026-09-14, 시안 승인)
 - **아직 없는 기능은 만들 때 넣는다.** 표의 항목 중 기능이 없는 행(먹은 기록·요리 기록·집밥 리포트·알림 등)은 지금 더보기에 자리만 만들지 않는다.
