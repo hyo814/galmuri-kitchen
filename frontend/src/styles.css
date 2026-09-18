@@ -29,7 +29,7 @@
   --protein: #2f7fd1;
   --fat: #b45fa8;
   --track: #e9ecef;
-  --star: #e0a100;
+  --star: #b07e00;
   color-scheme: light dark;
 }
 
@@ -7822,6 +7822,8 @@ button.ck-month {
 .demo-guide-acts .btn.secondary {
   background: var(--surface);
   color: var(--text);
+  /* 연녹색 카드 위 흰 버튼이라 경계가 1.12:1로 묻힌다 — .btn.outline과 같은 방식으로 테두리를 준다 */
+  box-shadow: inset 0 0 0 1.5px var(--control-line);
 }
 
 .r3-ai.spot {

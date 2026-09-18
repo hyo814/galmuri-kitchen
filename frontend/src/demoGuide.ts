@@ -28,8 +28,8 @@ export const dueText = (days: number) => (days === 0 ? "오늘까지예요" : da
 /** 재고 화면 안내 카드 문장을 [앞, 굵게, 뒤]로 */
 export function guideText(items: Dated[]): [string, string, string] {
   const first = urgentItems(items)[0];
-  if (!first) return ["냉장고를 미리 채워뒀어요. 곧 먹어야 할 재료로 뭘 만들 수 있을지 같이 볼까요?", "", ""];
-  return ["냉장고를 미리 채워뒀어요. 그런데 ", `${josa(first.name, "이", "가")} ${dueText(first.days_left!)}!`, ` ${withRo(first.name)} 뭘 만들 수 있을지 같이 볼까요?`];
+  if (!first) return ["갈무리부엌은 재료가 상하기 전에 알려주고, 그 재료로 만들 요리를 찾아줘요. 체험 냉장고를 채워뒀어요. 곧 먹어야 할 재료로 뭘 만들 수 있을지 같이 볼까요?", "", ""];
+  return ["갈무리부엌은 재료가 상하기 전에 알려주고, 그 재료로 만들 요리를 찾아줘요. 체험 냉장고를 채워뒀는데 ", `${josa(first.name, "이", "가")} ${dueText(first.days_left!)}!`, ` ${withRo(first.name)} 뭘 만들 수 있을지 같이 볼까요?`];
 }
 
 /** 레시피 추천 칸 AI 카드 말풍선. names는 급한 재료 이름(앞 두 개만 쓴다). 으로/로는 마지막 이름을 따른다 */
