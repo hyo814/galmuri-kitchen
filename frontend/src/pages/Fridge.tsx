@@ -293,7 +293,7 @@ export default function Fridge({ user }: { user: User }) {
           ) : (
             <>
               <p>{items && items.length > 0 ? "이 위치에는 재료가 없어요." : "재고가 비어 있어요."}</p>
-              <p className="muted">아래 버튼으로 재료를 추가해 보세요.</p>
+              <p className="muted">아래 버튼으로 재료를 추가해보세요.</p>
             </>
           )}
         </div>

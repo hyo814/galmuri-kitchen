@@ -77,7 +77,7 @@ export default function Tools() {
       ) : tools.length === 0 ? (
         <div className="empty">
           <p>등록한 도구가 없어요.</p>
-          <p className="muted">프라이팬, 뒤집개처럼 자주 쓰는 도구를 추가해 보세요.</p>
+          <p className="muted">프라이팬, 뒤집개처럼 자주 쓰는 도구를 추가해보세요.</p>
         </div>
       ) : (
         <ul className="list">

@@ -118,7 +118,7 @@ export default function ToolForm({ initial, onSubmit, onChecked, onReplaced, onD
             ))}
           </div>
           {isCoated(name) && (
-            <p className="hint">코팅이 30% 이상 벗겨졌다면 교체를 권장해요(식약처 기준). 6개월마다 상태를 확인해 보세요.</p>
+            <p className="hint">코팅이 30% 이상 벗겨졌다면 교체를 권장해요(식약처 기준). 6개월마다 상태를 확인해보세요.</p>
           )}
         </div>
 
