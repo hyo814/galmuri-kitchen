@@ -27,7 +27,8 @@ export default function BodyGoalSheet({ today, profile, onSaved, onDeleted, onCl
   const [goal, setGoal] = useState<BodyGoal>(profile?.goal ?? "maintain");
   const { busy, error, run } = useAsyncAction();
 
-  // 건강 관련 정보(개인정보 보호법 제23조)라 처음 저장할 때 따로 동의를 받는다. 동의해야 행이 생기므로 저장 시각이 곧 동의 시각이다.
+  // 건강 관련 정보(개인정보 보호법 제23조)라 처음 저장할 때 따로 동의를 받는다. 동의해야 행이 생기므로 행이 있다는 것 자체가 동의 기록이다
+  // (body_profiles에는 created_at이 없고 updated_at은 고칠 때마다 갱신된다 — 동의 시각까지 남겨야 하면 agreed_at을 더한다).
   // 이미 저장한 분은 처음 저장할 때 동의했으니 고칠 때 다시 묻지 않는다.
   const [agreed, setAgreed] = useState(false);
   const [agreeError, setAgreeError] = useState(false);
