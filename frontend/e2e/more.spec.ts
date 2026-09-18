@@ -293,7 +293,7 @@ test("주방 도구를 추가·점검하고 삭제하면 목록에 반영된다"
   await openTab(page, "더보기");
   await page.getByRole("button", { name: /주방 도구/ }).click();
   await expect(page.getByRole("heading", { name: "주방 도구" })).toBeVisible();
-  await expect(page.getByText("등록한 도구가 없어요.")).toBeVisible();
+  await expect(page.getByText("아직 도구가 없어요")).toBeVisible();
 
   await page.getByRole("button", { name: "도구 추가" }).click();
   const addSheet = page.getByRole("dialog", { name: "도구 추가" });
@@ -317,7 +317,7 @@ test("주방 도구를 추가·점검하고 삭제하면 목록에 반영된다"
   await row.click();
   page.once("dialog", (d) => d.accept()); // "코팅 프라이팬을 삭제할까요?"
   await page.getByRole("dialog", { name: "도구 수정" }).getByRole("button", { name: "이 도구 삭제" }).click();
-  await expect(page.getByText("등록한 도구가 없어요.")).toBeVisible();
+  await expect(page.getByText("아직 도구가 없어요")).toBeVisible();
 });
 
 test("데이터 내보내기를 누르면 zip 파일을 받는다", async ({ page }) => {

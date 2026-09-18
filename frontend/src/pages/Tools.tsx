@@ -76,8 +76,8 @@ export default function Tools() {
         !error && <p className="center muted">불러오는 중…</p>
       ) : tools.length === 0 ? (
         <div className="empty">
-          <p>등록한 도구가 없어요.</p>
-          <p className="muted">프라이팬, 뒤집개처럼 자주 쓰는 도구를 추가해보세요.</p>
+          <p>아직 도구가 없어요</p>
+          <p className="muted">프라이팬을 넣어두면 코팅 점검할 때를 알려줘요</p>
         </div>
       ) : (
         <ul className="list">

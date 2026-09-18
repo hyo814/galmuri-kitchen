@@ -1120,6 +1120,12 @@ button.row-btn > svg {
   font-weight: 700;
 }
 
+/* 빈 화면 설명 줄이 낱말 가운데서 끊기거나 마지막 낱말만 혼자 내려가지 않게 */
+.empty .soon-title + .muted {
+  word-break: keep-all;
+  text-wrap: balance;
+}
+
 .splash {
   position: fixed;
   inset: 0;
