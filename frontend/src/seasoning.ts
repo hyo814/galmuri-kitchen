@@ -15,7 +15,8 @@ export interface Seasoning {
 
 /** 계량 기준(스펙 22절): 1큰술 15ml, 1작은술 5ml, 1컵 200ml */
 export const SPOON_ML = { 큰술: 15, 작은술: 5, 컵: 200, ml: 1 } as const;
-// 밥숟가락 1개 용량. 출처 미확인, 시안 기준(3큰술 → 약 4개, 1큰술 → 약 1개). 화면에서도 "대략"이라고 안내한다.
+// 밥숟가락 1개 용량. 일반 계량 안내 기준 가득 10~12ml(깎으면 약 10ml), 그중 윗값 12ml를 쓴다(2026-09-18 사용자 확인).
+// 기관 고시가 아닌 통용값이고 시안(3큰술 → 약 4개, 1큰술 → 약 1개)과도 맞는다. 화면에서도 "대략"이라고 안내한다.
 export const RICE_SPOON_ML = 12;
 export const BASIS_UNITS: Record<Basis, BasisUnit[]> = { main_weight: ["g"], servings: ["인분"], yield: ["컵", "ml"] };
 
