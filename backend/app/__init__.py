@@ -156,8 +156,9 @@ def create_app(test_config=None):
         res.headers.setdefault("X-Frame-Options", "DENY")  # 다른 사이트에 끼워 넣어 클릭을 가로채지 못하게
         res.headers.setdefault("Content-Security-Policy", "frame-ancestors 'none'")  # X-Frame-Options의 표준 대체
         res.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-        # 쓰지 않는 기능은 잠근다. 사진은 <input type=file capture>로 열어 camera 권한이 필요 없다(있어도 self면 충분)
-        res.headers.setdefault("Permissions-Policy", "camera=(self), geolocation=(), microphone=(), payment=(), usb=(), interest-cohort=()")
+        # 쓰지 않는 기능은 잠근다. 사진은 <input type=file capture>로 열어 camera 권한이 필요 없다(있어도 self면 충분).
+        # interest-cohort는 넣지 않는다 — 크롬이 지원을 빼서 콘솔에 `Unrecognized feature` 경고만 남는다
+        res.headers.setdefault("Permissions-Policy", "camera=(self), geolocation=(), microphone=(), payment=(), usb=()")
         if not app.config["DEV_MODE"]:  # 개발은 http라 HSTS를 걸면 브라우저가 기억해 버린다
             res.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         return res
