@@ -498,7 +498,7 @@ test("양념 비율 프리셋에서 기준량을 바꾸면 양념 양이 그만�
   await expect(page.getByRole("heading", { name: "제육볶음 양념" })).toBeVisible();
 
   const gochujangRow = page.locator("li").filter({ hasText: "고추장" });
-  await expect(gochujangRow.getByText("2큰술")).toBeVisible();
+  await expect(gochujangRow.getByText("1큰술")).toBeVisible(); // 기준 돼지고기 300g
 
   await page.getByRole("button", { name: "1.2kg" }).click();
   await expect(gochujangRow.getByText("4큰술")).toBeVisible();

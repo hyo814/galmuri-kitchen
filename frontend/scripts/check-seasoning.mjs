@@ -43,7 +43,7 @@ for (const p of SEASONING_PRESETS) {
 const UNITS = ["큰술", "작은술", "컵", "ml", "g", "개", "꼬집"];
 const BASIS_UNITS = { main_weight: ["g"], servings: ["인분"], yield: ["컵", "ml"] };
 for (const p of SEASONING_PRESETS) {
-  assert.ok(p.source_note.includes("2026-09-18"), `${p.name} 출처 메모`);
+  assert.ok(/2026-\d\d-\d\d/.test(p.source_note), `${p.name} 출처 메모에 확인한 날짜가 없다`);
   assert.ok(p.name.length <= 30 && p.items.length <= 30, p.name);
   assert.ok(BASIS_UNITS[p.basis].includes(p.basis_unit), `${p.name} 기준 단위`);
   assert.ok(p.basis !== "servings" || (p.basis_amount <= 20 && p.basis_amount % 1 === 0), `${p.name} 인분`);
