@@ -359,7 +359,7 @@ function LoadedSheet<T>({
   );
 }
 
-type Panel = "locations" | "staples" | "rules" | "body" | "theme" | "export" | "install" | "credits";
+type Panel = "locations" | "staples" | "rules" | "body" | "theme" | "export" | "install" | "credits" | "leave";
 
 export default function More({ user, onLogout }: { user: User; onLogout: () => void }) {
   const { canPrompt, installed, prompt } = useInstallPrompt();
@@ -504,6 +504,7 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
           chevron={false}
           onClick={logout}
         />
+        <Row icon={<Icon name="trash" />} title="회원 탈퇴" className="mo-leave" onClick={() => setPanel("leave")} />
       </ul>
       {logoutError && (
         <p className="error" role="alert">
@@ -513,6 +514,8 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
       <p className="legal-links">
         <a href="/terms.html">이용약관</a> · <a href="/privacy.html">개인정보처리방침</a>
       </p>
+
+      {panel === "leave" && <LeaveSheet onClose={() => setPanel(null)} onLeft={onLogout} />}
 
       {panel === "locations" && (
         <LoadedSheet<StorageLocation[]> url="/api/locations" title="위치 관리" onClose={() => setPanel(null)}>
@@ -576,5 +579,55 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
         </Sheet>
       )}
     </main>
+  );
+}
+
+/** 회원 탈퇴 확인 시트(스펙 27절). 되돌릴 수 없어 지워지는 것을 먼저 보여주고, 체크를 해야 버튼이 눌린다. */
+function LeaveSheet({ onClose, onLeft }: { onClose: () => void; onLeft: () => void }) {
+  const [agreed, setAgreed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const leave = async () => {
+    setError(null);
+    if (!navigator.onLine) return setError("인터넷이 연결되면 탈퇴할 수 있어요");
+    setBusy(true);
+    try {
+      await api("/api/account", { method: "DELETE" });
+    } catch (e) {
+      setBusy(false);
+      return setError(e instanceof ApiError && e.status === 0 ? "인터넷이 연결되면 탈퇴할 수 있어요" : (e as Error).message);
+    }
+    onLeft(); // 로그아웃과 같은 마무리(기기에 남은 것까지 지우고 로그인 화면으로)
+  };
+
+  return (
+    <Sheet title="회원 탈퇴" description="지운 정보는 되돌릴 수 없어요" locked={busy} onClose={onClose}>
+      <p>탈퇴하면 아래가 모두 지워져요.</p>
+      <ul className="mo-leave-list">
+        <li>재고·필수품·보관 위치</li>
+        <li>레시피·양념 비율·식단</li>
+        <li>장보기 목록과 메모 사진</li>
+        <li>먹은 기록·요리 일기와 그 사진</li>
+        <li>하루 칼로리 목표에 넣은 내 몸 정보</li>
+      </ul>
+      <label className="mo-leave-agree">
+        <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} disabled={busy} />
+        <span>지워지는 내용을 확인했어요</span>
+      </label>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="ml-stack">
+        <button className="btn danger-fill" disabled={!agreed || busy} onClick={leave}>
+          {busy ? "지우는 중…" : "탈퇴하고 모두 지우기"}
+        </button>
+        <button className="btn secondary" disabled={busy} onClick={onClose}>
+          취소
+        </button>
+      </div>
+    </Sheet>
   );
 }

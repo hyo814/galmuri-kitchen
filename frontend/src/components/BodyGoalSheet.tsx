@@ -27,6 +27,14 @@ export default function BodyGoalSheet({ today, profile, onSaved, onDeleted, onCl
   const [goal, setGoal] = useState<BodyGoal>(profile?.goal ?? "maintain");
   const { busy, error, run } = useAsyncAction();
 
+  // 건강 관련 정보(개인정보 보호법 제23조)라 처음 저장할 때 따로 동의를 받는다. 동의해야 행이 생기므로 저장 시각이 곧 동의 시각이다.
+  // 이미 저장한 분은 처음 저장할 때 동의했으니 고칠 때 다시 묻지 않는다.
+  const [agreed, setAgreed] = useState(false);
+  const [agreeError, setAgreeError] = useState(false);
+  const needAgree = !profile;
+  const agreeRef = useRef<HTMLInputElement>(null);
+  const agreeErrId = useId();
+
   // 칸을 떠났거나 저장을 눌렀을 때만 틀렸다고 보여준다(시안 ShoppingItemSheet 패턴)
   const [touched, setTouched] = useState<Set<NumberField>>(() => new Set());
   const touch = (f: NumberField) => setTouched((prev) => (prev.has(f) ? prev : new Set(prev).add(f)));
@@ -64,6 +72,10 @@ export default function BodyGoalSheet({ today, profile, onSaved, onDeleted, onCl
     if (!value) {
       setTouched(new Set(["birthYear", "height", "weight"]));
       return focusFirstEmpty();
+    }
+    if (needAgree && !agreed) {
+      setAgreeError(true);
+      return agreeRef.current?.focus();
     }
     run(async () => {
       const res = await api<BodyProfileResponse>("/api/body-profile", { method: "PUT", body: value });
@@ -214,6 +226,30 @@ export default function BodyGoalSheet({ today, profile, onSaved, onDeleted, onCl
             <p className="muted">정보를 모두 넣으면 계산해 보여줘요</p>
           )}
         </div>
+
+        {needAgree && (
+          <div className="field">
+            <label className="nt-agree">
+              <input
+                ref={agreeRef}
+                type="checkbox"
+                checked={agreed}
+                aria-invalid={agreeError || undefined}
+                aria-describedby={agreeError ? agreeErrId : undefined}
+                onChange={(e) => {
+                  setAgreed(e.target.checked);
+                  if (e.target.checked) setAgreeError(false);
+                }}
+              />
+              <span>키·몸무게 같은 건강 관련 정보를 하루 칼로리 목표 계산에 쓰는 데 동의해요</span>
+            </label>
+            {agreeError && (
+              <p id={agreeErrId} className="hint nt-invalid" role="alert">
+                동의해야 저장할 수 있어요
+              </p>
+            )}
+          </div>
+        )}
 
         {error && (
           <p className="error" role="alert">

@@ -271,10 +271,15 @@ test("내 몸 정보로 하루 칼로리 목표를 정하면 더보기 카드에
   const sheet = page.getByRole("dialog", { name: "하루 칼로리 목표 정하기" });
   await sheet.getByRole("group", { name: "성별" }).getByRole("button", { name: "여성" }).click();
   await sheet.getByLabel("태어난 해").fill("1994");
-  await sheet.getByLabel("키").fill("165");
-  await sheet.getByLabel("몸무게").fill("60");
+  await sheet.getByLabel("키", { exact: true }).fill("165");
+  await sheet.getByLabel("몸무게", { exact: true }).fill("60");
   await sheet.getByRole("group", { name: "활동량" }).getByRole("button", { name: "보통" }).click();
   await expect(sheet.getByText(/기초대사량/)).toBeVisible();
+
+  // 건강 관련 정보라 처음 저장할 때는 동의해야 한다
+  await sheet.getByRole("button", { name: "저장" }).click();
+  await expect(sheet.getByText("동의해야 저장할 수 있어요")).toBeVisible();
+  await sheet.getByRole("checkbox", { name: /건강 관련 정보/ }).check();
   await sheet.getByRole("button", { name: "저장" }).click();
   await expect(sheet).toHaveCount(0);
 
@@ -328,4 +333,39 @@ test("데이터 내보내기를 누르면 zip 파일을 받는다", async ({ pag
   await downloadButton.click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/\.zip$/);
+});
+
+test("고칠 때는 동의를 다시 묻지 않는다(처음 저장할 때 이미 동의했다)", async ({ page }) => {
+  await openTab(page, "더보기");
+  await page.getByRole("button", { name: /하루 칼로리 목표/ }).click();
+  const sheet = page.getByRole("dialog", { name: "하루 칼로리 목표 정하기" });
+  await sheet.getByRole("group", { name: "성별" }).getByRole("button", { name: "남성" }).click();
+  await sheet.getByLabel("태어난 해").fill("1990");
+  await sheet.getByLabel("키", { exact: true }).fill("175");
+  await sheet.getByLabel("몸무게", { exact: true }).fill("70");
+  await sheet.getByRole("group", { name: "활동량" }).getByRole("button", { name: "보통" }).click();
+  await sheet.getByRole("checkbox", { name: /건강 관련 정보/ }).check();
+  await sheet.getByRole("button", { name: "저장" }).click();
+  await expect(sheet).toHaveCount(0);
+
+  await page.getByRole("button", { name: /하루 칼로리 목표/ }).click();
+  await expect(sheet.getByLabel("몸무게")).toHaveValue("70");
+  await expect(sheet.getByRole("checkbox", { name: /건강 관련 정보/ })).toHaveCount(0);
+});
+
+test("회원 탈퇴하면 계정과 데이터가 지워지고 로그인 화면으로 돌아온다", async ({ page }) => {
+  await openTab(page, "더보기");
+  await page.getByRole("button", { name: "회원 탈퇴" }).click();
+
+  const sheet = page.getByRole("dialog", { name: "회원 탈퇴" });
+  await expect(sheet.getByText("재고·필수품·보관 위치")).toBeVisible();
+  const leave = sheet.getByRole("button", { name: "탈퇴하고 모두 지우기" });
+  await expect(leave).toBeDisabled(); // 확인 체크 전에는 누를 수 없다
+  await sheet.getByRole("checkbox", { name: "지워지는 내용을 확인했어요" }).check();
+  await leave.click();
+
+  await expect(page.getByRole("button", { name: "로그인 없이 체험하기" })).toBeVisible();
+  // 세션이 끊겼다 — 새로고침해도 로그인 화면
+  await page.reload();
+  await expect(page.getByRole("button", { name: "로그인 없이 체험하기" })).toBeVisible();
 });

@@ -78,6 +78,7 @@ recipe-ai/
 | GET | `/auth/login/<provider>` | OAuth 시작 |
 | GET | `/auth/callback/<provider>` | OAuth 콜백 → 세션 발급 → `/`로 리다이렉트 |
 | POST | `/api/logout` | 세션 삭제 |
+| DELETE | `/api/account` | 회원 탈퇴 — users 행 삭제(내 데이터는 CASCADE), 커밋 뒤 `photos.user_photo_keys`로 사진 파일 삭제, 세션 삭제 |
 | GET | `/api/me` | 현재 사용자 `{id, nickname, scan: "on"\|"sample"\|"off", scan_limit, recipe_limit, videos: "on"\|"sample"\|"off", nutrition: "on"\|"sample"\|"off"}` (비로그인 401). `scan`은 사진으로 추가·AI 레시피 입구 표시에 함께 쓴다. `videos`는 영상 칸 표시용(17절). `nutrition`은 영양 계산 칸 표시용(21절, `FOOD_NUTRITION_API_KEY` 유무). `recipe_limit`은 호환용으로 남겨 두고, 화면의 남은 횟수는 `/api/ai-usage`를 읽는다. 개발용 로그인 응답도 같은 모양 |
 | GET/POST | `/api/ingredients` | 목록(임박 순, status 포함) / 생성 |
 | POST | `/api/ingredients/bulk` | 스캔 확인 후 일괄 생성 `{items:[{name, quantity, unit, purchased_on(YYYY-MM-DD 또는 null=모름), expires_on?, price?, location_id?}]}` 1~50개. 하나라도 틀리면 아무것도 만들지 않고 400 `{error: "N번째 재료: …", errors:[{index, error}]}` |
@@ -458,6 +459,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 - 키·몸무게만으로는 오차가 커서 성별·나이를 필수로 받는다.
 - 당류 기준: 식약처 영양성분 표시 당류 1일 기준치와 WHO 권고(총 섭취 에너지 대비 비율) — **구현 시 공식 수치와 출처를 확인해 화면에 출처와 함께 표시**.
 - `body_profiles`: user_id(UNIQUE), sex, birth_year, height_cm, weight_kg, activity, goal, updated_at(구현 세부 참고). 건강 정보이므로 본인만 조회, 계정 삭제 시 함께 삭제.
+  **별도 동의 (2026-09-18):** 키·몸무게는 민감정보(개인정보 보호법 제23조)일 수 있어 처음 저장할 때 시트 안 체크 한 개로 동의를 받는다(체크 전에는 저장하지 않는다). 동의해야 행이 생기므로 행의 존재·`updated_at`이 곧 동의 기록이고, 별도 동의 테이블은 두지 않는다. 이미 저장한 사람은 처음 저장 때 동의했으므로 고칠 때 다시 묻지 않는다. `입력한 정보 지우기`가 곧 동의 철회다. 방침(`privacy.html` 1번)에도 건강 관련 정보로 따로 적는다.
 ### 먹은 것 기록
 - `food_logs`: id, user_id, eaten_on, meal, food_code(선택)/recipe_id(선택)/title, amount_g 또는 servings, kcal·당류 등 계산값 스냅숏, estimated(bool). (구현 이름은 24절 구현 세부)
 - 식품 검색(캐시 → 공공 API) 또는 내 레시피·식단 칸에서 `먹었어요`로 추가.
@@ -745,7 +747,7 @@ CLI: `flask sync-public-recipes` — 식약처 COOKRCP01 전체(약 1,100건)를
 | **함께** | 가족과 함께 쓰기(기획만) · 친구 초대 · 의견 보내기 | 친구 초대·의견은 배포 무렵, 가족은 기획만 |
 | **앱** | 홈 화면에 앱 설치(있음) · 화면 테마(시스템/밝게/어둡게) · 알림 설정(임박 재료) · 데이터 내보내기(재고·내 레시피·내 양념 비율·장보기·식단·먹은 기록) | 테마·내보내기는 3a 다음 정리 작업, 알림은 배포 후 |
 | **도움말·정보** | 사용 방법 · 공지 · 문의하기 · 이용약관 · 개인정보처리방침 · 데이터 출처 · 앱 정보(버전) | 배포 전 |
-| **계정** | 로그인 계정(카카오/네이버/구글 표시) · 로그아웃 · 회원 탈퇴 | 로그아웃 이동은 정리 작업, 탈퇴는 배포 전 |
+| **계정** | 로그인 계정(카카오/네이버/구글 표시) · 로그아웃 · 회원 탈퇴 | 구현됨(2026-09-18). 탈퇴는 확인 시트(지워지는 것 목록 + 체크) → `DELETE /api/account`. 소셜 연결 끊기는 하지 않는다 — 다시 로그인하면 빈 새 계정이고, 방침 7번에 각 플랫폼에서 연결을 끊는 방법을 적어 두었다 |
 
 - **재고 화면 톱니바퀴:** 우리 부엌 묶음으로 옮긴 뒤에는 재고 화면에서 `보관 위치`·`필수품` 바로가기만 남기고(자주 씀), 나머지는 더보기로 보낸다.
 - **AI 사용량:** `ai_calls`에서 오늘(서울 날짜) 묶음별 횟수(세지 않은 헛호출 `_miss`는 빼고, 7절)와 한도를 보여준다. 원가(토큰)는 사용자에게 보여주지 않는다.
