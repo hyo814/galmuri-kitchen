@@ -4,7 +4,7 @@ import { app, expect, test } from "./fixtures";
 // 예시 사진 id를 함께 보내면 서버가 그 사진을 미리 읽어둔 결과(backend/app/data/sample_scans.json)를 준다.
 // 냉장고 사진의 결과는 16개(간장 포함)라, 일반 예시 결과(4개)와 달라 kind·sample이 함께 갔는지도 확인된다.
 test("체험 AI를 다 썼으면 예시 사진(냉장고)의 읽어둔 결과를 사진 띠와 함께 확인해 재고에 넣는다", async ({ page }) => {
-  // 체험 안내 카드가 떠 있어도 아래 고정 버튼으로 연다(카드 버튼 이름은 `사진 찍어보기`). 흔한 이름은 앱 화면·시트 안에서만 찾는다
+  // 체험 안내 카드가 떠 있어도 아래 고정 버튼으로 연다(카드 버튼 이름은 `예시 사진 읽기`). 흔한 이름은 앱 화면·시트 안에서만 찾는다
   await app(page).getByRole("button", { name: "사진으로 추가" }).click();
   const scanDialog = app(page).getByRole("dialog");
   const samples = scanDialog.getByRole("list", { name: "예시 사진으로 해보기" });

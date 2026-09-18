@@ -35,7 +35,7 @@ export function summaryView(s: FoodLogMonthSummary) {
     kcal: s.avg_kcal == null ? "—" : `${s.avg_approx ? "약 " : ""}${kcalNumber(s.avg_kcal)}`,
     home: s.home_percent == null ? "—" : `${s.home_percent}%`,
     split: s.home_percent == null ? null : ([s.home_percent, 100 - s.home_percent] as [number, number]),
-    note: s.home + s.out ? `집밥 ${s.home}끼 · 외식 ${s.out}끼 · 기록한 날 기준이에요` : "집밥·외식을 고르면 비율을 보여줘요",
+    note: s.home + s.out ? `집밥 ${s.home}끼 · 외식 ${s.out}끼 · 기록한 날 기준이에요${s.avg_kcal == null ? " · 음식 찾기에서 고르면 kcal도 알려줘요" : ""}` : "집밥·외식을 고르면 비율을 보여줘요",
   };
 }
 

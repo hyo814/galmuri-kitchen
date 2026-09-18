@@ -196,7 +196,7 @@ export default function Fridge({ user }: { user: User }) {
                   setScanning(true);
                 }}
               >
-                사진 찍어보기
+                예시 사진 읽기
               </button>
             )}
           </div>
@@ -296,10 +296,17 @@ export default function Fridge({ user }: { user: User }) {
                 </button>
               </>
             )
-          ) : (
+          ) : items && items.length > 0 ? (
             <>
-              <p>{items && items.length > 0 ? "이 위치에는 재료가 없어요." : "재고가 비어 있어요."}</p>
+              <p>이 위치에는 재료가 없어요.</p>
               <p className="muted">아래 버튼으로 재료를 추가해보세요.</p>
+            </>
+          ) : (
+            /* 새로 가입한 사람이 가장 먼저 보는 화면이다 — 레시피·장보기·식단 빈 화면처럼 다람이와 얻는 것을 함께 보여준다 */
+            <>
+              <Mascot size={64} />
+              <p className="soon-title">재고가 비어 있어요</p>
+              <p className="muted">재료를 넣어두면 빨리 먹어야 할 것을 알려주고, 남은 재료로 만들 요리도 찾아줘요</p>
             </>
           )}
         </div>
