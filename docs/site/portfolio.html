@@ -366,7 +366,7 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
       <h1 id="hero-title">갈무리부엌</h1>
       <p class="hero-lede">
         냉장고 재고를 기록하면 상하기 전에 알려주고, 남은 재료로 레시피를 찾고, 식단·장보기·요리 일기까지 이어주는 <strong>모바일 우선 웹앱</strong>입니다.
-        설계 문서와 화면 시안은 사용자가 정하고 승인했고, 구현·검토·검증은 <strong>Claude Code 에이전트</strong>가 태스크 단위로 맡았습니다. 첫 커밋부터 재고·레시피·장보기·식단·영양 계산·요리 일기·집밥 리포트까지 약 108시간 걸렸습니다.
+        설계 문서와 화면 시안은 사용자가 정하고 승인했고, 구현·검토·검증은 <strong>Claude Code 에이전트</strong>가 태스크 단위로 맡았습니다. 첫 커밋부터 재고·레시피·장보기·식단·영양 계산·요리 일기·집밥 리포트까지 약 144시간 걸렸습니다.
         이름 "갈무리"는 물건을 잘 간수하고 일을 끝맺는다는 뜻의 순우리말이고, 마스코트는 셰프 다람쥐 <strong>다람이</strong>입니다.
       </p>
       <ul class="badges" aria-label="기술 스택">
@@ -389,14 +389,14 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
       <div class="hero-actions">
         <a class="btn btn-primary" href="https://galmuri-kitchen.onrender.com/?demo=1">바로 체험하기</a>
         <a class="btn btn-ghost" href="#">[GitHub 저장소]</a>
-        <a class="btn btn-ghost" href="#">[데모 영상]</a>
+        <a class="btn btn-ghost" href="../submission/demo/갈무리부엌-1분-데모.webm">1분 데모 영상</a>
       </div>
-      <p class="placeholder-note">바로 체험하기를 누르면 로그인 화면 없이 체험 계정으로 열립니다. 대괄호로 표시한 링크는 공개 후 채웁니다.</p>
+      <p class="placeholder-note">바로 체험하기를 누르면 로그인 화면 없이 체험 계정으로 열립니다. 1분 데모 영상은 운영 주소를 그대로 녹화한 것으로 자막이 들어 있고 소리는 없습니다. 대괄호로 표시한 링크는 공개 후 채웁니다.</p>
 
       <dl class="facts">
-        <div class="fact"><dt>백엔드 테스트(SQLite·PostgreSQL, 9/17 기준)</dt><dd>1,608 <small>개</small></dd></div>
-        <div class="fact"><dt>커밋(병합 254)</dt><dd>749 <small>개</small></dd></div>
-        <div class="fact"><dt>화면 시안(16묶음)</dt><dd>85 <small>장</small></dd></div>
+        <div class="fact"><dt>백엔드 테스트(SQLite·PostgreSQL, 9/19 기준)</dt><dd>1,670 <small>개</small></dd></div>
+        <div class="fact"><dt>커밋(병합 277)</dt><dd>814 <small>개</small></dd></div>
+        <div class="fact"><dt>화면 시안(16묶음)</dt><dd>78 <small>장</small></dd></div>
         <div class="fact"><dt>구현 단계</dt><dd>5 <small>단계(요리 일기)까지</small></dd></div>
       </dl>
     </div>
@@ -658,9 +658,9 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
 
         <div class="quality">
           <div class="q">
-            <p class="num">1,608</p>
+            <p class="num">1,670</p>
             <h3>백엔드 테스트, 경고 0</h3>
-            <p>2026-09-17 기준 SQLite·PostgreSQL 두 엔진 모두 통과. <code>DeprecationWarning</code>을 오류로 올려 실행합니다. 구현 에이전트는 테스트를 먼저 쓰고(TDD) 실패를 확인한 뒤 구현했습니다.</p>
+            <p>2026-09-19 기준 SQLite에서 전부 통과하고, PostgreSQL에서는 성능 기준 테스트 1건(캐시된 추천 호출 0.1초 기준 → 0.149초)만 전체 실행에서 넘습니다. 단독 실행은 통과하고 나흘 전 커밋과 속도가 같아 기준선이 빠듯한 쪽 문제로 보고, 투표가 끝난 뒤에 손봅니다. <code>DeprecationWarning</code>을 오류로 올려 실행합니다. 구현 에이전트는 테스트를 먼저 쓰고(TDD) 실패를 확인한 뒤 구현했습니다.</p>
             <pre>backend/.venv/bin/pytest -q -W error::DeprecationWarning</pre>
           </div>
           <div class="q">
@@ -704,8 +704,8 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
             <p>주부(4인 가족)와 1인 가구 페르소나로 사용성을 점검해 44건을 찾았습니다. 지금 화면에서 고칠 것과 설계에 반영할 것으로 나누고, 사용자가 고른 항목을 스펙 23절과 1d단계 계획으로 옮겼습니다.</p>
           </div>
           <div class="q">
-            <p class="num">73</p>
-            <h3>리뷰 반영 커밋(9/17 기준)</h3>
+            <p class="num">74</p>
+            <h3>리뷰 반영 커밋(9/19 기준)</h3>
             <p>병합을 뺀 커밋 가운데 제목에 "리뷰"·"검토"가 들어간 수입니다. 단계 끝 최종 리뷰는 <code>fix/phase1b-review</code>부터 <code>fix/meals-final-review</code>까지, 이후 기능도 <code>fix/*-review</code> 브랜치로 반영했습니다.</p>
           </div>
         </div>
@@ -719,7 +719,7 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
         <ol class="flow">
           <li><b>설계 문서</b><span>요구사항과 결정을 절 단위로. 추가 요구는 날짜와 함께 새 절로(지금 28절).</span></li>
           <li><b>화면 시안 승인</b><span>화면을 바꾸기 전에 시안을 보여주고 승인받아 <code>docs/design/</code>에 둡니다.</span></li>
-          <li><b>태스크 계획</b><span>태스크마다 바꿀 파일, 테스트, 검증 문구, 커밋 메시지까지. 단계별 계획 10개.</span></li>
+          <li><b>태스크 계획</b><span>태스크마다 바꿀 파일, 테스트, 검증 문구, 커밋 메시지까지. 단계별 계획 13개.</span></li>
           <li><b>worktree에서 구현</b><span>태스크마다 구현 에이전트 1개가 자기 worktree·포트에서 테스트 먼저 작성.</span></li>
           <li><b>역할별 리뷰 → 고침</b><span>변경 종류에 맞춰 코드·보안·UX·접근성·테스트 설계 리뷰를 병렬로, 지적은 fix 라운드로.</span></li>
           <li><b>최종 리뷰·폰 확인</b><span>단계 끝에 브랜치 전체 리뷰(<code>fix/*-final-review</code>), 사용자가 실제 기기에서 흐름 확인.</span></li>
