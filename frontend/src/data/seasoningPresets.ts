@@ -22,6 +22,7 @@ import type { Seasoning } from "../seasoning";
 // 같은 양념이 어느 쪽에도 없는 것(비빔국수)은 집밥에서 흔히 쓰는 비율 그대로 두고 그렇다고 화면에 적는다.
 const H = (recipe: string, basis: string) => `한식진흥원 한식 정밀레시피 '${recipe}'(4인 기준, ${basis}) · 공공누리 제1유형 · 2026-09-19 확인`;
 const M = (recipe: string, basis: string) => `농림수산식품교육문화정보원 식품 레시피 '${recipe}'(${basis}) · 2026-09-19 확인`;
+const F = (recipe: string, basis: string) => `식품의약품안전처 조리식품 레시피 DB '${recipe}'(${basis}, 나트륨·당류 저감 레시피라 간이 약해요) · 2026-09-19 확인`;
 const OURS = "공공데이터에 같은 양념이 없어 집밥에서 흔히 쓰는 비율로 넣었어요 · 2026-09-19";
 
 export const SEASONING_PRESETS: Seasoning[] = [
@@ -240,5 +241,70 @@ export const SEASONING_PRESETS: Seasoning[] = [
       { name: "소금", amount: 1, unit: "작은술" },
     ],
     source: "default", source_note: H("콩나물밥", "완성 약 1½컵"),
+  },
+  {
+    id: 17, name: "돼지갈비 양념", basis: "main_weight", basis_amount: 600, basis_unit: "g", main_ingredient: "돼지갈비",
+    items: [
+      { name: "진간장", amount: 5, unit: "큰술" },
+      { name: "설탕", amount: 2, unit: "큰술" },
+      { name: "생강즙", amount: 2, unit: "큰술" },
+      { name: "청주", amount: 2, unit: "큰술" },
+      { name: "다진 파", amount: 2, unit: "큰술" },
+      { name: "다진 마늘", amount: 1, unit: "큰술" },
+      { name: "고춧가루", amount: 1, unit: "큰술" },
+    ],
+    // 원본은 술 2큰술이라고만 적혀 있어 구이 양념에 흔한 청주로 적었다. 깨소금은 양념이 아니라 부재료 칸이라 뺐다.
+    // 소갈비(id 6)와 기준이 다르다. 저쪽은 1.2kg 구이, 이쪽은 돼지갈비 600g이다.
+    source: "default", source_note: M("돼지갈비구이", "4인분, 돼지갈비 600g"),
+  },
+  {
+    id: 18, name: "돼지불고기 양념", basis: "main_weight", basis_amount: 200, basis_unit: "g", main_ingredient: "돼지고기",
+    items: [
+      { name: "고추장", amount: 2, unit: "큰술" },
+      { name: "고춧가루", amount: 2, unit: "큰술" },
+      { name: "미림", amount: 25, unit: "g" },
+      { name: "간장", amount: 0.5, unit: "큰술" },
+      { name: "설탕", amount: 0.5, unit: "큰술" },
+      { name: "다진 파", amount: 1, unit: "작은술" },
+      { name: "다진 마늘", amount: 1, unit: "작은술" },
+      { name: "물엿", amount: 1, unit: "작은술" },
+      { name: "깨소금", amount: 1, unit: "작은술" },
+      { name: "참기름", amount: 1, unit: "작은술" },
+      { name: "후추", amount: 1, unit: "꼬집" },
+    ],
+    // 제육볶음(id 1)은 고춧가루가 앞서는 덮밥용이고 이쪽은 고추장·고춧가루가 같은 양인 고깃집식이다.
+    // 원본의 `약간`은 이 파일 규칙대로 옮겼다(후추 → 1꼬집, 참기름·깨소금 → 1작은술). 다진 파·마늘도 같은 규칙으로 1작은술.
+    source: "default", source_note: M("돼지불고기", "2인분, 돼지고기 200g"),
+  },
+  {
+    id: 19, name: "LA갈비 양념", basis: "main_weight", basis_amount: 200, basis_unit: "g", main_ingredient: "LA갈비",
+    items: [
+      { name: "저염간장", amount: 20, unit: "g" },
+      { name: "올리고당", amount: 20, unit: "g" },
+      { name: "다진 대파", amount: 20, unit: "g" },
+      { name: "다진 마늘", amount: 20, unit: "g" },
+      { name: "설탕", amount: 10, unit: "g" },
+      { name: "정종", amount: 10, unit: "g" },
+      { name: "매실액", amount: 10, unit: "g" },
+      { name: "통깨", amount: 5, unit: "g" },
+      { name: "월계수잎", amount: 5, unit: "g" },
+      { name: "통후추", amount: 5, unit: "g" },
+      { name: "참기름", amount: 3, unit: "g" },
+    ],
+    // 식약처 DB는 g만 주고 우리 단위에 g가 있어 환산 없이 그대로 담았다. 함께 재우는 배 20g·양파 20g은 양념 칸이 아니라 재료 칸이라 뺐다.
+    source: "default", source_note: F("L..A갈비구이", "LA갈비 200g"),
+  },
+  {
+    id: 20, name: "찜닭 양념", basis: "main_weight", basis_amount: 170, basis_unit: "g", main_ingredient: "닭고기",
+    items: [
+      { name: "간장", amount: 10, unit: "g" },
+      { name: "올리고당", amount: 9, unit: "g" },
+      { name: "황설탕", amount: 8, unit: "g" },
+      { name: "노두유", amount: 1, unit: "g" },
+      { name: "후추", amount: 1, unit: "꼬집" },
+    ],
+    // 기준 170g은 토막 낸 닭 무게다(그중 살코기는 90g). 감자·양파·당근·당면과 함께 졸이는 양념이다.
+    // 후추 0.25g은 `¼g`으로 보이면 읽기 어려워 이 파일 규칙대로 1꼬집으로 옮겼다.
+    source: "default", source_note: F("수삼매운닭찜", "토막 낸 닭 170g"),
   },
 ];
