@@ -6598,16 +6598,21 @@ button.sh-offline svg:last-child {
 /* 달력 칸 오른쪽 위 요리 일기 표시(시안 `.cook`, top 2px·right 3px). 384px에서 칸 폭은 약 45px(시안 목업도 같은 폭)이라
    시안 값대로면 이미 2자리 날짜 숫자와 빠듯하게 겹치고, 오늘 원(24px)과도 겹친다(개정 1 Q37) — 화면 확인(브리프 Step 3)에서 실측해 칸 밖으로 더 뺐다.
    오늘·평소 칸 모두 이 값 하나로 안 겹친다(Q37 전용 오늘 규칙은 따로 두지 않는다) */
+/* 달력 칸은 폭 44.6px에 오른쪽 여유가 1px뿐이라(실측 2026-09-19) 오른쪽·위로는 키울 수 없다.
+   대신 색을 뒤집어 알약이 보이게 하고 왼쪽으로만 2px 키운다.
+   전: 연한 바탕(--warn-tint)이 흰 칸 위에서 1.10:1이라 알약이 안 보이고 9px 글자만 주황 얼룩처럼 떴다.
+   후: 바탕이 칸 대비 7.0:1이라 뱃지로 읽히고, 글자는 5.5:1(다크 7.2:1).
+   오른쪽 끝(71.6px)·위(498px)는 그대로라 옆 칸(72.6px)·윗줄과 닿지 않고, 날짜 숫자(…54.1px)와도 1.5px 떨어진다. */
 .fl-cook {
   position: absolute;
   top: -3px;
   right: -3px;
-  width: 14px;
-  height: 14px;
-  border-radius: 7px;
-  background: var(--warn-tint);
-  color: var(--warn);
-  font-size: 9px;
+  width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--warn);
+  color: var(--warn-tint);
+  font-size: 11px;
   font-weight: 700;
   display: grid;
   place-items: center;
