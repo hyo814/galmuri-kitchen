@@ -106,7 +106,7 @@ class ItemRule(db.Model):
     keyword = db.Column(db.String(20), nullable=False)
     warn_days = db.Column(db.Integer, nullable=False)
     danger_days = db.Column(db.Integer, nullable=False)
-    source = db.Column(db.String(10), nullable=False, default="user")  # mfds | user
+    source = db.Column(db.String(10), nullable=False, default="user")  # mfds | nfqs | rda | user (defaults.py)
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
 

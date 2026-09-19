@@ -10,6 +10,14 @@ interface Draft {
   danger: string;
 }
 
+// 기본 규칙을 어디서 가져온 값인지 꼬리표로 보인다. 사용자가 만들거나 고친 규칙(user)은 꼬리표가 없다
+const SOURCE_LABEL: Record<ItemRule["source"], string> = {
+  mfds: "식약처 참고값",
+  nfqs: "수산물품질관리원",
+  rda: "농촌진흥청",
+  user: "",
+};
+
 const EMPTY: Draft = { keyword: "", warn: "", danger: "" };
 
 const toBody = (d: Draft) => ({ keyword: d.keyword, warn_days: Number(d.warn), danger_days: Number(d.danger) });
@@ -145,7 +153,7 @@ export default function RulesSheet({ rules, onChanged, onClose }: Props) {
                 <div className="row-main">
                   <span className="row-title">
                     {rule.keyword}
-                    {rule.source === "mfds" && <span className="source-tag">식약처 참고값</span>}
+                    {SOURCE_LABEL[rule.source] && <span className="source-tag">{SOURCE_LABEL[rule.source]}</span>}
                   </span>
                   <span className="row-sub">
                     노랑 {rule.warn_days}일 · 빨강 {rule.danger_days}일
