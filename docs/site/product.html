@@ -326,7 +326,7 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
         <ul class="hero-meta">
           <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>앱 설치 없이 휴대폰 브라우저에서</li>
           <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>카카오·네이버·구글로 시작</li>
-          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>식약처 참고값 기반 경고</li>
+          <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>공공기관 참고값 기반 경고</li>
         </ul>
       </div>
 
@@ -647,13 +647,13 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
   <section class="section surface" aria-labelledby="trust-title">
     <div class="wrap">
       <div class="section-head">
-        <h2 id="trust-title">경고 기준은 식약처 참고값에서</h2>
-        <p>감으로 정하지 않았어요. 공개된 참고값을 확인하고, 구입일 기준으로 보수적으로 바꿨어요.</p>
+        <h2 id="trust-title">경고 기준은 공공기관 참고값에서</h2>
+        <p>감으로 정하지 않았어요. 식약처·국립수산물품질관리원·농촌진흥청이 공개한 참고값을 확인하고, 구입일 기준으로 보수적으로 바꿨어요.</p>
       </div>
 
       <div class="trust-grid">
         <div class="card" style="background:var(--bg)">
-          <h3>품목별 기본 경고</h3>
+          <h3>품목별 기본 경고 — 가공식품(식약처)</h3>
           <p>식약처 참고값은 제조일 기준이에요. 앱은 구입한 날부터 세기 때문에, 참고값의 80%가 되는 날 빨강(섭취 주의), 그 3일 전부터 노랑으로 알려요.</p>
           <div class="table-scroll">
             <table>
@@ -667,6 +667,23 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
                 <tr><td>어묵</td><td>42일</td><td>30일째</td><td>33일째</td></tr>
                 <tr><td>소시지</td><td>56일</td><td>41일째</td><td>44일째</td></tr>
                 <tr><td>햄</td><td>57일</td><td>42일째</td><td>45일째</td></tr>
+                <tr><td>딸기·초코·바나나우유 등 가공유</td><td>24일</td><td>16일째</td><td>19일째</td></tr>
+                <tr><td>야쿠르트 등 유산균음료</td><td>26일</td><td>17일째</td><td>20일째</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 style="margin-top:28px">신선식품 — 수산물·김치</h3>
+          <p>수산물은 참고값이 "1~2일"처럼 범위로 나와요. 구입한 날 이미 며칠 지났을 수 있어 <b>범위의 짧은 쪽</b>을 빨강으로 그대로 써요(80% 환산을 하지 않아요). 얼려 두면 이 기준을 쓰지 않아요.</p>
+          <div class="table-scroll">
+            <table>
+              <caption>구입일부터 센 날짜</caption>
+              <thead><tr><th scope="col">품목</th><th scope="col">참고값</th><th scope="col">노랑</th><th scope="col">빨강</th><th scope="col">출처</th></tr></thead>
+              <tbody>
+                <tr><td>생선·오징어</td><td>1~2일</td><td>1일째</td><td>2일째</td><td>수산물품질관리원</td></tr>
+                <tr><td>새우·조개·가리비</td><td>2~3일</td><td>2일째</td><td>3일째</td><td>수산물품질관리원</td></tr>
+                <tr><td>굴</td><td>깐 생굴 5~7일</td><td>4일째</td><td>5일째</td><td>수산물품질관리원</td></tr>
+                <tr><td>김치</td><td>일반 냉장고 약 3개월</td><td>75일째</td><td>90일째</td><td>농촌진흥청</td></tr>
               </tbody>
             </table>
           </div>
@@ -685,6 +702,10 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
               <li>식품의약품안전처 「식품유형별 소비기한 설정 보고서」 참고값. 확인에 사용한 보도:
                 <a href="https://www.foodnews.co.kr/news/articleView.html?idxno=99913">foodnews.co.kr</a>,
                 <a href="https://www.lecturernews.com/news/articleView.html?idxno=113115">lecturernews.com</a></li>
+              <li>국립수산물품질관리원 「수산물 보관 요령」 — 생선·오징어 1~2일, 새우·조개 2~3일, 깐 생굴 5~7일:
+                <a href="https://fsis.go.kr/front/contents/cmsView.do?cate_id=0101&amp;cnts_id=16951&amp;select_list_no=7">fsis.go.kr</a></li>
+              <li>농촌진흥청 「김장 김치-효과 올바르게 알고 먹자」 — 일반 냉장고 약 3개월:
+                <a href="https://www.rda.go.kr/middlePopOpenPopNongsaroDBView.do?no=1342&amp;sj=%EA%B9%80%EC%9E%A5+%EA%B9%80%EC%B9%98-%ED%9A%A8%EA%B3%BC+%EC%98%AC%EB%B0%94%EB%A5%B4%EA%B2%8C+%EC%95%8C%EA%B3%A0+%EB%A8%B9%EC%9E%90">rda.go.kr</a></li>
               <li>코팅 조리기구: 식약처는 기간이 아니라 코팅이 30% 이상 벗겨진 상태를 교체 기준으로 권고해요. 6개월은 상태를 확인하는 주기로 앱이 제안하는 값이에요.</li>
               <li>앱의 경고는 참고용이에요. 보관 온도와 상태에 따라 달라질 수 있으니 포장 표시와 재료 상태를 함께 확인해주세요.</li>
             </ul>

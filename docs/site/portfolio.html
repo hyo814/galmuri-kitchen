@@ -366,7 +366,7 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
       <h1 id="hero-title">갈무리부엌</h1>
       <p class="hero-lede">
         냉장고 재고를 기록하면 상하기 전에 알려주고, 남은 재료로 레시피를 찾고, 식단·장보기·요리 일기까지 이어주는 <strong>모바일 우선 웹앱</strong>입니다.
-        설계 문서와 화면 시안은 사용자가 정하고 승인했고, 구현·검토·검증은 <strong>Claude Code 에이전트</strong>가 태스크 단위로 맡았습니다. 첫 커밋부터 재고·레시피·장보기·식단·영양 계산·요리 일기·집밥 리포트까지 약 144시간 걸렸습니다.
+        설계 문서와 화면 시안은 사용자가 정하고 승인했고, 구현·검토·검증은 <strong>Claude Code 에이전트</strong>가 태스크 단위로 맡았습니다. 첫 커밋부터 재고·레시피·장보기·식단·영양 계산·요리 일기·집밥 리포트까지 약 158시간 걸렸습니다.
         이름 "갈무리"는 물건을 잘 간수하고 일을 끝맺는다는 뜻의 순우리말이고, 마스코트는 셰프 다람쥐 <strong>다람이</strong>입니다.
       </p>
       <ul class="badges" aria-label="기술 스택">
@@ -394,8 +394,8 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
       <p class="placeholder-note">바로 체험하기를 누르면 로그인 화면 없이 체험 계정으로 열립니다. 1분 데모 영상은 운영 주소를 그대로 녹화한 것으로 자막이 들어 있고 소리는 없습니다. 대괄호로 표시한 링크는 공개 후 채웁니다.</p>
 
       <dl class="facts">
-        <div class="fact"><dt>백엔드 테스트(SQLite·PostgreSQL, 9/19 기준)</dt><dd>1,670 <small>개</small></dd></div>
-        <div class="fact"><dt>커밋(병합 277)</dt><dd>814 <small>개</small></dd></div>
+        <div class="fact"><dt>백엔드 테스트(SQLite·PostgreSQL, 9/20 기준)</dt><dd>1,701 <small>개</small></dd></div>
+        <div class="fact"><dt>커밋(병합 312)</dt><dd>886 <small>개</small></dd></div>
         <div class="fact"><dt>화면 시안(16묶음)</dt><dd>78 <small>장</small></dd></div>
         <div class="fact"><dt>구현 단계</dt><dd>5 <small>단계(요리 일기)까지</small></dd></div>
       </dl>
@@ -658,16 +658,17 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
 
         <div class="quality">
           <div class="q">
-            <p class="num">1,670</p>
+            <p class="num">1,701</p>
             <h3>백엔드 테스트, 경고 0</h3>
-            <p>2026-09-19 기준 SQLite에서 전부 통과하고, PostgreSQL에서는 성능 기준 테스트 1건(캐시된 추천 호출 0.1초 기준 → 0.149초)만 전체 실행에서 넘습니다. 단독 실행은 통과하고 나흘 전 커밋과 속도가 같아 기준선이 빠듯한 쪽 문제로 보고, 투표가 끝난 뒤에 손봅니다. <code>DeprecationWarning</code>을 오류로 올려 실행합니다. 구현 에이전트는 테스트를 먼저 쓰고(TDD) 실패를 확인한 뒤 구현했습니다.</p>
+            <p>2026-09-20 기준 <strong>SQLite·PostgreSQL 모두 전부 통과</strong>합니다. 9/17부터 PostgreSQL 전체 실행에서만 넘던 성능 기준 1건(캐시된 추천 호출)은 기준을 절대 시각에서 첫 호출 대비(<code>캐시 호출 &lt; 첫 호출 / 5</code>)로 바꿔 풀었습니다 — 재던 것이 캐시가 실제로 듣는지라 이쪽이 맞고, 앞서 도는 테스트 수·머신에 흔들리지 않습니다. <code>DeprecationWarning</code>을 오류로 올려 실행합니다. 구현 에이전트는 테스트를 먼저 쓰고(TDD) 실패를 확인한 뒤 구현했습니다.</p>
             <pre>backend/.venv/bin/pytest -q -W error::DeprecationWarning</pre>
           </div>
           <div class="q">
             <p class="num">11</p>
             <h3>프론트 순수 로직 검사 스크립트</h3>
-            <p>숫자 형식, 양념 계산, 쇼핑몰 링크, 오프라인 대기열 동기화, 서비스 워커 캐시 목록, 식단, 구입일 칩, 영양 계산, 먹은 기록, 요리 일기, 체험 안내를 브라우저 없이 검사하고, 타입 검사와 빌드까지 돌립니다.</p>
-            <pre>cd frontend &amp;&amp; npm run check &amp;&amp; npm run build</pre>
+            <p>숫자 형식, 양념 계산, 쇼핑몰 링크, 오프라인 대기열 동기화, 서비스 워커 캐시 목록, 식단, 구입일 칩, 영양 계산, 먹은 기록, 요리 일기, 체험 안내를 브라우저 없이 검사하고, 타입 검사와 빌드까지 돌립니다. 여기에 더해 실제 화면을 띄워 탭 5개의 핵심 흐름을 도는 E2E(Playwright) 82개가 있습니다.</p>
+            <pre>cd frontend &amp;&amp; npm run check &amp;&amp; npm run build
+cd frontend &amp;&amp; npm run e2e</pre>
           </div>
           <div class="q">
             <h3>역할별 리뷰가 잡은 실제 문제</h3>
@@ -717,7 +718,7 @@ footer { padding-block: 32px 48px; border-top: 1px solid var(--line); font-size:
         <p class="section-intro">한 기능이 <code>main</code>에 들어가기까지의 순서입니다. 사람은 1·2단계의 결정·승인과 6단계의 폰 확인을 맡고, 나머지는 리드 에이전트가 태스크를 나눠 서브에이전트에게 맡겼습니다.</p>
 
         <ol class="flow">
-          <li><b>설계 문서</b><span>요구사항과 결정을 절 단위로. 추가 요구는 날짜와 함께 새 절로(지금 28절).</span></li>
+          <li><b>설계 문서</b><span>요구사항과 결정을 절 단위로. 추가 요구는 날짜와 함께 새 절로(지금 31절).</span></li>
           <li><b>화면 시안 승인</b><span>화면을 바꾸기 전에 시안을 보여주고 승인받아 <code>docs/design/</code>에 둡니다.</span></li>
           <li><b>태스크 계획</b><span>태스크마다 바꿀 파일, 테스트, 검증 문구, 커밋 메시지까지. 단계별 계획 13개.</span></li>
           <li><b>worktree에서 구현</b><span>태스크마다 구현 에이전트 1개가 자기 worktree·포트에서 테스트 먼저 작성.</span></li>
