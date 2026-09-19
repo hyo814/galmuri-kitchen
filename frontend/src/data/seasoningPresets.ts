@@ -345,4 +345,29 @@ export const SEASONING_PRESETS: Seasoning[] = [
     // 물 4컵은 원본에서 부재료 칸이지만 고기를 잠기게 삶는 양이라 함께 담았다. 간장조림(id 3)은 2인분 조림용이라 컵 단위인 이쪽과 결이 다르다.
     source: "default", source_note: M("쇠고기장조림", "4인분, 쇠고기 400g"),
   },
+  {
+    id: 24, name: "미역국 양념", basis: "servings", basis_amount: 4, basis_unit: "인분", main_ingredient: null,
+    items: [
+      { name: "국간장", amount: 2, unit: "큰술" },
+      { name: "참기름", amount: 2, unit: "큰술" },
+      { name: "다진 마늘", amount: 1, unit: "큰술" },
+      { name: "후추", amount: 1, unit: "꼬집" },
+    ],
+    // 원본은 미역 2컵·다진 쇠고기 150g에 물 10컵으로 끓이는 4인분이다. 물은 부재료 칸이라 뺐다.
+    source: "default", source_note: M("미역국", "4인분, 미역 2컵"),
+  },
+  {
+    id: 25, name: "무국 양념", basis: "servings", basis_amount: 2, basis_unit: "인분", main_ingredient: null,
+    items: [
+      { name: "진간장", amount: 1, unit: "큰술" },
+      { name: "다진 파", amount: 1, unit: "큰술" },
+      { name: "다진 마늘", amount: 0.5, unit: "큰술" },
+      { name: "국간장", amount: 2, unit: "작은술" },
+      { name: "참기름", amount: 1, unit: "작은술" },
+      { name: "후추", amount: 1, unit: "꼬집" },
+      { name: "소금", amount: 1, unit: "꼬집" },
+    ],
+    // 원본은 쇠고기 200g·무 200g에 물 6컵으로 끓이는 2인분이다. 국간장과 진간장을 함께 쓰는 것이 이 레시피의 특징이다.
+    source: "default", source_note: M("쇠고기무국", "2인분, 쇠고기 200g·무 200g"),
+  },
 ];
