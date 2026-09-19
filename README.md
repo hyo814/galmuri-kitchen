@@ -12,7 +12,7 @@
 - 제출 자료: [서비스 소개서](docs/submission/01-서비스-소개서.md) · [시연 시나리오](docs/submission/02-시연-시나리오.md) · [AI 개발 과정](docs/submission/03-AI-개발-과정.md) · [제출 체크리스트](docs/submission/04-제출-체크리스트.md)
 
 <div align="center">
-  <video src="https://github.com/user-attachments/assets/ccfcd524-d316-4051-9e34-c157d9c6b90f" controls muted playsinline></video>
+  <video src="https://github.com/user-attachments/assets/dc55ea9b-1bf0-4434-940b-468413797555" controls muted playsinline></video>
 </div>
 
 ## 문제
