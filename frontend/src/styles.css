@@ -3996,6 +3996,43 @@ button.sh-offline svg:last-child {
   color: var(--text-2);
 }
 
+/* 믿고 사는 제품 추천(data/picks.ts) — 장보기 줄 아래 한 묶음. 체크 버튼(44px)만큼 들여 쓴다 */
+.sh-rec {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 0 10px 10px 54px;
+}
+
+.sh-rec > .sh-tag {
+  flex: none;
+  margin-top: 4px;
+}
+
+.sh-rec ul {
+  min-width: 0;
+  list-style: none;
+}
+
+.sh-rec button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font-size: 13px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.sh-rec button svg {
+  flex: none;
+  color: var(--text-3);
+}
+
 .sh-check {
   display: flex;
   align-items: center;

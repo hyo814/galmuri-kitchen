@@ -644,3 +644,13 @@ assert.notEqual(nameKey("대파"), nameKey("쪽파"));
 assert.deepEqual(memoScanRows(["달걀"], ["계란"]), [{ checked: false, listed: true }]);
 
 console.log("shopping sync ok");
+
+// picksFor: 믿고 사는 제품 추천(2026-09-19). 이름에 낱말이 들어가면 맞고, 다른 가루는 걸리지 않는다
+const { picksFor } = await import("../src/data/picks.ts");
+assert.equal(picksFor("밀가루 1kg").length, 3);
+assert.equal(picksFor("밀가루 (중력분)")[0], "한살림 우리밀 중력 밀가루");
+assert.deepEqual(picksFor("튀김가루"), []);
+assert.deepEqual(picksFor("두부"), []);
+assert.deepEqual(picksFor(""), []);
+
+console.log("picks ok");
