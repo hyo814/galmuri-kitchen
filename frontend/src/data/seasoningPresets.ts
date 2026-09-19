@@ -307,4 +307,42 @@ export const SEASONING_PRESETS: Seasoning[] = [
     // 후추 0.25g은 `¼g`으로 보이면 읽기 어려워 이 파일 규칙대로 1꼬집으로 옮겼다.
     source: "default", source_note: F("수삼매운닭찜", "토막 낸 닭 170g"),
   },
+  {
+    id: 21, name: "어묵볶음 양념", basis: "main_weight", basis_amount: 100, basis_unit: "g", main_ingredient: "어묵",
+    items: [
+      { name: "고춧가루", amount: 1, unit: "큰술" },
+      { name: "간장", amount: 0.5, unit: "큰술" },
+      { name: "설탕", amount: 0.5, unit: "큰술" },
+      { name: "마늘", amount: 2, unit: "개" },
+      { name: "참기름", amount: 1, unit: "작은술" },
+      { name: "깨소금", amount: 1, unit: "작은술" },
+    ],
+    // 원본은 마늘 2쪽이다. 우리 단위에 쪽이 없어 개로 뒀다. 함께 볶는 양파·피망·김치는 부재료 칸이라 뺐다.
+    source: "default", source_note: M("어묵볶음", "2인분, 어묵 100g"),
+  },
+  {
+    id: 22, name: "애호박볶음 양념", basis: "servings", basis_amount: 3, basis_unit: "인분", main_ingredient: null,
+    items: [
+      { name: "다진 파", amount: 2, unit: "큰술" },
+      { name: "간장", amount: 1, unit: "큰술" },
+      { name: "새우젓국", amount: 1, unit: "큰술" },
+      { name: "다진 마늘", amount: 2, unit: "작은술" },
+      { name: "고춧가루", amount: 2, unit: "작은술" },
+      { name: "참기름", amount: 1, unit: "작은술" },
+      { name: "깨소금", amount: 1, unit: "작은술" },
+    ],
+    // 애호박 1개 기준이라 무게를 알 수 없어 인분으로 뒀다. 원본은 참기름이 두 줄(1작은술·약간)이라 1작은술로 합쳤다.
+    source: "default", source_note: M("애호박무침", "3인분, 애호박 1개"),
+  },
+  {
+    id: 23, name: "장조림 양념", basis: "main_weight", basis_amount: 400, basis_unit: "g", main_ingredient: "쇠고기",
+    items: [
+      { name: "물", amount: 4, unit: "컵" },
+      { name: "진간장", amount: 1, unit: "컵" },
+      { name: "설탕", amount: 0.25, unit: "컵" },
+      { name: "참기름", amount: 1, unit: "작은술" },
+    ],
+    // 물 4컵은 원본에서 부재료 칸이지만 고기를 잠기게 삶는 양이라 함께 담았다. 간장조림(id 3)은 2인분 조림용이라 컵 단위인 이쪽과 결이 다르다.
+    source: "default", source_note: M("쇠고기장조림", "4인분, 쇠고기 400g"),
+  },
 ];
