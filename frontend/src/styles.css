@@ -4014,6 +4014,15 @@ button.sh-offline svg:last-child {
   list-style: none;
 }
 
+/* 농부님 메모 한 줄(누를 것이 없다 — 상품명에 이름이 안 적혀서 검색어로 쓰지 않는다) */
+.sh-rec p {
+  margin: 4px 0 0;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
 .sh-rec button {
   display: inline-flex;
   align-items: center;

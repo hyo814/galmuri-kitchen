@@ -645,21 +645,22 @@ assert.deepEqual(memoScanRows(["달걀"], ["계란"]), [{ checked: false, listed
 
 console.log("shopping sync ok");
 
-// picksFor: 믿고 사는 제품 추천(2026-09-19). 이름에 낱말이 들어가면 맞고, 다른 가루는 걸리지 않는다
-const { picksFor } = await import("../src/data/picks.ts");
-assert.equal(picksFor("밀가루 1kg").length, 3);
-assert.equal(picksFor("밀가루 (중력분)")[0], "한살림 우리밀 중력 밀가루");
-assert.deepEqual(picksFor("튀김가루"), []);
-assert.deepEqual(picksFor("두부"), []);
-assert.deepEqual(picksFor(""), []);
+// pickFor: 믿고 사는 제품·농부님 메모(2026-09-19·20). 이름에 낱말이 들어가면 맞고, 다른 가루는 걸리지 않는다
+const { pickFor } = await import("../src/data/picks.ts");
+assert.equal(pickFor("밀가루 1kg").products.length, 3);
+assert.equal(pickFor("밀가루 (중력분)").products[0], "한살림 우리밀 중력 밀가루");
+assert.equal(pickFor("튀김가루"), null);
+assert.equal(pickFor("두부"), null);
+assert.equal(pickFor(""), null);
+// 농부님은 상품명에 없어서 검색어로 쓰지 않는다 — note만 있고 products는 없다
+assert.equal(pickFor("거봉 1송이").note, "이재석 농부님");
+assert.equal(pickFor("샤인머스켓").note, pickFor("샤인머스캣").note);
+assert.equal(pickFor("메론").note, pickFor("멜론").note);
+assert.equal(pickFor("방울토마토").products, undefined);
 
-// 과일은 농부님 이름으로 뜨고, 메론/멜론 둘 다 걸리고, 가공품 줄에는 안 뜬다
-assert.deepEqual(picksFor("거봉 한 송이"), ["이재석 농부님 거봉"]);
-assert.equal(picksFor("샤인머스캣")[1], "이기석 농부님 샤인머스캣");
-assert.equal(picksFor("복숭아 (백도)").length, 2);
-assert.deepEqual(picksFor("메론"), picksFor("멜론"));
-assert.deepEqual(picksFor("토마토소스"), []);
-assert.deepEqual(picksFor("딸기잼"), []);
-assert.deepEqual(picksFor("수박"), []);
+// 가공품 줄에는 생과일 메모가 안 뜬다
+assert.equal(pickFor("토마토소스"), null);
+assert.equal(pickFor("딸기잼"), null);
+assert.equal(pickFor("수박"), null);
 
 console.log("picks ok");
