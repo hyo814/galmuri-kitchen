@@ -653,4 +653,13 @@ assert.deepEqual(picksFor("튀김가루"), []);
 assert.deepEqual(picksFor("두부"), []);
 assert.deepEqual(picksFor(""), []);
 
+// 과일은 농부님 이름으로 뜨고, 메론/멜론 둘 다 걸리고, 가공품 줄에는 안 뜬다
+assert.deepEqual(picksFor("거봉 한 송이"), ["이재석 농부님 거봉"]);
+assert.equal(picksFor("샤인머스캣")[1], "이기석 농부님 샤인머스캣");
+assert.equal(picksFor("복숭아 (백도)").length, 2);
+assert.deepEqual(picksFor("메론"), picksFor("멜론"));
+assert.deepEqual(picksFor("토마토소스"), []);
+assert.deepEqual(picksFor("딸기잼"), []);
+assert.deepEqual(picksFor("수박"), []);
+
 console.log("picks ok");
