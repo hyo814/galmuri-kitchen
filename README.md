@@ -11,7 +11,9 @@
 - 1분 데모 영상: 바로 아래에서 재생돼요 (1분 11초, 자막 있고 소리는 없습니다). 운영 주소에서 재고 → 영수증 사진 인식 → AI 레시피 → 장보기 → 오프라인 체크 → 식단까지 한 번에 돌린 화면입니다. 영수증 인식과 AI 레시피는 실제 Claude 호출이라 기다리는 시간도 그대로 들어 있습니다. 내려받을 파일은 [`docs/submission/demo/갈무리부엌-1분-데모.webm`](docs/submission/demo/갈무리부엌-1분-데모.webm)에 있습니다.
 - 제출 자료: [서비스 소개서](docs/submission/01-서비스-소개서.md) · [시연 시나리오](docs/submission/02-시연-시나리오.md) · [AI 개발 과정](docs/submission/03-AI-개발-과정.md) · [제출 체크리스트](docs/submission/04-제출-체크리스트.md)
 
-<video src="https://github.com/user-attachments/assets/015fae60-c9c9-4921-b54c-19000a118f7e" width="300" controls muted playsinline></video>
+<div align="center">
+  <video src="https://github.com/user-attachments/assets/015fae60-c9c9-4921-b54c-19000a118f7e" controls muted playsinline></video>
+</div>
 
 ## 문제
 
