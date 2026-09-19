@@ -84,6 +84,8 @@ export interface ScanItem {
   quantity: number;
   unit: string;
   location_kind: LocationKind;
+  /** AI가 고른 보관 위치 이름. 재고에 넣는 사진(memo 제외)만 붙고, 모를 때는 null */
+  location_name?: string | null;
   price: number | null;
   /** 생활용품(memo 스캔만) — 장보기에는 담고 재고에는 넣지 않는다 */
   household?: boolean;

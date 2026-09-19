@@ -491,7 +491,7 @@ def test_demo_user_ignores_user_ai_global_budget(demo_app, monkeypatch):
     demo_app.config.update(ANTHROPIC_API_KEY="test-key", USER_AI_GLOBAL_DAILY=1)
     use_user_budget(demo_app, 3)
     usage = {"model": "m", "input_tokens": 1, "output_tokens": 1}
-    monkeypatch.setattr(ai, "extract", lambda *args: ({"items": [], "purchased_on": None}, usage))
+    monkeypatch.setattr(ai, "extract", lambda *args, **kwargs: ({"items": [], "purchased_on": None}, usage))
     res = c.post("/api/scan?kind=receipt", data={"image": (io.BytesIO(b"\xff\xd8\xff" + b"jpeg"), "a.jpg", "image/jpeg")})
     assert (res.status_code, res.get_json()["sample"]) == (200, False)
 
@@ -556,7 +556,7 @@ def test_demo_sample_photo_in_real_mode_calls_ai_and_counts(demo_app, stored_sca
     demo_app.config["ANTHROPIC_API_KEY"] = "test-key"
     seen = []
 
-    def fake_extract(kind, images):
+    def fake_extract(kind, images, locations=()):
         seen.append(kind)
         return {"items": [{"name": "고등어", "quantity": 1, "unit": "팩", "location_kind": "fridge", "price": 24980}], "purchased_on": None}, {
             "model": "m", "input_tokens": 1, "output_tokens": 1}

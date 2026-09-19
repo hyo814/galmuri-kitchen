@@ -15,7 +15,7 @@ from .household import is_household
 from .ingredients import SEOUL, seoul_today
 from .locations import KINDS
 from .matching import normalize
-from .models import AiCall, db, utcnow
+from .models import AiCall, StorageLocation, db, utcnow
 from .validation import iso_date
 
 bp = Blueprint("scan", __name__, url_prefix="/api/scan", cli_group=None)  # 명령은 `flask make-sample-scans`
@@ -149,10 +149,11 @@ def _price(value):
     return round(value)
 
 
-def clean_result(kind, raw, today, merge=False):
+def clean_result(kind, raw, today, merge=False, location_names=()):
     """AI(또는 예시) 결과를 화면에 넘기기 전에 정리한다. 모델 출력은 믿지 않는다.
     memo만 줄마다 household(생활용품)를 붙인다 — 참/거짓이 아니면 이름으로 짐작한다.
-    merge(사진 여러 장): 이름(normalize)·단위·보관 종류가 같은 줄은 하나로 합친다."""
+    merge(사진 여러 장): 이름(normalize)·단위·보관 종류가 같은 줄은 하나로 합친다.
+    location_names: AI가 고를 수 있는 보관 위치 이름. 그 안에 없는 이름은 버린다(화면이 종류로 고르던 대로 돌아간다)."""
     raw = raw if isinstance(raw, dict) else {}
     rows = raw.get("items") if isinstance(raw.get("items"), list) else []
     items, seen = [], {}
@@ -170,6 +171,10 @@ def clean_result(kind, raw, today, merge=False):
             "location_kind": location_kind if location_kind in KINDS else "fridge",
             "price": None if kind in ai.NO_PRICE_KINDS else _price(row.get("price")),
         }
+        if location_names:
+            # 후보를 줬을 때만 칸 이름을 붙이고, 목록에 있는 이름만 남긴다 —
+            # 모델이 지어낸 이름이나 사진 속 글이 화면의 칸 선택을 흔들지 못하게. 없으면 화면이 종류로 고른다.
+            item["location_name"] = row.get("location_name") if row.get("location_name") in location_names else None
         if kind == "memo":
             household = row.get("household")
             item["household"] = household if isinstance(household, bool) else is_household(name)
@@ -221,16 +226,26 @@ def scan():
         raw = stored if stored and stored["kind"] == kind else ai.sample_result(kind, today)
         return jsonify(**clean_result(kind, raw, today), sample=True)
 
+    # 보관 위치 이름을 함께 줘서 AI가 칸까지 고르게 한다(사용자 결정 2026-09-19). 재고에 넣지 않는 memo는 빼고,
+    # 이름이 종류를 나누지 않는 경우(칸이 종류마다 하나뿐)에는 줘도 결과가 같지만 굳이 나누지 않는다.
+    user_locations = (
+        []
+        if kind == "memo"
+        else [(loc.name, loc.kind) for loc in StorageLocation.query.filter_by(user_id=g.user.id)
+              .order_by(StorageLocation.sort_order, StorageLocation.id)]
+    )
     check_ai_limits(g.user.id, SCAN_KINDS, ai_daily_limit(g.user, "AI_DAILY_SCAN_LIMIT"), "사진 인식은")
     # 업로드 검증(kind·사진 수·사진 유무·형식)에서 걸린 요청은 세지 않는다. 여러 장이어도 한 번 부르고 한 번 센다.
     call = start_ai_call(g.user.id, kind)
     try:
-        raw, usage = ai.extract(kind, images)
+        raw, usage = ai.extract(kind, images, locations=user_locations)
     except ai.AiError:
         miss_ai_call(call)
         abort(502, "인식에 실패했어요. 직접 입력해주세요.")
     finish_ai_call(call, usage)
-    result = clean_result(kind, raw, today, merge=len(images) > 1)
+    result = clean_result(
+        kind, raw, today, merge=len(images) > 1, location_names={name for name, _ in user_locations}
+    )
     if not result["items"]:
         miss_ai_call(call)
     return jsonify(**result, sample=False)
