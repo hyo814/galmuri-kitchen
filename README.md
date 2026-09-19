@@ -8,6 +8,7 @@
 앱 설치 없이 휴대폰 브라우저에서 씁니다. "갈무리"는 물건을 잘 간수하고 일을 끝맺는다는 뜻의 순우리말이고, 마스코트는 셰프 다람쥐 **다람이**입니다.
 
 - 체험: https://galmuri-kitchen.onrender.com/?demo=1 — 누르면 로그인 없이 체험 계정으로 바로 열립니다. 로그인 화면은 https://galmuri-kitchen.onrender.com (**로그인 없이 체험하기** 버튼도 있습니다)
+- 1분 데모 영상: [`docs/submission/demo/갈무리부엌-1분-데모.webm`](docs/submission/demo/갈무리부엌-1분-데모.webm) (1분 11초, 자막 포함, 소리 없음) — 운영 주소에서 재고 → 영수증 사진 인식 → AI 레시피 → 장보기 → 오프라인 체크 → 식단까지 한 번에 돌린 화면입니다. 영수증 인식과 AI 레시피는 실제 Claude 호출이라 기다리는 시간도 그대로 들어 있습니다.
 - 제출 자료: [서비스 소개서](docs/submission/01-서비스-소개서.md) · [시연 시나리오](docs/submission/02-시연-시나리오.md) · [AI 개발 과정](docs/submission/03-AI-개발-과정.md) · [제출 체크리스트](docs/submission/04-제출-체크리스트.md)
 
 ## 문제
