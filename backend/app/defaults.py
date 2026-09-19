@@ -1,4 +1,4 @@
-from .models import ItemRule, Staple, StorageLocation, db
+from .models import ItemRule, KitchenTool, Staple, StorageLocation, db
 
 DEFAULT_LOCATIONS = [("냉장실", "fridge"), ("냉동실", "freezer"), ("실온", "room")]
 
@@ -64,11 +64,26 @@ DEFAULT_RULES = [
 ]
 
 
+# 기본 주방 도구 (이름, 분류, 점검 주기 개월). 모든 사용자가 처음부터 갖는 도구 — 신규 가입 시드 + 기존 사용자 백필(사용자 결정 2026-09-19).
+# 어느 집에나 있는 것만 넣는다. 에어프라이어·정수기 필터처럼 갈리는 것은 사용자가 직접 넣는다.
+# 분류는 tools.CATEGORIES와 같다: 조리도구 / 조리기구 / 칼·도마 / 기타.
+# 점검 주기는 프라이팬만 6개월(설계 18절 프리셋 — 코팅 점검). 나머지는 비워 둔다:
+#   주기를 넣으면 없는 도구의 `점검할 때` 뱃지가 뜬다. 프라이팬도 bought_on·last_checked_on을 비워 두어
+#   점검 기준일이 만든 날(tools.check_base)이 되므로 시드 직후에는 알림이 뜨지 않는다.
+DEFAULT_TOOLS = [
+    ("프라이팬", "조리기구", 6), ("냄비", "조리기구", None), ("전기밥솥", "조리기구", None),
+    ("식칼", "칼·도마", None), ("도마", "칼·도마", None), ("주방 가위", "칼·도마", None),
+    ("국자", "조리도구", None), ("뒤집개", "조리도구", None), ("집게", "조리도구", None),
+    ("밥주걱", "조리도구", None),
+    ("수세미", "기타", None), ("행주", "기타", None), ("고무장갑", "기타", None),
+]
+
+
 def seed_user_defaults(user_id):
-    """새 사용자에게 기본 보관 위치·품목 규칙·필수품을 만든다. commit은 호출 측에서.
-    기존 사용자 백필은 여기가 아니라 마이그레이션(1회, h5s5t5a5p5l5e5)에서만 한다 — 이 함수는 신규 가입 때만 부른다
+    """새 사용자에게 기본 보관 위치·품목 규칙·필수품·주방 도구를 만든다. commit은 호출 측에서.
+    기존 사용자 백필은 여기가 아니라 마이그레이션(1회, 필수품 h5s5t5a5p5l5e5·도구 h6t6o6o6l6s6)에서만 한다 — 이 함수는 신규 가입 때만 부른다
     (auth.upsert_user가 user is None일 때만, demo.py가 새 체험 계정을 만들 때만). 로그인·목록 조회 때 다시 불러
-    필수품을 채우지 않는다 — 사용자가 뺀 기본 필수품이 되살아나면 안 된다(사용자 결정 2026-09-17)."""
+    필수품·도구를 채우지 않는다 — 사용자가 뺀 기본 필수품·도구가 되살아나면 안 된다(사용자 결정 2026-09-17)."""
     for order, (name, kind) in enumerate(DEFAULT_LOCATIONS):
         db.session.add(StorageLocation(user_id=user_id, name=name, kind=kind, sort_order=order))
     for keyword, warn_days, danger_days, source in DEFAULT_RULES:
@@ -78,3 +93,5 @@ def seed_user_defaults(user_id):
     for name, category in DEFAULT_STAPLES:
         # had_stock=False로 시작 — 재고에서 실제로 본 적 있어야("가졌던 것만 배너에") 떨어짐으로 센다(staples.py to_json)
         db.session.add(Staple(user_id=user_id, name=name, category=category, had_stock=False))
+    for name, category, months in DEFAULT_TOOLS:
+        db.session.add(KitchenTool(user_id=user_id, name=name, category=category, check_every_months=months))

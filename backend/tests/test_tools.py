@@ -26,6 +26,12 @@ def create(client, **fields):
     return client.post("/api/tools", json={"name": "코팅 프라이팬", "category": "조리기구", **fields})
 
 
+def clear_defaults(client):
+    """기본 주방 도구 13개(defaults.DEFAULT_TOOLS)를 지운다 — 이 파일의 목록 검사는 테스트가 만든 도구만 본다."""
+    for tool in client.get("/api/tools").get_json():
+        client.delete(f"/api/tools/{tool['id']}")
+
+
 def test_requires_login(client):
     assert client.get("/api/tools").status_code == 401
 
@@ -64,6 +70,7 @@ def test_created_date_is_base_when_no_dates(client, login):
 
 def test_list_sorts_due_first(client, login):
     login()
+    clear_defaults(client)
     today = seoul_today()
     create(client, name="뒤집개", category="조리도구")
     create(client, name="국자", category="조리도구", check_every_months=3)
@@ -116,6 +123,7 @@ def test_other_users_tool_is_hidden(client, login):
     login("owner")
     tool = create(client).get_json()
     login("intruder")
+    clear_defaults(client)
     assert client.get("/api/tools").get_json() == []
     for method, path in [
         ("patch", f"/api/tools/{tool['id']}"),
@@ -129,6 +137,7 @@ def test_other_users_tool_is_hidden(client, login):
 
 def test_delete(client, login):
     login()
+    clear_defaults(client)
     tool = create(client).get_json()
     assert client.delete(f"/api/tools/{tool['id']}").status_code == 204
     assert client.get("/api/tools").get_json() == []
