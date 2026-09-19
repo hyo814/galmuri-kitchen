@@ -11,6 +11,10 @@ DEFAULTS = {
     "어묵": (30, 33, "mfds"),
     "소시지": (41, 44, "mfds"),
     "햄": (42, 45, "mfds"),
+    "딸기우유": (16, 19, "mfds"),
+    "초코우유": (16, 19, "mfds"),
+    "바나나우유": (16, 19, "mfds"),
+    "야쿠르트": (17, 20, "mfds"),
 }
 
 
@@ -109,10 +113,16 @@ def test_migration_defaults_match_app_defaults():
     assert migration.DEFAULT_RULES == FROZEN_MIGRATION_DEFAULTS
 
 
-def test_app_defaults_match_frozen_defaults_today():
-    # 오늘 기준으로 app.defaults.DEFAULT_RULES가 마이그레이션 시점 값과 같은지 확인.
-    # 앞으로 기본값을 바꾸면 이 테스트가 실패한다 — 그때는 위 마이그레이션 상수를 고치는 게 아니라
-    # 새 마이그레이션을 추가하고, 이 테스트의 기대값만 최신 app.defaults로 갱신한다.
+def test_app_defaults_keep_frozen_defaults_and_append(): 
+    # 첫 마이그레이션(a3b3c3d3e3f3) 시점의 10개는 그 순서 그대로 앞에 남아 있어야 하고,
+    # 새 기본값은 뒤에 덧붙는다(2026-09-19 가공유·유산균음료). 앞쪽을 고치면 이 테스트가 실패한다 —
+    # 그때는 배포된 마이그레이션을 고치는 게 아니라 새 마이그레이션을 추가한다.
     from app.defaults import DEFAULT_RULES
 
-    assert DEFAULT_RULES == FROZEN_MIGRATION_DEFAULTS
+    assert DEFAULT_RULES[: len(FROZEN_MIGRATION_DEFAULTS)] == FROZEN_MIGRATION_DEFAULTS
+    assert [keyword for keyword, *_ in DEFAULT_RULES[len(FROZEN_MIGRATION_DEFAULTS) :]] == [
+        "딸기우유",
+        "초코우유",
+        "바나나우유",
+        "야쿠르트",
+    ]
