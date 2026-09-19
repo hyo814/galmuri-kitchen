@@ -111,7 +111,7 @@ export default function StaplesSheet({ staples, initialMissingOnly = false, onCh
       )}
 
       {groups.length === 0 ? (
-        <p className="hint">{staples.length === 0 ? "아직 등록한 필수품이 없어요. 위에서 추가해보세요." : "떨어진 필수품이 없어요."}</p>
+        <p className="hint">{staples.length === 0 ? "아직 필수품이 없어요. 위에서 추가해보세요." : "떨어진 필수품이 없어요."}</p>
       ) : (
         <div className="groups">
           {groups.map((group) => (
