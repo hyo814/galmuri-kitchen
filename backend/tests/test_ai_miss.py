@@ -16,7 +16,7 @@ from tests.test_scan import FOUND, JPEG_BYTES, USAGE, ai_call_costs, ai_calls, f
 MISS_KINDS = ["fridge_miss", "receipt_miss", "order_miss", "memo_miss", "recipe_miss", "link_miss", "recipe_photo_miss", "meal_miss", "eat_out_miss"]
 
 
-def broken(*args):
+def broken(*args, **kwargs):
     raise ai.AiError("timeout")
 
 
@@ -69,7 +69,7 @@ def test_errors_and_empty_results_are_free_misses(client, login, app, monkeypatc
     user = login()
     app.config["ANTHROPIC_API_KEY"] = "test-key"
     assert request_(client, monkeypatch, broken).status_code == 502
-    assert request_(client, monkeypatch, lambda *args: (nothing, USAGE)).status_code == status
+    assert request_(client, monkeypatch, lambda *args, **kwargs: (nothing, USAGE)).status_code == status
     assert ai_calls(app) == [(user.id, f"{kind}_miss")] * 2
     assert ai_call_costs(app) == [("claude-sonnet-5", None, None), ("claude-sonnet-5-answered", 1500, 120)]
     assert client.get("/api/ai-usage").get_json() == {"scan": {"used": 0, "limit": 10}, "recipe": {"used": 0, "limit": 10}}
@@ -95,7 +95,7 @@ def test_only_three_misses_a_day_are_free(client, login, app, monkeypatch):
 
     monkeypatch.setattr(ai, "extract", broken)
     assert upload(client, kind="receipt").status_code == 502  # 오늘 두 번째 헛호출
-    monkeypatch.setattr(ai, "extract", lambda kind, images: ({"items": [], "purchased_on": None}, USAGE))
+    monkeypatch.setattr(ai, "extract", lambda kind, images, locations=(): ({"items": [], "purchased_on": None}, USAGE))
     assert upload(client, kind="fridge").status_code == 200  # 세 번째
     assert upload(client, kind="order").status_code == 200  # 네 번째부터는 센다
     monkeypatch.setattr(ai, "extract", broken)
@@ -113,7 +113,7 @@ def test_free_misses_leave_daily_limit_open(client, login, app, monkeypatch):
         kinds = ["receipt", "fridge_miss", "memo_miss", "recipe_miss"]
         db.session.add_all(AiCall(user_id=user.id, kind=k, created_at=start + timedelta(hours=1)) for k in kinds)
         db.session.commit()
-    monkeypatch.setattr(ai, "extract", lambda kind, images: (FOUND, USAGE))
+    monkeypatch.setattr(ai, "extract", lambda kind, images, locations=(): (FOUND, USAGE))
     assert upload(client).status_code == 200  # 헛호출 3번은 세지 않아 두 번째가 된다
     res = upload(client)
     assert (res.status_code, res.get_json()) == (429, {"error": "오늘 사진 인식은 2번까지 쓸 수 있어요. 내일 다시 써주세요."})

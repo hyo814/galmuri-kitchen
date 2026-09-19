@@ -37,7 +37,7 @@ def cli(make_app, tmp_path, monkeypatch):
     monkeypatch.setattr(scan, "SAMPLE_PHOTO_DIR", out)
     calls, failing = [], set()
 
-    def fake_extract(kind, images):
+    def fake_extract(kind, images, locations=()):
         calls.append(kind)
         assert [mime for _, mime in images] == ["image/jpeg"]
         if kind in failing:

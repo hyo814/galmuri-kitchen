@@ -153,7 +153,12 @@ export default function ScanReview({ kind, result, locations, samplePhoto, retak
       unit: item.unit,
       price: item.price != null ? String(item.price) : "",
       // AI가 추정한 보관 종류의 첫 위치, 그런 위치가 없으면 첫 위치 (스펙 15절)
-      locationId: (locations.find((l) => l.kind === item.location_kind) ?? locations[0]).id,
+      // AI가 고른 칸 이름이 먼저다(3층·야채칸처럼 이름이 여럿일 때). 없으면 종류가 맞는 첫 칸
+      locationId: (
+        locations.find((l) => l.name === item.location_name) ??
+        locations.find((l) => l.kind === item.location_kind) ??
+        locations[0]
+      ).id,
       locationKind: item.location_kind,
       pick: null,
     })),
