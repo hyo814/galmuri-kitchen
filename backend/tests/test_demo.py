@@ -373,7 +373,7 @@ def test_demo_ai_limits_are_lower(demo_app, monkeypatch):
     fixed_now = datetime.combine(fixed_today, time(12), tzinfo=SEOUL).astimezone(timezone.utc)
     monkeypatch.setattr(scan, "seoul_today", lambda: fixed_today)
     monkeypatch.setattr(scan, "utcnow", lambda: fixed_now)
-    monkeypatch.setattr(ai, "suggest_recipes", lambda *args: pytest.fail("AI를 부르면 안 돼요"))
+    monkeypatch.setattr(ai, "suggest_recipes", lambda *args, **kwargs: pytest.fail("AI를 부르면 안 돼요"))
     with demo_app.app_context():
         db.session.add_all(AiCall(user_id=user_id, kind="recipe", created_at=fixed_now - timedelta(hours=i + 1)) for i in range(5))
         db.session.commit()
@@ -501,7 +501,7 @@ def test_demo_ai_calls_are_marked_demo(demo_app, monkeypatch):
     c.post("/api/demo-login")
     demo_app.config["ANTHROPIC_API_KEY"] = "test-key"
     usage = {"model": "m", "input_tokens": 1, "output_tokens": 1}
-    monkeypatch.setattr(ai, "suggest_recipes", lambda *args: ({"recipes": ai.SAMPLE_SUGGESTIONS}, usage))
+    monkeypatch.setattr(ai, "suggest_recipes", lambda *args, **kwargs: ({"recipes": ai.SAMPLE_SUGGESTIONS}, usage))
     monkeypatch.setattr(outbound, "web_page", fail_if_called)
     assert c.post("/api/recommendations/ai").status_code == 200
     with demo_app.app_context():

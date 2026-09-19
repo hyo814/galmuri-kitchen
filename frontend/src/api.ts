@@ -24,6 +24,12 @@ export interface Staple {
   status: StapleStatus;
 }
 
+export interface CookingTip {
+  id: number;
+  /** 한 줄 요령. AI 레시피를 만들 때 함께 넘긴다 */
+  body: string;
+}
+
 export interface ItemRule {
   id: number;
   keyword: string;

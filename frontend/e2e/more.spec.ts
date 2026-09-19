@@ -289,6 +289,27 @@ test("내 몸 정보로 하루 칼로리 목표를 정하면 더보기 카드에
   await expect(page.getByRole("button", { name: /하루 칼로리 목표.*유지 · 하루 [\d,]+kcal/ })).toBeVisible();
 });
 
+test("우리 집 비법을 적고 고치고 지우면 목록에 반영된다", async ({ page }) => {
+  await openTab(page, "더보기");
+  await page.getByRole("button", { name: /우리 집 비법/ }).click();
+  const sheet = page.getByRole("dialog", { name: "우리 집 비법" });
+  await expect(sheet.getByText("아직 적어 둔 비법이 없어요.")).toBeVisible();
+
+  await sheet.getByLabel("비법").fill("김치찌개엔 청국장 조금 넣는다");
+  await sheet.getByRole("button", { name: "추가" }).click();
+  await expect(sheet.getByText("김치찌개엔 청국장 조금 넣는다")).toBeVisible();
+
+  await sheet.getByRole("button", { name: "편집" }).click();
+  await sheet.getByRole("button", { name: "고치기" }).click();
+  await sheet.getByLabel("비법 고치기").fill("라면 끓을 때 멸치가루 한 숟가락");
+  await sheet.getByRole("button", { name: "저장" }).click();
+  await expect(sheet.getByText("라면 끓을 때 멸치가루 한 숟가락")).toBeVisible();
+
+  page.once("dialog", (d) => d.accept()); // "이 비법을 지울까요?"
+  await sheet.getByRole("button", { name: "삭제" }).click();
+  await expect(sheet.getByText("아직 적어 둔 비법이 없어요.")).toBeVisible();
+});
+
 test("주방 도구를 추가·점검하고 삭제하면 목록에 반영된다", async ({ page }) => {
   await openTab(page, "더보기");
   await page.getByRole("button", { name: /주방 도구/ }).click();

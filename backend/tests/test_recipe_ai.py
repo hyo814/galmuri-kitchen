@@ -249,7 +249,7 @@ def test_ai_recipes_attach_similar_public_image(client, login, app, monkeypatch)
     app.config["ANTHROPIC_API_KEY"] = "test-key"
     add_public(app, ("두부조림", PHOTO.format("tofu")))
     add_ingredient(client, "두부")
-    monkeypatch.setattr(ai, "suggest_recipes", lambda lines: ({"recipes": [draft("두부조림"), draft("파스타")]}, USAGE))
+    monkeypatch.setattr(ai, "suggest_recipes", lambda lines, tips=(): ({"recipes": [draft("두부조림"), draft("파스타")]}, USAGE))
     body = make(client).get_json()
     assert [(r["title"], r["image_url"]) for r in body["recipes"]] == [("두부조림", PHOTO.format("tofu")), ("파스타", None)]
 
@@ -270,7 +270,7 @@ def test_ai_recipes_real_call_cleans_marks_urgent_and_logs_tokens(client, login,
     add_ingredient(client, "두부", expires_on=(seoul_today() + timedelta(days=1)).isoformat())
     seen = []
 
-    def fake_suggest(lines):
+    def fake_suggest(lines, tips=()):
         seen.append(lines)
         raw = [
             draft(" 두부조림 ", ["두부", "간장"]),
@@ -309,7 +309,7 @@ def test_ai_recipes_returns_first_three_usable(client, login, app, monkeypatch):
     app.config["ANTHROPIC_API_KEY"] = "test-key"
     add_ingredient(client, "두부")
     titles = ["가지볶음", "나물무침", "두부조림", "라면", "무국"]
-    monkeypatch.setattr(ai, "suggest_recipes", lambda lines: ({"recipes": [draft(t) for t in titles]}, USAGE))
+    monkeypatch.setattr(ai, "suggest_recipes", lambda lines, tips=(): ({"recipes": [draft(t) for t in titles]}, USAGE))
     assert [r["title"] for r in make(client).get_json()["recipes"]] == titles[:3]
 
 
@@ -318,7 +318,7 @@ def test_ai_recipes_failure_is_502_and_a_miss(client, login, app, monkeypatch):
     app.config["ANTHROPIC_API_KEY"] = "test-key"
     add_ingredient(client, "두부")
 
-    def broken(lines):
+    def broken(lines, tips=()):
         raise ai.AiError("timeout")
 
     monkeypatch.setattr(ai, "suggest_recipes", broken)
@@ -327,7 +327,7 @@ def test_ai_recipes_failure_is_502_and_a_miss(client, login, app, monkeypatch):
     assert ai_call_costs(app) == [("claude-sonnet-5", None, None)]
 
     # 응답은 받았지만 정리하고 나니 쓸 레시피가 없으면 같은 502, 토큰은 남긴다
-    monkeypatch.setattr(ai, "suggest_recipes", lambda lines: ({"recipes": [draft(names=())]}, USAGE))
+    monkeypatch.setattr(ai, "suggest_recipes", lambda lines, tips=(): ({"recipes": [draft(names=())]}, USAGE))
     res = make(client)
     assert (res.status_code, res.get_json()) == (502, {"error": FAIL})
     assert ai_calls(app) == [(user.id, "recipe_miss"), (user.id, "recipe_miss")]  # 헛호출(스펙 7절)
@@ -347,7 +347,7 @@ def test_recipe_daily_limit_counts_recipe_and_link_only(client, login, app, monk
     user = login()
     app.config["ANTHROPIC_API_KEY"] = "test-key"
     add_ingredient(client, "두부")
-    monkeypatch.setattr(ai, "suggest_recipes", lambda lines: ({"recipes": [draft()]}, USAGE))
+    monkeypatch.setattr(ai, "suggest_recipes", lambda lines, tips=(): ({"recipes": [draft()]}, USAGE))
     start, now = fix_clock(monkeypatch)
     with app.app_context():
         other = User(provider="test", provider_id="other", nickname="x")
@@ -373,7 +373,7 @@ def test_recipe_burst_limit_separate_from_scan(client, login, app, monkeypatch):
     user = login()
     app.config.update(ANTHROPIC_API_KEY="test-key", AI_SCAN_BURST_LIMIT=3)
     add_ingredient(client, "두부")
-    monkeypatch.setattr(ai, "suggest_recipes", lambda lines: ({"recipes": [draft()]}, USAGE))
+    monkeypatch.setattr(ai, "suggest_recipes", lambda lines, tips=(): ({"recipes": [draft()]}, USAGE))
     _, now = fix_clock(monkeypatch)
     with app.app_context():
         db.session.add_all([AiCall(user_id=user.id, kind="receipt", created_at=now - timedelta(seconds=5)) for _ in range(3)])
@@ -390,7 +390,7 @@ def test_recipe_burst_limit_boundary(client, login, app, monkeypatch):
     user = login()
     app.config.update(ANTHROPIC_API_KEY="test-key", AI_SCAN_BURST_LIMIT=3)
     add_ingredient(client, "두부")
-    monkeypatch.setattr(ai, "suggest_recipes", lambda lines: ({"recipes": [draft()]}, USAGE))
+    monkeypatch.setattr(ai, "suggest_recipes", lambda lines, tips=(): ({"recipes": [draft()]}, USAGE))
     _, now = fix_clock(monkeypatch)
     with app.app_context():
         db.session.add_all([AiCall(user_id=user.id, kind="recipe", created_at=now - timedelta(seconds=59)) for _ in range(2)])
@@ -405,7 +405,7 @@ def test_limit_check_and_call_record_share_one_locked_transaction(client, login,
     login()
     app.config["ANTHROPIC_API_KEY"] = "test-key"
     add_ingredient(client, "두부")
-    monkeypatch.setattr(ai, "suggest_recipes", lambda lines: ({"recipes": [draft()]}, USAGE))
+    monkeypatch.setattr(ai, "suggest_recipes", lambda lines, tips=(): ({"recipes": [draft()]}, USAGE))
     events = []
     with app.app_context():
         engine = db.engine
@@ -1132,7 +1132,7 @@ def test_link_fetch_not_counted_as_ai_use(client, login, app, monkeypatch):
         db.session.commit()
     assert client.get("/api/ai-usage").get_json()["recipe"] == {"used": 9, "limit": 10}
     add_ingredient(client, "두부")
-    monkeypatch.setattr(ai, "suggest_recipes", lambda lines: ({"recipes": [draft()]}, USAGE))
+    monkeypatch.setattr(ai, "suggest_recipes", lambda lines, tips=(): ({"recipes": [draft()]}, USAGE))
     assert make(client).status_code == 200  # 10번째 AI 레시피
     with app.app_context():
         fetch_rows = AiCall.query.filter_by(kind="link_fetch").all()

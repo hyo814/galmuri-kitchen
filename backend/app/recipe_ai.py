@@ -6,6 +6,7 @@ from flask import Blueprint, abort, current_app, g, jsonify, request
 
 from . import ai, outbound, scan
 from .auth import ai_daily_limit, get_owned_or_404, login_required
+from .cooking_tips import user_tips
 from .matching import normalize, tokens
 from .models import AiCall, PublicRecipe, Recipe, db
 from .recipe_parse import MAX_AMOUNT, MAX_NAME, MAX_STEP, ingredient_key
@@ -121,7 +122,10 @@ def ai_recipes():
         scan.check_ai_limits(g.user.id, scan.RECIPE_KINDS, ai_daily_limit(g.user, "AI_DAILY_RECIPE_LIMIT"), "AI 레시피는")
         call = scan.start_ai_call(g.user.id, "recipe")
         try:
-            raw, usage = ai.suggest_recipes([f"{name} (빨리)" if urgent else name for name, urgent in stock])
+            tips = [tip.body for tip in user_tips(g.user.id)]
+            raw, usage = ai.suggest_recipes(
+                [f"{name} (빨리)" if urgent else name for name, urgent in stock], tips=tips
+            )
         except ai.AiError:
             scan.miss_ai_call(call)
             abort(502, FAIL)
