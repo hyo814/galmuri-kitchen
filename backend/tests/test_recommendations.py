@@ -338,7 +338,7 @@ def test_recommendations_are_fast_enough_for_full_public_db(client, login, app):
 
 
 def test_recommendations_first_call_and_cached_call_with_large_inventory(client, login, app):
-    # P-B1 성능 추가: 재고 2,000개 × 공공 레시피 1,100건 첫 호출 3초 안, 캐시된 두 번째 호출 0.1초 안
+    # P-B1 성능 추가: 재고 2,000개 × 공공 레시피 1,100건 첫 호출 3초 안, 캐시된 두 번째 호출은 첫 호출의 1/5 안
     user = login()
     words = ["대파", "양파", "두부", "계란", "감자", "당근", "애호박", "돼지고기", "소고기", "닭가슴살",
              "김치", "콩나물", "시금치", "표고버섯", "고추", "마늘", "간장", "고추장", "된장", "설탕"]
@@ -362,7 +362,10 @@ def test_recommendations_first_call_and_cached_call_with_large_inventory(client,
     started = time.perf_counter()
     recommend(client)
     cached_elapsed = time.perf_counter() - started
-    assert cached_elapsed < 0.1, f"{cached_elapsed:.3f}s"
+    # 캐시된 호출을 절대 시각(0.1초)으로 재던 것을 첫 호출 대비로 바꿨다(사용자 결정 2026-09-19).
+    # 0.1초는 원래 빠듯해서 앞서 도는 테스트가 늘 때마다 전체 실행에서만 넘나들었다(PostgreSQL 9/17, SQLite 9/19).
+    # 재는 목적은 "캐시가 실제로 듣는지"라 첫 호출 대비가 더 맞다 — 캐시가 깨지면 두 호출이 비슷해져 바로 걸린다.
+    assert cached_elapsed < first_elapsed / 5, f"{cached_elapsed:.3f}s (첫 호출 {first_elapsed:.3f}s)"
 
 
 # --- 3a final review fix wave ---
