@@ -29,7 +29,7 @@ export interface ItemRule {
   keyword: string;
   warn_days: number;
   danger_days: number;
-  source: "mfds" | "user";
+  source: "mfds" | "nfqs" | "rda" | "user";
 }
 
 export type ToolCategory = "조리도구" | "조리기구" | "칼·도마" | "기타";

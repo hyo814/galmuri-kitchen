@@ -1,3 +1,4 @@
+import pytest
 import importlib.util
 from pathlib import Path
 
@@ -93,8 +94,83 @@ def test_plain_milk_still_has_no_rule():
     assert "우유" not in {keyword for keyword, _, _, _ in DEFAULT_RULES}
 
 
-def test_rules_migration_defaults_match_app_defaults():
-    spec = importlib.util.spec_from_file_location("more_mfds_rules_migration", RULES_MIGRATION_PATH)
-    migration = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(migration)
-    assert migration.NEW_RULES == DEFAULT_RULES[-len(migration.NEW_RULES):]
+FRESH_MIGRATION_PATH = Path(__file__).resolve().parents[1] / "migrations" / "versions" / "h8f8i8s8h8_fresh_food_rules.py"
+
+
+def _migration(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _contiguous_index(rules, block):
+    """block이 rules 안에 순서 그대로 이어져 있는 시작 위치(없으면 -1)."""
+    for i in range(len(rules) - len(block) + 1):
+        if rules[i : i + len(block)] == block:
+            return i
+    return -1
+
+
+@pytest.mark.parametrize(
+    ("name", "path_name"),
+    [("more_mfds_rules_migration", "RULES"), ("fresh_food_rules_migration", "FRESH")],
+)
+def test_rules_migrations_match_app_defaults(name, path_name):
+    # 각 마이그레이션이 넣은 줄이 app.defaults에 순서 그대로 남아 있는지. 기본값을 바꾸면 여기서 실패한다 —
+    # 그때는 배포된 마이그레이션을 고치는 게 아니라 새 마이그레이션을 추가한다.
+    path = {"RULES": RULES_MIGRATION_PATH, "FRESH": FRESH_MIGRATION_PATH}[path_name]
+    assert _contiguous_index(DEFAULT_RULES, _migration(name, path).NEW_RULES) >= 0
+
+
+# --- 신선 수산물·김치 규칙 (사용자 결정 2026-09-20) ---
+
+
+def test_short_seafood_keywords_do_not_catch_seasonings_or_snacks():
+    """한 글자·두 글자 키워드는 그 낱말로 끝날 때만 맞는다(matching.keyword_in) — 굴소스·새우깡이 상한 것으로 보이면 안 된다."""
+    from app.ingredients import matching_rule
+
+    class R:
+        def __init__(self, i, keyword, warn, danger):
+            self.id, self.keyword, self.warn_days, self.danger_days = i, keyword, warn, danger
+
+    rules = [R(i, k, w, d) for i, (k, w, d, _) in enumerate(DEFAULT_RULES)]
+    assert matching_rule("굴", rules) == (4, 5)
+    assert matching_rule("생굴", rules) == (4, 5)
+    assert matching_rule("굴소스", rules) is None
+    assert matching_rule("새우", rules) == (2, 3)
+    assert matching_rule("새우깡", rules) is None
+    assert matching_rule("배추김치", rules) == (75, 90)
+    assert matching_rule("김치찌개", rules) is None
+
+
+def test_frozen_seafood_has_no_rule_warning():
+    """냉동은 품목 규칙을 쓰지 않는다(ingredient_status) — 얼려 둔 생선에 `상했을 수 있어요`가 뜨면 안 된다."""
+    from datetime import timedelta
+
+    from app.ingredients import ingredient_status, seoul_today
+
+    today = seoul_today()
+    bought = today - timedelta(days=5)
+    assert ingredient_status(bought, None, today, kind="fridge", rule=(1, 2)) == "danger"
+    assert ingredient_status(bought, None, today, kind="freezer", rule=(1, 2)) == "ok"  # 냉동 60일 기준
+
+
+def test_kimchi_rule_replaces_the_seven_day_fridge_default():
+    """규칙이 없으면 김치가 냉장 `오래됨` 7일에 걸린다 — 3개월 규칙이 그걸 고친다."""
+    from datetime import timedelta
+
+    from app.ingredients import ingredient_status, seoul_today
+
+    today = seoul_today()
+    bought = today - timedelta(days=30)
+    assert ingredient_status(bought, None, today, kind="fridge", rule=None) == "old"
+    assert ingredient_status(bought, None, today, kind="fridge", rule=(75, 90)) == "ok"
+
+
+def test_fresh_rule_sources_are_labelled_agencies():
+    # 화면이 출처 이름을 꼬리표로 보여 준다(RulesSheet.tsx SOURCE_LABEL) — 기관을 섞어 적으면 출처를 잘못 밝히게 된다.
+    by_keyword = {keyword: source for keyword, _, _, source in DEFAULT_RULES}
+    assert {by_keyword[k] for k in ("생선", "오징어", "새우", "조개", "가리비", "굴")} == {"nfqs"}
+    assert by_keyword["김치"] == "rda"
+    assert by_keyword["두부"] == "mfds"
