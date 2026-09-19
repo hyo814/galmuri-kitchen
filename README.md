@@ -207,6 +207,7 @@ Flask 한 앱이 `/api/*`와 React 빌드 결과를 같은 오리진에서 서�
 | 사진 | `/api/photos/<key>`가 키 접두사와 사진 행으로 소유자를 확인합니다. 응답에 `Content-Security-Policy: default-src 'none'; sandbox`와 `nosniff`를 붙입니다. 파일 서명으로 JPG·PNG·WEBP만 받고, 한 장 3MB, 메모·먹은 기록·요리 일기 사진이 종류마다 사용자당 200MB(체험 계정 20MB)까지입니다. |
 | CSV 수식 주입 | `=` `+` `-` `@` 탭·CR(전각 포함, 앞 공백 무시)로 시작하는 칸 앞에 `'`를 붙입니다. 내보내기는 하루 5번이고, `X-Requested-With` 헤더가 없으면 400입니다. |
 | 공통 | 상태 변경 요청은 `X-Requested-With: fetch` 필수(CSRF), 세션 쿠키는 HttpOnly·Secure·SameSite=Lax, 남의 리소스는 404입니다. Render에서 `DEV_MODE`가 켜져 있으면 앱이 시작하지 않습니다. |
+| 공통 보안 헤더 | 모든 응답에 `nosniff`, `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`(끼워 넣기·클릭 가로채기 차단), `Referrer-Policy: strict-origin-when-cross-origin`, 쓰지 않는 기능을 잠그는 `Permissions-Policy`를 붙이고 운영에서는 HSTS도 붙입니다. 사진처럼 이미 더 센 헤더를 쓰는 응답은 그대로 둡니다. |
 
 ## 체험 방법
 
@@ -253,7 +254,7 @@ macOS 기준이며, 명령은 저장소 루트에서 시작합니다.
 ### 테스트
 
 ```
-backend/.venv/bin/pytest -q -W error::DeprecationWarning   # 백엔드 1,667개
+backend/.venv/bin/pytest -q -W error::DeprecationWarning   # 백엔드 1,670개
 cd frontend && npm run check && npm run build              # 순수 로직 검사 스크립트 11개 + 타입 검사·빌드(빌드 전에 styles.css 괄호 짝 검사)
 cd frontend && npm run e2e                                 # 화면 단위 테스트(Playwright) 81개 — 처음 한 번 npx playwright install chromium
 ```
@@ -266,11 +267,11 @@ PostgreSQL 검증, 마이그레이션 점검, Docker 스모크 테스트, Render
 
 | 항목 | 수치 |
 |---|---|
-| 기간 | 2026-09-13 10:51 첫 커밋 → 2026-09-19 00:38 `4d2a0c3`(약 134시간) |
-| 커밋 | 781개(병합 261) |
+| 기간 | 2026-09-13 10:51 첫 커밋 → 2026-09-19 10:56 `623ffd4`(약 144시간) |
+| 커밋 | 814개(병합 277) |
 | 설계 | [설계 문서](docs/superpowers/specs/2026-09-13-recipe-ai-design.md) 31절, [구현 계획](docs/superpowers/plans/) 13개 |
 | 화면 시안 | [`docs/design/`](docs/design/) 16묶음, 사용자 승인 후 구현 |
-| 테스트 | 백엔드 1,667개(SQLite·PostgreSQL 통과), 프론트 검사 스크립트 11개, E2E(Playwright) 81개 |
+| 테스트 | 백엔드 1,670개(SQLite 전부 통과, PostgreSQL은 성능 기준 1건 빼고 통과), 프론트 검사 스크립트 11개, E2E(Playwright) 81개 |
 
 단계: 1 기반·로그인 → 1b 보관 위치·필수품·품목별 경고 → 1c 하단 탭·주방 도구 → 1d 사용성 → 2 사진 인식 → 3a 레시피·추천 → 3b AI 레시피·링크·영상 → 3c 양념 비율 → 더보기 정리 → 4 장보기·오프라인·체험 계정 → 4b-1 식단 짜기 → 4b-2 영양 계산 → 4b-3 먹은 기록 → 5 요리 일기·집밥 리포트.
 
