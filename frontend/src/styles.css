@@ -7037,10 +7037,13 @@ body:has(.ck-toast:not(:empty)) .page::after {
   object-fit: cover;
 }
 
+/* 사진 없는 자리는 레시피 카드(.rc-ph)와 같은 타일 색을 쓴다.
+   --field는 밝은 테마에서 페이지 배경(--bg)과 값이 같아(#f3f4f6), 흰 카드 위에 놓으면
+   타일이 아니라 카드에 구멍이 뚫린 것처럼 보였다(2026-09-19 운영 화면 확인). */
 .ck-noph {
   display: grid;
   place-items: center;
-  background: var(--field);
+  background: var(--neutral-tint);
   color: var(--text-3);
 }
 
