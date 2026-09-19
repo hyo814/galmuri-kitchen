@@ -1,7 +1,7 @@
 import importlib.util
 from pathlib import Path
 
-from app.defaults import DEFAULT_STAPLES, DEFAULT_TOOLS
+from app.defaults import DEFAULT_RULES, DEFAULT_STAPLES, DEFAULT_TOOLS
 
 MIGRATION_PATH = Path(__file__).resolve().parents[1] / "migrations" / "versions" / "h5s5t5a5p5l5e5_default_staples.py"
 
@@ -74,3 +74,27 @@ def test_tools_migration_defaults_match_app_defaults():
 def test_default_tool_names_unique():
     names = [name for name, _, _ in DEFAULT_TOOLS]
     assert len(names) == len(set(names))
+
+
+RULES_MIGRATION_PATH = Path(__file__).resolve().parents[1] / "migrations" / "versions" / "h7r7u7l7e7s7_more_mfds_rules.py"
+
+
+def test_processed_milk_and_lactic_drink_rules(client, login):
+    """식약처 1차 공개분 나머지 둘(가공유 24일·유산균음료 26일, 2026-09-19) — 실제로 적는 이름에 붙였다."""
+    login()
+    rules = {r["keyword"]: (r["warn_days"], r["danger_days"]) for r in client.get("/api/item-rules").get_json()}
+    for name in ("딸기우유", "초코우유", "바나나우유"):
+        assert rules[name] == (16, 19)  # 24일의 80% 내림 = 19, 그 3일 전 = 16
+    assert rules["야쿠르트"] == (17, 20)  # 26일의 80% 내림 = 20
+
+
+def test_plain_milk_still_has_no_rule():
+    # 우유는 소비기한 표시제가 2031년 적용이라 참고값이 없다 — 규칙을 만들지 않는다(포장 날짜 입력 안내).
+    assert "우유" not in {keyword for keyword, _, _, _ in DEFAULT_RULES}
+
+
+def test_rules_migration_defaults_match_app_defaults():
+    spec = importlib.util.spec_from_file_location("more_mfds_rules_migration", RULES_MIGRATION_PATH)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    assert migration.NEW_RULES == DEFAULT_RULES[-len(migration.NEW_RULES):]
