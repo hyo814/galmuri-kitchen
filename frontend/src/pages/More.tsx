@@ -5,6 +5,7 @@ import {
   localToday,
   type AiUsage,
   type BodyProfileResponse,
+  type CookingTip,
   type CookReport,
   type ExportSummary,
   type FoodLogDay,
@@ -20,6 +21,7 @@ import ProviderLogo from "../components/ProviderLogo";
 import RulesSheet from "../components/RulesSheet";
 import Sheet from "../components/Sheet";
 import StaplesSheet from "../components/StaplesSheet";
+import TipsSheet from "../components/TipsSheet";
 import { savedText } from "../cooklog/cook.ts";
 import { monthOf, todayRowSub } from "../foodlog/log";
 import { useInstallPrompt } from "../install";
@@ -359,7 +361,7 @@ function LoadedSheet<T>({
   );
 }
 
-type Panel = "locations" | "staples" | "rules" | "body" | "theme" | "export" | "install" | "credits" | "leave";
+type Panel = "locations" | "staples" | "rules" | "tips" | "body" | "theme" | "export" | "install" | "credits" | "leave";
 
 export default function More({ user, onLogout }: { user: User; onLogout: () => void }) {
   const { canPrompt, installed, prompt } = useInstallPrompt();
@@ -449,6 +451,12 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
           sub="계란 30일처럼 품목마다 기준"
           onClick={() => setPanel("rules")}
         />
+        <Row
+          icon={<Icon name="bowl" />}
+          title="우리 집 비법"
+          sub="AI 레시피에 넣어줄 한 줄 요령"
+          onClick={() => setPanel("tips")}
+        />
         <Row icon={<Icon name="pan" />} title="주방 도구" sub="프라이팬 코팅 점검" onClick={() => navigate("/tools")} />
       </ul>
 
@@ -525,6 +533,11 @@ export default function More({ user, onLogout }: { user: User; onLogout: () => v
       {panel === "staples" && (
         <LoadedSheet<Staple[]> url="/api/staples" title="필수품" onClose={() => setPanel(null)}>
           {(data, onChanged) => <StaplesSheet staples={data} onChanged={onChanged} onClose={() => setPanel(null)} />}
+        </LoadedSheet>
+      )}
+      {panel === "tips" && (
+        <LoadedSheet<CookingTip[]> url="/api/cooking-tips" title="우리 집 비법" onClose={() => setPanel(null)}>
+          {(data, onChanged) => <TipsSheet tips={data} onChanged={onChanged} onClose={() => setPanel(null)} />}
         </LoadedSheet>
       )}
       {panel === "rules" && (

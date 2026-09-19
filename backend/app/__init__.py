@@ -88,6 +88,7 @@ def create_app(test_config=None):
     from .auth import init_oauth
     from .body import bp as body_bp
     from .cook_report import bp as cook_report_bp
+    from .cooking_tips import bp as cooking_tips_bp
     from .cooklog import bp as cooklog_bp
     from .coupang import bp as coupang_bp
     from .demo import bp as demo_bp
@@ -114,6 +115,7 @@ def create_app(test_config=None):
     app.register_blueprint(auth_bp)
     app.register_blueprint(body_bp)
     app.register_blueprint(cook_report_bp)
+    app.register_blueprint(cooking_tips_bp)
     app.register_blueprint(cooklog_bp)
     app.register_blueprint(coupang_bp)
     app.register_blueprint(demo_bp)

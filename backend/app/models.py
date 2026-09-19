@@ -123,6 +123,18 @@ class KitchenTool(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
 
+class CookingTip(db.Model):
+    """우리 집 비법(스펙 18-B). 사용자가 적어 두는 한 줄 요령 — AI 레시피를 만들 때 함께 넘긴다.
+    요리 이름과 묶지 않는다: `김치찌개엔 청국장 조금` 같은 한 문장이 그대로 쓸모 있고, 묶으면 적는 일이 번거로워진다."""
+
+    __tablename__ = "cooking_tips"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    body = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+
 class ShoppingItem(db.Model):
     """장보기 항목(스펙 16절). stocked_at이 있으면 재고에 넣은 것(산 것, 7일 보이고 지운다)."""
 
