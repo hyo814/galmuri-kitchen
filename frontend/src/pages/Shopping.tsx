@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { ShoppingItem, User } from "../api";
 import Icon from "../components/Icon";
 import Mascot from "../components/Mascot";
@@ -8,6 +8,7 @@ import ShoppingMemoCard from "../components/ShoppingMemoCard";
 import ShoppingItemSheet, { type ItemInput } from "../components/ShoppingItemSheet";
 import StoreFindAllSheet from "../components/StoreFindAllSheet";
 import StoreLinksSheet from "../components/StoreLinksSheet";
+import { picksFor } from "../data/picks";
 import { formatDate, withJosa } from "../format";
 import { groupItems, nameKey, newClientId, quantityText, sourceTag, type EditFields, type Op, type Ref, type ViewItem } from "../shopping/sync";
 import { useShopping } from "../shopping/useShopping";
@@ -215,8 +216,10 @@ export default function Shopping({ user }: { user: User }) {
             {group.items.map((item) => {
               const tag = sourceTag(item);
               const done = !!item.done_at;
+              const picks = done ? [] : picksFor(item.name); // 산 줄에는 안 보여준다
               return (
-                <li key={keyOf(item)} className={done ? "sh-row done" : "sh-row"}>
+                <Fragment key={keyOf(item)}>
+                <li className={done ? "sh-row done" : "sh-row"}>
                   <button
                     className="sh-check"
                     role="checkbox"
@@ -242,6 +245,22 @@ export default function Shopping({ user }: { user: User }) {
                     <Icon name="store" size={22} />
                   </button>
                 </li>
+                {picks.length > 0 && (
+                  <li className="sh-rec">
+                    <span className="sh-tag info">추천</span>
+                    <ul>
+                      {picks.map((product) => (
+                        <li key={product}>
+                          <button type="button" aria-label={`${product} 쇼핑몰에서 찾기`} onClick={() => setStore(product)}>
+                            {product}
+                            <Icon name="search" size={14} />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                )}
+                </Fragment>
               );
             })}
           </ul>
