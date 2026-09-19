@@ -658,4 +658,9 @@ assert.equal(pickFor("샤인머스켓").note, pickFor("샤인머스캣").note);
 assert.equal(pickFor("메론").note, pickFor("멜론").note);
 assert.equal(pickFor("방울토마토").products, undefined);
 
+// 가공품 줄에는 생과일 메모가 안 뜬다
+assert.equal(pickFor("토마토소스"), null);
+assert.equal(pickFor("딸기잼"), null);
+assert.equal(pickFor("수박"), null);
+
 console.log("picks ok");

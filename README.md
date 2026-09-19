@@ -258,7 +258,7 @@ macOS 기준이며, 명령은 저장소 루트에서 시작합니다.
 ### 테스트
 
 ```
-backend/.venv/bin/pytest -q -W error::DeprecationWarning   # 백엔드 1,670개
+backend/.venv/bin/pytest -q -W error::DeprecationWarning   # 백엔드 1,683개
 cd frontend && npm run check && npm run build              # 순수 로직 검사 스크립트 11개 + 타입 검사·빌드(빌드 전에 styles.css 괄호 짝 검사)
 cd frontend && npm run e2e                                 # 화면 단위 테스트(Playwright) 81개 — 처음 한 번 npx playwright install chromium
 ```
@@ -271,11 +271,11 @@ PostgreSQL 검증, 마이그레이션 점검, Docker 스모크 테스트, Render
 
 | 항목 | 수치 |
 |---|---|
-| 기간 | 2026-09-13 10:51 첫 커밋 → 2026-09-19 20:13 `f1a5fff`(약 153시간) |
-| 커밋 | 848개(병합 294) |
+| 기간 | 2026-09-13 10:51 첫 커밋 → 2026-09-19 23:47 `ffd04fb`(약 157시간) |
+| 커밋 | 865개(병합 302) |
 | 설계 | [설계 문서](docs/superpowers/specs/2026-09-13-recipe-ai-design.md) 31절, [구현 계획](docs/superpowers/plans/) 13개 |
 | 화면 시안 | [`docs/design/`](docs/design/) 16묶음, 사용자 승인 후 구현 |
-| 테스트 | 백엔드 1,670개(SQLite 전부 통과, PostgreSQL은 성능 기준 1건 빼고 통과), 프론트 검사 스크립트 11개, E2E(Playwright) 81개 |
+| 테스트 | 백엔드 1,683개(SQLite·PostgreSQL 모두 전부 통과), 프론트 검사 스크립트 11개, E2E(Playwright) 81개 |
 
 단계: 1 기반·로그인 → 1b 보관 위치·필수품·품목별 경고 → 1c 하단 탭·주방 도구 → 1d 사용성 → 2 사진 인식 → 3a 레시피·추천 → 3b AI 레시피·링크·영상 → 3c 양념 비율 → 더보기 정리 → 4 장보기·오프라인·체험 계정 → 4b-1 식단 짜기 → 4b-2 영양 계산 → 4b-3 먹은 기록 → 5 요리 일기·집밥 리포트.
 
